@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.DS_Store
+# notes personnelles : jamais publiées
+NOTES-PRIVEES.md
+
+# private: the owner's training (never published)
+autotrain.py
+naim_train_window.swift
+tools/acces_modele.py
+owner_admin.py
+# private: Naim's system prompt and tool descriptions (delivered with the model by Naim's server)
+naim_prompts.json

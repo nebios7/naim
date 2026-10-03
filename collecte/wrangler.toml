@@ -1,0 +1,13 @@
+name = "naim-feedback"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+DATASET_REPO = "redhamohamed/naim-feedback"
+DATA_DIR = "data"
+MODEL_REPO = "redhamohamed/naim"
+
+# id filled at deployment (wrangler kv namespace create LIMITS)
+[[kv_namespaces]]
+binding = "LIMITS"
+id = "022835475a084d2eb546dc3116360c01"

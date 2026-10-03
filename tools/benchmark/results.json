@@ -1,0 +1,42 @@
+{
+ "naim:latest": {
+  "code": {
+   "passed": 33,
+   "total": 41
+  },
+  "tools": {
+   "passed": 20,
+   "total": 20
+  }
+ },
+ "mimo:latest": {
+  "code": {
+   "passed": 0,
+   "total": 41
+  },
+  "tools": {
+   "passed": null,
+   "total": 20
+  }
+ },
+ "qwen2.5-coder:7b-instruct": {
+  "code": {
+   "passed": 36,
+   "total": 41
+  },
+  "tools": {
+   "passed": 0,
+   "total": 20
+  }
+ },
+ "llama3.1:8b": {
+  "code": {
+   "passed": 26,
+   "total": 41
+  },
+  "tools": {
+   "passed": 19,
+   "total": 20
+  }
+ }
+}
