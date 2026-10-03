@@ -2225,7 +2225,8 @@ async function send(textArg, attsArg, opts = {}) {
   if (live && text && textArg === undefined) {  // Naim is working: guide it without stopping it
     $("#input").value = ""; autoGrow(); updateSendBtn();
     const note = `Toi : ${text}`;
-    const r = S.mode === "agent" ? await api("/api/interject", { method: "POST", body: { run_id: live.id, text } }) : { ok: false };
+    const canGuide = S.mode === "agent" || S.chat_tools !== false;  // the Chat with tools takes it into account too
+    const r = canGuide ? await api("/api/interject", { method: "POST", body: { run_id: live.id, text } }) : { ok: false };
     if (r.ok) { live.reply.steps.push({ type: "event", icon: "💬", text: note }); live.v?.event("💬", note); toast("Naim en tiendra compte à sa prochaine étape"); }
     else { (live.queue ||= []).push(text); toast("Message gardé : envoyé dès que Naim a fini"); }
     return;
@@ -4006,6 +4007,8 @@ function buildRail() {
     + `<button class="rbtn" data-go="settings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`;
   $$("#rail [data-go]").forEach((b) => (b.onclick = () => {
     const g = b.dataset.go;
+    // a second click on the page already open closes it and goes back to the conversation (a toggle)
+    if (g !== "chat" && g !== "agent" && b.classList.contains("on")) { setView("chat"); updateRail(); return; }
     if (g === "chat" || g === "agent") { setView("chat"); setMode(g); }
     else if (g === "schedules" || g === "artifacts") naimCmd(g);
     else { setView("settings"); showSettingsTab(g === "settings" ? "general" : g); }

@@ -1164,6 +1164,9 @@ class Handler(BaseHTTPRequestHandler):
         folder.mkdir(parents=True, exist_ok=True)
         helper = Agent(str(folder), body.get("model", "naim"), auto_yes=bool(body.get("auto_yes")), emit=self.event,
                        approver=approver, options=options, **agent_settings(body))
+        run_id = body.get("run_id") or helper.run_id
+        with _lock:
+            _agents[run_id] = helper  # « écris pour guider Naim » reaches this reply too
         helper._preload_tool_groups(" ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
                                                                    if m.get("role") == "user"]))
         own = mailer.own_addresses() if helper.features.get("email") else []
@@ -1174,11 +1177,24 @@ class Handler(BaseHTTPRequestHandler):
             note += ("\nSpecialised tool groups (use_tools): " + "; ".join(f"{g} ({TOOL_GROUPS[g][1]})" for g in helper._tool_groups))
         messages = [dict(messages[0], content=messages[0]["content"] + note)] + messages[1:]
         think = bool(body.get("think")) and not trivial_message(body["message"])
+        try:
+            self._chat_steps(body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id)
+        finally:
+            with _lock:
+                _agents.pop(run_id, None)
+
+    def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
         for step in range(14):
             if stop.is_set():
                 self.event({"type": "stopped"})
                 break
+            with helper._inbox_lock:  # what the user typed while Naim was working: taken into account now
+                notes, helper._inbox = helper._inbox, []
+            if notes:
+                messages.append({"role": "user", "content": "(Message de l'utilisateur pendant ton travail — prends-le en "
+                                 "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
+                self.event({"type": "interjection_read", "count": len(notes)})
             tools = helper.tools + [chatfiles.FILE_TOOL]
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls = "", []
