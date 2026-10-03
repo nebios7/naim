@@ -1136,6 +1136,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def chat_agentic(self, body, messages, options, stop, files=False):
         """Chat mode with all of Naim's tools, streamed: text appears as it is written, tools run in the same reply."""
+        def repeating(text):
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            return len(lines) >= 4 and len(set(lines[-3:])) == 1 and len(lines[-1]) > 2
         import chatfiles
         import mailer
         s = body.get("settings") or {}
@@ -1171,7 +1174,7 @@ class Handler(BaseHTTPRequestHandler):
             note += ("\nSpecialised tool groups (use_tools): " + "; ".join(f"{g} ({TOOL_GROUPS[g][1]})" for g in helper._tool_groups))
         messages = [dict(messages[0], content=messages[0]["content"] + note)] + messages[1:]
         think = bool(body.get("think")) and not trivial_message(body["message"])
-        made, mail_error, sent, total_tokens = [], None, False, 0
+        made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
         for step in range(14):
             if stop.is_set():
                 self.event({"type": "stopped"})
@@ -1179,8 +1182,12 @@ class Handler(BaseHTTPRequestHandler):
             tools = helper.tools + [chatfiles.FILE_TOOL]
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls = "", []
-            for chunk in ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts):
+            stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
+            for chunk in stream:
                 if stop.is_set():
+                    break
+                if repeating(content):  # the model loops on the same line (it happens with images): cut at once
+                    stream.close()
                     break
                 msg = chunk.get("message", {})
                 if msg.get("thinking"):
@@ -1223,6 +1230,25 @@ class Handler(BaseHTTPRequestHandler):
                     result += ("\n\n[STOP: same error twice. Do not call it again. Tell the user the exact error, your "
                                "hypothesis about its cause and what would fix it.]")
                 messages.append({"role": "tool", "tool_name": name, "content": result[:12000]})
+            # a screenshot or an image looked at: Naim SEES it (only the latest one stays, older ones are dropped)
+            imgs, helper._pending_images = getattr(helper, "_pending_images", []), []
+            looked, helper._looked = getattr(helper, "_looked", False), False
+            if imgs and (helper._can_see() if looked else helper._vision()):
+                for i in shots:
+                    messages[i].pop("images", None)
+                shots.append(len(messages))
+                messages.append({"role": "user", "content": "Voici l'image du fichier." if looked else "Voici la capture d'écran.",
+                                 "images": imgs})
+            used_tools = True
+        if used_tools and not stop.is_set() and not content.strip():
+            # it acted but said nothing: one more turn to tell what it saw / did, or what blocks (never a silent stop)
+            for chunk in ollama_chat(body.get("model", "naim"), messages + [{"role": "user", "content": (
+                    "Réponds maintenant à l'utilisateur : ce que tu as vu ou fait, et la suite (continue la tâche s'il "
+                    "reste quelque chose à faire).")}], tools=None, think=False, stream=True, options=options):
+                if stop.is_set():
+                    break
+                if (chunk.get("message") or {}).get("content"):
+                    self.event({"type": "token", "text": chunk["message"]["content"]})
         if mail_error and not sent:  # never let a reply suggest an email left when it did not
             self.event({"type": "token", "text": f"\n\nL'e-mail n'a pas pu partir. Erreur exacte : {mail_error.removeprefix('error: ')[:300]}"})
         self.event({"type": "done"})
