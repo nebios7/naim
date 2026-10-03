@@ -1198,7 +1198,7 @@ const DEFAULTS = {
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
   notify: true, sound: false, show_stats: true, show_time: false, wrap_code: false,
-  live_actions: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
+  live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
   vision_model: "", stop_temp_processes: true, keep_final_app: true, planMode: false, enable_web: true, enable_memory: true, enable_skills: true, enable_mcp: true, enable_subagents: true,
@@ -2271,7 +2271,7 @@ function settingsPayload() {
   return { temperature: S.temperature, top_p: S.top_p, top_k: S.top_k, repeat_penalty: S.repeat_penalty, num_ctx: S.num_ctx,
     num_predict: S.num_predict, seed: S.seed, keep_alive: S.keep_alive, vision_model: S.vision_model, system_prompt: S.system_prompt, user_name: S.user_name,
     auto_writes: S.auto_writes, auto_commands: S.auto_commands, max_steps: S.max_steps, blocked_commands: S.blocked_commands,
-    enable_web: S.enable_web, enable_memory: S.enable_memory, enable_skills: S.enable_skills, enable_mcp: S.enable_mcp,
+    enable_web: S.enable_web, chat_tools: S.chat_tools, enable_memory: S.enable_memory, enable_skills: S.enable_skills, enable_mcp: S.enable_mcp,
     enable_subagents: S.enable_subagents, enable_computer: S.enable_computer, enable_simulator: S.enable_simulator, auto_computer: S.auto_computer, computer_power: S.computer_power, screen_images: S.screen_images, enable_email: S.enable_email, enable_learning: S.enable_learning, enable_review: S.enable_review, memory_auto: S.memory_auto, memory_limit: S.memory_limit, email_allowed: S.email_allowed, auto_mcp: S.auto_mcp, disabled_skills: S.disabled_skills, naim_backend: S.naim_backend,
     llama_gpu_layers: S.llama_gpu_layers, llama_threads: S.llama_threads, llama_batch: S.llama_batch, llama_kv_type: S.llama_kv_type, llama_checkpoints: S.llama_checkpoints, llama_parallel: S.llama_parallel, max_subagents: S.max_subagents,
     auto_verify: S.auto_verify, auto_skill: S.auto_skill, minimal_mode: S.minimal_mode, command_timeout: S.command_timeout, loop_limit: S.loop_limit,
@@ -2986,6 +2986,7 @@ const TABS = {
       ${row("Notification quand Naim a fini", "Si la fenêtre est en arrière-plan, ou quand l'agent attend une autorisation.", sw("notify"))}
       ${row("Son à la fin d'une réponse", "", sw("sound"))}
       ${row("Afficher la vitesse (tokens/s)", "", sw("show_stats"))}
+      ${row("Outils en mode Chat", "Le Chat peut aussi agir dans la même réponse : lire et écrire des fichiers, lancer des commandes, chercher sur le web, créer des documents, envoyer des e-mails… (avec ta confirmation selon tes réglages). Désactivé : le Chat répond seulement, sauf web, fichiers et e-mails demandés explicitement.", sw("chat_tools"))}
       ${row("Actions de l'agent en direct", "Chaque commande, sa sortie et le code écrit défilent pendant le travail.", sw("live_actions"))}
       ${row("Garder le détail des actions ouvert à la fin", "Sinon il se replie en une ligne résumée.", sw("keep_actions_open"))}
       ${row("Afficher l'heure des messages", "", sw("show_time"))}

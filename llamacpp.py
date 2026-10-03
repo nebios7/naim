@@ -297,7 +297,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         return out
 
     def chunks():
-        first = None
+        first, calls = None, {}  # tool calls arrive in pieces while streaming: assembled, then given at the end
         with resp:
             for raw in resp:
                 line = raw.decode("utf-8", errors="replace").strip()
@@ -310,6 +310,11 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 t = ev.get("timings")
                 if ev.get("choices"):
                     delta = ev["choices"][0].get("delta", {})
+                    for tc in delta.get("tool_calls") or []:
+                        c = calls.setdefault(tc.get("index", len(calls)), {"name": "", "args": ""})
+                        f = tc.get("function") or {}
+                        c["name"] += f.get("name") or ""
+                        c["args"] += f.get("arguments") or ""
                     if first is None and (delta.get("content") or delta.get("reasoning_content")):
                         first = time.time()
                     yield {"message": {"content": delta.get("content") or "", "thinking": delta.get("reasoning_content") or ""},
@@ -320,4 +325,13 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 elif not t and (ev.get("usage") or {}).get("completion_tokens") and first:  # MLX: counts only
                     yield {"message": {}, "done": True, "eval_count": ev["usage"]["completion_tokens"],
                            "eval_duration": int((time.time() - first) * 1e9)}
+        if calls:
+            out = []
+            for _, c in sorted(calls.items()):
+                try:
+                    args = json.loads(c["args"] or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                out.append({"function": {"name": c["name"], "arguments": args}})
+            yield {"message": {"tool_calls": out}, "done": False}
     return chunks()

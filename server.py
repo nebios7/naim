@@ -60,7 +60,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, WEB_TOOLS, Agent, now_note, ollama_chat, today_line
+from naimtools import CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat, today_line
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
 WEB_NEED_RE = re.compile(r"\b(cherche|recherche|web|internet|en ligne|google|actualit|news|aujourd'hui|cette semaine|"
@@ -1103,6 +1103,10 @@ class Handler(BaseHTTPRequestHandler):
             if any((chatfiles.OUT / n.strip()).is_file() for n in named):
                 files = False  # the file exists (✉ Envoyer on its card): only send it
         web = s.get("enable_web", True) is not False and bool(WEB_NEED_RE.search(body["message"] or ""))
+        if options.get("backend") == "llamacpp" and s.get("chat_tools", True) is not False and not body.get("images"):
+            # Chat with every tool, like an assistant that talks AND acts: answers stream as usual; when a tool is
+            # needed, it is used in the same reply, then the answer goes on
+            return self.chat_agentic(body, messages, options, stop, files=files)
         if wants_schedule or files or web or email:
             if self.chat_with_web(body, messages, options, stop, schedule=wants_schedule, files=files,
                                   web=web or not (files or email), email=email, send_now=address_given):
@@ -1121,6 +1125,106 @@ class Handler(BaseHTTPRequestHandler):
             if chunk.get("done") and chunk.get("eval_duration"):
                 self.event({"type": "stats", "tokens": chunk.get("eval_count", 0),
                             "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9)})
+        self.event({"type": "done"})
+
+    CHAT_TOOLS_NOTE = (
+        "\n\nIn this conversation you can also ACT, with tools: read and write files, run commands, search the web, "
+        "create documents (creer_fichier: PDF, Word, Excel, ZIP…), send emails, schedule tasks, and more (use_tools loads "
+        "a specialised group, use_mcp an extra server). Answer directly when you can; use a tool only when the request "
+        "needs an action, a file or fresh information, then give the answer. Never write code meant to create a file "
+        "yourself: call the tool. Files you create go in {folder}.")
+
+    def chat_agentic(self, body, messages, options, stop, files=False):
+        """Chat mode with all of Naim's tools, streamed: text appears as it is written, tools run in the same reply."""
+        import chatfiles
+        import mailer
+        s = body.get("settings") or {}
+
+        def approver(action, detail):
+            aid = uuid.uuid4().hex
+            entry = {"event": threading.Event(), "allow": False}
+            with _lock:
+                _pending[aid] = entry
+            self.event({"type": "approval", "id": aid, "action": action, "detail": detail[:40000]})
+            deadline = time.time() + APPROVAL_TIMEOUT
+            while not entry["event"].wait(0.3):
+                if stop.is_set() or time.time() > deadline:
+                    break
+            with _lock:
+                _pending.pop(aid, None)
+            self.event({"type": "approval_result", "id": aid, "allow": entry["allow"]})
+            return entry["allow"]
+
+        folder = Path(s.get("project") or body.get("project") or chatfiles.OUT).expanduser()
+        if not folder.is_dir():
+            folder = chatfiles.OUT
+        folder.mkdir(parents=True, exist_ok=True)
+        helper = Agent(str(folder), body.get("model", "naim"), auto_yes=bool(body.get("auto_yes")), emit=self.event,
+                       approver=approver, options=options, **agent_settings(body))
+        helper._preload_tool_groups(" ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
+                                                                   if m.get("role") == "user"]))
+        own = mailer.own_addresses() if helper.features.get("email") else []
+        allowed = mailer.addresses(" ".join(agent_settings(body)["email_allowed"]))
+        me = next((a for a in own if a in allowed), None) or (own[0] if own else None)
+        note = self.CHAT_TOOLS_NOTE.format(folder=folder) + (f"\nThe user's own email address (« moi »): {me}" if me else "")
+        if getattr(helper, "_tool_groups", None):
+            note += ("\nSpecialised tool groups (use_tools): " + "; ".join(f"{g} ({TOOL_GROUPS[g][1]})" for g in helper._tool_groups))
+        messages = [dict(messages[0], content=messages[0]["content"] + note)] + messages[1:]
+        think = bool(body.get("think")) and not trivial_message(body["message"])
+        made, mail_error, sent, total_tokens = [], None, False, 0
+        for step in range(14):
+            if stop.is_set():
+                self.event({"type": "stopped"})
+                break
+            tools = helper.tools + [chatfiles.FILE_TOOL]
+            opts = dict(options, tool_choice="required") if (files and step == 0) else options
+            content, calls = "", []
+            for chunk in ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts):
+                if stop.is_set():
+                    break
+                msg = chunk.get("message", {})
+                if msg.get("thinking"):
+                    self.event({"type": "thinking_token", "text": msg["thinking"]})
+                if msg.get("content"):
+                    content += msg["content"]
+                    self.event({"type": "token", "text": msg["content"]})
+                if msg.get("tool_calls"):
+                    calls = msg["tool_calls"]
+                if chunk.get("done") and chunk.get("eval_duration"):
+                    total_tokens += chunk.get("eval_count", 0)
+                    self.event({"type": "stats", "tokens": total_tokens, "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9)})
+            if stop.is_set() or not calls:
+                break
+            messages.append({"role": "assistant", "content": content, "tool_calls": calls})
+            if content.strip():
+                self.event({"type": "token", "text": "\n\n"})
+            for c in calls:
+                name, args = c["function"]["name"], c["function"].get("arguments") or {}
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except ValueError:
+                        args = {}
+                self.event({"type": "tool", "name": name, "args": args})
+                try:
+                    if name == "creer_fichier":
+                        result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"))
+                        made.append(info)
+                        self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": list(reversed(made))})
+                    else:
+                        result = helper.call_tool(name, args)
+                        if name == "send_email":
+                            sent, mail_error = (True, None) if str(result).startswith("ok") else (sent, result)
+                except Exception as e:  # a tool error is told to the model, never a crash of the reply
+                    result = f"error: {e}"
+                result = str(result)
+                self.event({"type": "tool_result", "name": name, "result": result[-3000:]})
+                if helper._same_error(name, result):
+                    result += ("\n\n[STOP: same error twice. Do not call it again. Tell the user the exact error, your "
+                               "hypothesis about its cause and what would fix it.]")
+                messages.append({"role": "tool", "tool_name": name, "content": result[:12000]})
+        if mail_error and not sent:  # never let a reply suggest an email left when it did not
+            self.event({"type": "token", "text": f"\n\nL'e-mail n'a pas pu partir. Erreur exacte : {mail_error.removeprefix('error: ')[:300]}"})
         self.event({"type": "done"})
 
     def chat_with_web(self, body, messages, options, stop, schedule=False, files=False, web=True, email=False, send_now=False):
