@@ -13,7 +13,7 @@ SCRIPT = '''on run argv
     set theSubject to item 1 of argv
     set theBody to item 2 of argv
     set nFiles to (item 3 of argv) as integer
-    tell application "Mail"
+    tell application id "com.apple.mail"
         set msg to make new outgoing message with properties {subject:theSubject, content:theBody, visible:false}
         tell msg
             repeat with i from (4 + nFiles) to count of argv
@@ -56,7 +56,7 @@ _OWN = []
 def own_addresses():
     """The addresses of the Mail accounts of this Mac (the user's own), read once."""
     if not _OWN:
-        r = subprocess.run(["osascript", "-e", 'tell application "Mail" to get email addresses of every account'],
+        r = subprocess.run(["osascript", "-e", 'tell application id "com.apple.mail" to get email addresses of every account'],
                            capture_output=True, text=True, timeout=30)
         _OWN.extend(addresses(r.stdout) or ["?"])
     return [a for a in _OWN if a != "?"]
@@ -126,7 +126,7 @@ READ_SCRIPT = '''on run argv
     set RS to (character id 30)
     set US to (character id 31)
     set out to ""
-    tell application "Mail"
+    tell application id "com.apple.mail"
         if unreadOnly then
             set msgs to (messages of inbox whose read status is false)
         else
@@ -154,7 +154,7 @@ end run'''
 DRAFT_SCRIPT = '''on run argv
     set mid to (item 1 of argv) as integer
     set replyText to item 2 of argv
-    tell application "Mail"
+    tell application id "com.apple.mail"
         set m to first message of inbox whose id is mid
         set r to reply m opening window false
         set content of r to replyText
@@ -165,7 +165,7 @@ end run'''
 
 JUNK_SCRIPT = '''on run argv
     set mid to (item 1 of argv) as integer
-    tell application "Mail"
+    tell application id "com.apple.mail"
         set m to first message of inbox whose id is mid
         set junk mail status of m to true
         move m to junk mailbox

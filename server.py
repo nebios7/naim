@@ -1132,7 +1132,8 @@ class Handler(BaseHTTPRequestHandler):
         import mailer
         allowed = mailer.addresses(" ".join(agent_settings(body)["email_allowed"]))
         own = mailer.own_addresses() if email else []
-        me = next((a for a in own if a in allowed), None) or (allowed[0] if allowed else own[0] if own else None)
+        # the user's own address: one of this Mac's Mail accounts (an allowed one first); never guessed from the list
+        me = next((a for a in own if a in allowed), None) or (own[0] if own else None)
         note = ((WEB_CHAT_NOTE if web else "") + (FILE_CHAT_NOTE if files else "") + (EMAIL_CHAT_NOTE if email else "")
                 + (f"\nThe user's own email address (« moi », « une copie à moi »): {me}" if email and me else ""))
         wants_copy = bool(me) and bool(re.search(r"copie\s+(?:à|a|pour)\s+moi|à moi aussi|et moi\b|envoie[- ]moi|envoy\w+[- ]moi",
