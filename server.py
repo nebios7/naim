@@ -1140,7 +1140,7 @@ class Handler(BaseHTTPRequestHandler):
                                                  " ".join(str(m.get("content") or "") for m in messages[-4:] if m.get("role") == "user"), re.I))
         recipients = set()
         messages = [dict(messages[0], content=messages[0]["content"] + note)] + messages[1:]
-        made, last_tool, mailed, nudged, copy_nudged = [], None, False, False, False
+        made, last_tool, mailed, nudged, copy_nudged, mail_error = [], None, False, False, False, None
         s = body.get("settings") or {}
         def approver(action, detail):  # same confirmation card as in Agent mode (e.g. an email to a new address)
             aid = uuid.uuid4().hex
@@ -1200,7 +1200,11 @@ class Handler(BaseHTTPRequestHandler):
                 if msg.get("thinking"):
                     self.event({"type": "thinking", "text": msg["thinking"]})
                 text = msg.get("content") or ""
-                if not recipients and re.search(r"\b(envoy[ée]e?s?|transmis)\b.{0,60}\b(e-?mail|mail|courriel|à vous|à toi)\b"
+                if mail_error and not recipients:  # the email did not leave: the answer says so, with the real error
+                    claims = re.search(r"\b(envoy[ée]e?s?|parti|transmis)\b", text, re.I) and not re.search(r"\b(pas|n'a|échou|erreur|impossible)\b", text, re.I)
+                    text = (f"L'e-mail n'a pas pu partir. Erreur exacte : {mail_error.removeprefix('error: ')[:300]}"
+                            + ("" if claims or not text.strip() else "\n\n" + text))
+                elif not recipients and re.search(r"\b(envoy[ée]e?s?|transmis)\b.{0,60}\b(e-?mail|mail|courriel|à vous|à toi)\b"
                                                 r"|\b(e-?mail|mail|courriel)\b.{0,30}\b(envoy[ée]e?s?|parti)\b", text, re.I):
                     text += "\n\n⚠ Aucun e-mail n'a été envoyé pour l'instant : dis-moi si je dois l'envoyer (et à qui)."
                 self.event({"type": "token", "text": text})
@@ -1227,6 +1231,8 @@ class Handler(BaseHTTPRequestHandler):
                         result = helper.send_email(args.get("to", ""), args.get("subject", ""), args.get("body", ""), atts)
                         if result.startswith("ok"):
                             recipients.update(mailer.addresses(args.get("to", "")))
+                        else:
+                            mail_error = result
                     elif name == "chercher_contact":
                         result = helper.chercher_contact(args.get("nom", ""))
                     elif name == "creer_fichier":
@@ -1239,6 +1245,10 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as e:
                     result = f"error: {e}"
                 self.event({"type": "tool_result", "name": name, "result": result[-3000:]})
+                if helper._same_error(name, result):  # same failure twice: no third blind try
+                    result += ("\n\n[STOP: this tool failed twice with the SAME error. Do not call it again. Tell the user "
+                               "the exact error message, your hypothesis about its cause and what would fix it. Never "
+                               "invent a vague cause like « formatting problem ».]")
                 messages.append({"role": "tool", "tool_name": name, "content": result[:12000]})
         if used and not answered and not stop.is_set():
             # attempts used up (or an empty answer): always say what was done or what blocks, never stay silent

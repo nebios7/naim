@@ -381,6 +381,22 @@ class Agent:
                 tools.append(USE_TOOLS_TOOL)
         return tools, lookup
 
+    DIAGNOSE = ("\n\n[STOP: this tool failed twice with the SAME error. Do not call it again the same way. Diagnose like an "
+                "engineer: read the error word by word; check your assumption with a minimal test (run_command: a tiny "
+                "command that isolates the failing part); search the exact error message on the web if it is unclear; "
+                "then fix the cause, or tell the user the exact error, your hypothesis and what would fix it. Never "
+                "invent a vague cause.]")
+
+    def _same_error(self, name, result):
+        """Same tool, same error, a second time: no more blind retries, a diagnosis (once per kind of error)."""
+        first = (result or "").strip().split("\n", 1)[0]
+        if not re.match(r"(error|erreur|exit code [1-9]|stopped|failed|échec)", first, re.I):
+            return ""
+        key = (name, re.sub(r"\d+", "#", first)[:160])
+        seen = self.__dict__.setdefault("_errors_seen", {})
+        seen[key] = seen.get(key, 0) + 1
+        return self.DIAGNOSE if seen[key] == 2 else ""
+
     def use_tools(self, group):
         defs = (getattr(self, "_tool_groups", None) or {}).pop((group or "").strip().lower(), None)
         if not defs:
@@ -2173,6 +2189,8 @@ class Agent:
                 self.emit({"type": "tool_result", "name": name, "result": result[-3000:]})
                 if len(result) > MAX_OUTPUT:
                     result = result[:MAX_OUTPUT] + "\n... (truncated)"
+                if (nudge := self._same_error(name, result)):
+                    result += nudge
                 if looping:
                     result = f"{LOOP_NUDGE}\n\n(previous result, unchanged)\n{result[:1500]}"
                     if self.todos:
