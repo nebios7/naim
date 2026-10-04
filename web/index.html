@@ -1201,6 +1201,50 @@ body #send:hover, #send:hover { opacity: .85; background: var(--text) !important
 @keyframes hsweep { 0%, 100% { text-shadow: none; } 40% { text-shadow: 0 0 16px color-mix(in srgb, var(--text) 60%, transparent); transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .empty .hero .walker { display: none; } }
 #rail .rtop { height: 6px; }
+/* ===== v5 : chaleur et sobriété — palette chaude, actions neutres, le secondaire n'apparaît qu'au survol ===== */
+:root { --brand: #1f1e1b; --brand-h: #3a3833; --brand-t: #fffdf8; --brand-soft: rgb(31 30 27 / .07); --c-chat: #1f1e1b; --send: #1f1e1b; --send-t: #fffdf8; }
+:root[data-theme="dark"] { --bg: #1d1c1a; --panel: #262523; --side: #181715; --hover: #2f2d2a; --text: #edebe6; --muted: #a29f97; --line: #353330;
+    --accent: #edebe6; --accent-soft: #2f2d2a; --user: #2c2a27; --code: #191816;
+    --brand: #edebe6; --brand-h: #d6d3cc; --brand-t: #1d1c1a; --brand-soft: rgb(237 235 230 / .10);
+    --c-chat: #edebe6; --send: #edebe6; --send-t: #1d1c1a; --robot-d: #181715; --robot-eye: #edebe6;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 40px rgb(0 0 0 / .45); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1d1c1a; --panel: #262523; --side: #181715; --hover: #2f2d2a; --text: #edebe6; --muted: #a29f97; --line: #353330;
+    --accent: #edebe6; --accent-soft: #2f2d2a; --user: #2c2a27; --code: #191816;
+    --brand: #edebe6; --brand-h: #d6d3cc; --brand-t: #1d1c1a; --brand-soft: rgb(237 235 230 / .10);
+    --c-chat: #edebe6; --send: #edebe6; --send-t: #1d1c1a; --robot-d: #181715; --robot-eye: #edebe6;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 40px rgb(0 0 0 / .45); } }
+body { letter-spacing: -0.006em; }
+.md { line-height: 1.68; }
+.md h1, .md h2, .md h3 { letter-spacing: -0.015em; font-weight: 600; }
+.md h2 { font-size: 1.18em; margin: 22px 0 8px; } .md h3 { font-size: 1.05em; margin: 18px 0 6px; }
+.turn + .turn { margin-top: 6px; }
+.turn.user .bubble { border-radius: 18px !important; padding: 9px 15px !important; }
+/* rating and secondary actions: visible on the latest answer, on hover elsewhere */
+.turn.bot .fb { opacity: 0; transition: opacity .18s var(--ease); }
+.turn.bot:hover .fb, .turn.bot:last-child .fb, .turn.bot .fb:has(.rate.on) { opacity: 1; }
+.turn.bot .fb:has(.rate.on) .rate:not(.on) { display: none; }
+.rate { font-size: 11.5px !important; padding: 1px 8px !important; }
+/* code blocks: quiet header, tools on hover */
+.md .code { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.md .code .bar { background: transparent; border-bottom: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+.md .code .bar button { opacity: 0; transition: opacity .15s; }
+.md .code:hover .bar button, .md .code .bar button:focus-visible { opacity: 1; }
+/* composer: only what matters */
+#tempPill { display: none !important; }
+.composer { border-radius: 20px !important; }
+/* primary buttons and switches follow the neutral palette */
+.btn.primary, body .btn.primary { background: var(--brand) !important; color: var(--brand-t) !important; border-color: var(--brand) !important; }
+.btn.primary:hover { opacity: .88; }
+.switch input:checked + span { background: var(--brand) !important; }
+.switch input:checked + span::before { background: var(--brand-t) !important; }
+/* sidebar: lighter */
+aside#side .group { font-size: 11.5px; font-weight: 500; letter-spacing: .01em; text-transform: none; color: var(--muted); }
+.conv { border-radius: 8px; }
+.conv .cicon { opacity: .6; }
+/* home: a soft halo behind the greeting */
+body.home #chatcol::before { content: ""; position: absolute; left: 50%; top: 38%; width: min(720px, 90%); height: 320px; transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--text) 6%, transparent), transparent 65%); pointer-events: none; z-index: 0; }
+body.home #chatcol > * { position: relative; z-index: 1; }
 </style>
 </head>
 <body>
@@ -1444,7 +1488,7 @@ const DEFAULTS = {
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
   vision_model: "", stop_temp_processes: true, keep_final_app: true, planMode: false, enable_web: true, enable_memory: true, enable_skills: true, enable_mcp: true, enable_subagents: true,
-  enable_computer: true, enable_simulator: true, auto_computer: false, computer_power: false, screen_images: false, enable_email: true, email_allowed: "", enable_learning: true, enable_review: true, auto_train: false, auto_train_min: 150, auto_preview: true, onboarded: false, share_feedback: false, share_auto: false, memory_auto: true, memory_limit: 60, params_open: false, presets: {}, folders: [], accent: "argile",
+  enable_computer: true, enable_simulator: true, auto_computer: false, computer_power: false, screen_images: false, enable_email: true, email_allowed: "", enable_learning: true, enable_review: true, auto_train: false, auto_train_min: 150, auto_preview: true, onboarded: false, share_feedback: false, share_auto: false, memory_auto: true, memory_limit: 60, params_open: false, presets: {}, folders: [], accent: "sobre",
   auto_mcp: false, disabled_skills: [],
   auto_writes: false, auto_commands: false, max_steps: 30, blocked_commands: "rm -rf /\nsudo \nmkfs\n:(){ :|:& };:",
 };
@@ -4134,11 +4178,13 @@ async function loadSettings() {
 function saveSettings() { api("/api/settings", { method: "PUT", body: S }).catch(() => {}); }
 let saveTimer; function saveSettingsSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 400); }
 const WIDTHS = { narrow: "700px", normal: "840px", wide: "1080px", full: "100%" };
-const ACCENTS = { argile: ["#d97757", "#c6613f", "Argile"], bleu: ["#3b82f6", "#2563eb", "Bleu"], violet: ["#8b5cf6", "#7c3aed", "Violet"],
+const ACCENTS = { sobre: ["#2c2a26", "#2c2a26", "Naim (sobre, s'accorde au thème)"], argile: ["#d97757", "#c6613f", "Argile"], bleu: ["#3b82f6", "#2563eb", "Bleu"], violet: ["#8b5cf6", "#7c3aed", "Violet"],
   vert: ["#10b981", "#059669", "Vert"], rose: ["#ec4899", "#db2777", "Rose"], ambre: ["#f59e0b", "#d97706", "Ambre"], gris: ["#6b6a66", "#555450", "Gris (sobre)"] };
 function applyAccent() {
-  const a = ACCENTS[S.accent] || ACCENTS.argile, r = document.documentElement.style;
-  r.setProperty("--brand", a[0]); r.setProperty("--brand-h", a[1]);
+  const r = document.documentElement.style;
+  if (!ACCENTS[S.accent] || S.accent === "sobre") { for (const k of ["--brand", "--brand-h", "--brand-soft", "--brand-t"]) r.removeProperty(k); return; }  // the theme's own neutral
+  const a = ACCENTS[S.accent];
+  r.setProperty("--brand", a[0]); r.setProperty("--brand-h", a[1]); r.setProperty("--brand-t", "#ffffff");
   const [x, y, z] = [1, 3, 5].map((i) => parseInt(a[0].slice(i, i + 2), 16));
   r.setProperty("--brand-soft", `rgb(${x} ${y} ${z} / .16)`);
 }
