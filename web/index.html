@@ -1203,12 +1203,12 @@ body #send:hover, #send:hover { opacity: .85; background: var(--text) !important
 #rail .rtop { height: 6px; }
 /* ===== v5 : chaleur et sobriété — palette chaude, actions neutres, le secondaire n'apparaît qu'au survol ===== */
 :root { --brand: #1f1e1b; --brand-h: #3a3833; --brand-t: #fffdf8; --brand-soft: rgb(31 30 27 / .07); --c-chat: #1f1e1b; --send: #1f1e1b; --send-t: #fffdf8; }
-:root[data-theme="dark"] { --bg: #1d1c1a; --panel: #262523; --side: #181715; --hover: #2f2d2a; --text: #edebe6; --muted: #a29f97; --line: #353330;
+:root[data-theme="dark"] { --brand: #e8e9ed; --brand-h: #d0d1d6; --brand-t: #17181b; --brand-soft: rgb(232 233 237 / .10); --c-chat: #e8e9ed; --send: #e8e9ed; --send-t: #17181b; }  /* Sombre : le noir graphite, sans bleu */
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --bg: #1d1c1a; --panel: #262523; --side: #181715; --hover: #2f2d2a; --text: #edebe6; --muted: #a29f97; --line: #353330;
     --accent: #edebe6; --accent-soft: #2f2d2a; --user: #2c2a27; --code: #191816;
     --brand: #edebe6; --brand-h: #d6d3cc; --brand-t: #1d1c1a; --brand-soft: rgb(237 235 230 / .10);
     --c-chat: #edebe6; --send: #edebe6; --send-t: #1d1c1a; --robot-d: #181715; --robot-eye: #edebe6;
-    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 40px rgb(0 0 0 / .45); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1d1c1a; --panel: #262523; --side: #181715; --hover: #2f2d2a; --text: #edebe6; --muted: #a29f97; --line: #353330;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 40px rgb(0 0 0 / .45); } }  /* Automatique : le sombre chaud */
     --accent: #edebe6; --accent-soft: #2f2d2a; --user: #2c2a27; --code: #191816;
     --brand: #edebe6; --brand-h: #d6d3cc; --brand-t: #1d1c1a; --brand-soft: rgb(237 235 230 / .10);
     --c-chat: #edebe6; --send: #edebe6; --send-t: #1d1c1a; --robot-d: #181715; --robot-eye: #edebe6;
@@ -2110,50 +2110,11 @@ function heroStart() {
   if (logo) logo.onmouseenter = () => { if (!logo.dataset.busy) heroShow(); };
   heroTimer = setTimeout(function again() { if (!$(".empty .hero h1")) return; heroShow(); heroTimer = setTimeout(again, 17000); }, 1400);
 }
-async function heroShow() {
-  const h1 = $(".empty .hero h1"), logo = $(".empty .hero .logo");
-  if (!h1 || !logo || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const my = ++heroRun; logo.dataset.busy = "1";
-  const letters = $$(".hl", h1); if (!letters.length) return;
-  let w = $(".walker", h1);
-  if (!w) { w = document.createElement("span"); w.className = "walker"; w.innerHTML = robotSVG(); h1.appendChild(w); }
-  w.getAnimations().forEach((a) => a.cancel()); w.style.opacity = "";
-  const fs = parseFloat(getComputedStyle(h1).fontSize) || 32, size = Math.round(fs * 0.8);
-  w.style.width = w.style.height = size + "px"; $(".robot", w).style.width = $(".robot", w).style.height = size + "px";
-  const y0 = letters[0].offsetTop + fs * 0.2 - size;  // standing on the tops of the letters
-  const x = (i) => letters[i].offsetLeft + letters[i].offsetWidth / 2 - size / 2;
-  const alive = () => my === heroRun && document.body.contains(h1);
-  const go = (frames, opts) => { const prev = w.getAnimations(); const a = w.animate(frames, { fill: "forwards", easing: "ease-in-out", ...opts });
-    return a.finished.then(() => prev.forEach((p) => p.cancel())).catch(() => {}); };
-  const at = (i, dy = 0, extra = "") => `translate(${x(i)}px, ${y0 + dy}px) ${extra}`;
-  try {
-    await go([{ transform: at(0, -40, "scale(.15)"), opacity: 0, filter: "blur(6px) brightness(2)" },
-              { transform: at(0, -10, "scale(1.1)"), opacity: 1, filter: "blur(0) brightness(1.6)", offset: .7 },
-              { transform: at(0), opacity: 1, filter: "none" }], { duration: 700 });
-    w.style.opacity = "1";  // stays visible while it walks (the arrival animation is dropped as the walk goes on)
-    w.classList.add("walk");
-    for (let i = 1; i < letters.length; i++) {
-      if (!alive()) return;
-      if (letters[i].classList.contains("sp") && i + 1 < letters.length) {  // a gap between two words: dive in, come back out
-        w.classList.add("behind");
-        await go([{ transform: at(i - 1) }, { transform: at(i, fs * 0.15) }, { transform: at(i, fs * 0.75) }], { duration: 480 });
-        await new Promise((r) => setTimeout(r, 260));
-        await go([{ transform: at(i, fs * 0.75) }, { transform: at(i + 1, fs * 0.15), offset: .6 }, { transform: at(i + 1) }], { duration: 560 });
-        w.classList.remove("behind");
-        letters[i + 1].classList.add("lit"); setTimeout(() => letters[i + 1]?.classList.remove("lit"), 900);
-        i++;
-        continue;
-      }
-      letters[i].classList.add("lit"); setTimeout(() => letters[i]?.classList.remove("lit"), 900);
-      await go([{ transform: at(i - 1) }, { transform: at(i) }], { duration: 240, easing: "linear" });
-    }
-    w.classList.remove("walk");
-    if (!alive()) return;
-    const n = letters.length - 1;
-    await go([{ transform: at(n), opacity: 1 }, { transform: at(n, 0, "scale(.2)"), opacity: 0, filter: "blur(6px) brightness(2)" }], { duration: 600 });
-    w.style.opacity = "0";
-    h1.classList.add("sweep"); setTimeout(() => h1.classList.remove("sweep"), 1600);  // a light runs over the greeting
-  } finally { if (my === heroRun) delete logo.dataset.busy; }
+async function heroShow() {  // a light runs over the greeting, letter by letter
+  const h1 = $(".empty .hero h1");
+  if (!h1 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  h1.classList.remove("sweep"); void h1.offsetWidth; h1.classList.add("sweep");
+  setTimeout(() => h1.classList.remove("sweep"), 2200);
 }
 let stickBottom = true;  // follow the conversation as it grows, until the user scrolls up to read
 function scrollDown(force) { const s = $("#scroll"); if (force) stickBottom = true; if (stickBottom) s.scrollTop = s.scrollHeight; }
