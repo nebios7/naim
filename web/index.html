@@ -1148,6 +1148,58 @@ body #send:hover, #send:hover { opacity: .85; background: var(--text) !important
 @media (prefers-reduced-motion: reduce) { #liveBar .lrobot .robot, #liveBar .lrobot .robot *, #rail .robot *, .brand .robot *, .turn { animation: none !important; } }
 #permPill { color: var(--text) !important; background: none !important; border-color: var(--line) !important; }
 #permPill svg { color: var(--muted); }
+/* home robot show */
+.rbtn.logo .mono-n { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font: 600 15px/1 ui-serif, "New York", Georgia, serif; color: var(--bg); background: var(--text); letter-spacing: -.5px; }
+#liveBar .ldot { display: none !important; }
+.empty .hero h1 { position: relative; }
+.empty .hero .hl { position: relative; z-index: 1; display: inline-block; transition: transform .25s var(--ease), text-shadow .5s, color .5s; }
+.empty .hero .hl.lit { transform: translateY(3px); text-shadow: 0 0 14px color-mix(in srgb, var(--text) 55%, transparent), 0 0 2px var(--text); }
+.empty .hero .walker { position: absolute; left: 0; top: 0; width: 26px; height: 26px; z-index: 2; pointer-events: none; opacity: 0; will-change: transform; }
+.empty .hero .walker .robot { width: 26px; height: 26px; animation: none !important; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--text) 35%, transparent)); }
+.empty .hero .walker.behind { z-index: 0; }
+.empty .hero .walker.behind .robot { filter: brightness(.65); }
+.empty .hero .walker.walk .robot { animation: wbob .24s ease-in-out infinite alternate !important; }
+.empty .hero .walker.walk .ll { transform-box: fill-box; animation: wstep .24s steps(2) infinite; }
+.empty .hero .walker.walk .lr { transform-box: fill-box; animation: wstep .24s steps(2) infinite reverse; }
+.empty .hero .walker .eye { transform-box: fill-box; transform: translateX(30%); }
+@keyframes wbob { from { transform: translateY(0); } to { transform: translateY(-6%); } }
+@keyframes wstep { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+.empty .hero .logo.launch .robot { animation: rlaunch .7s var(--ease) both !important; }
+.empty .hero .logo.catch .robot { animation: rhop .5s ease-out !important; }
+.empty .hero .logo.catch .robot .eye { animation: none !important; transform: scaleY(.35); }
+@keyframes rlaunch { 0% { transform: translateY(0); } 30% { transform: translateY(6%) scaleY(.92); } 60% { transform: translateY(-12%); filter: brightness(1.6); } 100% { transform: translateY(0); } }
+.empty .hero h1.sweep .hl { animation: hsweep 1.2s var(--ease) both; }
+.empty .hero h1.sweep .hl:nth-child(1) { animation-delay: 0.035s; }
+.empty .hero h1.sweep .hl:nth-child(2) { animation-delay: 0.070s; }
+.empty .hero h1.sweep .hl:nth-child(3) { animation-delay: 0.105s; }
+.empty .hero h1.sweep .hl:nth-child(4) { animation-delay: 0.140s; }
+.empty .hero h1.sweep .hl:nth-child(5) { animation-delay: 0.175s; }
+.empty .hero h1.sweep .hl:nth-child(6) { animation-delay: 0.210s; }
+.empty .hero h1.sweep .hl:nth-child(7) { animation-delay: 0.245s; }
+.empty .hero h1.sweep .hl:nth-child(8) { animation-delay: 0.280s; }
+.empty .hero h1.sweep .hl:nth-child(9) { animation-delay: 0.315s; }
+.empty .hero h1.sweep .hl:nth-child(10) { animation-delay: 0.350s; }
+.empty .hero h1.sweep .hl:nth-child(11) { animation-delay: 0.385s; }
+.empty .hero h1.sweep .hl:nth-child(12) { animation-delay: 0.420s; }
+.empty .hero h1.sweep .hl:nth-child(13) { animation-delay: 0.455s; }
+.empty .hero h1.sweep .hl:nth-child(14) { animation-delay: 0.490s; }
+.empty .hero h1.sweep .hl:nth-child(15) { animation-delay: 0.525s; }
+.empty .hero h1.sweep .hl:nth-child(16) { animation-delay: 0.560s; }
+.empty .hero h1.sweep .hl:nth-child(17) { animation-delay: 0.595s; }
+.empty .hero h1.sweep .hl:nth-child(18) { animation-delay: 0.630s; }
+.empty .hero h1.sweep .hl:nth-child(19) { animation-delay: 0.665s; }
+.empty .hero h1.sweep .hl:nth-child(20) { animation-delay: 0.700s; }
+.empty .hero h1.sweep .hl:nth-child(21) { animation-delay: 0.735s; }
+.empty .hero h1.sweep .hl:nth-child(22) { animation-delay: 0.770s; }
+.empty .hero h1.sweep .hl:nth-child(23) { animation-delay: 0.805s; }
+.empty .hero h1.sweep .hl:nth-child(24) { animation-delay: 0.840s; }
+.empty .hero h1.sweep .hl:nth-child(25) { animation-delay: 0.875s; }
+.empty .hero h1.sweep .hl:nth-child(26) { animation-delay: 0.910s; }
+.empty .hero h1.sweep .hl:nth-child(27) { animation-delay: 0.945s; }
+.empty .hero h1.sweep .hl:nth-child(28) { animation-delay: 0.980s; }
+.empty .hero h1.sweep .hl:nth-child(29) { animation-delay: 1.015s; }
+@keyframes hsweep { 0%, 100% { text-shadow: none; } 40% { text-shadow: 0 0 16px color-mix(in srgb, var(--text) 60%, transparent); transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .empty .hero .walker { display: none; } }
 </style>
 </head>
 <body>
@@ -1203,7 +1255,7 @@ body #send:hover, #send:hover { opacity: .85; background: var(--text) !important
       <div id="findBar" hidden><input id="findIn" placeholder="Chercher dans la conversation…" spellcheck="false"><span id="findN"></span><button class="icon" id="findPrev" title="Précédent (⇧↩)">↑</button><button class="icon" id="findNext" title="Suivant (↩)">↓</button><button class="icon" id="findClose" title="Fermer (Échap)">✕</button></div>
       <div id="scroll"><div id="thread"></div></div>
       <footer>
-        <div id="liveBar" hidden><span class="ldot lrobot" data-robot></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
+        <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
         <div class="composer">
           <div class="slash" id="slash" hidden></div>
           <div class="atts" id="pending"></div>
@@ -1375,7 +1427,7 @@ function robotSVG(cls = "") {
     <rect x="5" y="9" width="6" height="4" fill="var(--robot)"/>
     <rect class="chest" x="7" y="10" width="2" height="1" fill="var(--robot-d)"/>
     <rect class="arm al" x="3" y="10" width="2" height="1" fill="var(--robot)"/><rect class="arm ar" x="11" y="10" width="2" height="1" fill="var(--robot)"/>
-    <rect x="5" y="13" width="2" height="2" fill="var(--robot)"/><rect x="9" y="13" width="2" height="2" fill="var(--robot)"/>
+    <rect class="leg ll" x="5" y="13" width="2" height="2" fill="var(--robot)"/><rect class="leg lr" x="9" y="13" width="2" height="2" fill="var(--robot)"/>
   </svg>`;
 }
 function placeRobots(root = document) { $$("[data-robot]", root).forEach((el) => { if (!el.firstChild) el.innerHTML = robotSVG(); }); }
@@ -1964,7 +2016,7 @@ function renderThread() {
     const agent = S.mode === "agent";
     const rec = list.slice(0, 6);
     document.body.classList.add("home");
-    t.innerHTML = `<div class="empty"><div class="hero"><span class="logo">${robotSVG()}</span><h1>${esc(greeting())}</h1></div>
+    t.innerHTML = `<div class="empty"><div class="hero"><span class="logo" title="Coucou">${robotSVG()}</span><h1>${heroLetters(greeting())}</h1></div>
       <div class="sub1">${agent ? "Je travaille directement dans ton dossier : je crée, modifie, lance et vérifie le code." : "Pose une question, demande du code, un document ou une recherche sur le web."}</div></div>`;
     const chips = agent
       ? [["phone", "App iOS", "Crée une app SwiftUI et une API Flask, puis lance-la dans le simulateur"],
@@ -1981,6 +2033,7 @@ function renderThread() {
       ${rec.length ? `<div class="hrec"><div class="hrt">Récents</div>${rec.slice(0, 5).map((c) => `<button class="hrow" data-open="${c.id}">${svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat")}<span class="hrn">${esc((c.title || "Sans titre").replace(/^⏱\s*/, ""))}</span><span class="hrw">${relTime(c.updated)}</span></button>`).join("")}</div>` : ""}`;
     $$(".hchip", hb).forEach((b) => (b.onclick = () => { $("#input").value = b.dataset.p; $("#input").focus(); $("#input").dispatchEvent(new Event("input")); }));
     $$("[data-open]", hb).forEach((b) => (b.onclick = () => openConv(b.dataset.open)));
+    heroStart();
     updateCtx();
     return;
   }
@@ -1997,6 +2050,69 @@ function renderThread() {
   setBusy(!!live);
   updateCtx();
   scrollDown(true);
+}
+
+// ======================================================================= the home robot's show
+// it beams in above the greeting, walks on the letters (each one lights up under its feet), dives between the
+// words and comes back out, then jumps off and beams away. Again every few seconds, or when you hover it.
+function heroLetters(text) {
+  return [...text].map((ch) => ch === " " ? '<span class="hl sp">&nbsp;</span>' : `<span class="hl">${esc(ch)}</span>`).join("");
+}
+let heroRun = 0, heroTimer = null;
+function heroStart() {
+  clearTimeout(heroTimer);
+  const logo = $(".empty .hero .logo");
+  if (logo) logo.onmouseenter = () => { if (!logo.dataset.busy) heroShow(); };
+  heroTimer = setTimeout(function again() { if (!$(".empty .hero h1")) return; heroShow(); heroTimer = setTimeout(again, 17000); }, 1400);
+}
+async function heroShow() {
+  const h1 = $(".empty .hero h1"), logo = $(".empty .hero .logo");
+  if (!h1 || !logo || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const my = ++heroRun; logo.dataset.busy = "1";
+  const letters = $$(".hl", h1); if (!letters.length) return;
+  let w = $(".walker", h1);
+  if (!w) { w = document.createElement("span"); w.className = "walker"; w.innerHTML = robotSVG(); h1.appendChild(w); }
+  w.getAnimations().forEach((a) => a.cancel()); w.style.opacity = "";
+  const fs = parseFloat(getComputedStyle(h1).fontSize) || 32, size = Math.round(fs * 0.8);
+  w.style.width = w.style.height = size + "px"; $(".robot", w).style.width = $(".robot", w).style.height = size + "px";
+  const y0 = letters[0].offsetTop + fs * 0.2 - size;  // standing on the tops of the letters
+  const x = (i) => letters[i].offsetLeft + letters[i].offsetWidth / 2 - size / 2;
+  const alive = () => my === heroRun && document.body.contains(h1);
+  const go = (frames, opts) => { const prev = w.getAnimations(); const a = w.animate(frames, { fill: "forwards", easing: "ease-in-out", ...opts });
+    return a.finished.then(() => prev.forEach((p) => p.cancel())).catch(() => {}); };
+  const at = (i, dy = 0, extra = "") => `translate(${x(i)}px, ${y0 + dy}px) ${extra}`;
+  try {
+    logo.classList.add("launch");  // the big robot sends its little twin
+    await go([{ transform: at(0, -40, "scale(.15)"), opacity: 0, filter: "blur(6px) brightness(2)" },
+              { transform: at(0, -10, "scale(1.1)"), opacity: 1, filter: "blur(0) brightness(1.6)", offset: .7 },
+              { transform: at(0), opacity: 1, filter: "none" }], { duration: 700 });
+    logo.classList.remove("launch");
+    w.style.opacity = "1";  // stays visible while it walks (the arrival animation is dropped as the walk goes on)
+    w.classList.add("walk");
+    for (let i = 1; i < letters.length; i++) {
+      if (!alive()) return;
+      if (letters[i].classList.contains("sp") && i + 1 < letters.length) {  // a gap between two words: dive in, come back out
+        w.classList.add("behind");
+        await go([{ transform: at(i - 1) }, { transform: at(i, fs * 0.15) }, { transform: at(i, fs * 0.75) }], { duration: 480 });
+        await new Promise((r) => setTimeout(r, 260));
+        await go([{ transform: at(i, fs * 0.75) }, { transform: at(i + 1, -fs * 0.35), offset: .6 }, { transform: at(i + 1) }], { duration: 560 });
+        w.classList.remove("behind");
+        letters[i + 1].classList.add("lit"); setTimeout(() => letters[i + 1]?.classList.remove("lit"), 900);
+        i++;
+        continue;
+      }
+      letters[i].classList.add("lit"); setTimeout(() => letters[i]?.classList.remove("lit"), 900);
+      await go([{ transform: at(i - 1) }, { transform: at(i) }], { duration: 240, easing: "linear" });
+    }
+    w.classList.remove("walk");
+    if (!alive()) return;
+    const n = letters.length - 1;
+    await go([{ transform: at(n) }, { transform: at(n, -size * 0.9, "rotate(-12deg)"), offset: .45 },
+              { transform: at(n, -size * 0.3, "translateX(" + size * 1.2 + "px) scale(.2)"), opacity: 0, filter: "blur(6px) brightness(2)" }], { duration: 760 });
+    w.style.opacity = "0";
+    h1.classList.add("sweep"); setTimeout(() => h1.classList.remove("sweep"), 1600);  // a light runs over the greeting
+    logo.classList.add("catch"); setTimeout(() => logo.classList.remove("catch"), 900);
+  } finally { if (my === heroRun) delete logo.dataset.busy; }
 }
 let stickBottom = true;  // follow the conversation as it grows, until the user scrolls up to read
 function scrollDown(force) { const s = $("#scroll"); if (force) stickBottom = true; if (stickBottom) s.scrollTop = s.scrollHeight; }
@@ -4336,7 +4452,7 @@ function buildRail() {
   const items = [["chat", "chat", "Chat", "#5b9cf5"], ["agent", "agent", "Agent : code, fichiers, commandes", "#d97757"],
     ["sched", "schedules", "Planifier", "#e0a43c"], ["art", "artifacts", "Artéfacts", "#a47ce8"], ["models", "models", "Modèles", "#3fb9a0"],
     ["skills", "skills", "Skills", "#e56aa0"], ["mcp", "mcp", "Serveurs MCP", "#7dbb5a"]];
-  $("#rail").innerHTML = `<button class="rbtn logo" data-cmd="home" title="Accueil · nouvelle conversation"><div data-robot></div></button>`
+  $("#rail").innerHTML = `<button class="rbtn logo" data-cmd="home" title="Accueil · nouvelle conversation"><span class="mono-n">N</span></button>`
     + items.map(([ic, go, t, c]) => `<button class="rbtn" data-go="${go}" data-c style="--rc:${c}" title="${t}">${svgI(ic)}${go === "schedules" ? '<span class="rdot" id="railAsk" hidden></span>' : ""}</button>`).join("")
     + `<div class="spacer"></div><button class="rbtn" id="railTheme" title="Thème : clair / sombre / automatique"></button>`
     + `<button class="rbtn" data-cmd="sidebar" title="Afficher / masquer la liste des conversations (⌘B)">${svgI("list")}</button>`
