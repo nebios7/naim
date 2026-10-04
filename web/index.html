@@ -1122,6 +1122,32 @@ body.busyrun #toBottom svg { display: none; }
 body.busyrun #toBottom .tbdots { display: inline-flex; }
 /* the conversation fades out softly above the composer */
 body:not(.home) #scroll { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); }
+/* ---- calm, neutral look: no blue on what you type, subtle motion ---- */
+body .composer:focus-within, .composer:focus-within { border-color: color-mix(in srgb, var(--text) 26%, var(--line)) !important; box-shadow: 0 4px 18px rgb(0 0 0 / .10) !important; }
+body #send, #send { background: var(--text) !important; color: var(--bg) !important; border-color: transparent !important; border-radius: 999px !important; transition: transform .15s var(--ease), opacity .15s; }
+body #send:hover, #send:hover { opacity: .85; background: var(--text) !important; }
+#modePill.chat { color: var(--text) !important; background: var(--hover) !important; border-color: var(--line) !important; }
+.turn.user .bubble { background: var(--hover) !important; border: 0 !important; }
+.md li::marker { color: var(--muted) !important; }
+.md :not(pre) > code { color: var(--text) !important; background: var(--code) !important; border-color: var(--line) !important; }
+.md a, .sub a { color: var(--text) !important; border-bottom: 1px solid color-mix(in srgb, var(--text) 35%, transparent) !important; }
+.md a:hover { border-bottom-color: var(--text) !important; }
+::selection { background: color-mix(in srgb, var(--text) 22%, transparent); }
+.conv.active, .conv.on { box-shadow: none !important; background: var(--hover) !important; }
+/* the robot is alive everywhere: logo idles, the one next to the status works */
+#liveBar .ldot.lrobot { width: 18px; height: 18px; background: none !important; border-radius: 0; animation: none !important; display: inline-flex !important; flex: none; }
+#liveBar .lrobot .robot { width: 18px; height: 18px; animation: rwork 1.1s ease-in-out infinite; }
+#liveBar .lrobot .robot .tip, #liveBar .lrobot .robot .chest { animation: rglow .8s ease-in-out infinite; }
+#liveBar .lrobot .robot .eye { animation: rscan 2.2s ease-in-out infinite; }
+#rail .robot .eye, .brand .robot .eye { animation: rlook 11s ease-in-out infinite; }
+#rail .robot .tip, .brand .robot .tip { animation: rglow 3.5s ease-in-out infinite; }
+@keyframes rwork { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-6%) rotate(-4deg); } 75% { transform: translateY(-6%) rotate(4deg); } }
+@keyframes rscan { 0%, 100% { transform: translateX(-35%); } 50% { transform: translateX(35%); } }
+/* messages arrive softly */
+.turn { animation: naimIn .22s var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { #liveBar .lrobot .robot, #liveBar .lrobot .robot *, #rail .robot *, .brand .robot *, .turn { animation: none !important; } }
+#permPill { color: var(--text) !important; background: none !important; border-color: var(--line) !important; }
+#permPill svg { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -1177,7 +1203,7 @@ body:not(.home) #scroll { -webkit-mask-image: linear-gradient(to bottom, #000 ca
       <div id="findBar" hidden><input id="findIn" placeholder="Chercher dans la conversation…" spellcheck="false"><span id="findN"></span><button class="icon" id="findPrev" title="Précédent (⇧↩)">↑</button><button class="icon" id="findNext" title="Suivant (↩)">↓</button><button class="icon" id="findClose" title="Fermer (Échap)">✕</button></div>
       <div id="scroll"><div id="thread"></div></div>
       <footer>
-        <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
+        <div id="liveBar" hidden><span class="ldot lrobot" data-robot></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
         <div class="composer">
           <div class="slash" id="slash" hidden></div>
           <div class="atts" id="pending"></div>
@@ -2132,7 +2158,7 @@ function addBot(m, idx) {
     setThinking(t) { think.hidden = !t; $("div", think).textContent = t; },
     setStats(s) { $(".stats", d).textContent = s && S.show_stats ? `${s.tokens} tokens · ${s.tps.toFixed(1)} tok/s` : ""; },
     typing(text) {
-      working.hidden = false; $(".wtext", working).innerHTML = esc((text || "Naim réfléchit").replace(/[.…\s]+$/, "")) + DOTS;
+      working.hidden = false; $(".wtext", working).textContent = (text || "Naim réfléchit").replace(/[.…\s]+$/, "") + "…";
       if (!v._t0) {
         v._t0 = Date.now();
         v._timer = setInterval(() => {
@@ -2672,7 +2698,7 @@ function updateLiveBar() {
   const label = (r.status || "Naim réfléchit").replace(/[.…\s]+$/, "");
   if (bar.dataset.label !== label + step) {  // rewritten only when it changes: the dots keep their rhythm
     bar.dataset.label = label + step;
-    $(".ltext", bar).innerHTML = (step ? `<span class="lstep">${step}</span>` : "") + `<span class="lword">${esc(label)}</span>${DOTS}`;
+    $(".ltext", bar).innerHTML = (step ? `<span class="lstep">${step}</span>` : "") + `<span class="lword">${esc(label)}…</span>`;
   }
   const sec = Math.round((Date.now() - r.t0) / 1000);
   $(".ltime", bar).textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")}`;
