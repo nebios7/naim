@@ -1070,12 +1070,12 @@ body.vnarrow.sideopen aside#side { display: flex; position: fixed; top: 0; botto
 body.vtiny .ctools #modelPick b { max-width: 70px; }
 body.vtiny #titleBtn { max-width: 52%; }
 /* the robot is alive on the home page */
-.empty .hero .robot { animation: rfloat 4.2s ease-in-out infinite; cursor: pointer; }
+.empty .hero .robot { cursor: pointer; }
 .empty .hero .robot .eye { animation: rlook 9s ease-in-out infinite; }
 .empty .hero .robot .tip { animation: rglow 2.4s ease-in-out infinite; }
-.empty .hero .robot .ar { transform-box: fill-box; transform-origin: 0 50%; animation: rwave 7s ease-in-out infinite; }
+
 .empty .hero .robot .chest { animation: rglow 1.6s ease-in-out infinite; }
-.empty .hero .logo:hover .robot { animation: rhop .5s ease-out; }
+
 .empty .hero .logo:hover .robot .eye { animation: none; transform: scaleY(.35); }
 @keyframes rfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5%); } }
 @keyframes rlook { 0%, 30%, 100% { transform: translateX(0) scaleY(1); } 34%, 46% { transform: translateX(-40%) scaleY(1); } 50%, 62% { transform: translateX(40%) scaleY(1); }
@@ -1200,6 +1200,7 @@ body #send:hover, #send:hover { opacity: .85; background: var(--text) !important
 .empty .hero h1.sweep .hl:nth-child(29) { animation-delay: 1.015s; }
 @keyframes hsweep { 0%, 100% { text-shadow: none; } 40% { text-shadow: 0 0 16px color-mix(in srgb, var(--text) 60%, transparent); transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .empty .hero .walker { display: none; } }
+#rail .rtop { height: 6px; }
 </style>
 </head>
 <body>
@@ -2082,11 +2083,9 @@ async function heroShow() {
     return a.finished.then(() => prev.forEach((p) => p.cancel())).catch(() => {}); };
   const at = (i, dy = 0, extra = "") => `translate(${x(i)}px, ${y0 + dy}px) ${extra}`;
   try {
-    logo.classList.add("launch");  // the big robot sends its little twin
     await go([{ transform: at(0, -40, "scale(.15)"), opacity: 0, filter: "blur(6px) brightness(2)" },
               { transform: at(0, -10, "scale(1.1)"), opacity: 1, filter: "blur(0) brightness(1.6)", offset: .7 },
               { transform: at(0), opacity: 1, filter: "none" }], { duration: 700 });
-    logo.classList.remove("launch");
     w.style.opacity = "1";  // stays visible while it walks (the arrival animation is dropped as the walk goes on)
     w.classList.add("walk");
     for (let i = 1; i < letters.length; i++) {
@@ -2095,7 +2094,7 @@ async function heroShow() {
         w.classList.add("behind");
         await go([{ transform: at(i - 1) }, { transform: at(i, fs * 0.15) }, { transform: at(i, fs * 0.75) }], { duration: 480 });
         await new Promise((r) => setTimeout(r, 260));
-        await go([{ transform: at(i, fs * 0.75) }, { transform: at(i + 1, -fs * 0.35), offset: .6 }, { transform: at(i + 1) }], { duration: 560 });
+        await go([{ transform: at(i, fs * 0.75) }, { transform: at(i + 1, fs * 0.15), offset: .6 }, { transform: at(i + 1) }], { duration: 560 });
         w.classList.remove("behind");
         letters[i + 1].classList.add("lit"); setTimeout(() => letters[i + 1]?.classList.remove("lit"), 900);
         i++;
@@ -2107,11 +2106,9 @@ async function heroShow() {
     w.classList.remove("walk");
     if (!alive()) return;
     const n = letters.length - 1;
-    await go([{ transform: at(n) }, { transform: at(n, -size * 0.9, "rotate(-12deg)"), offset: .45 },
-              { transform: at(n, -size * 0.3, "translateX(" + size * 1.2 + "px) scale(.2)"), opacity: 0, filter: "blur(6px) brightness(2)" }], { duration: 760 });
+    await go([{ transform: at(n), opacity: 1 }, { transform: at(n, 0, "scale(.2)"), opacity: 0, filter: "blur(6px) brightness(2)" }], { duration: 600 });
     w.style.opacity = "0";
     h1.classList.add("sweep"); setTimeout(() => h1.classList.remove("sweep"), 1600);  // a light runs over the greeting
-    logo.classList.add("catch"); setTimeout(() => logo.classList.remove("catch"), 900);
   } finally { if (my === heroRun) delete logo.dataset.busy; }
 }
 let stickBottom = true;  // follow the conversation as it grows, until the user scrolls up to read
@@ -4452,7 +4449,7 @@ function buildRail() {
   const items = [["chat", "chat", "Chat", "#5b9cf5"], ["agent", "agent", "Agent : code, fichiers, commandes", "#d97757"],
     ["sched", "schedules", "Planifier", "#e0a43c"], ["art", "artifacts", "Artéfacts", "#a47ce8"], ["models", "models", "Modèles", "#3fb9a0"],
     ["skills", "skills", "Skills", "#e56aa0"], ["mcp", "mcp", "Serveurs MCP", "#7dbb5a"]];
-  $("#rail").innerHTML = `<button class="rbtn logo" data-cmd="home" title="Accueil · nouvelle conversation"><span class="mono-n">N</span></button>`
+  $("#rail").innerHTML = `<div class="rtop"></div>`
     + items.map(([ic, go, t, c]) => `<button class="rbtn" data-go="${go}" data-c style="--rc:${c}" title="${t}">${svgI(ic)}${go === "schedules" ? '<span class="rdot" id="railAsk" hidden></span>' : ""}</button>`).join("")
     + `<div class="spacer"></div><button class="rbtn" id="railTheme" title="Thème : clair / sombre / automatique"></button>`
     + `<button class="rbtn" data-cmd="sidebar" title="Afficher / masquer la liste des conversations (⌘B)">${svgI("list")}</button>`
