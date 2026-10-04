@@ -1267,6 +1267,7 @@ class Handler(BaseHTTPRequestHandler):
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls, shown = "", [], 0
             stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
+            thought = False
             for chunk in stream:
                 if stop.is_set():
                     break
@@ -1275,6 +1276,7 @@ class Handler(BaseHTTPRequestHandler):
                     break
                 msg = chunk.get("message", {})
                 if msg.get("thinking"):
+                    thought = True
                     self.event({"type": "thinking_token", "text": msg["thinking"]})
                 if msg.get("content"):
                     content += msg["content"]
@@ -1290,6 +1292,11 @@ class Handler(BaseHTTPRequestHandler):
             raw = raw_tool_calls(content)
             if not calls and raw:  # written as text: executed anyway
                 calls = raw
+            if think and thought and not calls and not content.strip() and not stop.is_set():
+                # it stopped inside its reasoning, without answering: the same step again, without reasoning
+                think = False
+                self.event({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
+                continue
             clean = content.split("<tool_call")[0]
             if not calls and len(clean) > shown:  # end of a plain answer: the characters held back
                 self.event({"type": "token", "text": clean[shown:]})
