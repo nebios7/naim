@@ -92,7 +92,7 @@ ANSWER_TOOLS = {"read_file", "list_files", "find_files", "search", "find_symbol"
                 "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
 # the user wants files made or changed (a document, their project), not only an answer
-FILE_WORK_RE = re.compile(r"fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|projet|dossier|"
+FILE_WORK_RE = re.compile(r"images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|projet|dossier|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
                           r"installe|lance|ex[ée]cute|teste|\w\.[a-z]{1,5}\b", re.I)
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
@@ -1205,7 +1205,10 @@ class Handler(BaseHTTPRequestHandler):
         "needs an action, a file or fresh information, then give the answer. Never write code meant to create a file "
         "yourself: call the tool. Files you create go in {folder}.\nTo teach, explain or show code, write it IN your reply: "
         "short explanations and complete examples in Markdown code blocks, step by step, then one question to go on. "
-        "Do not create a file for that unless the user asks for a file or a document.")
+        "Do not create a file for that unless the user asks for a file or a document.\nA diagram or schema asked in the "
+        "conversation: draw it IN your reply as a ```mermaid code block (the app shows it as a real diagram, with SVG/PNG "
+        "export). Keep it readable: 8-20 boxes, short French labels, no special characters inside labels. When it shows "
+        "facts (models, companies, numbers, dates), check them first with web_search: never invent a figure.")
 
     def chat_agentic(self, body, messages, options, stop, files=False, act=False):
         """Chat mode with all of Naim's tools, streamed: text appears as it is written, tools run in the same reply."""
@@ -1269,6 +1272,7 @@ class Handler(BaseHTTPRequestHandler):
     def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
         nudges = 1 if body.get("_relaunched") else 0
+        seen_calls, stuck = {}, False
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
         file_work = bool(FILE_WORK_RE.search(asked))
         if not file_work and not files:
@@ -1291,10 +1295,15 @@ class Handler(BaseHTTPRequestHandler):
                                  "essentiel, puis réponds avec ce que tu as trouvé.)"})
             with helper._inbox_lock:  # what the user typed while Naim was working: taken into account now
                 notes, helper._inbox = helper._inbox, []
+            if any(re.match(r"\s*(stop|stoppe|arr[eê]te|arr[eê]tes?[- ]toi|annule)\b", n, re.I) for n in notes):
+                stop.set()  # « Stop » typed while Naim works: it stops, like the stop button
+                self.event({"type": "stopped"})
+                break
             if notes:
                 messages.append({"role": "user", "content": "(Message de l'utilisateur pendant ton travail — prends-le en "
                                  "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
                 self.event({"type": "interjection_read", "count": len(notes)})
+            last = last or stuck
             tools = None if last and used_tools else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
             if tools and not files and not file_work:  # a question, a lesson: the answer goes in the conversation
                 tools = [t for t in tools if t["function"]["name"] in ANSWER_TOOLS]
@@ -1358,6 +1367,15 @@ class Handler(BaseHTTPRequestHandler):
                         args = json.loads(args)
                     except ValueError:
                         args = {}
+                sig = name + json.dumps(args, sort_keys=True, ensure_ascii=False)[:500]
+                seen_calls[sig] = seen_calls.get(sig, 0) + 1
+                if seen_calls[sig] > 2:  # the same call a third time: it is going round in circles
+                    stuck = True
+                    messages.append({"role": "tool", "tool_name": name, "content": "refused: you already did exactly this twice."})
+                    messages.append({"role": "user", "content": "Tu répètes la même action sans résultat : arrête-la. Change de "
+                                     "méthode ou réponds maintenant avec ce que tu sais (pour un schéma : un bloc ```mermaid "
+                                     "dans ta réponse)."})
+                    continue
                 self.event({"type": "tool", "name": name, "args": args})
                 try:
                     if name == "aller_dans_dossier":
