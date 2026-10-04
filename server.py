@@ -1157,6 +1157,53 @@ class Handler(BaseHTTPRequestHandler):
                             "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9)})
         self.event({"type": "done"})
 
+    FOLDER_TOOL = {"type": "function", "function": {
+        "name": "aller_dans_dossier",
+        "description": ("Work in another folder of this Mac: the one the user names (« nous sommes dans INLI », « le dossier "
+                        "Factures du Bureau ») or a path. It is searched in Desktop, Documents, Downloads and the home "
+                        "folder; then your file tools (list_files, read_file, find_files…) work there. Call it first when "
+                        "the user talks about a folder you are not in."),
+        "parameters": {"type": "object", "properties": {"dossier": {"type": "string", "description": "name or path of the folder"}},
+                       "required": ["dossier"]}}}
+
+    @staticmethod
+    def find_folders(q):
+        """Folders matching a path or a name (accents and case ignored) in the usual places, the fullest first."""
+        import unicodedata
+        q = (q or "").strip().rstrip("/")
+        p = Path(q).expanduser()
+        if p.is_absolute() and p.is_dir():
+            return [p]
+        norm = lambda t: "".join(c for c in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(c) != "Mn").strip()
+        want, hits = norm(Path(q).name), []
+        if "/" in q and (Path.home() / q).is_dir():
+            hits.append(Path.home() / q)
+        for base in (Path.home() / "Desktop", Path.home() / "Documents", Path.home() / "Downloads", Path.home()):
+            for dirpath, dirnames, _ in os.walk(base):
+                depth = len(Path(dirpath).relative_to(base).parts)
+                dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS and d != "Library"] if depth < 3 else []
+                hits += [Path(dirpath) / d for d in dirnames if norm(d) == want]
+        uniq = {}
+        for h in hits:  # same folder reached twice (case-insensitive disk, home + Desktop walk)
+            uniq.setdefault(str(h.resolve()).lower(), h.resolve())
+        count = lambda d: sum(1 for x in d.rglob("*") if x.is_file() and not x.name.startswith("."))
+        return sorted(uniq.values(), key=count, reverse=True)
+
+    FOLDER_RE = re.compile(r"\b(?:r[ée]pertoire|dossier|folder|directory)\s+(?:de\s+|du\s+|nomm[ée]\s+|appel[ée]\s+)?"
+                           r"[«\"'`]?\s*([~/]?[\w][\w .\-/À-ÿ]{0,80}?)\s*[»\"'`]?(?=[\s.,;:!?)]|$)", re.I)
+
+    def folder_from_text(self, texts):
+        """« nous sommes dans le répertoire INLI » → that folder (the most recent message that names one)."""
+        for t in texts:
+            for m in self.FOLDER_RE.finditer(t or ""):
+                name = m.group(1).strip()
+                if len(name) < 2 or name.lower() in ("actuel", "courant", "du projet", "ci-dessus", "suivant"):
+                    continue
+                found = self.find_folders(name)
+                if found:
+                    return found[0], found[1:4]
+        return None, []
+
     CHAT_TOOLS_NOTE = (
         "\n\nIn this conversation you can also ACT, with tools: read and write files, run commands, search the web, "
         "create documents (creer_fichier: PDF, Word, Excel, ZIP…), send emails, schedule tasks, and more (use_tools loads "
@@ -1192,6 +1239,11 @@ class Handler(BaseHTTPRequestHandler):
         if not folder.is_dir():
             folder = chatfiles.OUT
         folder.mkdir(parents=True, exist_ok=True)
+        named, others = self.folder_from_text([body["message"]] + [str(m.get("content") or "") for m in
+                                                                   reversed((body.get("history") or [])[-6:]) if m.get("role") == "user"])
+        if named and named.resolve() != folder.resolve():  # the user names the folder to work in: go there first
+            folder = named
+            self.event({"type": "project", "path": str(named)})
         helper = Agent(str(folder), body.get("model", "naim"), auto_yes=bool(body.get("auto_yes")), emit=self.event,
                        approver=approver, options=options, **agent_settings(body))
         run_id = body.get("run_id") or helper.run_id
@@ -1202,7 +1254,11 @@ class Handler(BaseHTTPRequestHandler):
         own = mailer.own_addresses() if helper.features.get("email") else []
         allowed = mailer.addresses(" ".join(agent_settings(body)["email_allowed"]))
         me = next((a for a in own if a in allowed), None) or (own[0] if own else None)
-        note = self.CHAT_TOOLS_NOTE.format(folder=folder) + (f"\nThe user's own email address (« moi »): {me}" if me else "")
+        note = self.CHAT_TOOLS_NOTE.format(folder=folder) + (
+            f"\nYou are working in the folder {folder} (relative paths are inside it). Before asking the user where a "
+            "file is, look for it yourself (list_files, find_files)."
+            + (f"\nFiles in this folder:\n{helper.list_files('.')[:2500]}" if named else "")
+            + (f" Other folders with the same name: {', '.join(map(str, others))}." if named and others else "")) + (f"\nThe user's own email address (« moi »): {me}" if me else "")
         if getattr(helper, "_tool_groups", None):
             note += ("\nSpecialised tool groups (use_tools): " + "; ".join(f"{g} ({TOOL_GROUPS[g][1]})" for g in helper._tool_groups))
         messages = [dict(messages[0], content=messages[0]["content"] + note)] + messages[1:]
@@ -1225,7 +1281,7 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "user", "content": "(Message de l'utilisateur pendant ton travail — prends-le en "
                                  "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
                 self.event({"type": "interjection_read", "count": len(notes)})
-            tools = helper.tools + [chatfiles.FILE_TOOL]
+            tools = helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls, shown = "", [], 0
             stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
@@ -1270,7 +1326,19 @@ class Handler(BaseHTTPRequestHandler):
                         args = {}
                 self.event({"type": "tool", "name": name, "args": args})
                 try:
-                    if name == "creer_fichier":
+                    if name == "aller_dans_dossier":
+                        options_ = self.find_folders(args.get("dossier", ""))
+                        found = options_[0] if options_ else None
+                        if not found:
+                            result = f"error: folder « {args.get('dossier')} » not found in Desktop, Documents, Downloads or home; ask the user for its path"
+                        else:
+                            helper.root = found.resolve()
+                            self.event({"type": "project", "path": str(found)})  # the app now works there too
+                            others = [str(o) for o in options_[1:4]]
+                            result = (f"ok: now working in {found}."
+                                      + (f" Other folders with this name: {', '.join(others)} — if it is not the right one, ask the user." if others else "")
+                                      + "\nFiles:\n" + helper.list_files(".")[:3000])
+                    elif name == "creer_fichier":
                         result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"))
                         made.append(info)
                         self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": list(reversed(made))})
@@ -1296,15 +1364,12 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "user", "content": "Voici l'image du fichier." if looked else "Voici la capture d'écran.",
                                  "images": imgs})
             used_tools = True
-        if used_tools and not stop.is_set() and not content.strip():
-            # it acted but said nothing: one more turn to tell what it saw / did, or what blocks (never a silent stop)
-            for chunk in ollama_chat(body.get("model", "naim"), messages + [{"role": "user", "content": (
-                    "Réponds maintenant à l'utilisateur : ce que tu as vu ou fait, et la suite (continue la tâche s'il "
-                    "reste quelque chose à faire).")}], tools=None, think=False, stream=True, options=options):
-                if stop.is_set():
-                    break
-                if (chunk.get("message") or {}).get("content"):
-                    self.event({"type": "token", "text": chunk["message"]["content"]})
+        if used_tools and not stop.is_set() and not content.strip() and not body.get("_relaunched"):
+            # it acted but said nothing: once more, WITH its tools, to go on with the task or say what it found
+            messages.append({"role": "user", "content": "Continue : poursuis la tâche avec tes outils s'il reste quelque chose "
+                             "à faire, sinon réponds à l'utilisateur (ce que tu as vu ou fait)."})
+            return self._chat_steps({**body, "_relaunched": True}, messages, options, stop, False, helper, think, repeating,
+                                    chatfiles, run_id)
         if mail_error and not sent:  # never let a reply suggest an email left when it did not
             self.event({"type": "token", "text": f"\n\nL'e-mail n'a pas pu partir. Erreur exacte : {mail_error.removeprefix('error: ')[:300]}"})
         self.event({"type": "done"})

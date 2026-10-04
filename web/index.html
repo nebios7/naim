@@ -2341,6 +2341,7 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "screenshot": if (lastTool && ev.image) { lastTool.image = ev.image; v.shot(ev.image, ev.label); } break;
           case "deliverable_look": if (lastTool && ev.image) { lastTool.image = ev.image; v.shot(ev.image, `Aperçu de ${ev.path}`); } break;
           case "deliverables": reply.deliverables = { root: ev.root, files: ev.files }; break;
+          case "project": if (ev.path && ev.path !== S.project) { S.project = ev.path; saveSettings(); if ($("#project")) $("#project").value = ev.path; toast(`Naim travaille dans ${ev.path.replace(/^\/Users\/[^/]+/, "~")}`); } break;
           case "note": reply.steps.push({ type: "note", text: ev.text }); v.note(ev.text); break;
           case "approval": v.approval(ev); break;
           case "question": { const st = { type: "question", id: ev.id, question: ev.question, options: ev.options || [], multiple: !!ev.multiple, answer: null }; reply.steps.push(st); v.question(st); break; }
