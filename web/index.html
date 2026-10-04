@@ -1050,6 +1050,39 @@ body.home .empty { margin: 0 auto 22px; }
 .hrow svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
 .hrow .hrn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hrow .hrw { color: var(--muted); font-size: 12px; flex: none; }
+/* Header: title on the left, tools on the right (mode and model are in the composer) */
+#modeSeg { display: none !important; }
+header#chatHeader { min-height: 46px; gap: 4px; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+#titleBtn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: min(60%, 520px); font-weight: 500; font-size: 14px; padding: 5px 8px; border-radius: var(--r-m, 9px); }
+#titleBtn .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#titleBtn svg { width: 13px; height: 13px; flex: none; opacity: .6; }
+#titleBtn:hover { background: var(--side); }
+/* model picker inside the composer */
+.ctools #modelPick { border: 0; background: none; padding: 3px 8px; gap: 6px; min-width: 0; max-width: 170px; border-radius: 999px; color: var(--muted); font-size: 12.5px; }
+.ctools #modelPick:hover { background: var(--side); color: var(--text); }
+.ctools #modelPick b { font-weight: 500; }
+.ctools #modelPick small { display: none; }
+.ctools #modelPick .mdot { width: 7px; height: 7px; }
+/* narrow window or big zoom: the sidebar folds away and opens over the page */
+body.vnarrow aside#side { display: none; }
+body.vnarrow.sideopen aside#side { display: flex; position: fixed; top: 0; bottom: 0; left: 52px; z-index: 30; width: min(300px, 80vw); box-shadow: var(--shadow); animation: naimSlide .16s var(--ease) both; }
+body.vtiny .ctools #modelPick b { max-width: 70px; }
+body.vtiny #titleBtn { max-width: 52%; }
+/* the robot is alive on the home page */
+.empty .hero .robot { animation: rfloat 4.2s ease-in-out infinite; cursor: pointer; }
+.empty .hero .robot .eye { animation: rlook 9s ease-in-out infinite; }
+.empty .hero .robot .tip { animation: rglow 2.4s ease-in-out infinite; }
+.empty .hero .robot .ar { transform-box: fill-box; transform-origin: 0 50%; animation: rwave 7s ease-in-out infinite; }
+.empty .hero .robot .chest { animation: rglow 1.6s ease-in-out infinite; }
+.empty .hero .logo:hover .robot { animation: rhop .5s ease-out; }
+.empty .hero .logo:hover .robot .eye { animation: none; transform: scaleY(.35); }
+@keyframes rfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5%); } }
+@keyframes rlook { 0%, 30%, 100% { transform: translateX(0) scaleY(1); } 34%, 46% { transform: translateX(-40%) scaleY(1); } 50%, 62% { transform: translateX(40%) scaleY(1); }
+  66% { transform: translateX(0) scaleY(1); } 80% { transform: scaleY(1); } 82% { transform: scaleY(.12); } 84% { transform: scaleY(1); } }
+@keyframes rglow { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes rwave { 0%, 70%, 100% { transform: translateY(0) rotate(0); } 74%, 82% { transform: translateY(-150%) rotate(-25deg); } 78%, 86% { transform: translateY(-120%) rotate(15deg); } }
+@keyframes rhop { 0% { transform: translateY(0); } 40% { transform: translateY(-14%); } 100% { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .empty .hero .robot, .empty .hero .robot * { animation: none !important; } }
 </style>
 </head>
 <body>
@@ -1276,7 +1309,7 @@ function robotSVG(cls = "") {
     <rect class="eye" x="5" y="5" width="2" height="2" fill="var(--robot-eye)"/><rect class="eye" x="9" y="5" width="2" height="2" fill="var(--robot-eye)"/>
     <rect x="5" y="9" width="6" height="4" fill="var(--robot)"/>
     <rect class="chest" x="7" y="10" width="2" height="1" fill="var(--robot-d)"/>
-    <rect x="3" y="10" width="2" height="1" fill="var(--robot)"/><rect x="11" y="10" width="2" height="1" fill="var(--robot)"/>
+    <rect class="arm al" x="3" y="10" width="2" height="1" fill="var(--robot)"/><rect class="arm ar" x="11" y="10" width="2" height="1" fill="var(--robot)"/>
     <rect x="5" y="13" width="2" height="2" fill="var(--robot)"/><rect x="9" y="13" width="2" height="2" fill="var(--robot)"/>
   </svg>`;
 }
@@ -1578,7 +1611,7 @@ const COMMANDS = {
   models: () => { setView("settings"); showSettingsTab("models"); },
   shortcuts: () => { setView("settings"); showSettingsTab("keys"); },
   palette: () => openPalette(),
-  sidebar: () => { if (innerWidth <= 760) document.body.classList.toggle("sideopen"); else document.body.classList.toggle("noside"); $("#sideBtn").hidden = !document.body.classList.contains("noside"); },
+  sidebar: () => { if (document.body.classList.contains("vnarrow")) document.body.classList.toggle("sideopen"); else document.body.classList.toggle("noside"); fitViewport(); },
   terminal: () => toggleTerminal(),
   git: () => { setView("chat"); if (S.mode !== "agent") setMode("agent"); showPanel("git"); },
   mcp: () => { setView("settings"); showSettingsTab("mcp"); },
@@ -1603,9 +1636,24 @@ const COMMANDS = {
 window.naimCmd = (name) => COMMANDS[name]?.();
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-cmd]"); if (b) { e.preventDefault(); naimCmd(b.dataset.cmd); } });
 
+// the page is zoomed with CSS zoom, which media queries ignore: the layout follows the width that is really available
+function fitViewport() {
+  const w = innerWidth / (parseFloat(document.documentElement.style.zoom) || S.zoom || 1);
+  const b = document.body;
+  b.classList.toggle("vnarrow", w < 1000); b.classList.toggle("vtiny", w < 640);
+  if (!b.classList.contains("vnarrow")) b.classList.remove("sideopen");
+  const hidden = b.classList.contains("vnarrow") ? !b.classList.contains("sideopen") : b.classList.contains("noside");
+  if ($("#sideBtn")) $("#sideBtn").hidden = !hidden;
+}
+addEventListener("resize", () => fitViewport());
+document.addEventListener("click", (e) => {  // the overlay sidebar closes when you click elsewhere or pick a conversation
+  if (!document.body.classList.contains("sideopen")) return;
+  if (!e.target.closest("aside#side") && !e.target.closest("#sideBtn") && !e.target.closest("[data-go], .rbtn")) { document.body.classList.remove("sideopen"); fitViewport(); }
+  else if (e.target.closest("aside#side .conv")) setTimeout(() => { document.body.classList.remove("sideopen"); fitViewport(); }, 0);
+});
 function setZoom(z) {
   S.zoom = Math.round(Math.min(2, Math.max(0.6, z)) * 100) / 100;
-  document.documentElement.style.zoom = S.zoom; if (typeof fitSettings === "function") fitSettings();
+  document.documentElement.style.zoom = S.zoom; if (typeof fitSettings === "function") fitSettings(); fitViewport();
   if (typeof fitComposer === "function") requestAnimationFrame(fitComposer);
   saveSettings(); toast(`Zoom ${Math.round(S.zoom * 100)} %`);
 }
@@ -1796,7 +1844,7 @@ async function openConv(id) {
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 async function saveConv(conv = current) { if (conv) await api(`/api/conversations/${conv.id}`, { method: "PUT", body: conv }); }
 function newConv() { current = null; pending = []; renderPending(); setView("chat"); renderList(); renderThread(); updateTitle(); }
-function updateTitle() { if (S.params_open && typeof renderParams === "function" && !$("#params").contains(document.activeElement)) renderParams(); $("#titleBtn").textContent = (current?.title || "Nouvelle conversation") + " ▾"; document.title = current ? `${current.title} · Naim` : "Naim"; $("#navHome").classList.toggle("on", view === "chat" && !current); }
+function updateTitle() { if (S.params_open && typeof renderParams === "function" && !$("#params").contains(document.activeElement)) renderParams(); $("#titleBtn").innerHTML = `<span class="tt">${esc(current?.title || "Nouvelle conversation")}</span>${typeof svgI === "function" ? svgI("chevd") : ""}`; document.title = current ? `${current.title} · Naim` : "Naim"; $("#navHome").classList.toggle("on", view === "chat" && !current); }
 $("#backBtn").onclick = () => { setView("chat"); if (current) renderThread(); };
 $("#titleBtn").onclick = (e) => {
   e.stopPropagation();
@@ -3886,7 +3934,7 @@ document.addEventListener("click", (e) => {
 function applySettings() {
   applyAccent();
   if (S.theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = S.theme;
-  document.documentElement.style.zoom = S.zoom || 1;
+  document.documentElement.style.zoom = S.zoom || 1; fitViewport();
   document.documentElement.style.setProperty("--fs", `${S.font_size}px`);
   document.documentElement.style.setProperty("--w", WIDTHS[S.width] || WIDTHS.normal);
   document.body.classList.toggle("wrapcode", !!S.wrap_code);
@@ -4177,6 +4225,9 @@ const RICON = {
   auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 000 16z" fill="currentColor"/>',
 };
 const svgI = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${RICON[k]}</svg>`;
+// header like a pro IDE: title on the left, tools on the right; mode and model live in the composer
+$(".composer .ctools").insertBefore($("#modelPick"), $("#ctxInfo"));
+fitViewport(); updateTitle();
 renderFolderPill();
 function buildRail() {
   const items = [["chat", "chat", "Chat", "#5b9cf5"], ["agent", "agent", "Agent : code, fichiers, commandes", "#d97757"],
