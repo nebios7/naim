@@ -1114,6 +1114,14 @@ details.think > summary:hover { color: var(--text); background: var(--hover); }
 #liveBar .ltext { display: inline-flex; align-items: center; }
 #liveBar .lword { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 @media (prefers-reduced-motion: reduce) { .ldots i { animation: none; } }
+/* « descendre » while Naim writes: three dots instead of the arrow (it still takes you down) */
+#toBottom .tbdots { display: none; gap: 3px; align-items: center; }
+#toBottom .tbdots i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent, #d97757); animation: ldot 1.2s ease-in-out infinite; }
+#toBottom .tbdots i:nth-child(2) { animation-delay: .15s; } #toBottom .tbdots i:nth-child(3) { animation-delay: .3s; }
+body.busyrun #toBottom svg { display: none; }
+body.busyrun #toBottom .tbdots { display: inline-flex; }
+/* the conversation fades out softly above the composer */
+body:not(.home) #scroll { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); }
 </style>
 </head>
 <body>
@@ -2654,7 +2662,7 @@ $("#send").onclick = () => (curRun() && !$("#input").value.trim() ? stop() : sen
 const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span>';
 function updateLiveBar() {
   const r = curRun(), bar = $("#liveBar");
-  bar.hidden = !r || view !== "chat"; document.body.classList.toggle("haslive", !bar.hidden);
+  bar.hidden = !r || view !== "chat"; document.body.classList.toggle("haslive", !bar.hidden); document.body.classList.toggle("busyrun", !!r);
   if (!r) return;
   r.t0 ||= Date.now();
   const todos = r.reply.todos || [], cur = todos.findIndex((t) => t.status === "in_progress");
@@ -4359,7 +4367,7 @@ function polishSettings() {
   const st = $(".sidefoot .status"); if (st && !st.dataset.nav) { st.dataset.nav = 1; st.addEventListener("click", () => { if (!st.onclick) { setView("settings"); showSettingsTab("engine"); updateRail(); } }); st.title = "Moteur et modèle — clic pour les réglages"; }
   const sc = $("#scroll");
   if (sc && !$("#toBottom")) {
-    const b = document.createElement("button"); b.id = "toBottom"; b.title = "Aller en bas"; b.innerHTML = msgI("down"); b.hidden = true;
+    const b = document.createElement("button"); b.id = "toBottom"; b.title = "Aller en bas"; b.innerHTML = msgI("down") + '<span class="tbdots" aria-hidden="true"><i></i><i></i><i></i></span>'; b.hidden = true;
     b.onclick = () => { stickBottom = true; sc.scrollTop = sc.scrollHeight; b.hidden = true; };
     $("#chatcol").appendChild(b);
     let lastTop = 0;
