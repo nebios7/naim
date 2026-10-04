@@ -970,6 +970,59 @@ header#chatHeader { overflow: hidden; }
 .composer.wrap .ctools .spacer { display: none; }
 .composer.wrap #send { margin-left: auto; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* folder chip in the composer replaces the bar above the conversation; no help line under the composer */
+#projectBar, #projectBar.show { display: none !important; }
+#hint { display: none !important; }
+#folderPill { display: inline-flex; align-items: center; gap: 5px; max-width: 220px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px 3px 8px; color: var(--muted); }
+#folderPill:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 30%, transparent); }
+#folderPill svg { width: 14px; height: 14px; flex: none; }
+#folderPill .fpn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#folderPill svg.fpc { width: 10px; height: 10px; opacity: .6; }
+/* Tâches planifiées */
+.schpage { max-width: 900px; }
+.schhead { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.schtitle { flex: 1; min-width: 240px; }
+.schtitle h1 { margin: 0 0 6px; }
+.schtitle .sub { margin: 0; }
+.schtools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.schtools #schSearch { width: 200px; }
+.schtools .icon svg { width: 18px; height: 18px; }
+.schsort { display: inline-flex; align-items: center; gap: 2px; background: var(--side); border: 1px solid var(--line); border-radius: var(--r-m, 9px); padding: 3px 4px 3px 10px; color: var(--muted); font-size: 13px; }
+.schsort select { border: 0; background: none; color: var(--text); font: inherit; font-weight: 500; padding: 2px 4px; cursor: pointer; }
+.schempty { text-align: center; padding: 40px 0 30px; color: var(--muted); }
+.schempty svg { width: 76px; height: 76px; stroke-width: 1.1; color: var(--text); opacity: .8; margin-bottom: 14px; }
+.schitem { display: flex; gap: 14px; align-items: flex-start; padding: 14px 10px; border-bottom: 1px solid var(--line); border-radius: var(--r-m, 9px); }
+.schitem:hover { background: var(--side); }
+.schitem .ti, .tpl .ti { width: 36px; height: 36px; flex: none; border-radius: 9px; background: var(--side); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--text); }
+.schitem .ti svg, .tpl .ti svg { width: 18px; height: 18px; }
+.schitem .sb { flex: 1; min-width: 0; }
+.schitem .sb b { font-weight: 600; }
+.schitem .sb .tag2 { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 6px; font-weight: 500; }
+.schitem .sb p { margin: 3px 0 5px; color: var(--muted); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schmeta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12.5px; }
+.schmeta span { display: inline-flex; align-items: center; gap: 5px; }
+.schmeta svg { width: 13px; height: 13px; }
+.schmeta .ok { color: var(--ok, #3fb950); } .schmeta .bad { color: var(--danger); }
+.schitem .sa { display: flex; align-items: center; gap: 6px; flex: none; }
+.schitem .sa .icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; }
+.schitem .sa .icon svg { width: 18px !important; height: 18px !important; display: block; }
+.schitem .run { color: var(--accent); }
+.schwave { height: 8px; margin: 26px 0 30px; background: var(--line); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8'%3E%3Cpath d='M0 4 Q6 0 12 4 T24 4' fill='none' stroke='black' stroke-width='1.3'/%3E%3C/svg%3E") repeat-x; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8'%3E%3Cpath d='M0 4 Q6 0 12 4 T24 4' fill='none' stroke='black' stroke-width='1.3'/%3E%3C/svg%3E") repeat-x; }
+.schtpl { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px 24px; }
+.tpl { display: flex; gap: 14px; text-align: left; background: none; border: 0; padding: 10px; border-radius: var(--r-l, 14px); cursor: pointer; color: var(--text); font: inherit; }
+.tpl:hover { background: var(--side); }
+.tpl b { display: block; font-weight: 600; margin-bottom: 3px; }
+.tpl p { margin: 0 0 7px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.tpl small { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.tpl small svg { width: 13px; height: 13px; }
+.schfoot { margin-top: 26px; text-align: right; }
+.linkbtn { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; padding: 4px; }
+.linkbtn.danger:hover { color: var(--danger); }
+#schForm { margin-bottom: 20px; }
+#schForm > .srow > div[style*="grid"] { grid-template-columns: minmax(80px, 130px) minmax(0, 1fr) !important; }
+#schForm input.field:not([type=number]), #schForm select, #schForm textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+#schForm .sch-days { min-width: 0; }
+@container (max-width: 520px) { #schForm > .srow > div[style*="grid"] { grid-template-columns: minmax(0, 1fr) !important; } }
 </style>
 </head>
 <body>
@@ -1033,6 +1086,7 @@ header#chatHeader { overflow: hidden; }
           <div class="ctools">
             <button class="icon" id="attach" title="Joindre des fichiers">＋</button>
             <button class="pill" id="modePill" title="Changer de mode">💬 Chat</button>
+            <button class="pill" id="folderPill" title="Dossier de travail"></button>
             <button class="pill" id="permPill" title="Mode d'autorisation de l'agent (⇧⇥ pour passer au suivant)" hidden></button>
             <button class="pill" id="tempPill" title="Température">🌡 0.60</button>
             <div class="spacer"></div>
@@ -1108,14 +1162,23 @@ header#chatHeader { overflow: hidden; }
 
   <!-- schedules view -->
   <div class="view page" id="viewSch" hidden>
-    <div class="pagein">
-      <h1>Planifier</h1>
-      <p class="sub">Naim exécute ces tâches tout seul, à l'heure prévue, tant que l'application est ouverte. Chaque résultat devient une conversation et tu reçois une notification.</p>
+    <div class="pagein schpage">
+      <div class="schhead">
+        <div class="schtitle"><h1>Tâches planifiées</h1>
+          <p class="sub">Naim exécute ces tâches selon un planning, ou quand tu le demandes. Chaque résultat devient une conversation.</p></div>
+        <div class="schtools">
+          <input class="field" id="schSearch" placeholder="Rechercher une tâche" hidden>
+          <button class="icon" id="schSearchBtn" title="Rechercher"></button>
+          <label class="schsort">Trier par <select id="schSort"><option value="next">Prochaine exécution</option><option value="name">Nom</option><option value="last">Dernière exécution</option></select></label>
+          <button class="btn primary" id="schNewBtn">Nouvelle tâche</button>
+        </div>
+      </div>
       <div id="schAsk"></div>
-      <div style="display:flex;align-items:center;gap:10px;margin:18px 0 12px"><h2 style="font-size:18px;margin:0;flex:1">Tâches</h2><button class="btn danger" id="schClearAll" hidden>Tout supprimer</button></div>
-      <div class="sgroup" id="schList"></div>
-      <button class="btn primary" id="schNewBtn">＋ Nouvelle tâche</button>
       <div class="sgroup" id="schForm" hidden></div>
+      <div class="schlist" id="schList"></div>
+      <div class="schwave"></div>
+      <div class="schtpl" id="schTpl"></div>
+      <div class="schfoot"><button class="linkbtn danger" id="schClearAll" hidden>Supprimer toutes les tâches</button></div>
     </div>
   </div>
 
@@ -1617,17 +1680,25 @@ const MENU_ICONS = { "↻": "refresh", "🔔": "bell", "📄": "file", "📑": "
   "⭐": "star", "★": "star", "🚫": "ban", "✅": "check", "✓": "check", "✗": "x", "✕": "x", "👁": "eye", "⚡": "bolt", "✋": "hand",
   "🧑": "user", "🤖": "robot", "⚠": "warn", "⚠️": "warn", "▾": "chevd", "▸": "chevr", "⌂": "home", "🗺": "map", "❓": "help",
   "📍": "pin", "◇": "art", "📁": "folder", "⚙": "settings", "⚙︎": "settings", "📘": "book", "🧠": "brain", "🔎": "search", "💬": "chat", "✉️": "mail2", "✉": "mail2", "🗜": "compress", "✎": "edit", "📌": "pin", "⧉": "copy", "#": "tag", "▢": "folder", "📂": "folder", "↓": "download", "⬇": "download",
-  "🗑": "trash", "▶": "play", "＋": "plus", "+": "plus", "↶": "undo", "✨": "spark", "⌘": "cmd" };
+  "🗑": "trash", "▶": "play", "↗": "ext", "＋": "plus", "+": "plus", "↶": "undo", "✨": "spark", "⌘": "cmd" };
 function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()]; return k && RICON[k] ? svgI(k) : esc(ic || ""); }
 function showMenu(anchor, items) {
   closeMenu();
   const m = document.createElement("div"); m.className = "menu"; m.id = "ctxmenu";
   m.innerHTML = items.map((it, i) => it === "-" ? "<hr>" : `<button data-i="${i}" class="${it.danger ? "danger" : ""}"${it.title ? ` title="${esc(it.title)}"` : ""}><span class="mic" style="width:18px;display:inline-flex;justify-content:center">${menuIcon(it.icon)}</span>${esc(it.label)}${it.key ? `<kbd>${it.key}</kbd>` : ""}</button>`).join("");
   document.body.appendChild(m);
-  const r = anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : { left: anchor.clientX, bottom: anchor.clientY, top: anchor.clientY };
-  const z = S.zoom || 1;
-  m.style.left = Math.min(r.left / (anchor.getBoundingClientRect ? 1 : z), innerWidth / z - 230) + "px";
-  m.style.top = Math.min(r.bottom / (anchor.getBoundingClientRect ? 1 : z) + 4, innerHeight / z - m.offsetHeight - 10) + "px";
+  let box = anchor.getBoundingClientRect ? anchor : null;
+  while (box && box.parentElement && !box.getBoundingClientRect().width) box = box.parentElement;  // hidden button: its row
+  const r = box ? box.getBoundingClientRect() : { left: anchor.clientX, bottom: anchor.clientY, top: anchor.clientY };
+  // measured, not guessed: k = screen pixels per CSS pixel of the menu (the page zoom, whatever the engine reports)
+  m.style.left = m.style.top = "0px"; m.style.animation = "none";  // measured without the opening animation's scale
+  const mr = m.getBoundingClientRect(), k = mr.width / (m.offsetWidth || 1) || 1;
+  const left = Math.max(8, Math.min(r.left, innerWidth - mr.width - 8));
+  const top = r.bottom + 4 + mr.height > innerHeight - 8 && r.top - 4 - mr.height > 8 ? r.top - 4 - mr.height  // no room below: above
+    : Math.max(8, Math.min(r.bottom + 4, innerHeight - mr.height - 8));
+  m.style.left = (left - mr.left) / k + "px";
+  m.style.top = (top - mr.top) / k + "px";
+  requestAnimationFrame(() => (m.style.animation = ""));
   m.onclick = (e) => { const b = e.target.closest("[data-i]"); if (b) { closeMenu(); items[+b.dataset.i].run(); } };
   setTimeout(() => document.addEventListener("click", closeMenu, { once: true }), 0);
 }
@@ -3251,8 +3322,16 @@ function schText(s) {
   if (!s) return "";
   if (s.type === "once") return `une fois, le ${new Date(s.at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}`;
   if (s.type === "interval") return `toutes les ${s.every_minutes >= 60 && s.every_minutes % 60 === 0 ? s.every_minutes / 60 + " h" : s.every_minutes + " min"}`;
-  if (s.type === "weekly") return `chaque ${(s.days || []).map((d) => DAYS[d]).join(", ")} à ${s.time}`;
-  return `chaque jour à ${s.time}`;
+  const h = (t) => String(t || "").replace(/^0(\d)/, "$1");
+  const FULL = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+  if (s.type === "weekly") {
+    const d = [...(s.days || [])].sort().join("");
+    if (d === "01234") return `en semaine à ${h(s.time)}`;
+    if (d === "56") return `le week-end à ${h(s.time)}`;
+    if (d === "0123456") return `tous les jours à ${h(s.time)}`;
+    return `chaque ${(s.days || []).map((x) => (s.days.length > 2 ? DAYS : FULL)[x]).join(", ")} à ${h(s.time)}`;
+  }
+  return `tous les jours à ${h(s.time)}`;
 }
 let schEdit = null, schFormOpen = false;
 function schFormHTML(t = {}) {
@@ -3272,12 +3351,18 @@ function schFormHTML(t = {}) {
       <label>Emails autorisés</label><input class="field mono" id="schEmails" placeholder="adresses en plus de celles écrites dans la demande" value="${esc(t.emails || "")}">
     </div>
     <small class="muted" style="display:block;margin-top:6px">Fichiers et commandes sont toujours autorisés pendant une tâche planifiée. « Tout autoriser » = vraiment tout : clics, frappe, emails vers n'importe quelle adresse et pièces jointes. « Me demander » : notification pour les clics et les emails vers une adresse qui n'est ni dans la demande ni dans « Emails autorisés » ; sans réponse sous 15 min, l'action est refusée et la tâche continue.</small>
-    <div style="display:flex;justify-content:flex-end;gap:8px">${t.id ? '<button class="btn" id="schCancel">Annuler</button>' : ""}<button class="btn primary" id="schSave">${t.id ? "Enregistrer" : "Planifier"}</button></div></div>`;
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" id="schCancel">Annuler</button><button class="btn primary" id="schSave">${t.id ? "Enregistrer" : "Planifier"}</button></div></div>`;
 }
 async function loadSchedules() {
   const form = $("#schForm");
-  form.hidden = !(schEdit || schFormOpen); $("#schNewBtn").hidden = !form.hidden;
-  $("#schNewBtn").onclick = () => { schFormOpen = true; loadSchedules(); setTimeout(() => form.scrollIntoView({ behavior: "smooth" }), 50); };
+  form.hidden = !(schEdit || schFormOpen);
+  $("#schNewBtn").onclick = () => { schEdit = null; schFormOpen = true; loadSchedules(); setTimeout(() => form.scrollIntoView({ behavior: "smooth", block: "center" }), 50); };
+  $("#schSearchBtn").innerHTML = svgI("search");
+  $("#schSearchBtn").onclick = () => { const f = $("#schSearch"); f.hidden = !f.hidden; if (!f.hidden) f.focus(); else { f.value = ""; loadSchedules(); } };
+  $("#schSearch").oninput = () => loadSchedules();
+  $("#schSort").value = localStorage.getItem("naim.schSort") || "next";
+  $("#schSort").onchange = (e) => { try { localStorage.setItem("naim.schSort", e.target.value); } catch {} loadSchedules(); };
+  renderSchTemplates();
   form.innerHTML = schFormHTML(schEdit || {});
   const syncType = () => { const ty = $("#schType").value; $$(".sch-time").forEach((e) => (e.hidden = ty === "interval" || ty === "once")); $$(".sch-days").forEach((e) => (e.hidden = ty !== "weekly")); $$(".sch-int").forEach((e) => (e.hidden = ty !== "interval")); $$(".sch-once").forEach((e) => (e.hidden = ty !== "once")); };
   $("#schType").onchange = syncType; syncType();
@@ -3300,30 +3385,65 @@ async function loadSchedules() {
   };
   renderAsks(asks || []);
   const box = $("#schList");
-  box.innerHTML = tasks.length ? "" : '<div class="srow"><div class="sl"><small>Aucune tâche planifiée pour l\'instant.</small></div></div>';
-  tasks.forEach((t) => {
-    const el = document.createElement("div"); el.className = "srow";
-    const nxt = t.next_run ? new Date(t.next_run).toLocaleString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
-    el.innerHTML = `<div class="sl"><b>${running.includes(t.id) ? '<span class="adot rund" style="display:inline-block;margin-right:6px"></span>' : "⏱ "}${esc(t.name)} <span class="badge2">${t.mode === "chat" ? "chat" : "agent"}</span></b>
-      <small>${esc(schText(t.schedule))} · ${{ auto: "🔓 tout autorisé", ask: "🔔 me demander", safe: "🔒 prudent" }[t.policy || "ask"]} · prochaine : ${esc(nxt)}${t.last_run ? ` · dernière : ${t.last_status === "ok" ? "✓" : "⚠"} ${esc(t.last_run.replace("T", " "))}` : ""}</small></div>
-      <div class="sc"><label class="switch" title="Activée"><input type="checkbox" ${t.enabled ? "checked" : ""}><span></span></label>
-      ${t.last_conv ? '<button class="btn" data-x="open">Résultat</button>' : ""}<button class="btn" data-x="run">▶ Maintenant</button><button class="btn" data-x="edit">Modifier</button><button class="btn danger" data-x="del">Supprimer</button></div>`;
+  const q = fold($("#schSearch").value.trim());
+  const sort = $("#schSort").value;
+  const shown = tasks.filter((t) => !q || fold(`${t.name} ${t.prompt}`).includes(q)).sort((a, b) =>
+    sort === "name" ? a.name.localeCompare(b.name) : sort === "last" ? String(b.last_run || "").localeCompare(String(a.last_run || ""))
+      : String(a.next_run || "9").localeCompare(String(b.next_run || "9")));
+  box.innerHTML = tasks.length ? (shown.length ? "" : '<div class="schempty"><p>Aucune tâche ne correspond.</p></div>')
+    : `<div class="schempty">${svgI("sched")}<p>Aucune tâche planifiée pour le moment.</p></div>`;
+  shown.forEach((t) => {
+    const el = document.createElement("div"); el.className = "schitem";
+    const when = (d) => new Date(d).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const isRun = running.includes(t.id);
+    el.innerHTML = `<div class="ti">${svgI(t.mode === "chat" ? "chat" : "agent")}</div>
+      <div class="sb"><b>${esc(t.name)}</b><span class="tag2">${t.mode === "chat" ? "Chat" : "Agent"}</span>
+        <p title="${esc(t.prompt)}">${esc(t.prompt.split("\n")[0])}</p>
+        <div class="schmeta"><span>${svgI("sched")}${esc(schText(t.schedule))}</span>
+          ${isRun ? `<span class="run">${svgI("activity")}En cours…</span>` : t.enabled && t.next_run ? `<span>Prochaine : ${esc(when(t.next_run))}</span>` : t.enabled ? "" : "<span>En pause</span>"}
+          ${t.last_run ? `<span class="${t.last_status === "ok" ? "ok" : "bad"}">${svgI(t.last_status === "ok" ? "check" : "warn")}Dernière : ${esc(when(t.last_run))}</span>` : ""}
+          <span>${svgI({ auto: "unlock", ask: "bell", safe: "lock" }[t.policy || "ask"])}${{ auto: "Tout autorisé", ask: "Me demander", safe: "Prudent" }[t.policy || "ask"]}</span></div></div>
+      <div class="sa"><label class="switch" title="${t.enabled ? "Activée" : "En pause"}"><input type="checkbox" ${t.enabled ? "checked" : ""}><span></span></label>
+        <button class="icon" data-x="menu" title="Options">${svgI("dots")}</button></div>`;
     $("input", el).onchange = async (e) => { await api("/api/schedules", { method: "POST", body: { id: t.id, enabled: e.target.checked } }); loadSchedules(); };
-    el.onclick = async (e) => {
-      const x = e.target.closest("[data-x]")?.dataset.x;
-      if (x === "run") { await api(`/api/schedules/${t.id}/run`, { method: "POST", body: {} }); toast("Tâche lancée, le résultat arrivera dans la barre latérale"); setTimeout(loadSchedules, 1500); }
-      if (x === "open") openConv(t.last_conv);
-      if (x === "edit") { schEdit = t; loadSchedules(); $("#schForm").scrollIntoView({ behavior: "smooth" }); }
-      if (x === "del" && confirm(`Supprimer la tâche « ${t.name} » ?`)) { await fetch(`/api/schedules/${t.id}`, { method: "DELETE" }); loadSchedules(); }
-    };
+    $("[data-x=menu]", el).onclick = (e) => { e.stopPropagation(); showMenu(e.currentTarget, [
+      { icon: "▶", label: "Lancer maintenant", run: async () => { await api(`/api/schedules/${t.id}/run`, { method: "POST", body: {} }); toast("Tâche lancée : le résultat arrivera dans la barre latérale"); setTimeout(loadSchedules, 1500); } },
+      ...(t.last_conv ? [{ icon: "💬", label: "Voir le dernier résultat", run: () => openConv(t.last_conv) }] : []),
+      { icon: "✎", label: "Modifier", run: () => { schEdit = t; loadSchedules(); setTimeout(() => $("#schForm").scrollIntoView({ behavior: "smooth", block: "center" }), 50); } },
+      "-",
+      { icon: "🗑", label: "Supprimer", danger: true, run: async () => { if (confirm(`Supprimer la tâche « ${t.name} » ?`)) { await fetch(`/api/schedules/${t.id}`, { method: "DELETE" }); loadSchedules(); } } },
+    ]); };
     box.appendChild(el);
   });
   if (running.length) setTimeout(() => view === "schedules" && loadSchedules(), 5000);
   loadList();
 }
+const SCH_TEMPLATES = [
+  ["sun", "Briefing du matin", "Ce qui demande ton attention aujourd'hui : e-mails importants non lus et rendez-vous.", { type: "weekly", days: [0, 1, 2, 3, 4], time: "08:00" },
+   "Résume les e-mails importants non lus de ma boîte de réception et ce qui m'attend aujourd'hui, en quelques points courts."],
+  ["mail2", "Tri de la boîte de réception", "Classe les nouveaux e-mails, écarte les indésirables et prépare des brouillons de réponse aux messages urgents.", { type: "weekly", days: [0, 1, 2, 3, 4], time: "08:30" },
+   "Trie ma boîte de réception : mets les messages indésirables dans le courrier indésirable et prépare des brouillons de réponse aux messages urgents (sans les envoyer)."],
+  ["test", "Tests du projet", "Chaque nuit, lance les tests du projet et résume les échecs avec leur cause probable.", { type: "daily", time: "02:00" },
+   "Lance les tests du projet. S'il y a des échecs, résume-les avec la cause probable et le fichier concerné."],
+  ["list", "Bilan hebdomadaire", "Chaque vendredi, ce qui a changé dans le projet cette semaine et ce qu'il reste à faire.", { type: "weekly", days: [4], time: "16:00" },
+   "Fais le bilan de la semaine dans le projet : commits, fichiers modifiés, et ce qu'il reste à faire."],
+  ["bulb", "Idées de contenu", "Chaque semaine, quelques idées de publications à partir des actualités de ton secteur.", { type: "weekly", days: [0], time: "09:00" },
+   "Propose 5 idées de publications à partir des actualités récentes de mon secteur, avec une phrase d'accroche pour chacune."],
+  ["globe", "Veille d'un sujet", "Les actualités d'un sujet, d'un concurrent ou d'un mot-clé, résumées avec les liens.", { type: "daily", time: "09:00" },
+   "Cherche sur le web les actualités des dernières 24 heures sur [sujet] et envoie-moi un résumé avec les liens."],
+];
+function renderSchTemplates() {
+  const box = $("#schTpl"); if (!box || box.childElementCount) return;
+  box.innerHTML = SCH_TEMPLATES.map(([ic, name, desc, sc], i) => `<button class="tpl" data-t="${i}"><span class="ti">${svgI(ic)}</span><span><b>${esc(name)}</b><p>${esc(desc)}</p><small>${svgI("sched")}${esc(schText(sc).replace(/^./, (c) => c.toUpperCase()))}</small></span></button>`).join("");
+  $$(".tpl", box).forEach((b) => (b.onclick = () => {
+    const [, name, , schedule, prompt] = SCH_TEMPLATES[+b.dataset.t];
+    schEdit = { name, prompt, mode: "agent", schedule }; schFormOpen = true; loadSchedules();
+    setTimeout(() => { $("#schForm").scrollIntoView({ behavior: "smooth", block: "center" }); const p = $("#schPrompt"); p.focus(); const k = p.value.indexOf("[sujet]"); if (k >= 0) p.setSelectionRange(k, k + 7); }, 60);
+  }));
+}
 function renderAsks(asks) {
   const box = $("#schAsk"); if (!box) return;
-  box.innerHTML = asks.map((a) => `<div class="sgroup" style="border-color:var(--danger)"><div class="srow col"><div class="sl"><b>🔔 ${esc(a.name)} demande : ${esc(a.action)}</b><small>${esc(a.time.replace("T", " "))} · sans réponse, refusé après 15 min</small></div>
+  box.innerHTML = asks.map((a) => `<div class="sgroup" style="border-color:var(--danger)"><div class="srow col"><div class="sl"><b>${svgI("bell")} ${esc(a.name)} demande : ${esc(a.action)}</b><small>${esc(a.time.replace("T", " "))} · sans réponse, refusé après 15 min</small></div>
     <pre class="aout" style="margin:0;max-height:180px">${esc(a.detail)}</pre>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" data-ask="${a.id}" data-allow="0">Refuser</button><button class="btn primary" data-ask="${a.id}" data-allow="1">Autoriser</button></div></div></div>`).join("");
   $$("[data-ask]", box).forEach((b) => (b.onclick = async () => { await api("/api/schedules/answer", { method: "POST", body: { id: b.dataset.ask, allow: b.dataset.allow === "1" } }); toast(b.dataset.allow === "1" ? "Autorisé ✓" : "Refusé"); refreshAsks(); }));
@@ -3813,7 +3933,32 @@ $("#input").addEventListener("keydown", (e) => {  // ⇧⇥ : next mode (agent o
 });
 let homeDir = "";
 api("/api/status").then((st) => { homeDir = st.home || ""; showProjectPath(); }).catch(() => {});
+function renderFolderPill() {
+  const b = $("#folderPill"); if (!b) return;
+  try { svgI; } catch { return; }  // icons are defined further down: drawn again once they exist
+  const p = S.project || "", name = p.split("/").filter(Boolean).pop() || "";
+  b.title = p ? `Dossier de travail : ${p}` : "Choisir le dossier de travail";
+  b.innerHTML = `${svgI("folder")}<span class="fpn">${esc(name || "Choisir un dossier")}</span>${svgI("chevd").replace("<svg", '<svg class="fpc"')}`;
+}
+async function folderMenuPill(anchor) {
+  const recent = [...new Set([S.project, ...list.map((c) => c.project)].filter(Boolean))].slice(0, 6);
+  const info = S.project ? await api(`/api/project-info?root=${encodeURIComponent(S.project)}`).catch(() => ({})) : {};
+  const short = (p) => homeDir && p.startsWith(homeDir + "/") ? "~" + p.slice(homeDir.length) : p;
+  const go = (p) => { S.project = p; saveSettings(); applySettings(); openDirs = new Set([""]); knownFiles = new Set(); refreshTreeSoon(); };
+  showMenu(anchor, [
+    ...recent.map((p) => ({ icon: p === S.project ? "✓" : "📁", label: short(p), title: p, run: () => go(p) })),
+    ...(recent.length ? ["-"] : []),
+    { icon: "📂", label: "Choisir un dossier…", run: () => $("#pick").click() },
+    ...(S.project ? [
+      { icon: "↗", label: "Ouvrir dans le Finder", run: () => naimCmd("reveal") },
+      info.file ? { icon: "📄", label: `Instructions du projet (${info.file})`, run: () => { showPanel("files"); openFile(info.file); } }
+                : { icon: "＋", label: "Créer les instructions du projet (NAIM.md)", run: () => runSlash("/init") },
+    ] : []),
+  ]);
+}
+$("#folderPill").onclick = (e) => { e.stopPropagation(); folderMenuPill(e.currentTarget); };
 function showProjectPath() {
+  renderFolderPill();
   const el = $("#project"); if (document.activeElement === el) return;
   const p = S.project || "";
   el.value = homeDir && (p === homeDir || p.startsWith(homeDir + "/")) ? "~" + p.slice(homeDir.length) : p;
@@ -3931,6 +4076,7 @@ async function checkStatus() {
 // ======================================================================= UI v3: rail, model picker, parameters panel, folders
 const RICON = {
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
+  ext: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
   file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
   wand: '<path d="M4 20L15 9"/><path d="M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/><path d="M19 12l.6 1.4L21 14l-1.4.6L19 16l-.6-1.4L17 14l1.4-.6z"/>',
@@ -3997,6 +4143,7 @@ const RICON = {
   auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 000 16z" fill="currentColor"/>',
 };
 const svgI = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${RICON[k]}</svg>`;
+renderFolderPill();
 function buildRail() {
   const items = [["chat", "chat", "Chat", "#5b9cf5"], ["agent", "agent", "Agent : code, fichiers, commandes", "#d97757"],
     ["sched", "schedules", "Planifier", "#e0a43c"], ["art", "artifacts", "Artéfacts", "#a47ce8"], ["models", "models", "Modèles", "#3fb9a0"],
