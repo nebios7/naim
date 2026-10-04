@@ -2367,7 +2367,7 @@ async function stream(reply, v, message, hist, extra = {}) {
   v.actions(reply);
   // Chat mode: a PDF or an image Naim just created opens in the preview right away
   const made = reply.deliverables?.files?.[0];
-  if (made && conv.mode !== "agent" && current === conv && /^(pdf|png|jpe?g|gif|svg)$/.test(made.ext)) {
+  if (made && S.auto_preview !== false && conv.mode !== "agent" && current === conv && /^(pdf|png|jpe?g|gif|svg)$/.test(made.ext)) {
     setTimeout(() => { const boxes = $$(".delivbox"); boxes[boxes.length - 1]?.querySelector("[data-dopen]")?.click(); }, 300);
   }
   if (current === conv) { setBusy(false); updateCtx(); }
@@ -3118,7 +3118,7 @@ const TABS = {
       ${row("Vérifier qu'il n'invente rien", "Quand Naim produit un document à partir des tiens (CV, lettre, rapport), il compare les deux et retire ce qui n'y figure pas. Ajoute un peu de temps.", sw("enable_review"))}
       ${row("Garder l'app livrée allumée à la fin", "Désactivé : tout ce que Naim a lancé est arrêté quand la tâche se termine.", sw("keep_final_app"))}
       ${row("Version minimale d'abord", "Naim livre la plus petite version qui marche puis propose des améliorations (beaucoup plus rapide).", sw("minimal_mode"))}
-      ${row("Aperçu automatique", "Quand Naim lance une app web, elle s'affiche à droite (panneau Aperçu).", sw("auto_preview"))}
+      ${row("Aperçu automatique", "Quand Naim lance une app web, ou crée un PDF ou une image en Chat, l'aperçu s'ouvre à droite (panneau Aperçu).", sw("auto_preview"))}
       ${row("Vérification automatique des apps web", "Toutes les pages sont testées avant que Naim dise « fini ».", sw("auto_verify"))}
       ${row("Charger automatiquement le bon skill", "Selon ta demande (PDF, Excel, React, déploiement…).", sw("auto_skill"))}
       ${row("Délai max d'une commande", "En secondes (les serveurs passent automatiquement en arrière-plan).", `<input class="field" type="number" data-k="command_timeout" data-num min="10" max="1800" step="10" value="${S.command_timeout}">`)}

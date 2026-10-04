@@ -60,7 +60,8 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat, today_line
+from naimtools import (CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+                       raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
 WEB_NEED_RE = re.compile(r"\b(cherche|recherche|web|internet|en ligne|google|actualit|news|aujourd'hui|cette semaine|"
@@ -100,10 +101,6 @@ def trivial_message(text):
     return sum(w not in TRIVIAL_WORDS for w in words) == 0
 
 
-RAW_CALL_RE = re.compile(r"<tool_call>\s*<function=([\w.-]+)>(.*?)</function>\s*(?:</tool_call>|$)", re.S)
-RAW_PARAM_RE = re.compile(r"<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>", re.S)
-
-
 def shown_part(text):
     """What may be displayed while streaming: never a « <tool_call> » block, nor the start of one being written."""
     cut = text.find("<tool_call")
@@ -113,21 +110,6 @@ def shown_part(text):
     if lt >= 0 and "<tool_call".startswith(text[lt:]):  # « <too… » could become « <tool_call »: wait
         return text[:lt]
     return text
-
-
-def raw_tool_calls(text):
-    """Tool calls the model wrote as text (« <tool_call><function=read_file>… ») instead of real calls: recovered."""
-    calls = []
-    for m in RAW_CALL_RE.finditer(text or ""):
-        args = {}
-        for k, v in RAW_PARAM_RE.findall(m.group(2)):
-            v = v.strip()
-            try:
-                args[k] = json.loads(v) if v[:1] in "[{" or v in ("true", "false") or re.fullmatch(r"-?\d+(\.\d+)?", v) else v
-            except ValueError:
-                args[k] = v
-        calls.append({"function": {"name": m.group(1), "arguments": args}})
-    return calls
 
 
 def chosen_option(message, history):

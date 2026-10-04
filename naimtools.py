@@ -145,6 +145,58 @@ PORT_RE = re.compile(r"\b(?:port|listening on|écoute sur)\s*[:=]?\s*(\d{4,5})\b
 URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(?::\d+)?[^\s'\"<>)]*")
 
 
+RAW_CALL_RE = re.compile(r"<tool_call>\s*<function=([\w.-]+)>(.*?)</function>\s*(?:</tool_call>|$)", re.S)
+RAW_PARAM_RE = re.compile(r"<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>", re.S)
+
+
+def raw_tool_calls(text):
+    """Tool calls the model wrote as text (« <tool_call><function=read_file>… ») instead of real calls: recovered."""
+    calls = []
+    for m in RAW_CALL_RE.finditer(text or ""):
+        args = {}
+        for k, v in RAW_PARAM_RE.findall(m.group(2)):
+            v = v.strip()
+            try:
+                args[k] = json.loads(v) if v[:1] in "[{" or v in ("true", "false") or re.fullmatch(r"-?\d+(\.\d+)?", v) else v
+            except ValueError:
+                args[k] = v
+        calls.append({"function": {"name": m.group(1), "arguments": args}})
+    return calls
+
+
+def repeating(text):
+    """The same non-empty line three times in a row at the end: the model loops."""
+    lines = [l.strip() for l in (text or "").split("\n") if l.strip()]
+    return len(lines) >= 4 and len(set(lines[-3:])) == 1 and len(lines[-1]) > 2
+
+
+def chat_watched(model, messages, tools=None, think=False, options=None):
+    """One model answer, read as it is written so that a loop can be cut at once (llama.cpp); tool calls written as text
+    are recovered. Same result as a non-streamed call: {role, content, thinking?, tool_calls?}."""
+    if (options or {}).get("backend") != "llamacpp":
+        msg = ollama_chat(model, messages, tools=tools, think=think, options=options)
+    else:
+        content, thinking, calls = "", "", []
+        stream = ollama_chat(model, messages, tools=tools, think=think, stream=True, options=options)
+        for chunk in stream:
+            m = chunk.get("message", {})
+            content += m.get("content") or ""
+            thinking += m.get("thinking") or ""
+            if m.get("tool_calls"):
+                calls = m["tool_calls"]
+            if repeating(content):
+                stream.close()
+                content = re.sub(r"(\n[^\n]*)\1{2,}\s*$", r"\1", content)  # keep one copy of the repeated line
+                break
+        msg = {"role": "assistant", "content": content, **({"thinking": thinking} if thinking else {}),
+               **({"tool_calls": calls} if calls else {})}
+    if not msg.get("tool_calls") and "<tool_call" in (msg.get("content") or ""):
+        raw = raw_tool_calls(msg["content"])
+        if raw:
+            msg["tool_calls"], msg["content"] = raw, msg["content"].split("<tool_call")[0].rstrip()
+    return msg
+
+
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07")
 
 
@@ -2087,13 +2139,13 @@ class Agent:
             self._notify_finished()
             self.emit({"type": "status", "text": "Naim réfléchit..."})
             self._compact_history()
-            msg = ollama_chat(self.model, self.messages, tools=self.tools, think=self.think, options=self.options)
+            msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options)
             if self.think and not msg.get("tool_calls") and not (msg.get("content") or "").strip():
                 # the model stopped inside its reasoning (no answer, no action): same step again, without reasoning
                 if msg.get("thinking"):
                     self.emit({"type": "thinking", "text": msg["thinking"].strip()})
                 self.emit({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
-                msg = ollama_chat(self.model, self.messages, tools=self.tools, think=False, options=self.options)
+                msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options)
             self.messages.append(msg)
             if msg.get("thinking") and self.think:
                 self.emit({"type": "thinking", "text": msg["thinking"].strip()})
