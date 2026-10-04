@@ -16,7 +16,7 @@ import feedback_share
 import llamacpp
 
 SERVER = feedback_share.DEFAULT_URL  # Naim's server (Cloudflare): checks the installation, then redirects
-FILES = [("naim-Q4_K_M.gguf", "modèle Naim"), ("naim-mmproj-f16.gguf", "vision")]
+FILES = [("naim-Q4_K_M.gguf", "modèle Naim"), ("naim-mmproj-f16.gguf", "vision"), ("llama-server-naim", "moteur Naim")]
 STATE = {"running": False, "file": "", "label": "", "done": 0, "total": 0, "finished": False, "error": None}
 
 
@@ -54,6 +54,8 @@ def _fetch(name, label):
     if total and part.stat().st_size < total:
         raise IOError(f"téléchargement incomplet de {name}")
     part.rename(dest)
+    if name == "llama-server-naim":
+        dest.chmod(0o755)  # the engine is a program
 
 
 def save_version():

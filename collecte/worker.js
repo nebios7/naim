@@ -22,7 +22,7 @@ const SECRETS = [
 ];
 
 const MODEL_FILES = new Set(["naim-Q4_K_M.gguf", "naim-mmproj-f16.gguf", "naim-Q8_0.gguf",
-  "naim_prompts.json"]);  // Naim's instructions and tool descriptions: private, delivered like the model
+  "naim_prompts.json", "llama-server-naim"]);  // llama-server-naim: Naim's engine (reads the « naim » architecture)  // Naim's instructions and tool descriptions: private, delivered like the model
 const LIMIT_DL_INSTALL = 20;  // model downloads per installation per day (resumed downloads included)
 const LIMIT_DL_IP = 40;
 

@@ -32,7 +32,37 @@ def model_files():
     return gguf, (mmproj if mmproj.exists() else None)
 
 
+NAIM_BIN = MODELS / "llama-server-naim"  # Naim's own llama.cpp build: it knows the « naim » architecture
+
+
+def gguf_arch(path):
+    """general.architecture of a GGUF file (read from its header), or None."""
+    import struct
+    try:
+        with open(path, "rb") as f:
+            if f.read(4) != b"GGUF":
+                return None
+            f.read(4 + 8 + 8)  # version, tensor count, key count
+            for _ in range(64):
+                n = struct.unpack("<Q", f.read(8))[0]
+                key = f.read(n).decode(errors="replace")
+                vtype = struct.unpack("<I", f.read(4))[0]
+                if vtype != 8:  # only strings matter here; general.architecture comes first
+                    return None
+                n = struct.unpack("<Q", f.read(8))[0]
+                val = f.read(n).decode(errors="replace")
+                if key == "general.architecture":
+                    return val
+    except (OSError, struct.error):
+        return None
+    return None
+
+
 def binary():
+    if NAIM_BIN.exists() and os.access(NAIM_BIN, os.X_OK):
+        return str(NAIM_BIN)
+    if gguf_arch(model_files()[0]) == "naim":
+        return None  # a stock llama.cpp cannot open it: the Naim engine must be downloaded first
     return shutil.which("llama-server") or next(
         (p for p in ("/opt/homebrew/bin/llama-server", "/usr/local/bin/llama-server") if Path(p).exists()), None)
 
