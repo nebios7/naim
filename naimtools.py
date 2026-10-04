@@ -170,6 +170,17 @@ def repeating(text):
     return len(lines) >= 4 and len(set(lines[-3:])) == 1 and len(lines[-1]) > 2
 
 
+# a reply that only announces an action (« Je vais envoyer… ») instead of doing it
+ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
+                         r"envoie|prépare|regarde|vérifie)\b|(?:je vais|laisse-moi)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|"
+                         r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim))",
+                         re.I | re.M)
+# a remark on the previous result (« pas obligé de… », « t'as rien compris », « c'est pas ça »), not a new request
+FEEDBACK_RE = re.compile(r"pas oblig|rien compris|pas compris|c'?est pas [cç]a|ce n'?est pas [cç]a|je t'?ai (dit|demand)|"
+                         r"j'?ai (dit|demand)|pourquoi (tu|t'?as|as-tu)|trop de |en trop|pas besoin d|arr[eê]te de|"
+                         r"tu (as|a) (oubli|refait|recommenc)|pas ce que", re.I)
+
+
 def chat_watched(model, messages, tools=None, think=False, options=None):
     """One model answer, read as it is written so that a loop can be cut at once (llama.cpp); tool calls written as text
     are recovered. Same result as a non-streamed call: {role, content, thinking?, tool_calls?}."""
@@ -605,6 +616,8 @@ class Agent:
 
     PLACEHOLDER_RE = re.compile(r"^\s*<(already written|\d+ lignes écrites)|\(ancien résultat raccourci\)|Résumé de mes étapes précédentes")
 
+    BUILT_EXTS = {".xlsx", ".docx", ".pdf", ".odt", ".rtf"}
+
     def write_file(self, path, content):
         p = self.resolve(path)
         if err := self._guard_own_path(p, "Écrire"):
@@ -629,6 +642,15 @@ class Agent:
         self.checkpoint.save(p)
         self.emit({"type": "checkpoint", "run_id": self.run_id})
         p.parent.mkdir(parents=True, exist_ok=True)
+        if p.suffix.lower() in self.BUILT_EXTS:  # text written as .xlsx/.docx/.pdf would be a broken file: build the real one
+            import chatfiles
+            try:
+                chatfiles._make(p, content)
+            except Exception as e:
+                return f"error: cannot build {self.rel(p)}: {e}"
+            return (f"ok: built {self.rel(p)} ({p.stat().st_size} bytes) from your "
+                    f"{'CSV' if p.suffix.lower() == '.xlsx' else 'Markdown/HTML'} content. It is a real "
+                    f"{p.suffix[1:].upper()} file: do not write it again.")
         p.write_text(content)
         lines = content.count(chr(10)) + 1
         long_note = (f" Note: {lines} lines is long for a first version; keep the next files short (under ~120 lines)."
@@ -1449,6 +1471,8 @@ class Agent:
         p = self.resolve(path)
         if not p.is_file():
             return f"error: file not found: {path}"
+        if p.suffix.lower() in (".xlsx", ".xlsm", ".csv"):  # a table has no page to look at: its cells, as text
+            return self.read_file(path)[:6000] + "\n\n(Tableau lu en texte : vérifie les colonnes et les valeurs.)"
         try:
             img, note = docs.preview_png(p, int(page or 1))
         except (docs.DocError, diagrams.DiagramError) as e:
@@ -2120,7 +2144,14 @@ class Agent:
             task = (f"{task}\n\n[Carnet de la tâche précédente, restée inachevée : reprends là où elle s'est arrêtée, "
                     f"sans refaire ce qui est coché. Vérifie d'abord l'état des fichiers listés.]\n{prev}")
             self._task_words = (prev.split("Demande : ", 1)[-1].split("\n", 1)[0] or task)[:1500]
-        if self.features["skills"] and self.auto_skill and not self.plan and (sk := ext.match_skill(task, self.root, self.disabled_skills)):
+        feedback = len(self.messages) > 1 and bool(FEEDBACK_RE.search(task or ""))
+        if feedback:  # a remark on what was just done, not a new task: answer it, fix only what it asks
+            task = (f"{task}\n\n[Remarque de l'utilisateur sur ce que tu viens de faire. Commence par dire en une phrase ce "
+                    "que tu as compris. Puis corrige seulement ce qu'elle demande (par exemple supprimer les fichiers en "
+                    "trop) ; ne refais pas la tâche et ne répète pas ton résumé précédent. Si tu n'es pas sûr de ce "
+                    "qu'il veut, pose une seule question.]")
+        if (self.features["skills"] and self.auto_skill and not self.plan and not feedback
+                and (sk := ext.match_skill(task, self.root, self.disabled_skills))):
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
             task = f"{task}\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
@@ -2215,6 +2246,21 @@ class Agent:
                                + (", ou désactive « Raisonnement » si ça se reproduit." if self.think else "."))
                     self._outcome = "stalled"
                 else:
+                    before = next((m.get("content") or "" for m in reversed(self.messages[:self._task_idx])
+                                   if m.get("role") == "assistant" and (m.get("content") or "").strip()), "")
+                    if (before and self._stall_pushbacks < 3
+                            and difflib.SequenceMatcher(None, before[:1500], content[:1500]).ratio() > 0.75):
+                        self._stall_pushbacks += 1  # the same summary as last time: it did not answer the new message
+                        self.messages.append({"role": "user", "content": (
+                            "Tu viens de répéter ta réponse précédente. Relis mon dernier message et réponds-y "
+                            "directement, en une ou deux phrases, puis fais seulement ce qu'il demande.")})
+                        continue
+                    if (ANNOUNCE_RE.search(content) and len(content) < 400 and not self.plan
+                            and self._stall_pushbacks < 3):  # « Je vais supprimer les fichiers… » without doing it
+                        self._stall_pushbacks += 1
+                        self.messages.append({"role": "assistant", "content": content})
+                        self.messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), puis dis-moi le résultat."})
+                        continue
                     self._outcome = "answer"
                 self.emit({"type": "answer", "text": content})
                 return content

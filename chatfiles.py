@@ -123,13 +123,15 @@ def _make(dst, content):
         dst.write_text(content or "")
 
 
-def create(nom, contenu="", fichiers=None):
-    """Create the file; returns (message for Naim, file info for the app)."""
-    OUT.mkdir(parents=True, exist_ok=True)
+def create(nom, contenu="", fichiers=None, folder=None):
+    """Create the file (in the user's working folder when there is one, else in OUT);
+    returns (message for Naim, file info for the app)."""
+    out = Path(folder) if folder else OUT
+    out.mkdir(parents=True, exist_ok=True)
     name = _safe(nom)
     if not Path(name).suffix:
         name += ".txt"
-    dst = _unique(OUT, name)
+    dst = _unique(out, name)
     if dst.suffix.lower() == ".zip":
         items = fichiers or []
         if not items and contenu:
@@ -139,7 +141,7 @@ def create(nom, contenu="", fichiers=None):
         with tempfile.TemporaryDirectory() as tmp, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
             for it in items:
                 inner = str(it.get("nom") or "fichier.txt").strip().lstrip("/").replace("..", "")
-                existing = OUT / _safe(inner)
+                existing = out / _safe(inner)
                 if it.get("contenu") is None and existing.is_file():
                     z.write(existing, inner)
                     continue
@@ -149,6 +151,6 @@ def create(nom, contenu="", fichiers=None):
     else:
         _make(dst, contenu)
     info = {"path": dst.name, "size": dst.stat().st_size, "ext": dst.suffix.lower()[1:]}
-    return (f"fichier créé : {dst} ({info['size']} octets), dans le dossier des fichiers du mode Chat "
-            f"({OUT}) — PAS dans un projet. Il est affiché à l'utilisateur, prêt à ouvrir ou télécharger. "
-            "Quand tu en parles, donne exactement ce nom et cet emplacement.", info)
+    where = "dans le dossier de travail de l'utilisateur" if folder else f"dans le dossier des fichiers du mode Chat ({OUT})"
+    return (f"fichier créé : {dst} ({info['size']} octets), {where}. Il est affiché à l'utilisateur, prêt à ouvrir "
+            "ou télécharger. Quand tu en parles, donne exactement ce nom et cet emplacement.", info)

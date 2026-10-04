@@ -60,7 +60,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import (CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+from naimtools import (ANNOUNCE_RE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
@@ -87,11 +87,6 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
                         r"[àa] (demain|plus|bient[oô]t)|bye|ciao)\b)", re.I)
 
 
-# a reply that only announces an action (« Je vais envoyer… ») instead of doing it
-ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
-                         r"envoie|prépare|regarde|vérifie)\b|(?:je vais|laisse-moi)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|"
-                         r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim))",
-                         re.I | re.M)
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
 d'accord dac super génial genial parfait top cool nickel très tres bonne nuit à a demain plus bientôt bientot bye ciao naim
 mohamed et encore c'est cool ça ca marche""".split())
@@ -1248,7 +1243,7 @@ class Handler(BaseHTTPRequestHandler):
         note = self.CHAT_TOOLS_NOTE.format(folder=folder) + (
             f"\nYou are working in the folder {folder} (relative paths are inside it). Before asking the user where a "
             "file is, look for it yourself (list_files, find_files)."
-            + f" Files you created in this conversation (creer_fichier) are in {chatfiles.OUT}: attach them with that full path."
+            + f" Files you create (creer_fichier) go in this folder; older ones may be in {chatfiles.OUT}. Attach them with their full path."
             + (f"\nFiles in this folder:\n{helper.list_files('.')[:2500]}" if named else "")
             + (f" Other folders with the same name: {', '.join(map(str, others))}." if named and others else "")) + (f"\nThe user's own email address (« moi »): {me}" if me else "")
         if getattr(helper, "_tool_groups", None):
@@ -1350,9 +1345,10 @@ class Handler(BaseHTTPRequestHandler):
                                       + (f" Other folders with this name: {', '.join(others)} — if it is not the right one, ask the user." if others else "")
                                       + "\nFiles:\n" + helper.list_files(".")[:3000])
                     elif name == "creer_fichier":
-                        result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"))
+                        here = helper.root if helper.root.resolve() != chatfiles.OUT.resolve() else None
+                        result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"), here)
                         made.append(info)
-                        self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": list(reversed(made))})
+                        self.event({"type": "deliverables", "root": str(here or chatfiles.OUT), "files": list(reversed(made))})
                     else:
                         result = helper.call_tool(name, args)
                         if name == "send_email":
