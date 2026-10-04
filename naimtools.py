@@ -1866,7 +1866,7 @@ class Agent:
                 dirnames[:] = []
             for name in filenames:
                 f = Path(dirpath) / name
-                if f.suffix.lower() in self.DELIVERABLE_EXTS and not name.startswith("."):
+                if f.suffix.lower() in self.DELIVERABLE_EXTS and not name.startswith((".", "~$")):  # ~$… : Office lock files
                     st = f.stat()
                     if st.st_mtime >= since - 1:
                         found.append((st.st_mtime, {"path": self.rel(f), "size": st.st_size, "ext": f.suffix.lower()[1:]}))

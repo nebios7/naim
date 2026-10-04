@@ -1083,6 +1083,29 @@ body.vtiny #titleBtn { max-width: 52%; }
 @keyframes rwave { 0%, 70%, 100% { transform: translateY(0) rotate(0); } 74%, 82% { transform: translateY(-150%) rotate(-25deg); } 78%, 86% { transform: translateY(-120%) rotate(15deg); } }
 @keyframes rhop { 0% { transform: translateY(0); } 40% { transform: translateY(-14%); } 100% { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .empty .hero .robot, .empty .hero .robot * { animation: none !important; } }
+/* Steps, like a pro IDE: a line icon per action, quiet file names, a shimmer on the running one */
+.aline { gap: 8px; font-size: 13.5px; color: var(--text); }
+.aline .aic { width: 16px; height: 16px; flex: none; display: inline-flex; color: var(--muted); }
+.aline .aic svg { width: 15px; height: 15px; }
+.arow.err .aic, .arow.err .alabel { color: var(--danger); }
+.arow.run .aic { color: var(--accent, var(--brand)); animation: pulse 1.2s ease-in-out infinite; }
+.arow.run .alabel { background: linear-gradient(90deg, var(--text) 0%, var(--text) 40%, color-mix(in srgb, var(--text) 35%, transparent) 50%, var(--text) 60%, var(--text) 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: naimShimmer 2.4s linear infinite; }
+.arow.run .alabel code, .arow.run .alabel .muted { color: inherit; }
+.alabel code { background: none !important; border: 0 !important; padding: 0 !important; color: var(--muted); font-size: 12.5px; }
+.arows { gap: 7px; padding-left: 14px; margin-left: 7px; border-left-color: color-mix(in srgb, var(--line) 80%, transparent); }
+.agroup > summary { font-size: 13px; gap: 5px; }
+.gchev { width: 13px; height: 13px; display: inline-flex; font-size: 0; }
+.gchev svg { width: 13px; height: 13px; }
+.aout { margin-left: 24px; }
+details.think > summary { list-style: none; display: inline-flex; align-items: center; gap: 5px; font-size: 13px; padding: 2px 6px 2px 2px; border-radius: 6px; }
+details.think > summary::-webkit-details-marker { display: none; }
+details.think > summary::before { content: ""; width: 13px; height: 13px; background: currentColor; transition: transform .15s;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat; }
+details.think[open] > summary::before { transform: rotate(90deg); }
+details.think > summary:hover { color: var(--text); background: var(--hover); }
+#toBottom { left: auto !important; right: 22px; transform: none !important; bottom: 128px; }
 </style>
 </head>
 <body>
@@ -1549,10 +1572,11 @@ function rateHTML(cur, ask) {
     RATES.map(([v, l, t]) => `<button class="rate r${v + 1}${cur === v ? " on" : ""}" data-rate="${v}" title="${t}">${l}</button>`).join("");
 }
 function delivCards(dl) {
+  dl = { ...dl, files: (dl.files || []).filter((f) => !/(^|\/)~\$/.test(f.path)) };  // Office lock files are not deliverables
   const box = document.createElement("div");
   box.innerHTML = `<div class="delivtitle">Livrables</div><div class="deliv">${dl.files.map((f, i) => {
     const q = `root=${encodeURIComponent(dl.root)}&path=${encodeURIComponent(f.path)}`;
-    const thumb = /^(pdf|png|jpe?g|gif|svg|docx|xlsx|pptx)$/.test(f.ext) ? `<img loading="lazy" src="/api/thumb?${q}&w=480" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'dext',textContent:'${f.ext.toUpperCase()}'}))">` : `<span class="dext">${esc(f.ext.toUpperCase())}</span>`;
+    const thumb = /^(pdf|png|jpe?g|gif|svg|docx|pptx)$/.test(f.ext) ? `<img loading="lazy" src="/api/thumb?${q}&w=480" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'dext',textContent:'${f.ext.toUpperCase()}'}))">` : `<span class="dext">${esc(f.ext.toUpperCase())}</span>`;
     return `<div class="dcard" data-i="${i}"><div class="dthumb" data-dopen title="Aperçu">${thumb}</div><div class="dinfo"><b title="${esc(f.path)}">${esc(f.path.split("/").pop())}</b><small>${DELIV_KIND[f.ext] || f.ext.toUpperCase()} · ${fmtSize(f.size)}</small></div>
       <div class="dacts"><button data-ddl title="Enregistrer une copie dans Téléchargements">⬇ Télécharger</button><button data-dapp title="Ouvrir avec l'application du Mac">Ouvrir</button><button data-dfinder title="Montrer dans le Finder">Finder</button><button data-dmail title="Préparer l'envoi par mail">✉ Envoyer</button><button data-dcopy title="Copier le chemin complet du fichier">⧉ Chemin</button></div></div>`; }).join("")}</div>`;
   box.addEventListener("click", (e) => {
@@ -2014,7 +2038,30 @@ function actionInfo(name, a = {}, res = "") {
       terminate: `Arrêté ${cmd(a.bundle_id)}`, screenshot: "Regardé le simulateur", tap_text: `Touché ${esc(q(a.text))}`, tap: "Touché l'écran du simulateur",
       swipe: "Glissé sur le simulateur", type: `Tapé ${esc(q(a.text))}`, home: "Écran d'accueil du simulateur", open_url: `Ouvert ${cmd(a.url)}`, logs: "Lu les logs de l'app" })[a.action] || "Utilisé le simulateur" }),
   };
-  return (M[name] || (() => ({ kind: "other", label: esc(name) })))();
+  Object.assign(M, {
+    creer_fichier: () => ({ kind: "write", label: a.nom ? `Créé ${cmd(a.nom)}` : "Créé un fichier" }),
+    aller_dans_dossier: () => ({ kind: "read", label: `Ouvert le dossier ${cmd(a.dossier)}` }),
+    find_files: () => ({ kind: "read", label: `Cherché les fichiers ${cmd(a.pattern || a.name || a.query)}` }),
+    multi_edit: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.edits?.length ? ` <span class="muted">· ${a.edits.length} changements</span>` : ""}` }),
+    move_file: () => ({ kind: "write", label: `Déplacé ${cmd(a.source || a.src)} vers ${cmd(a.destination || a.dst)}` }),
+    delete_file: () => ({ kind: "write", label: `Mis à la corbeille ${cmd(a.path)}` }),
+    http_request: () => ({ kind: "web", label: `Requête ${esc(a.method || "GET")} ${cmd(a.url)}` }),
+    notebook_edit: () => ({ kind: "write", label: `Modifié le notebook ${cmd(a.path)}` }),
+    find_symbol: () => ({ kind: "read", label: `Cherché la définition de ${cmd(a.name || a.symbol)}` }),
+    find_references: () => ({ kind: "read", label: `Cherché les usages de ${cmd(a.name || a.symbol)}` }),
+    check_code: () => ({ kind: "cmd", label: `Vérifié le code${a.path ? " de " + cmd(a.path) : ""}` }),
+    use_tools: () => ({ kind: "other", label: `Chargé les outils ${cmd(a.group || a.groups || a.name)}` }),
+    chercher_contact: () => ({ kind: "mail", label: `Cherché le contact ${esc(q(a.nom || a.name || a.query))}` }),
+    wait: () => ({ kind: "cmd", label: "Attendu la fin d'un programme" }),
+  });
+  const human = (n) => { const t = String(n).replace(/_/g, " "); return esc(t.charAt(0).toUpperCase() + t.slice(1)); };
+  return (M[name] || (() => ({ kind: "other", label: human(name) })))();
+}
+const STEP_ICON = { read: "file", write: "edit", cmd: "term", web: "globe", mem: "brain", skill: "book", mail: "mail2", mcp: "mcp", sub: "agent", screen: "eye", other: "tool" };
+function stepIcon(name, kind) {
+  if (/^(search|find_files|find_symbol|find_references|web_search|chercher_contact)$/.test(name)) return svgI("search");
+  if (/^(list_files|aller_dans_dossier)$/.test(name)) return svgI("folder");
+  return svgI(STEP_ICON[kind] || "tool");
 }
 function groupSummary(counts) {
   const parts = [];
@@ -2106,14 +2153,14 @@ function addBot(m, idx) {
       if (!v._replay) { v._n = (v._n || 0) + 1; v._prog(); }
       if (!group) {
         group = document.createElement("details"); group.className = "agroup"; group.open = !!S.live_actions && !v._replay;  // live feed while working
-        group.innerHTML = `<summary><span class="gchev">›</span><span class="gsum"></span></summary><div class="arows"></div>`;
+        group.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum"></span></summary><div class="arows"></div>`;
         flow.appendChild(group);
       }
       const info = actionInfo(name, args);
       counts[info.kind] = (counts[info.kind] || 0) + 1;
       $(".gsum", group).textContent = groupSummary(counts);
       const row = document.createElement("div"); row.className = "arow run";
-      row.innerHTML = `<div class="aline"><span class="adot"></span>${sub ? `<span class="subtag">${esc(sub)}</span>` : ""}<span class="alabel">${info.label}</span></div><pre class="aout" hidden></pre>`;
+      row.innerHTML = `<div class="aline"><span class="aic">${stepIcon(name, info.kind)}</span>${sub ? `<span class="subtag">${esc(sub)}</span>` : ""}<span class="alabel">${info.label}</span></div><pre class="aout" hidden></pre>`;
       const pre = $(".aout", row);
       if ((name === "run_command" || name === "start_process") && args.command) {
         pre.innerHTML = `<span class="cmdline">$ ${esc(args.command)}</span>\n`; pre.hidden = !group.open;
@@ -2486,7 +2533,7 @@ async function stream(reply, v, message, hist, extra = {}) {
             const a = ev.args || {};
             if (ev.name === "update_todos") { lastTool = null; break; }
             lastTool = { type: "tool", name: ev.name, sub: ev.sub, output: "",
-              args: { path: a.path || a.output, source: a.source, question: a.question, key: a.key, command: a.command, pattern: a.pattern, target: a.target, id: a.id, query: a.query, url: a.url, name: a.name, fact: a.fact, action: a.action, names: a.names, server: a.server, to: a.to, subject: a.subject, text: a.text, keys: a.keys, app: a.app, scheme: a.scheme, bundle_id: a.bundle_id, ...toolMeta(ev.name, a) } };
+              args: { path: a.path || a.output, source: a.source, question: a.question, key: a.key, command: a.command, pattern: a.pattern, target: a.target, id: a.id, query: a.query, url: a.url, name: a.name, fact: a.fact, action: a.action, names: a.names, server: a.server, to: a.to, subject: a.subject, text: a.text, keys: a.keys, app: a.app, scheme: a.scheme, bundle_id: a.bundle_id, nom: a.nom, dossier: a.dossier, method: a.method, group: a.group, ...toolMeta(ev.name, a) } };
             reply.steps.push(lastTool); v.addStep(ev.name, lastTool.args, ev.sub); v.typing(toolLabel(ev.name, a));
             if (ev.sub) { const l = toolLabel(ev.name, a).replace(/^Naim /, ""); v.subagent({ name: ev.sub, status: "run", action: l.charAt(0).toUpperCase() + l.slice(1) }); }
             break;
