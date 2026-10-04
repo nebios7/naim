@@ -1023,6 +1023,33 @@ header#chatHeader { overflow: hidden; }
 #schForm input.field:not([type=number]), #schForm select, #schForm textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
 #schForm .sch-days { min-width: 0; }
 @container (max-width: 520px) { #schForm > .srow > div[style*="grid"] { grid-template-columns: minmax(0, 1fr) !important; } }
+/* Home: greeting, then the composer in the middle, suggestions and recent conversations under it */
+body.home #chatcol { overflow-y: auto; }
+body.home #scroll { flex: 0 0 auto; overflow: visible; margin-top: auto; padding-top: 18px; }  /* centred when it fits, */
+body.home footer { margin-bottom: auto; }                                                   /* scrolls when it does not */
+body.home #toBottom, body.home #liveBar { display: none !important; }
+body.home #thread { padding-bottom: 0; }
+body.home footer { padding-bottom: 6vh; }
+body.home .composer { max-width: min(var(--w), 720px); box-shadow: 0 6px 24px rgb(0 0 0 / .10); }
+body.home .empty { margin: 0 auto 22px; }
+.empty .hero { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.empty .hero .logo { width: 46px; height: 46px; margin: 0; flex: none; display: inline-flex; }
+.empty .hero .logo .robot, .empty .hero .logo svg { width: 46px; height: 46px; }
+.empty .hero h1 { margin: 0; font-family: ui-serif, "New York", "Iowan Old Style", Georgia, serif; font-weight: 500; font-size: clamp(24px, 4.2cqi, 36px); letter-spacing: -0.4px; line-height: 1.15; text-align: left; }
+#chatcol { container-type: inline-size; }
+.empty .sub1 { margin-top: 10px; font-size: 14.5px; }
+#homeBelow { max-width: min(var(--w), 720px); margin: 14px auto 0; }
+.hchips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.hchip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: none; color: var(--text); border-radius: 999px; padding: 6px 13px 6px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.hchip:hover { background: var(--side); border-color: color-mix(in srgb, var(--text) 25%, transparent); }
+.hchip svg { width: 15px; height: 15px; color: var(--muted); }
+.hrec { margin-top: 30px; }
+.hrt { font-size: 12.5px; color: var(--muted); font-weight: 500; padding: 0 10px 6px; }
+.hrow { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; color: var(--text); font: inherit; font-size: 13.5px; text-align: left; padding: 8px 10px; border-radius: var(--r-m, 9px); cursor: pointer; }
+.hrow:hover { background: var(--side); }
+.hrow svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.hrow .hrn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hrow .hrw { color: var(--muted); font-size: 12px; flex: none; }
 </style>
 </head>
 <body>
@@ -1095,6 +1122,7 @@ header#chatHeader { overflow: hidden; }
           </div>
         </div>
         <div class="hint" id="hint"></div>
+        <div id="homeBelow" hidden></div>
       </footer>
       <div class="dropzone">Dépose tes fichiers ici</div>
       <input type="file" id="fileInput" multiple hidden>
@@ -1807,29 +1835,34 @@ function greeting() {
   const g = h < 5 ? "Bonne nuit" : h < 18 ? "Bonjour" : "Bonsoir";
   return S.user_name ? `${g}, ${S.user_name}` : `${g}, je suis Naim`;
 }
+function leaveHome() { document.body.classList.remove("home"); const hb = $("#homeBelow"); if (hb) { hb.hidden = true; hb.innerHTML = ""; } }
 function renderThread() {
   const t = $("#thread"); t.innerHTML = "";
   if (!current || !current.messages.length) {
     const agent = S.mode === "agent";
     const rec = list.slice(0, 6);
-    t.innerHTML = `<div class="empty"><div class="logo">${robotSVG()}</div><h1>${esc(greeting())}</h1><div class="sub1">${agent ? "Mode Agent : je travaille directement dans ton dossier de projet — je crée, modifie et teste les fichiers." : "Ton assistant de code. Pose une question, demande du code ou joins des fichiers."}</div>
-      <div class="chips">${(agent
-        ? [["phone", "#5b9cf5", "App iOS reliée à une API", "Crée une app SwiftUI et une API Flask, puis lance-la dans le simulateur"],
-           ["globe", "#3fb9a0", "Application web complète", "Crée une application web de gestion de tâches avec Flask, puis vérifie chaque page"],
-           ["bug", "#e56aa0", "Trouver et corriger les bugs", "Analyse ce projet, lance-le, trouve les bugs et corrige-les"],
-           ["test", "#e0a43c", "Ajouter des tests", "Ajoute des tests unitaires au projet et fais-les passer"]]
-        : [["globe", "#a47ce8", "Recherche sur le web", "Cherche sur le web les dernières nouveautés de Python et résume-les avec les sources"],
-           ["script", "#e0a43c", "Script utile", "Écris un script Bash qui sauvegarde un dossier chaque jour avec rotation"],
-           ["agent", "#d97757", "Expliquer du code", "Explique async/await en JavaScript avec des exemples simples"],
-           ["mail2", "#5b9cf5", "Rédiger un email", "Rédige un email professionnel pour relancer un client poliment"]]
-      ).map(([ic, c, t, p]) => `<button class="chip" style="--cc:${c}" data-p="${esc(p)}"><span class="cic">${svgI(ic)}</span><span><b>${esc(t)}</b><small>${esc(p)}</small></span></button>`).join("")}</div>
-      ${rec.length ? `<div class="rtitle">Conversations récentes</div><div class="recents">${rec.map((c) => `<div class="rcard" data-open="${c.id}"><b>${c.pinned ? "📌 " : ""}${esc(c.title)}</b><small>${c.mode === "agent" ? "Agent · " : ""}${groupOf(c.updated)}</small></div>`).join("")}</div>` : ""}
-      <div class="keys"><span><kbd>⌘N</kbd> nouvelle</span><span><kbd>⌘K</kbd> commandes</span><span><kbd>⌘J</kbd> terminal</span><span><kbd>⌘+</kbd> <kbd>⌘−</kbd> zoom</span><span><kbd>⌘,</kbd> réglages</span></div></div>`;
-    $$(".chip", t).forEach((b) => (b.onclick = () => { $("#input").value = b.dataset.p || b.textContent; $("#input").focus(); $("#input").dispatchEvent(new Event("input")); }));
-    $$("[data-open]", t).forEach((b) => (b.onclick = () => openConv(b.dataset.open)));
+    document.body.classList.add("home");
+    t.innerHTML = `<div class="empty"><div class="hero"><span class="logo">${robotSVG()}</span><h1>${esc(greeting())}</h1></div>
+      <div class="sub1">${agent ? "Je travaille directement dans ton dossier : je crée, modifie, lance et vérifie le code." : "Pose une question, demande du code, un document ou une recherche sur le web."}</div></div>`;
+    const chips = agent
+      ? [["phone", "App iOS", "Crée une app SwiftUI et une API Flask, puis lance-la dans le simulateur"],
+         ["globe", "Application web", "Crée une application web de gestion de tâches avec Flask, puis vérifie chaque page"],
+         ["bug", "Corriger les bugs", "Analyse ce projet, lance-le, trouve les bugs et corrige-les"],
+         ["test", "Ajouter des tests", "Ajoute des tests unitaires au projet et fais-les passer"]]
+      : [["globe", "Recherche web", "Cherche sur le web les dernières nouveautés de Python et résume-les avec les sources"],
+         ["file", "Document", "Fais-moi un PDF d'une page qui présente mon projet"],
+         ["script", "Script", "Écris un script Bash qui sauvegarde un dossier chaque jour avec rotation"],
+         ["mail2", "E-mail", "Rédige un email professionnel pour relancer un client poliment"],
+         ["bulb", "Expliquer", "Explique async/await en JavaScript avec des exemples simples"]];
+    const hb = $("#homeBelow"); hb.hidden = false;
+    hb.innerHTML = `<div class="hchips">${chips.map(([ic, l, p]) => `<button class="hchip" data-p="${esc(p)}" title="${esc(p)}">${svgI(ic)}${esc(l)}</button>`).join("")}</div>
+      ${rec.length ? `<div class="hrec"><div class="hrt">Récents</div>${rec.slice(0, 5).map((c) => `<button class="hrow" data-open="${c.id}">${svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat")}<span class="hrn">${esc((c.title || "Sans titre").replace(/^⏱\s*/, ""))}</span><span class="hrw">${relTime(c.updated)}</span></button>`).join("")}</div>` : ""}`;
+    $$(".hchip", hb).forEach((b) => (b.onclick = () => { $("#input").value = b.dataset.p; $("#input").focus(); $("#input").dispatchEvent(new Event("input")); }));
+    $$("[data-open]", hb).forEach((b) => (b.onclick = () => openConv(b.dataset.open)));
     updateCtx();
     return;
   }
+  leaveHome();
   const live = runs[current.id];
   current.messages.forEach((m, idx) => {
     if (current.summary && idx === current.summary.upto) $("#thread").appendChild(compactNote(current.summary));
@@ -2316,6 +2349,7 @@ async function send(textArg, attsArg, opts = {}) {
   current.messages.push(reply);
   if (!textArg) { $("#input").value = ""; pending = []; renderPending(); autoGrow(); }
   if ($("#thread .empty")) $("#thread").innerHTML = "";
+  leaveHome();
   addUser(userMsg, current.messages.length - 2);
   const v = addBot(reply, current.messages.length - 1);
   v.typing(S.mode === "agent" ? "Naim réfléchit…" : "Naim écrit…");
