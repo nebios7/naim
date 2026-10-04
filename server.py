@@ -100,6 +100,36 @@ def trivial_message(text):
     return sum(w not in TRIVIAL_WORDS for w in words) == 0
 
 
+RAW_CALL_RE = re.compile(r"<tool_call>\s*<function=([\w.-]+)>(.*?)</function>\s*(?:</tool_call>|$)", re.S)
+RAW_PARAM_RE = re.compile(r"<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>", re.S)
+
+
+def shown_part(text):
+    """What may be displayed while streaming: never a « <tool_call> » block, nor the start of one being written."""
+    cut = text.find("<tool_call")
+    if cut >= 0:
+        return text[:cut]
+    lt = text.rfind("<")
+    if lt >= 0 and "<tool_call".startswith(text[lt:]):  # « <too… » could become « <tool_call »: wait
+        return text[:lt]
+    return text
+
+
+def raw_tool_calls(text):
+    """Tool calls the model wrote as text (« <tool_call><function=read_file>… ») instead of real calls: recovered."""
+    calls = []
+    for m in RAW_CALL_RE.finditer(text or ""):
+        args = {}
+        for k, v in RAW_PARAM_RE.findall(m.group(2)):
+            v = v.strip()
+            try:
+                args[k] = json.loads(v) if v[:1] in "[{" or v in ("true", "false") or re.fullmatch(r"-?\d+(\.\d+)?", v) else v
+            except ValueError:
+                args[k] = v
+        calls.append({"function": {"name": m.group(1), "arguments": args}})
+    return calls
+
+
 def chosen_option(message, history):
     """« 2 », « la 2 », « option 2 » after Naim offered numbered choices: the text of that choice, else ''."""
     m = re.fullmatch(r"\s*(?:(?:la|le|l'|option|choix|n°|num[ée]ro)\s*)?(\d{1,2})\s*[.)!]?\s*", message or "", re.I)
@@ -1197,7 +1227,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "interjection_read", "count": len(notes)})
             tools = helper.tools + [chatfiles.FILE_TOOL]
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
-            content, calls = "", []
+            content, calls, shown = "", [], 0
             stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
             for chunk in stream:
                 if stop.is_set():
@@ -1210,12 +1240,22 @@ class Handler(BaseHTTPRequestHandler):
                     self.event({"type": "thinking_token", "text": msg["thinking"]})
                 if msg.get("content"):
                     content += msg["content"]
-                    self.event({"type": "token", "text": msg["content"]})
+                    visible = shown_part(content)
+                    if len(visible) > shown:
+                        self.event({"type": "token", "text": visible[shown:]})
+                        shown = len(visible)
                 if msg.get("tool_calls"):
                     calls = msg["tool_calls"]
                 if chunk.get("done") and chunk.get("eval_duration"):
                     total_tokens += chunk.get("eval_count", 0)
                     self.event({"type": "stats", "tokens": total_tokens, "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9)})
+            raw = raw_tool_calls(content)
+            if not calls and raw:  # written as text: executed anyway
+                calls = raw
+            clean = content.split("<tool_call")[0]
+            if not calls and len(clean) > shown:  # end of a plain answer: the characters held back
+                self.event({"type": "token", "text": clean[shown:]})
+            content = clean
             if stop.is_set() or not calls:
                 break
             messages.append({"role": "assistant", "content": content, "tool_calls": calls})
