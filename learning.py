@@ -13,6 +13,7 @@ export() turns the good tasks into training files for Naim v3 (MLX LoRA):
 import hashlib
 import json
 import random
+import re
 import time
 from pathlib import Path
 
@@ -125,6 +126,47 @@ def rate_chat(chat_id, messages, rating):
     return True
 
 
+# automatic sorting before every training: the user's ratings stay the main signal, these rules only keep out what
+# must never be learned, whatever the rating (so a training never needs a manual review)
+EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]+ ?")
+ANNOUNCE_ONLY_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|envoie|"
+                              r"prépare)\b|(?:je vais|laisse-moi)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|cherch|lire|ouvr|fair|génér|prépar|"
+                              r"regard|vérifi|modifi|écri|rédig|exécut|install))", re.I)
+GREETING_RE = re.compile(r"^\W*(salut|bonjour|bonsoir|coucou|hello|hey|yo)\b[\w\s,!.']{0,20}$", re.I)
+TEST_ROOTS = ("/private/tmp/", "/tmp/", "/private/var/folders/")
+
+
+def no_emoji(text):
+    return EMOJI_RE.sub("", text or "")
+
+
+def chat_flaw(msgs):
+    """Why a rated Chat answer must not be learned (None = fine)."""
+    answer = next((m.get("content") or "" for m in reversed(msgs) if m["role"] == "assistant"), "").strip()
+    asked = next((m.get("content") or "" for m in reversed(msgs) if m["role"] == "user"), "").strip()
+    if not answer:
+        return "réponse vide"
+    if "<tool_call" in answer or "<function=" in answer:
+        return "appel d'outil écrit en texte"
+    if ANNOUNCE_ONLY_RE.search(answer) and len(answer) < 300 and "```" not in answer:
+        return "annonce sans agir"
+    if re.match(r"\W*avec plaisir\b", answer, re.I):
+        return "réponse toute faite"
+    if GREETING_RE.match(asked) and re.search(r"\bje suis \W*naim\b", answer, re.I):
+        return "se présente sur un simple salut"
+    return None
+
+
+def task_flaw(t):
+    """Why a finished agent task must not be learned (None = fine)."""
+    if str(t.get("project") or "").startswith(TEST_ROOTS):
+        return "tâche de test"
+    final = next((m.get("content") or "" for m in reversed(t.get("messages") or []) if m.get("role") == "assistant"), "")
+    if "<tool_call" in final:
+        return "appel d'outil écrit en texte"
+    return None
+
+
 def _chat_examples():
     out = []
     for f in sorted(CHATS.glob("*.json")) if CHATS.exists() else []:
@@ -136,7 +178,8 @@ def _chat_examples():
             msgs = c["messages"]
             while msgs and msgs[0]["role"] != "user":
                 msgs = msgs[1:]
-            if len(msgs) >= 2:
+            if len(msgs) >= 2 and not chat_flaw(msgs):
+                msgs = [dict(m, content=no_emoji(m.get("content"))) if m["role"] == "assistant" else m for m in msgs]
                 out.append({"messages": [{"role": "system", "content": CHAT_SYSTEM}] + msgs})
     return out
 
@@ -205,7 +248,7 @@ def _steps(trace):
         done = [_short(x) for x in msgs[1:i]]
         recent = "\n".join(done)[-STEP_CONTEXT:]
         prompt = task[:800] + (f"\n\n[Déjà fait]\n{recent}" if recent else "")
-        target = {"role": "assistant", "content": m.get("content") or ""}
+        target = {"role": "assistant", "content": no_emoji(m.get("content"))}
         if m.get("tool_calls"):
             target["tool_calls"] = [{"type": "function", "function": {"name": c["function"]["name"],
                                                                        "arguments": c["function"].get("arguments") or {}}}
@@ -216,7 +259,7 @@ def _steps(trace):
 
 def export(valid_ratio=0.1):
     """Write the dataset files from the good tasks. Returns counts and the folder."""
-    good = [t for t in _load_all() if is_good(t)]
+    good = [t for t in _load_all() if is_good(t) and not task_flaw(t)]
     chats = _chat_examples()
     if not good and not chats:
         raise ValueError("aucune tâche réussie à exporter pour l'instant")
