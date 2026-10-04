@@ -259,7 +259,14 @@ def _steps(trace):
 
 def export(valid_ratio=0.1):
     """Write the dataset files from the good tasks. Returns counts and the folder."""
-    good = [t for t in _load_all() if is_good(t) and not task_flaw(t)]
+    good, seen = [], {}
+    for t in _load_all():  # newest first; the same request repeated (a scheduled task every day) counts twice at most
+        if not is_good(t) or task_flaw(t):
+            continue
+        key = re.sub(r"\W+", " ", str(t.get("task") or "")).strip().lower()[:80]
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] <= 2 or t.get("rating") == 1:
+            good.append(t)
     chats = _chat_examples()
     if not good and not chats:
         raise ValueError("aucune tâche réussie à exporter pour l'instant")
