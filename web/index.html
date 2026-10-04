@@ -1884,6 +1884,14 @@ function greeting() {
   return S.user_name ? `${g}, ${S.user_name}` : `${g}, je suis Naim`;
 }
 function leaveHome() { document.body.classList.remove("home"); const hb = $("#homeBelow"); if (hb) { hb.hidden = true; hb.innerHTML = ""; } }
+// notes written for the model inside tool results (« This file is done… », « [STOP: …] ») are not for the user
+function shownResult(r) {
+  return String(r || "")
+    .replace(/\s*This file is done:[\s\S]*$/, "").replace(/\s*It is a real \w+ file:[^\n]*/g, "")
+    .replace(/\s*Note: \d+ lines is long[^\n]*/g, "").replace(/\n*\[STOP:[^\]]*\]/g, "")
+    .replace(/\s*\((?:Tableau lu en texte|Le modèle actuel)[^)]*\)/g, "")
+    .replace(/\s*Il est affiché à l'utilisateur[\s\S]*$/, "").trim();
+}
 function renderThread() {
   const t = $("#thread"); t.innerHTML = "";
   if (!current || !current.messages.length) {
@@ -2135,7 +2143,8 @@ function addBot(m, idx) {
       const p = $(".aout", lastRow);
       const cmd = $(".cmdline", p)?.outerHTML || "";
       if (lastRow.dataset.preview) { /* keep the code preview */ }
-      else if (name !== "run_command" || !lastOut) { const r = res.replace(/^ok: /, "").replace(/^exit code 0\n?/, "").replace(/\n\n\[Plan[^\]]*\]$/, ""); p.innerHTML = cmd + (cmd && r ? "\n" : "") + esc(r); }
+      else if (name !== "run_command" || !lastOut) { const r = shownResult(res.replace(/^ok: /, "").replace(/^exit code 0\n?/, "").replace(/\n\n\[Plan[^\]]*\]$/, "")); p.innerHTML = cmd + (cmd && r ? "\n" : "") + esc(r); }
+      if (ok && /^(write_file|edit_file|multi_edit|move_file|delete_file|creer_fichier)$/.test(name) && !lastRow.dataset.preview) { p.innerHTML = ""; p.hidden = true; return; }  // the step line says it all
       if (ok && !lastRow.dataset.preview && ((name !== "run_command" && name !== "start_process") || !p.textContent.replace(/^\$.*$/m, "").trim())) p.hidden = !cmd || !group?.open;
       if (!ok) p.hidden = false;
       if (/^ok: (wrote|edited)/.test(res)) refreshTreeSoon();

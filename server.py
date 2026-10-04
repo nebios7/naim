@@ -87,6 +87,14 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
                         r"[àa] (demain|plus|bient[oô]t)|bye|ciao)\b)", re.I)
 
 
+# tools kept for a plain question or a lesson in Chat: look things up, never change files
+ANSWER_TOOLS = {"read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
+                "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
+                "mail_inbox", "planifier", "send_email", "http_request"}
+# the user wants files made or changed (a document, their project), not only an answer
+FILE_WORK_RE = re.compile(r"fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|projet|dossier|"
+                          r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
+                          r"installe|lance|ex[ée]cute|teste|\w\.[a-z]{1,5}\b", re.I)
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
 d'accord dac super génial genial parfait top cool nickel très tres bonne nuit à a demain plus bientôt bientot bye ciao naim
 mohamed et encore c'est cool ça ca marche""".split())
@@ -1195,7 +1203,9 @@ class Handler(BaseHTTPRequestHandler):
         "create documents (creer_fichier: PDF, Word, Excel, ZIP…), send emails, schedule tasks, and more (use_tools loads "
         "a specialised group, use_mcp an extra server). Answer directly when you can; use a tool only when the request "
         "needs an action, a file or fresh information, then give the answer. Never write code meant to create a file "
-        "yourself: call the tool. Files you create go in {folder}.")
+        "yourself: call the tool. Files you create go in {folder}.\nTo teach, explain or show code, write it IN your reply: "
+        "short explanations and complete examples in Markdown code blocks, step by step, then one question to go on. "
+        "Do not create a file for that unless the user asks for a file or a document.")
 
     def chat_agentic(self, body, messages, options, stop, files=False, act=False):
         """Chat mode with all of Naim's tools, streamed: text appears as it is written, tools run in the same reply."""
@@ -1259,6 +1269,12 @@ class Handler(BaseHTTPRequestHandler):
     def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
         nudges = 1 if body.get("_relaunched") else 0
+        asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
+        file_work = bool(FILE_WORK_RE.search(asked))
+        if not file_work and not files:
+            messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
+                "Markdown. Ne crée ni ne modifie aucun fichier.)"))
         limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 60))
         for step in range(limit):
             if stop.is_set():
@@ -1280,6 +1296,8 @@ class Handler(BaseHTTPRequestHandler):
                                  "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
                 self.event({"type": "interjection_read", "count": len(notes)})
             tools = None if last and used_tools else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
+            if tools and not files and not file_work:  # a question, a lesson: the answer goes in the conversation
+                tools = [t for t in tools if t["function"]["name"] in ANSWER_TOOLS]
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls, shown = "", [], 0
             stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
