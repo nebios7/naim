@@ -958,6 +958,7 @@ header#chatHeader { overflow: hidden; }
   background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
   background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important;
   animation: naimShimmer 3.2s cubic-bezier(.4, 0, .6, 1) infinite; }
+.turn.bot:has(.working:not([hidden])) details.think > summary::before { background: var(--muted); }
 .turn.bot:has(.working:not([hidden])) details.think > summary::marker, .turn.bot:has(.working:not([hidden])) details.think > summary::-webkit-details-marker { color: var(--muted); }
 @keyframes naimShimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
 
@@ -1105,7 +1106,14 @@ details.think > summary::before { content: ""; width: 13px; height: 13px; backgr
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat; }
 details.think[open] > summary::before { transform: rotate(90deg); }
 details.think > summary:hover { color: var(--text); background: var(--hover); }
-#toBottom { left: auto !important; right: 22px; transform: none !important; bottom: 128px; }
+/* thinking: three dots that rise one after another */
+.ldots { display: inline-flex; align-items: flex-end; gap: 3px; margin-left: 5px; height: 1em; vertical-align: -1px; }
+.ldots i { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); animation: ldot 1.2s ease-in-out infinite; }
+.ldots i:nth-child(2) { animation-delay: .15s; } .ldots i:nth-child(3) { animation-delay: .3s; }
+@keyframes ldot { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
+#liveBar .ltext { display: inline-flex; align-items: center; }
+#liveBar .lword { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .ldots i { animation: none; } }
 </style>
 </head>
 <body>
@@ -2116,7 +2124,7 @@ function addBot(m, idx) {
     setThinking(t) { think.hidden = !t; $("div", think).textContent = t; },
     setStats(s) { $(".stats", d).textContent = s && S.show_stats ? `${s.tokens} tokens · ${s.tps.toFixed(1)} tok/s` : ""; },
     typing(text) {
-      working.hidden = false; $(".wtext", working).textContent = text || "Naim réfléchit…";
+      working.hidden = false; $(".wtext", working).innerHTML = esc((text || "Naim réfléchit").replace(/[.…\s]+$/, "")) + DOTS;
       if (!v._t0) {
         v._t0 = Date.now();
         v._timer = setInterval(() => {
@@ -2643,6 +2651,7 @@ function updateSendBtn() {
 }
 $("#input").addEventListener("input", updateSendBtn);
 $("#send").onclick = () => (curRun() && !$("#input").value.trim() ? stop() : send());
+const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span>';
 function updateLiveBar() {
   const r = curRun(), bar = $("#liveBar");
   bar.hidden = !r || view !== "chat"; document.body.classList.toggle("haslive", !bar.hidden);
@@ -2652,7 +2661,11 @@ function updateLiveBar() {
   const step = todos.length ? `Étape ${cur >= 0 ? cur + 1 : todos.filter((t) => t.status === "done").length}/${todos.length}` : "";
   const done = todos.filter((t) => t.status === "done" || t.status === "skipped").length, prog = $(".lprog", bar);
   prog.hidden = !todos.length; if (todos.length) $("i", prog).style.width = Math.round(100 * done / todos.length) + "%";
-  $(".ltext", bar).innerHTML = (step ? `<span class="lstep">${step}</span>` : "") + esc((r.status || "Naim travaille").replace(/[.…\s]+$/, "") + "…");
+  const label = (r.status || "Naim réfléchit").replace(/[.…\s]+$/, "");
+  if (bar.dataset.label !== label + step) {  // rewritten only when it changes: the dots keep their rhythm
+    bar.dataset.label = label + step;
+    $(".ltext", bar).innerHTML = (step ? `<span class="lstep">${step}</span>` : "") + `<span class="lword">${esc(label)}</span>${DOTS}`;
+  }
   const sec = Math.round((Date.now() - r.t0) / 1000);
   $(".ltime", bar).textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")}`;
 }
