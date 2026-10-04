@@ -87,6 +87,11 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
                         r"[àa] (demain|plus|bient[oô]t)|bye|ciao)\b)", re.I)
 
 
+# a reply that only announces an action (« Je vais envoyer… ») instead of doing it
+ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
+                         r"envoie|prépare|regarde|vérifie)\b|(?:je vais|laisse-moi)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|"
+                         r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim))",
+                         re.I | re.M)
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
 d'accord dac super génial genial parfait top cool nickel très tres bonne nuit à a demain plus bientôt bientot bye ciao naim
 mohamed et encore c'est cool ça ca marche""".split())
@@ -1097,6 +1102,8 @@ class Handler(BaseHTTPRequestHandler):
         options, extra = model_options(body)
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
+        if body.get("history") and trivial_message(body["message"]):
+            mem = ""  # « merci », « ok » in a conversation: answer about it, not about remembered projects
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
         choice = chosen_option(body["message"], body.get("history"))
         text = (f"{body['message']} — je choisis cette option que tu as proposée : « {choice} ». Fais-le maintenant."
@@ -1115,10 +1122,12 @@ class Handler(BaseHTTPRequestHandler):
             if any((chatfiles.OUT / n.strip()).is_file() for n in named):
                 files = False  # the file exists (✉ Envoyer on its card): only send it
         web = s.get("enable_web", True) is not False and bool(WEB_NEED_RE.search(body["message"] or ""))
-        if options.get("backend") == "llamacpp" and s.get("chat_tools", True) is not False and not body.get("images"):
+        if (options.get("backend") == "llamacpp" and s.get("chat_tools", True) is not False and not body.get("images")
+                and not (trivial_message(body["message"]) and not choice)):  # « merci », « salut » : a plain reply
             # Chat with every tool, like an assistant that talks AND acts: answers stream as usual; when a tool is
             # needed, it is used in the same reply, then the answer goes on
-            return self.chat_agentic(body, messages, options, stop, files=files)
+            return self.chat_agentic(body, messages, options, stop, files=files,
+                                     act=email and bool(re.search(r"\b(e-?mails?|mails?|courriels?)\b", body["message"] or "", re.I)))
         if wants_schedule or files or web or email:
             if self.chat_with_web(body, messages, options, stop, schedule=wants_schedule, files=files,
                                   web=web or not (files or email), email=email, send_now=address_given):
@@ -1193,7 +1202,7 @@ class Handler(BaseHTTPRequestHandler):
         "needs an action, a file or fresh information, then give the answer. Never write code meant to create a file "
         "yourself: call the tool. Files you create go in {folder}.")
 
-    def chat_agentic(self, body, messages, options, stop, files=False):
+    def chat_agentic(self, body, messages, options, stop, files=False, act=False):
         """Chat mode with all of Naim's tools, streamed: text appears as it is written, tools run in the same reply."""
         def repeating(text):
             lines = [l.strip() for l in text.split("\n") if l.strip()]
@@ -1239,6 +1248,7 @@ class Handler(BaseHTTPRequestHandler):
         note = self.CHAT_TOOLS_NOTE.format(folder=folder) + (
             f"\nYou are working in the folder {folder} (relative paths are inside it). Before asking the user where a "
             "file is, look for it yourself (list_files, find_files)."
+            + f" Files you created in this conversation (creer_fichier) are in {chatfiles.OUT}: attach them with that full path."
             + (f"\nFiles in this folder:\n{helper.list_files('.')[:2500]}" if named else "")
             + (f" Other folders with the same name: {', '.join(map(str, others))}." if named and others else "")) + (f"\nThe user's own email address (« moi »): {me}" if me else "")
         if getattr(helper, "_tool_groups", None):
@@ -1246,13 +1256,14 @@ class Handler(BaseHTTPRequestHandler):
         messages = [dict(messages[0], content=messages[0]["content"] + note)] + messages[1:]
         think = bool(body.get("think")) and not trivial_message(body["message"])
         try:
-            self._chat_steps(body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id)
+            self._chat_steps(body, messages, options, stop, files or act, helper, think, repeating, chatfiles, run_id)
         finally:
             with _lock:
                 _agents.pop(run_id, None)
 
     def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
+        nudges = 1 if body.get("_relaunched") else 0
         for step in range(14):
             if stop.is_set():
                 self.event({"type": "stopped"})
@@ -1301,6 +1312,17 @@ class Handler(BaseHTTPRequestHandler):
             if not calls and len(clean) > shown:  # end of a plain answer: the characters held back
                 self.event({"type": "token", "text": clean[shown:]})
             content = clean
+            if not calls and not stop.is_set() and nudges < 2 and (
+                    not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400)):
+                # « Je vais envoyer l'e-mail… » without doing it, or an empty reply: do it now
+                nudges += 1
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), "
+                                 "puis dis-moi le résultat. Si une information te manque vraiment, pose une seule question."})
+                if content.strip():
+                    self.event({"type": "token", "text": "\n\n"})
+                continue
             if stop.is_set() or not calls:
                 break
             messages.append({"role": "assistant", "content": content, "tool_calls": calls})
