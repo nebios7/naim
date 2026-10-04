@@ -1259,17 +1259,27 @@ class Handler(BaseHTTPRequestHandler):
     def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
         nudges = 1 if body.get("_relaunched") else 0
-        for step in range(14):
+        limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 60))
+        for step in range(limit):
             if stop.is_set():
                 self.event({"type": "stopped"})
                 break
+            last = step == limit - 1
+            if last and used_tools:  # out of steps: the last one is the answer, with what was found (no more tools)
+                messages.append({"role": "user", "content": "Tu as utilisé toutes tes étapes : arrête de chercher. Réponds "
+                                 "maintenant à ma demande avec tout ce que tu as déjà trouvé (organisé, complet), et dis "
+                                 "ce qui manque encore."})
+                self.event({"type": "status", "text": "Naim rédige la réponse avec ce qu'il a trouvé…"})
+            elif step == limit * 2 // 3 and used_tools:
+                messages.append({"role": "user", "content": f"(Il te reste {limit - step} étapes : termine ce qui est "
+                                 "essentiel, puis réponds avec ce que tu as trouvé.)"})
             with helper._inbox_lock:  # what the user typed while Naim was working: taken into account now
                 notes, helper._inbox = helper._inbox, []
             if notes:
                 messages.append({"role": "user", "content": "(Message de l'utilisateur pendant ton travail — prends-le en "
                                  "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
                 self.event({"type": "interjection_read", "count": len(notes)})
-            tools = helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
+            tools = None if last and used_tools else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls, shown = "", [], 0
             stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
