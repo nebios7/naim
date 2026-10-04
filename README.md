@@ -86,14 +86,19 @@ Naim a **son propre modèle**, réservé à l'application Naim : il se télécha
 | | |
 |---|---|
 | Taille | ~9 milliards de paramètres |
-| Architecture | décodeur hybride : couches d'attention linéaire + couches d'attention complète |
+| Architecture | **`naim`**, sa propre architecture : décodeur hybride de 32 couches, attention linéaire (Gated DeltaNet) avec une couche d'attention complète toutes les 4 |
+| Détails | dimension 4096, 16 têtes d'attention (4 pour clés/valeurs), vocabulaire de 248 320 tokens |
 | Contexte | jusqu'à 262 000 tokens (32 000 par défaut dans l'app) |
 | Capacités | appel d'outils, mode raisonnement, vision (lecture d'images) |
-| Téléchargement | 6,5 Go : le modèle (5,6 Go) et sa vision (0,9 Go), installés par l'application |
+| Téléchargement | 6,5 Go : le modèle (5,6 Go), sa vision (0,9 Go) et le moteur Naim (16 Mo), installés par l'application |
+| Moteur | **moteur Naim** : une version de llama.cpp qui lit l'architecture `naim` (Metal, Apple Silicon) |
 | Utilisation | dans Naim : l'application, le navigateur (`naim --web`) et le terminal (`naimtools`) |
 | Vitesse (Mac M4, 32 Go) | ~12 à 17 tokens/s en écriture, ~75 à 100 tokens/s en lecture |
 | Entraînement | affinage LoRA par auto-distillation, successeur de Mimo |
 | Licence | Apache 2.0 |
+
+Les fichiers du modèle portent son nom jusque dans leurs métadonnées (`general.architecture = naim`, vision
+`naim_vision`) : ils s'ouvrent avec le moteur Naim, fourni avec l'application.
 
 Chaque tâche réussie peut être gardée (sur ton Mac uniquement) pour entraîner la version suivante : Naim apprend de
 ses propres réussites.
@@ -234,7 +239,7 @@ pur mais ne sait pas piloter d'outils (il écrit les appels en texte) : il ne pe
 
 - macOS sur **Mac Apple Silicon** (M1 ou plus récent), **16 Go** de mémoire conseillés
 - Outils Xcode (`xcode-select --install`) — l'installeur te le propose
-- [Homebrew](https://brew.sh) conseillé (pour `llama.cpp`)
+- [Homebrew](https://brew.sh) conseillé (outils de développement ; le moteur Naim est fourni avec le modèle)
 - Environ **8 Go** d'espace disque (modèle de 6,5 Go)
 
 ## Installation

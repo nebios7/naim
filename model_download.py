@@ -21,7 +21,8 @@ STATE = {"running": False, "file": "", "label": "", "done": 0, "total": 0, "fini
 
 
 def missing():
-    return [(f, label) for f, label in FILES if not (llamacpp.MODELS / f).exists()]
+    return [(f, label) for f, label in FILES if not (llamacpp.MODELS / f).exists()
+            and not (f == "llama-server-naim" and STATE.get("engine_absent"))]
 
 
 def _fetch(name, label):
@@ -80,6 +81,9 @@ def _run():
                     break
                 except Exception as e:
                     if attempt == 2:
+                        if name == "llama-server-naim" and llamacpp.gguf_arch(llamacpp.model_files()[0]) != "naim":
+                            STATE["engine_absent"] = True  # not published yet: the model works with llama.cpp
+                            break  # the engine is only needed for a model in Naim's own architecture
                         raise
                     STATE["error"] = f"nouvelle tentative ({e})"
                     time.sleep(3)
