@@ -2196,6 +2196,8 @@ function talkStateUpdate() {  // who has the floor, shown by the wave button its
   const el = $("#talkState"), b = $("#talkBtn"); if (!el || !b) return;
   el.hidden = true;
   if (!talk.on) { delete b.dataset.s; return; }
+  if (voice.audio && dictation.on) stopDictation();            // it speaks: the microphone pauses (it must not hear itself)
+  else if (!voice.audio && !dictation.on && (curRun() || !voice.preparing)) talkListen();  // then it listens again
   const st = voice.audio ? "speak" : voice.preparing ? "prep" : dictation.on && !curRun() ? "listen" : curRun() ? "think" : "listen";
   if (b.dataset.s === st) return;
   b.dataset.s = st;
@@ -2204,8 +2206,7 @@ function talkStateUpdate() {  // who has the floor, shown by the wave button its
 }
 setInterval(talkStateUpdate, 250);
 function talkStart() {
-  talk.on = true; $("#talkBtn").classList.add("on"); $("#talkBtn").title = "Arrêter la conversation à voix haute";
-  toast("Conversation à voix haute : parle, Naim t'écoute");
+  talk.on = true; $("#talkBtn").classList.add("on"); voiceUnlock();
   talkListen();
 }
 function talkStop() {
@@ -2240,9 +2241,14 @@ function stopDictation(quiet) {
 // ======================================================================= Naim's voice (naim_voice.py: its own French voice)
 let voiceOK = false;
 api("/api/tts").then((r) => { voiceOK = !!r.available; if (voiceOK && current) renderThread(); }).catch(() => {});
-const voice = { queue: [], audio: null, btn: null, token: 0 };
-function voiceSentences(text) {  // code blocks are shown, not read; then sentence by sentence (speech starts at once)
-  const t = String(text || "").replace(/```[\s\S]*?```/g, " ").replace(/\n{2,}/g, ". ");
+const voice = { queue: [], fed: 0, done: true, audio: null, btn: null, token: 0, preparing: false, wake: null, player: null, run: null };
+// one audio element, unlocked by a click (WebKit lets a page play sound only after a gesture), reused for every sentence
+function voicePlayer() { if (!voice.player) { voice.player = new Audio(); voice.player.preload = "auto"; } return voice.player; }
+function voiceUnlock() { const p = voicePlayer(); p.muted = true; p.play().catch(() => {}).finally(() => { p.pause(); p.muted = false; }); }
+function voiceSentences(text) {  // code is shown, not read (an unfinished code block too); then sentence by sentence
+  let t = String(text || "");
+  if ((t.match(/```/g) || []).length % 2) t = t.slice(0, t.lastIndexOf("```"));
+  t = t.replace(/```[\s\S]*?```/g, " ").replace(/\n{2,}/g, ". ");
   return (t.match(/[^.!?…\n]+[.!?…]*/g) || []).map((x) => x.trim()).filter((x) => x.replace(/[\W_]/g, "").length > 1);
 }
 async function voiceClip(sentence) {
@@ -2250,25 +2256,46 @@ async function voiceClip(sentence) {
   if (!r.ok) throw new Error("voix indisponible");
   return URL.createObjectURL(await r.blob());
 }
-async function voiceSay(text, btn) {
+function voiceStart(btn) {  // a new reading; sentences arrive with voiceFeed (while Naim writes, or all at once)
   voiceStop();
-  const my = ++voice.token, parts = voiceSentences(text);
-  if (!parts.length) return;
-  voice.btn = btn || null; btn?.classList.add("speaking"); voice.preparing = true;
-  let next = voiceClip(parts[0]);
-  for (let i = 0; i < parts.length && my === voice.token; i++) {
-    let url; try { url = await next; } catch (e) { toast("La voix de Naim n'est pas disponible"); break; }
-    if (i + 1 < parts.length) next = voiceClip(parts[i + 1]);  // the next sentence is made while this one plays
-    if (my !== voice.token) break;
+  const my = voice.token;
+  Object.assign(voice, { queue: [], fed: 0, done: false, btn: btn || null, preparing: true });
+  btn?.classList.add("speaking");
+  voice.run = voiceLoop(my);
+  return voice.run;
+}
+function voiceFeed(text, final) {
+  const parts = voiceSentences(text), ready = final ? parts.length : Math.max(0, parts.length - 1);  // the last one may be unfinished
+  for (let i = voice.fed; i < ready; i++) voice.queue.push(parts[i]);
+  voice.fed = Math.max(voice.fed, ready);
+  if (final) voice.done = true;
+  voice.wake?.();
+}
+async function voiceLoop(my) {
+  let next = null, failures = 0;
+  while (my === voice.token) {
+    if (!next && !voice.queue.length) {
+      if (voice.done) break;
+      await new Promise((ok) => { voice.wake = ok; setTimeout(ok, 1000); }); voice.wake = null;
+      continue;
+    }
+    const cur = next || voiceClip(voice.queue.shift());
+    next = voice.queue.length ? voiceClip(voice.queue.shift()) : null;  // the next sentence is made while this one plays
+    let url; try { url = await cur; failures = 0; } catch { if (++failures > 2) { toast("La voix de Naim ne répond pas"); break; } continue; }
+    if (my !== voice.token) { URL.revokeObjectURL(url); break; }
     voice.preparing = false;
-    await new Promise((ok) => { const a = voice.audio = new Audio(url); a.onended = a.onerror = ok; a.play().catch(ok); });
+    const p = voicePlayer(); voice.audio = p;
+    await new Promise((ok) => { p.onended = p.onerror = ok; p.src = url; p.play().catch(ok); });
+    voice.audio = null; voice.preparing = !voice.done || voice.queue.length > 0 || !!next;
     URL.revokeObjectURL(url);
   }
   if (my === voice.token) voiceStop();
 }
+async function voiceSay(text, btn) { const run = voiceStart(btn); voiceFeed(text, true); return run; }
 function voiceStop() {
-  voice.token++; voice.preparing = false;
-  if (voice.audio) { voice.audio.pause(); voice.audio = null; }
+  voice.token++; voice.preparing = false; voice.queue = []; voice.done = true; voice.wake?.();
+  if (voice.player) { voice.player.pause(); }
+  voice.audio = null;
   voice.btn?.classList.remove("speaking"); voice.btn = null;
 }
 let stickBottom = true;  // follow the conversation as it grows, until the user scrolls up to read
@@ -2411,7 +2438,7 @@ function addBot(m, idx) {
   const think = $(".think", d), flow = $(".flow", d), body = $(".md", d), working = $(".working", d);
   let raw = false, group = null, counts = {}, lastRow = null, lastOut = "";
   $("[data-a=copy]", d).onclick = () => { copyText(m?.content || body.innerText); toast("Copié"); };
-  const sp = $("[data-a=speak]", d); if (sp) sp.onclick = () => (voice.btn === sp ? voiceStop() : voiceSay(m?.content || body.innerText, sp));
+  const sp = $("[data-a=speak]", d); if (sp) sp.onclick = () => { voiceUnlock(); voice.btn === sp ? voiceStop() : voiceSay(m?.content || body.innerText, sp); };
   $("[data-a=regen]", d).onclick = () => regenerate();
   $("[data-a=cont]", d).onclick = () => { if (!curRun()) send("Continue exactement là où tu t'es arrêté, sans répéter.", []); };
   $("[data-a=raw]", d).onclick = () => { raw = !raw; body.innerHTML = raw ? `<pre style="white-space:pre-wrap;font:13px ui-monospace,Menlo,monospace">${esc(m?.content || "")}</pre>` : md(m?.content || ""); };
@@ -2835,7 +2862,9 @@ async function stream(reply, v, message, hist, extra = {}) {
     });
     const reader = res.body.getReader(), dec = new TextDecoder();
     let buf = "", pendingRender = false;
-    const renderText = () => { if (pendingRender) return; pendingRender = true; requestAnimationFrame(() => { pendingRender = false; v.setText(reply.content); if (current === conv) scrollDown(); }); };
+    const speaking = voiceOK && current === conv && (talk.on || S.voice_auto);  // its voice starts with the first sentence
+    if (speaking) voiceStart();
+    const renderText = () => { if (pendingRender) return; pendingRender = true; requestAnimationFrame(() => { pendingRender = false; v.setText(reply.content); if (speaking) voiceFeed(reply.content, false); if (current === conv) scrollDown(); }); };
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -2909,9 +2938,10 @@ async function stream(reply, v, message, hist, extra = {}) {
     const down = () => { stickBottom = true; const sc = $("#scroll"); sc.scrollTop = sc.scrollHeight; };
     requestAnimationFrame(down); setTimeout(down, 120); setTimeout(down, 450);  // after the layout and the code colouring
   }
-  if (talk.on && current === conv) {  // conversation mode: Naim answers aloud, then listens again
-    (voiceOK && reply.content && !/⏹ Arrêté/.test(reply.content) ? voiceSay(reply.content) : Promise.resolve()).then(() => setTimeout(talkListen, 250));
-  } else if (S.voice_auto && voiceOK && current === conv && reply.content && !/⏹ Arrêté/.test(reply.content)) voiceSay(reply.content);
+  if (voice.run && !voice.done) {  // the voice already speaks: it gets the end of the answer
+    if (/⏹ Arrêté/.test(reply.content || "")) voiceStop(); else voiceFeed(reply.content || "", true);
+  }
+  if (talk.on && current === conv) (voice.run || Promise.resolve()).then(() => setTimeout(talkListen, 250));  // then it listens again
   if (reply.stats || reply.ttft != null) {
     reply.stats = { ...(reply.stats || {}), ttft: reply.ttft, total: (Date.now() - reply.time) / 1000,
                     reason: /⏹ Arrêté/.test(reply.content || "") ? "stopped" : reply.stats?.reason };
@@ -2929,8 +2959,9 @@ async function stream(reply, v, message, hist, extra = {}) {
   await saveConv(conv); loadList();
   mentionFiles = null;  // files may have been created: the @ list is rebuilt next time
   if (run.queue?.length && current === conv) setTimeout(() => send(run.queue.join("\n\n")), 300);
-  if (document.hidden || !document.hasFocus()) notify("Naim a terminé", (reply.content || "").replace(/[`*#_>]/g, "").slice(0, 120), { conv: conv.id });
-  if (S.sound) ding();
+  const quiet = talk.on && conv.mode !== "agent";  // a spoken conversation: no notification, no sound
+  if (!quiet && (document.hidden || !document.hasFocus())) notify("Naim a terminé", (reply.content || "").replace(/[`*#_>]/g, "").slice(0, 120), { conv: conv.id });
+  if (S.sound && !quiet) ding();
 }
 function currentTodo(list) {
   const t = (list || []).find((x) => x.status === "in_progress");
