@@ -1,14 +1,12 @@
 """Naim's voice: its answers read aloud, with its own voice (not the Mac's), entirely on this Mac.
 
-Two engines: « naturelle » (Chatterbox, very natural, slower: ~5 s of work per second of speech on a MacBook Air;
-its voice comes from a French LibriVox reader of Multilingual LibriSpeech, CC BY 4.0, ~/.naim/voix/naim-voix-naturelle.wav)
-and « rapide » (Piper, below: instant, a little more synthetic).
-Once the natural voice has been taught to a Piper model (~/.naim/voix/naim-voix-1817.onnx), « naturelle » uses it:
-the same voice, instant.
+Naim's voice (~/.naim/voix/naim.onnx) is its own: a voice model trained for Naim, from a French LibriVox reader
+of Multilingual LibriSpeech (CC BY 4.0). A small worker in its own Python environment (~/.naim/voix/.venv) loads it
+once, then each sentence becomes a WAV in a fraction of a second, without slowing Naim's language model.
 
-The voice is a French Piper model (~/.naim/voix/naim-voix.onnx, voice « Pierre » of the UPMC corpus,
-CC BY-SA 4.0) run by a small worker in its own Python environment (~/.naim/voix/.venv): it is loaded once,
-then each sentence becomes a WAV in a fraction of a second, without slowing Naim's language model.
+Before that model exists, « naturelle » falls back to the voice imitated from a recording
+(~/.naim/voix/naim-voix-naturelle.wav, much slower), and « rapide » is a stock French voice
+(~/.naim/voix/naim-voix.onnx, « Pierre » of the UPMC corpus, CC BY-SA 4.0).
 """
 import json
 import re
@@ -23,7 +21,7 @@ DIR = ext.HOME / "voix"
 MODEL = DIR / "naim-voix.onnx"
 PYTHON = DIR / ".venv" / "bin" / "python"
 SPEAKER = 1  # « pierre » in the UPMC model
-FAST_NAT = DIR / "naim-voix-1817.onnx"  # the natural voice, learned by Piper (single speaker)
+FAST_NAT = DIR / "naim.onnx"  # Naim's own voice (single speaker)
 
 WORKER = r'''
 import json, sys, wave
