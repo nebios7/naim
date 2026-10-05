@@ -1281,6 +1281,14 @@ body:has(#talkBtn.on) #micBtn.rec { color: #e5484d; }
 #talkState .tsw i:nth-child(4) { animation-delay: .3s; } #talkState .tsw i:nth-child(5) { animation-delay: .4s; }
 @keyframes tsw { 0%, 100% { height: 4px; } 50% { height: 14px; } }
 body:has(#talkState:not([hidden])) #liveBar { display: none !important; }
+/* conversation states inside the wave button: listening (red), thinking (soft pulse), voice being prepared, speaking */
+#talkBtn svg path { transform-box: fill-box; transform-origin: center; }
+#talkBtn[data-s=listen] { color: #e5484d !important; background: color-mix(in srgb, #e5484d 14%, transparent) !important; }
+#talkBtn[data-s=listen] svg, #talkBtn[data-s=speak] svg { animation: talkwave .9s ease-in-out infinite; }
+#talkBtn[data-s=speak] svg { animation-duration: .55s; }
+#talkBtn[data-s=think] svg, #talkBtn[data-s=prep] svg { animation: talkpulse 1.4s ease-in-out infinite; }
+@keyframes talkwave { 0%, 100% { transform: scaleY(.75); } 50% { transform: scaleY(1.15); } }
+@keyframes talkpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 </style>
 </head>
 <body>
@@ -2184,13 +2192,15 @@ function startDictation() {
 }
 // ---- conversation mode: listen → (silence) → send → Naim answers aloud → listen again
 const talk = { on: false, timer: null }, TALK_SILENCE = 1500;
-function talkStateUpdate() {  // who has the floor: you, Naim thinking, Naim speaking
-  const el = $("#talkState"); if (!el) return;
-  el.hidden = !talk.on; if (!talk.on) return;
+function talkStateUpdate() {  // who has the floor, shown by the wave button itself (no extra banner)
+  const el = $("#talkState"), b = $("#talkBtn"); if (!el || !b) return;
+  el.hidden = true;
+  if (!talk.on) { delete b.dataset.s; return; }
   const st = voice.audio ? "speak" : voice.preparing ? "prep" : dictation.on && !curRun() ? "listen" : curRun() ? "think" : "listen";
-  el.dataset.s = st;
-  $(".tst", el).textContent = { listen: "Je t'écoute…", think: "Naim réfléchit…", speak: "Naim parle…", prep: "Naim prépare sa voix…" }[st];
-  $(".tsh", el).textContent = { listen: "parle, ton message part après un court silence", think: "parle pour le guider, dis « stop » pour l'arrêter", speak: "Espace ou Échap pour lui couper la parole", prep: "Échap pour annuler" }[st];
+  if (b.dataset.s === st) return;
+  b.dataset.s = st;
+  b.title = { listen: "Je t'écoute (ton message part après un court silence)", think: "Naim réfléchit (parle pour le guider, « stop » pour l'arrêter)",
+              speak: "Naim parle (Espace ou Échap pour lui couper la parole)", prep: "Naim prépare sa voix (Échap pour annuler)" }[st] + " · clic : arrêter la conversation";
 }
 setInterval(talkStateUpdate, 250);
 function talkStart() {
