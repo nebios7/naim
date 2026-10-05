@@ -470,6 +470,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(learning.summary())
         elif path == "/api/storage":
             self.send_json(storage_info())
+        elif path == "/api/backups":
+            self.send_json(backup_list())
         elif path == "/api/model/version":
             self.send_json(model_version())
         elif path == "/api/model/download":
@@ -1020,6 +1022,13 @@ class Handler(BaseHTTPRequestHandler):
             if ok:
                 subprocess.Popen(["open", url])
             self.send_json({"ok": ok})
+        elif path == "/api/backup":
+            self.send_json(backup_make())
+        elif path == "/api/backup/restore":
+            if _agents or _runs:
+                self.send_json({"error": "Naim travaille : réessaie quand il a fini."})
+            else:
+                self.send_json(backup_restore(self.read_json().get("path", "")))
         elif path == "/api/storage/clear":
             b = self.read_json()
             if _agents or (b.get("what") == "restauration" and _runs):
@@ -1726,6 +1735,70 @@ def _storage_dirs():
 
 def _size(p):
     return sum(f.stat().st_size for f in Path(p).rglob("*") if f.is_file()) if Path(p).exists() else 0
+
+
+# ---------------------------------------------------------------- backup / restore
+BACKUPS = Path.home() / "Documents" / "Sauvegardes Naim"  # its own folder, apart from the source code
+
+
+def _backup_items():
+    """What a backup holds: (name in the zip, path). Not the model (downloaded again), not the Admin keys."""
+    data = Path.home() / "Library" / "Application Support" / "Naim"
+    return [("conversations", data / "conversations"), ("settings.json", data / "settings.json"),
+            ("schedules.json", data / "schedules.json"), ("naim/NAIM.md", ext.HOME / "NAIM.md"),
+            ("naim/memory.json", ext.HOME / "memory.json"), ("naim/memory.md", ext.HOME / "memory.md"),
+            ("naim/mcp.json", ext.HOME / "mcp.json"), ("naim/skills", ext.HOME / "skills"),
+            ("naim/apprentissage", ext.HOME / "apprentissage")]
+
+
+def backup_make(note=""):
+    import zipfile
+    BACKUPS.mkdir(parents=True, exist_ok=True)
+    dst = BACKUPS / f"naim-sauvegarde-{time.strftime('%Y-%m-%d-%H%M%S')}{('-' + note) if note else ''}.zip"
+    n = 0
+    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, p in _backup_items():
+            if p.is_file():
+                z.write(p, name)
+                n += 1
+            elif p.is_dir():
+                for f in p.rglob("*"):
+                    if f.is_file() and "__pycache__" not in f.parts and f.suffix != ".tmp":
+                        z.write(f, f"{name}/{f.relative_to(p)}")
+                        n += 1
+        z.writestr("naim-sauvegarde.json", json.dumps({"date": time.strftime("%Y-%m-%d %H:%M"), "files": n}))
+    return {"ok": True, "path": str(dst), "files": n, "size": dst.stat().st_size}
+
+
+def backup_list():
+    out = []
+    for f in sorted(BACKUPS.glob("naim-sauvegarde-*.zip"), reverse=True) if BACKUPS.exists() else []:
+        out.append({"path": str(f), "name": f.name, "size": f.stat().st_size,
+                    "date": time.strftime("%d/%m/%Y %H:%M", time.localtime(f.stat().st_mtime))})
+    return {"folder": str(BACKUPS), "backups": out}
+
+
+def backup_restore(path):
+    """Put a backup back. The current state is saved first (« avant-restauration »): nothing can be lost."""
+    import zipfile
+    src = Path(path).expanduser()
+    if not (src.is_file() and src.suffix == ".zip" and zipfile.is_zipfile(src)):
+        return {"error": "sauvegarde introuvable ou abîmée"}
+    with zipfile.ZipFile(src) as z:
+        names = z.namelist()
+        if "naim-sauvegarde.json" not in names:
+            return {"error": "ce fichier n'est pas une sauvegarde de Naim"}
+        safety = backup_make("avant-restauration")
+        targets = dict(_backup_items())
+        for name in names:
+            top = next((k for k in targets if name == k or name.startswith(k + "/")), None)
+            if not top or ".." in Path(name).parts:
+                continue  # only what Naim saves, never a path outside its folders
+            dest = targets[top] if name == top else targets[top] / Path(name).relative_to(top)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with z.open(name) as fin, open(dest, "wb") as fout:
+                shutil.copyfileobj(fin, fout)
+    return {"ok": True, "safety": safety["path"]}
 
 
 def storage_info():

@@ -3544,7 +3544,9 @@ const TABS = {
     <div class="srow" style="padding:0 0 8px"><input class="field" id="memSearch" placeholder="Rechercher dans la mémoire…" style="flex:1"></div>
     <div id="memList"><div class="srow"><div class="sl">Chargement…</div></div></div>
     <h3 style="margin:22px 0 8px">Conversations et stockage</h3>
-    <div class="sgroup" id="storageBox"><div class="srow"><div class="sl">Chargement…</div></div></div>`,
+    <div class="sgroup" id="storageBox"><div class="srow"><div class="sl">Chargement…</div></div></div>
+    <h3 style="margin:22px 0 8px">Sauvegarde</h3>
+    <div class="sgroup" id="backupBox"><div class="srow"><div class="sl">Chargement…</div></div></div>`,
   agent: () => `<h2>Agent</h2>
     <div class="profiles">${Object.entries(PROFILES).map(([k, [t, d]]) => `<button class="profile${currentProfile() === k ? " on" : ""}" data-profile="${k}"><b>${t}</b><small>${d}</small></button>`).join("")}</div>
     <div class="sgroup">
@@ -4125,8 +4127,27 @@ async function loadStorage() {
     loadStorage();
   }));
 }
+async function loadBackups() {
+  const box = $("#backupBox"); if (!box) return;
+  const { folder, backups } = await api("/api/backups");
+  const mo = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)} Mo` : `${Math.max(1, Math.round(n / 1024))} Ko`;
+  box.innerHTML = `<div class="srow"><div class="sl"><b>Sauvegarder maintenant</b><small>Conversations, mémoire, réglages, tâches planifiées, skills, serveurs MCP, NAIM.md et apprentissage, dans un seul fichier (sans le modèle ni tes clés).</small></div>
+      <div class="sc"><button class="btn" id="bkOpen">Ouvrir le dossier</button><button class="btn primary" id="bkMake">Sauvegarder</button></div></div>`
+    + (backups.length ? backups.slice(0, 8).map((b) => `<div class="srow"><div class="sl"><b>${esc(b.date)}</b><small>${esc(b.name)} · ${mo(b.size)}</small></div>
+      <div class="sc"><button class="btn" data-restore="${esc(b.path)}">Restaurer</button></div></div>`).join("")
+      : `<div class="srow"><div class="sl"><small>Aucune sauvegarde pour l'instant.</small></div></div>`);
+  $("#bkOpen").onclick = () => api("/api/reveal", { method: "POST", body: { path: folder } });
+  $("#bkMake").onclick = async () => { const b = $("#bkMake"); b.disabled = true; b.textContent = "Sauvegarde…";
+    const r = await api("/api/backup", { method: "POST", body: {} }); toast(r.ok ? `Sauvegardé : ${r.files} fichiers (${mo(r.size)})` : (r.error || "Échec")); loadBackups(); };
+  $$("[data-restore]", box).forEach((b) => (b.onclick = async () => {
+    if (!confirm("Restaurer cette sauvegarde ?\n\nTes conversations, ta mémoire et tes réglages actuels sont d'abord sauvegardés automatiquement (« avant-restauration »), puis remplacés par ceux de cette sauvegarde.")) return;
+    const r = await api("/api/backup/restore", { method: "POST", body: { path: b.dataset.restore } });
+    if (r.error) return toast(r.error);
+    toast("Sauvegarde restaurée : Naim se recharge"); setTimeout(() => location.reload(), 1200);
+  }));
+}
 async function loadMemory() {
-  loadStorage();
+  loadStorage(); loadBackups();
   const box = $("#memList"); if (!box) return;
   const { facts, cats, progress } = await api("/api/memory");
   const active = facts.filter((f) => f.active !== false), pinned = facts.filter((f) => f.pinned);
