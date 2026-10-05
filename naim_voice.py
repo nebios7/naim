@@ -3,6 +3,8 @@
 Two engines: « naturelle » (Chatterbox, very natural, slower: ~5 s of work per second of speech on a MacBook Air;
 its voice comes from a French LibriVox reader of Multilingual LibriSpeech, CC BY 4.0, ~/.naim/voix/naim-voix-naturelle.wav)
 and « rapide » (Piper, below: instant, a little more synthetic).
+Once the natural voice has been taught to a Piper model (~/.naim/voix/naim-voix-1817.onnx), « naturelle » uses it:
+the same voice, instant.
 
 The voice is a French Piper model (~/.naim/voix/naim-voix.onnx, voice « Pierre » of the UPMC corpus,
 CC BY-SA 4.0) run by a small worker in its own Python environment (~/.naim/voix/.venv): it is loaded once,
@@ -21,13 +23,14 @@ DIR = ext.HOME / "voix"
 MODEL = DIR / "naim-voix.onnx"
 PYTHON = DIR / ".venv" / "bin" / "python"
 SPEAKER = 1  # « pierre » in the UPMC model
+FAST_NAT = DIR / "naim-voix-1817.onnx"  # the natural voice, learned by Piper (single speaker)
 
 WORKER = r'''
 import json, sys, wave
 from piper import PiperVoice
 from piper.config import SynthesisConfig
 voice = PiperVoice.load(sys.argv[1])
-cfg = SynthesisConfig(speaker_id=int(sys.argv[2]), length_scale=0.95, noise_scale=0.6, noise_w_scale=0.8)
+cfg = SynthesisConfig(speaker_id=None if sys.argv[2] == "-" else int(sys.argv[2]), length_scale=0.95, noise_scale=0.6, noise_w_scale=0.8)
 for line in sys.stdin:
     job = json.loads(line)
     try:
@@ -61,6 +64,7 @@ for line in sys.stdin:
 
 _proc, _lock = None, threading.Lock()
 _nat, _nat_lock = None, threading.Lock()
+_fast, _fast_lock = None, threading.Lock()
 
 
 def available():
@@ -68,7 +72,19 @@ def available():
 
 
 def natural_available():
-    return NAT_REF.exists() and NAT_PYTHON.exists()
+    return fast_natural_available() or (NAT_REF.exists() and NAT_PYTHON.exists())
+
+
+def fast_natural_available():
+    return FAST_NAT.exists() and PYTHON.exists()
+
+
+def _fast_worker():
+    global _fast
+    if _fast is None or _fast.poll() is not None:
+        _fast = subprocess.Popen([str(PYTHON), "-c", WORKER, str(FAST_NAT), "-"], stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+    return _fast
 
 
 def _natural_worker():
@@ -122,9 +138,14 @@ def speak(text, engine="rapide"):
     text = clean(text)[:1500]
     if not text:
         return b""
-    natural = engine == "naturelle" and natural_available()
-    with (_nat_lock if natural else _lock):
-        p = _natural_worker() if natural else _worker()
+    if engine == "naturelle" and fast_natural_available():
+        lock, start = _fast_lock, _fast_worker
+    elif engine == "naturelle" and natural_available():
+        lock, start = _nat_lock, _natural_worker
+    else:
+        lock, start = _lock, _worker
+    with lock:
+        p = start()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             out = f.name
         p.stdin.write(json.dumps({"text": text, "out": out}) + "\n")

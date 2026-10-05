@@ -11,3 +11,4 @@ tools/acces_modele.py
 owner_admin.py
 # private: Naim's system prompt and tool descriptions (delivered with the model by Naim's server)
 naim_prompts.json
+.serena/

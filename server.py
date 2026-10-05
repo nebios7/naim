@@ -1896,7 +1896,10 @@ def warm_voice():
     """Naim's natural voice is heavy to load (~1 min): loaded in the background as soon as Naim opens."""
     try:
         import naim_voice
-        if naim_voice.natural_available():
+        if naim_voice.fast_natural_available():  # instant: nothing heavy to load
+            with naim_voice._fast_lock:
+                naim_voice._fast_worker()
+        elif naim_voice.natural_available():
             with naim_voice._nat_lock:
                 naim_voice._natural_worker()
     except Exception as e:  # noqa: BLE001
