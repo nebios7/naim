@@ -1793,7 +1793,26 @@ def _busy():
     return bool(_agents) or bool(scheduler.running_ids())
 
 
+def warm_up():
+    """When Naim opens: it reads its tools and instructions once, in the background (one invisible request of one
+    token, through the very same path as a real message). The first message then starts at once instead of
+    waiting ~1 minute for that reading."""
+    try:
+        time.sleep(4)
+        s = _settings()
+        if s.get("naim_backend", "llamacpp") != "llamacpp" or s.get("mode") == "agent" or not llamacpp.available():
+            return
+        h = Handler.__new__(Handler)
+        h.event = lambda ev: None
+        body = {"message": "bonjour, es-tu prêt ?", "mode": "chat", "model": s.get("model") or "naim", "history": [],
+                "project": s.get("project"), "settings": {**s, "num_predict": 1, "memory_auto": False, "think": False}}
+        h.run_chat(body, threading.Event())
+    except Exception as e:  # noqa: BLE001 — only a speed-up: never a problem if it fails
+        print(f"préchauffage impossible : {e}", flush=True)
+
+
 def serve(port=8765):
+    threading.Thread(target=warm_up, daemon=True, name="naim-warm-up").start()
     scheduler.start_loop(_settings, ollama_chat, Agent, CHAT_PROMPT)
     if at := _private("autotrain"):
         at.start_loop(_settings, _busy)

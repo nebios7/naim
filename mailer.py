@@ -89,6 +89,9 @@ def addresses(text):
     return sorted({a.lower() for a in EMAIL_RE.findall(text or "")})
 
 
+SIMULATED = None  # a list while Naim checks itself: emails are recorded there instead of being sent
+
+
 def send(to, subject, body, attachments=()):
     rcpt = addresses(to)
     if not rcpt:
@@ -97,6 +100,9 @@ def send(to, subject, body, attachments=()):
     missing = [f for f in files if not Path(f).is_file()]
     if missing:
         raise MailError("pièce jointe introuvable : " + ", ".join(missing))
+    if SIMULATED is not None:  # Naim's self-check: everything is verified, nothing leaves the Mac
+        SIMULATED.append({"to": rcpt, "subject": subject, "attachments": files})
+        return rcpt
     r = subprocess.run(["osascript", "-e", SCRIPT, subject or "(sans objet)", body or "", str(len(files)), *files, *rcpt],
                        capture_output=True, text=True, timeout=120)
     if r.returncode != 0:

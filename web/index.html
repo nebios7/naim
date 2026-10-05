@@ -1251,6 +1251,13 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 .stats .schip svg { width: 12px; height: 12px; }
 .turn.bot .stats { opacity: 0; transition: opacity .18s var(--ease); }
 .turn.bot:hover .stats, .turn.bot:last-child .stats { opacity: 1; }
+/* settings profiles */
+.profiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; margin: 4px 0 18px; }
+.profile { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-l, 14px); padding: 12px 14px; cursor: pointer; color: var(--text); font: inherit; }
+.profile:hover { border-color: color-mix(in srgb, var(--text) 30%, var(--line)); }
+.profile.on { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+.profile b { display: block; font-weight: 600; margin-bottom: 4px; }
+.profile small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -3502,6 +3509,7 @@ const TABS = {
     <h3 style="margin:22px 0 8px">Conversations et stockage</h3>
     <div class="sgroup" id="storageBox"><div class="srow"><div class="sl">Chargement…</div></div></div>`,
   agent: () => `<h2>Agent</h2>
+    <div class="profiles">${Object.entries(PROFILES).map(([k, [t, d]]) => `<button class="profile${currentProfile() === k ? " on" : ""}" data-profile="${k}"><b>${t}</b><small>${d}</small></button>`).join("")}</div>
     <div class="sgroup">
       ${row("Dossier de projet par défaut", "", `<input class="field mono" type="text" data-k="project" value="${esc(S.project)}" style="width:260px"><button class="ghost" id="sPick">Choisir…</button>`)}
       ${row("Nombre max d'étapes par tâche", "L'agent s'arrête après ce nombre d'actions.", range("max_steps", 5, 100, 1))}
@@ -3565,6 +3573,18 @@ const TABS = {
     ${row("Données", "Conversations et réglages : ~/Library/Application Support/Naim", "")}
     ${row("Fonctionnement", "100 % local : Ollama + serveur Naim sur 127.0.0.1, aucune donnée envoyée sur Internet.", "")}</div>`,
 };
+// one click sets the options that go together (the detailed settings below stay available)
+const PROFILES = {
+  rapide: ["Rapide", "Questions et petites tâches : version minimale, 30 étapes.", { minimal_mode: true, max_steps: 30, command_timeout: 120, think: false }],
+  equilibre: ["Équilibré", "L'usage de tous les jours : version minimale, 50 étapes, commandes jusqu'à 3 min.", { minimal_mode: true, max_steps: 50, command_timeout: 180, think: false }],
+  complexe: ["Projet complexe", "Applications complètes, tâches longues : pas de version minimale, 100 étapes, commandes jusqu'à 5 min.", { minimal_mode: false, max_steps: 100, command_timeout: 300, think: false }],
+};
+function currentProfile() { return Object.keys(PROFILES).find((k) => Object.entries(PROFILES[k][2]).every(([kk, v]) => S[kk] === v)); }
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-profile]"); if (!b) return;
+  const [title, , set] = PROFILES[b.dataset.profile];
+  Object.assign(S, set); saveSettings(); applySettings(); showSettingsTab("agent"); toast(`Profil « ${title} » appliqué`);
+});
 function showSettingsTab(t) {
   $$("#stabs .stablist > button").forEach((b) => b.classList.toggle("on", b.dataset.s === t));
   $("#stabs .stablist > button.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });  // narrow: the chosen tab stays visible
