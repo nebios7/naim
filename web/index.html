@@ -1323,7 +1323,7 @@ body:has(#talkBtn.on) #micBtn.rec { color: #e5484d; }
       <div id="findBar" hidden><input id="findIn" placeholder="Chercher dans la conversation…" spellcheck="false"><span id="findN"></span><button class="icon" id="findPrev" title="Précédent (⇧↩)">↑</button><button class="icon" id="findNext" title="Suivant (↩)">↓</button><button class="icon" id="findClose" title="Fermer (Échap)">✕</button></div>
       <div id="scroll"><div id="thread"></div></div>
       <footer>
-        <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
+        <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris ou parle pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
         <div class="composer">
           <div class="slash" id="slash" hidden></div>
           <div class="atts" id="pending"></div>
@@ -2179,12 +2179,22 @@ function talkStop() {
   talk.on = false; clearTimeout(talk.timer); stopDictation(); voiceStop();
   $("#talkBtn").classList.remove("on"); $("#talkBtn").title = "Conversation à voix haute : tu parles, Naim répond avec sa voix";
 }
-function talkListen() { if (talk.on && !curRun() && !dictation.on) startDictation(); }
+// it listens while Naim thinks or writes too (what you say then guides it, « stop » stops it), not while it speaks
+function talkListen() { if (talk.on && !dictation.on && !voice.audio) startDictation(); }
 function talkSend() {
   if (!talk.on) return;
   stopDictation(true); window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop();
+  const working = !!curRun();
   if ($("#input").value.trim()) send(); else talkListen();
+  if (working) setTimeout(talkListen, 300);  // a remark while Naim works: it keeps listening
 }
+// cut Naim's voice to speak: Espace or Échap (outside the text field), typing, or the wave button
+document.addEventListener("keydown", (e) => {
+  if (!voice.audio) return;
+  const typing = e.target.closest?.("input, textarea, [contenteditable]");
+  if (e.key === "Escape" || (e.key === " " && !typing)) { e.preventDefault(); voiceStop(); if (talk.on) setTimeout(talkListen, 150); }
+});
+$("#input").addEventListener("input", () => { if (voice.audio && !dictation.on) voiceStop(); });
 function stopDictation(quiet) {
   if (!dictation.on) return;
   dictation.on = false;
@@ -2855,7 +2865,12 @@ async function stream(reply, v, message, hist, extra = {}) {
   } finally {
     v.finish(); if (current === conv) setBusy(false);
   }
+  const wasAtBottom = stickBottom;  // the final rendering replaces the text: Safari (the app) may lose the place
   v.setText(reply.content || (reply.steps.length ? "" : "_(pas de réponse)_"));
+  if (wasAtBottom && current === conv) {
+    const down = () => { stickBottom = true; const sc = $("#scroll"); sc.scrollTop = sc.scrollHeight; };
+    requestAnimationFrame(down); setTimeout(down, 120); setTimeout(down, 450);  // after the layout and the code colouring
+  }
   if (talk.on && current === conv) {  // conversation mode: Naim answers aloud, then listens again
     (voiceOK && reply.content && !/⏹ Arrêté/.test(reply.content) ? voiceSay(reply.content) : Promise.resolve()).then(() => setTimeout(talkListen, 250));
   } else if (S.voice_auto && voiceOK && current === conv && reply.content && !/⏹ Arrêté/.test(reply.content)) voiceSay(reply.content);
