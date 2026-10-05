@@ -1264,6 +1264,10 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 @keyframes micpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 /* Naim's voice */
 .msgacts [data-a=speak].speaking { color: var(--text); animation: micpulse 1.1s ease-in-out infinite; }
+/* conversation mode */
+#talkBtn svg { width: 17px; height: 17px; }
+#talkBtn.on { color: var(--bg); background: var(--text); border-radius: 999px; }
+body:has(#talkBtn.on) #micBtn.rec { color: #e5484d; }
 </style>
 </head>
 <body>
@@ -1327,6 +1331,7 @@ body.home #chatcol > * { position: relative; z-index: 1; }
           <div class="ctools">
             <button class="icon" id="attach" title="Joindre des fichiers">＋</button>
             <button class="icon" id="micBtn" title="Dicter (parle, Naim écrit)" hidden></button>
+            <button class="icon" id="talkBtn" title="Conversation à voix haute : tu parles, Naim répond avec sa voix" hidden></button>
             <button class="pill" id="modePill" title="Changer de mode">💬 Chat</button>
             <button class="pill" id="folderPill" title="Dossier de travail"></button>
             <button class="pill" id="permPill" title="Mode d'autorisation de l'agent (⇧⇥ pour passer au suivant)" hidden></button>
@@ -2142,7 +2147,9 @@ async function heroShow() {  // a light runs over the greeting, letter by letter
 const dictation = { on: false, base: "", rec: null };
 function dictationAvailable() { return !!(window.webkit?.messageHandlers?.naimDictation || window.webkitSpeechRecognition || window.SpeechRecognition); }
 window.naimDictation = (text, final, error) => {
-  if (error) { toast(error); stopDictation(); return; }
+  if (error) { toast(error); stopDictation(); talkStop(); return; }
+  if (!dictation.on) return;  // a late result after the message was sent
+  if (talk.on && text.trim()) { clearTimeout(talk.timer); talk.timer = setTimeout(talkSend, TALK_SILENCE); }
   const inp = $("#input");
   inp.value = dictation.base + (dictation.base && text ? " " : "") + text;
   inp.dispatchEvent(new Event("input"));
@@ -2159,6 +2166,24 @@ function startDictation() {
   rec.onerror = (e) => window.naimDictation("", true, e.error === "not-allowed" ? "Le micro n'est pas autorisé pour Naim." : null);
   rec.onend = () => dictation.on && stopDictation(true);
   rec.start();
+}
+// ---- conversation mode: listen → (silence) → send → Naim answers aloud → listen again
+const talk = { on: false, timer: null }, TALK_SILENCE = 1500;
+function talkStart() {
+  talk.on = true; $("#talkBtn").classList.add("on"); $("#talkBtn").title = "Arrêter la conversation à voix haute";
+  toast("Conversation à voix haute : parle, Naim t'écoute");
+  talkListen();
+}
+function talkStop() {
+  if (!talk.on) return;
+  talk.on = false; clearTimeout(talk.timer); stopDictation(); voiceStop();
+  $("#talkBtn").classList.remove("on"); $("#talkBtn").title = "Conversation à voix haute : tu parles, Naim répond avec sa voix";
+}
+function talkListen() { if (talk.on && !curRun() && !dictation.on) startDictation(); }
+function talkSend() {
+  if (!talk.on) return;
+  stopDictation(true); window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop();
+  if ($("#input").value.trim()) send(); else talkListen();
 }
 function stopDictation(quiet) {
   if (!dictation.on) return;
@@ -2831,7 +2856,9 @@ async function stream(reply, v, message, hist, extra = {}) {
     v.finish(); if (current === conv) setBusy(false);
   }
   v.setText(reply.content || (reply.steps.length ? "" : "_(pas de réponse)_"));
-  if (S.voice_auto && voiceOK && current === conv && reply.content && !/⏹ Arrêté/.test(reply.content)) voiceSay(reply.content);
+  if (talk.on && current === conv) {  // conversation mode: Naim answers aloud, then listens again
+    (voiceOK && reply.content && !/⏹ Arrêté/.test(reply.content) ? voiceSay(reply.content) : Promise.resolve()).then(() => setTimeout(talkListen, 250));
+  } else if (S.voice_auto && voiceOK && current === conv && reply.content && !/⏹ Arrêté/.test(reply.content)) voiceSay(reply.content);
   if (reply.stats || reply.ttft != null) {
     reply.stats = { ...(reply.stats || {}), ttft: reply.ttft, total: (Date.now() - reply.time) / 1000,
                     reason: /⏹ Arrêté/.test(reply.content || "") ? "stopped" : reply.stats?.reason };
@@ -4523,6 +4550,7 @@ async function checkStatus() {
 const RICON = {
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+  wave: '<path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10v4M21 12h0"/>',
   ext: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
   file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
@@ -4590,7 +4618,9 @@ const RICON = {
   auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 000 16z" fill="currentColor"/>',
 };
 const svgI = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${RICON[k]}</svg>`;
-if (dictationAvailable()) { const m = $("#micBtn"); m.hidden = false; m.innerHTML = svgI("mic"); m.onclick = () => (dictation.on ? stopDictation() : startDictation()); }
+if (dictationAvailable()) { const m = $("#micBtn"); m.hidden = false; m.innerHTML = svgI("mic"); m.onclick = () => { if (talk.on) talkStop(); dictation.on ? stopDictation() : startDictation(); }; }
+api("/api/tts").then((r) => { if (!r.available || !dictationAvailable()) return;  // speaking needs both: dictation and Naim's voice
+  const t = $("#talkBtn"); t.hidden = false; t.innerHTML = svgI("wave"); t.onclick = () => (talk.on ? talkStop() : talkStart()); }).catch(() => {});
 // header like a pro IDE: title on the left, tools on the right; mode and model live in the composer
 $(".composer .ctools").insertBefore($("#modelPick"), $("#ctxInfo"));
 fitViewport(); updateTitle();
