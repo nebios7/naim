@@ -1,5 +1,9 @@
 """Naim's voice: its answers read aloud, with its own voice (not the Mac's), entirely on this Mac.
 
+Two engines: « naturelle » (Chatterbox, very natural, slower: ~5 s of work per second of speech on a MacBook Air;
+its voice comes from a French LibriVox reader of Multilingual LibriSpeech, CC BY 4.0, ~/.naim/voix/naim-voix-naturelle.wav)
+and « rapide » (Piper, below: instant, a little more synthetic).
+
 The voice is a French Piper model (~/.naim/voix/naim-voix.onnx, voice « Pierre » of the UPMC corpus,
 CC BY-SA 4.0) run by a small worker in its own Python environment (~/.naim/voix/.venv): it is loaded once,
 then each sentence becomes a WAV in a fraction of a second, without slowing Naim's language model.
@@ -34,11 +38,62 @@ for line in sys.stdin:
         print(json.dumps({"ok": False, "error": str(e)[:200]}), flush=True)
 '''
 
+NAT_REF = DIR / "naim-voix-naturelle.wav"
+NAT_PYTHON = Path.home() / "Documents" / "naim" / "voix" / "cb" / "bin" / "python"  # Chatterbox environment (owner's Mac)
+NAT_WORKER = r'''
+import json, sys, warnings
+warnings.filterwarnings("ignore")
+import torch, torchaudio as ta
+from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+dev = "mps" if torch.backends.mps.is_available() else "cpu"
+m = ChatterboxMultilingualTTS.from_pretrained(device=dev)
+m.prepare_conditionals(sys.argv[1], exaggeration=0.5)  # Naim's voice, prepared once
+print("@@" + json.dumps({"ready": True}), flush=True)
+for line in sys.stdin:
+    job = json.loads(line)
+    try:
+        wav = m.generate(job["text"], language_id="fr", exaggeration=0.5, cfg_weight=0.5)
+        ta.save(job["out"], wav, m.sr)
+        print("@@" + json.dumps({"ok": True}), flush=True)
+    except Exception as e:
+        print("@@" + json.dumps({"ok": False, "error": str(e)[:200]}), flush=True)
+'''
+
 _proc, _lock = None, threading.Lock()
+_nat, _nat_lock = None, threading.Lock()
 
 
 def available():
     return MODEL.exists() and PYTHON.exists()
+
+
+def natural_available():
+    return NAT_REF.exists() and NAT_PYTHON.exists()
+
+
+def _natural_worker():
+    global _nat
+    if _nat is None or _nat.poll() is not None:
+        _nat = subprocess.Popen([str(NAT_PYTHON), "-c", NAT_WORKER, str(NAT_REF)], stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        _reply(_nat)  # « ready »: the model is loaded
+    return _nat
+
+
+def _reply(p):
+    """The worker's answer; other lines (libraries print things) are skipped. Piper's worker has no « @@ » mark."""
+    while True:
+        line = p.stdout.readline()
+        if not line:
+            return {"ok": False, "error": "la voix ne répond pas"}
+        line = line.strip()
+        if line.startswith("@@"):
+            return json.loads(line[2:])
+        if line.startswith("{"):
+            try:
+                return json.loads(line)
+            except ValueError:
+                pass
 
 
 def clean(text):
@@ -62,18 +117,19 @@ def _worker():
     return _proc
 
 
-def speak(text):
+def speak(text, engine="rapide"):
     """WAV bytes of the text read by Naim's voice (empty bytes if there is nothing to read)."""
     text = clean(text)[:1500]
     if not text:
         return b""
-    with _lock:
-        p = _worker()
+    natural = engine == "naturelle" and natural_available()
+    with (_nat_lock if natural else _lock):
+        p = _natural_worker() if natural else _worker()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             out = f.name
         p.stdin.write(json.dumps({"text": text, "out": out}) + "\n")
         p.stdin.flush()
-        r = json.loads(p.stdout.readline() or '{"ok": false, "error": "la voix ne répond pas"}')
+        r = _reply(p)
     data = Path(out).read_bytes() if r.get("ok") else b""
     Path(out).unlink(missing_ok=True)
     if not r.get("ok"):

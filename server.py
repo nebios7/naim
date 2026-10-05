@@ -474,7 +474,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(backup_list())
         elif path == "/api/tts":
             import naim_voice
-            self.send_json({"available": naim_voice.available()})
+            self.send_json({"available": naim_voice.available() or naim_voice.natural_available(),
+                            "natural": naim_voice.natural_available(), "fast": naim_voice.available()})
         elif path == "/api/model/version":
             self.send_json(model_version())
         elif path == "/api/model/download":
@@ -1030,7 +1031,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/tts":  # Naim's voice: one sentence → WAV
             import naim_voice
             try:
-                wav = naim_voice.speak(self.read_json().get("text", ""))
+                b = self.read_json()
+                wav = naim_voice.speak(b.get("text", ""), b.get("engine") or "rapide")
             except Exception as e:  # noqa: BLE001
                 self.send_json({"error": str(e)}, 503)
             else:

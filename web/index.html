@@ -1519,6 +1519,7 @@ const workingHTML = (text = "Naim réfléchit…") => `<div class="working-line"
 
 // ======================================================================= state
 const DEFAULTS = {
+  voice_engine: "naturelle", voice_fast_talk: true, voice_auto: false,
   mode: "chat", model: "naim", think: false, project: "", autoYes: false,
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
@@ -2235,7 +2236,8 @@ function voiceSentences(text) {  // code blocks are shown, not read; then senten
   return (t.match(/[^.!?…\n]+[.!?…]*/g) || []).map((x) => x.trim()).filter((x) => x.replace(/[\W_]/g, "").length > 1);
 }
 async function voiceClip(sentence) {
-  const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: sentence }) });
+  const engine = talk.on && S.voice_fast_talk !== false ? "rapide" : (S.voice_engine || "naturelle");
+  const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: sentence, engine }) });
   if (!r.ok) throw new Error("voix indisponible");
   return URL.createObjectURL(await r.blob());
 }
@@ -3535,7 +3537,9 @@ const TABS = {
       ${row("Envoyer avec", "", sel("send_key", [["enter", "Entrée (Maj+Entrée = nouvelle ligne)"], ["mod", "⌘+Entrée (Entrée = nouvelle ligne)"]]))}
       ${row("Notification quand Naim a fini", "Si la fenêtre est en arrière-plan, ou quand l'agent attend une autorisation.", sw("notify"))}
       ${row("Son à la fin d'une réponse", "", sw("sound"))}
-      ${row("Lire les réponses à voix haute", "Avec la voix de Naim (voix « Pierre », corpus UPMC, CC BY-SA 4.0), sur ce Mac. Le bouton ♪ sous chaque réponse la lit aussi à la demande.", sw("voice_auto"))}
+      ${row("Lire les réponses à voix haute", "Avec la voix de Naim, sur ce Mac. Le bouton ♪ sous chaque réponse la lit aussi à la demande.", sw("voice_auto"))}
+      ${row("Voix de Naim", "Naturelle : la plus vivante, mais lente sur ce Mac (quelques secondes par phrase ; lecteur de livres audio Multilingual LibriSpeech, CC BY 4.0). Rapide : instantanée, plus synthétique (voix « Pierre », corpus UPMC, CC BY-SA 4.0).", sel("voice_engine", [["naturelle", "Naturelle"], ["rapide", "Rapide"]]))}
+      ${row("Voix rapide pendant les conversations", "Pour répondre sans attente quand tu lui parles (le bouton ♪ garde la voix choisie ci-dessus).", sw("voice_fast_talk"))}
       ${row("Afficher la vitesse (tokens/s)", "", sw("show_stats"))}
       ${row("Outils en mode Chat", "Le Chat peut aussi agir dans la même réponse : lire et écrire des fichiers, lancer des commandes, chercher sur le web, créer des documents, envoyer des e-mails… (avec ta confirmation selon tes réglages). Désactivé : le Chat répond seulement, sauf web, fichiers et e-mails demandés explicitement.", sw("chat_tools"))}
       ${row("Actions de l'agent en direct", "Chaque commande, sa sortie et le code écrit défilent pendant le travail.", sw("live_actions"))}
