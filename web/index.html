@@ -1262,6 +1262,8 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 #micBtn svg { width: 17px; height: 17px; }
 #micBtn.rec { color: #e5484d; animation: micpulse 1.1s ease-in-out infinite; }
 @keyframes micpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+/* Naim's voice */
+.msgacts [data-a=speak].speaking { color: var(--text); animation: micpulse 1.1s ease-in-out infinite; }
 </style>
 </head>
 <body>
@@ -2165,6 +2167,40 @@ function stopDictation(quiet) {
   if (!quiet) { window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop(); }
   $("#input").focus();
 }
+
+// ======================================================================= Naim's voice (naim_voice.py: its own French voice)
+let voiceOK = false;
+api("/api/tts").then((r) => { voiceOK = !!r.available; if (voiceOK && current) renderThread(); }).catch(() => {});
+const voice = { queue: [], audio: null, btn: null, token: 0 };
+function voiceSentences(text) {  // code blocks are shown, not read; then sentence by sentence (speech starts at once)
+  const t = String(text || "").replace(/```[\s\S]*?```/g, " ").replace(/\n{2,}/g, ". ");
+  return (t.match(/[^.!?…\n]+[.!?…]*/g) || []).map((x) => x.trim()).filter((x) => x.replace(/[\W_]/g, "").length > 1);
+}
+async function voiceClip(sentence) {
+  const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: sentence }) });
+  if (!r.ok) throw new Error("voix indisponible");
+  return URL.createObjectURL(await r.blob());
+}
+async function voiceSay(text, btn) {
+  voiceStop();
+  const my = ++voice.token, parts = voiceSentences(text);
+  if (!parts.length) return;
+  voice.btn = btn || null; btn?.classList.add("speaking");
+  let next = voiceClip(parts[0]);
+  for (let i = 0; i < parts.length && my === voice.token; i++) {
+    let url; try { url = await next; } catch (e) { toast("La voix de Naim n'est pas disponible"); break; }
+    if (i + 1 < parts.length) next = voiceClip(parts[i + 1]);  // the next sentence is made while this one plays
+    if (my !== voice.token) break;
+    await new Promise((ok) => { const a = voice.audio = new Audio(url); a.onended = a.onerror = ok; a.play().catch(ok); });
+    URL.revokeObjectURL(url);
+  }
+  if (my === voice.token) voiceStop();
+}
+function voiceStop() {
+  voice.token++;
+  if (voice.audio) { voice.audio.pause(); voice.audio = null; }
+  voice.btn?.classList.remove("speaking"); voice.btn = null;
+}
 let stickBottom = true;  // follow the conversation as it grows, until the user scrolls up to read
 function scrollDown(force) { const s = $("#scroll"); if (force) stickBottom = true; if (stickBottom) s.scrollTop = s.scrollHeight; }
 function attChips(atts, removable) {
@@ -2300,11 +2336,12 @@ function addBot(m, idx) {
   const d = document.createElement("div"); d.className = "turn bot";
   d.innerHTML = `<details class="think" hidden><summary>Raisonnement</summary><div></div></details><div class="todos" hidden></div><div class="flow"></div><div class="md"></div>
     <div class="working" hidden>${robotSVG("working")}<span class="wtext">Naim réfléchit…</span><span class="wprog"></span><span class="wtime"></span><div class="wbar" hidden><i></i></div></div>
-    <div class="msgacts">${S.show_time && m?.time ? `<span class="time">${fmtTime(m.time)}</span>` : ""}<button class="icon" data-a="copy" title="Copier">⧉</button><button class="icon" data-a="regen" title="Régénérer">↻</button><button class="icon" data-a="cont" title="Continuer la réponse">↪</button><button class="icon" data-a="raw" title="Voir le texte brut">¶</button><span class="stats"></span></div>`;
+    <div class="msgacts">${S.show_time && m?.time ? `<span class="time">${fmtTime(m.time)}</span>` : ""}<button class="icon" data-a="copy" title="Copier">⧉</button>${voiceOK ? '<button class="icon" data-a="speak" title="Écouter (la voix de Naim)">♪</button>' : ""}<button class="icon" data-a="regen" title="Régénérer">↻</button><button class="icon" data-a="cont" title="Continuer la réponse">↪</button><button class="icon" data-a="raw" title="Voir le texte brut">¶</button><span class="stats"></span></div>`;
   $("#thread").appendChild(d);
   const think = $(".think", d), flow = $(".flow", d), body = $(".md", d), working = $(".working", d);
   let raw = false, group = null, counts = {}, lastRow = null, lastOut = "";
   $("[data-a=copy]", d).onclick = () => { copyText(m?.content || body.innerText); toast("Copié"); };
+  const sp = $("[data-a=speak]", d); if (sp) sp.onclick = () => (voice.btn === sp ? voiceStop() : voiceSay(m?.content || body.innerText, sp));
   $("[data-a=regen]", d).onclick = () => regenerate();
   $("[data-a=cont]", d).onclick = () => { if (!curRun()) send("Continue exactement là où tu t'es arrêté, sans répéter.", []); };
   $("[data-a=raw]", d).onclick = () => { raw = !raw; body.innerHTML = raw ? `<pre style="white-space:pre-wrap;font:13px ui-monospace,Menlo,monospace">${esc(m?.content || "")}</pre>` : md(m?.content || ""); };
@@ -2794,6 +2831,7 @@ async function stream(reply, v, message, hist, extra = {}) {
     v.finish(); if (current === conv) setBusy(false);
   }
   v.setText(reply.content || (reply.steps.length ? "" : "_(pas de réponse)_"));
+  if (S.voice_auto && voiceOK && current === conv && reply.content && !/⏹ Arrêté/.test(reply.content)) voiceSay(reply.content);
   if (reply.stats || reply.ttft != null) {
     reply.stats = { ...(reply.stats || {}), ttft: reply.ttft, total: (Date.now() - reply.time) / 1000,
                     reason: /⏹ Arrêté/.test(reply.content || "") ? "stopped" : reply.stats?.reason };
@@ -3429,6 +3467,7 @@ const TABS = {
       ${row("Envoyer avec", "", sel("send_key", [["enter", "Entrée (Maj+Entrée = nouvelle ligne)"], ["mod", "⌘+Entrée (Entrée = nouvelle ligne)"]]))}
       ${row("Notification quand Naim a fini", "Si la fenêtre est en arrière-plan, ou quand l'agent attend une autorisation.", sw("notify"))}
       ${row("Son à la fin d'une réponse", "", sw("sound"))}
+      ${row("Lire les réponses à voix haute", "Avec la voix de Naim (voix « Pierre », corpus UPMC, CC BY-SA 4.0), sur ce Mac. Le bouton ♪ sous chaque réponse la lit aussi à la demande.", sw("voice_auto"))}
       ${row("Afficher la vitesse (tokens/s)", "", sw("show_stats"))}
       ${row("Outils en mode Chat", "Le Chat peut aussi agir dans la même réponse : lire et écrire des fichiers, lancer des commandes, chercher sur le web, créer des documents, envoyer des e-mails… (avec ta confirmation selon tes réglages). Désactivé : le Chat répond seulement, sauf web, fichiers et e-mails demandés explicitement.", sw("chat_tools"))}
       ${row("Actions de l'agent en direct", "Chaque commande, sa sortie et le code écrit défilent pendant le travail.", sw("live_actions"))}
@@ -4603,7 +4642,8 @@ function relTime(ts) {
 }
 const MSG_ICONS = { copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0014.5 4h-9A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16H8"/>',
   regen: '<path d="M20 11a8 8 0 10-2.3 5.7M20 5v6h-6"/>', cont: '<path d="M5 12h12M13 7l5 5-5 5"/>', raw: '<path d="M6 7h12M6 12h12M6 17h7"/>',
-  edit: '<path d="M4 20h4L18.5 9.5a2.1 2.1 0 00-3-3L5 17z"/>', down: '<path d="M12 5v14M6 13l6 6 6-6"/>' };
+  edit: '<path d="M4 20h4L18.5 9.5a2.1 2.1 0 00-3-3L5 17z"/>', down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  speak: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/>' };
 const msgI = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${MSG_ICONS[k]}</svg>`;
 function iconizeMsgActs(root = document) {
   $$(".msgacts [data-a]", root).forEach((b) => { const k = b.dataset.a; if (MSG_ICONS[k] && !b.dataset.svg) { b.dataset.svg = 1; b.innerHTML = msgI(k); } });

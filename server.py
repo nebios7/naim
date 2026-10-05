@@ -472,6 +472,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(storage_info())
         elif path == "/api/backups":
             self.send_json(backup_list())
+        elif path == "/api/tts":
+            import naim_voice
+            self.send_json({"available": naim_voice.available()})
         elif path == "/api/model/version":
             self.send_json(model_version())
         elif path == "/api/model/download":
@@ -1024,6 +1027,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": ok})
         elif path == "/api/backup":
             self.send_json(backup_make())
+        elif path == "/api/tts":  # Naim's voice: one sentence → WAV
+            import naim_voice
+            try:
+                wav = naim_voice.speak(self.read_json().get("text", ""))
+            except Exception as e:  # noqa: BLE001
+                self.send_json({"error": str(e)}, 503)
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(wav)))
+                self.end_headers()
+                self.wfile.write(wav)
         elif path == "/api/backup/restore":
             if _agents or _runs:
                 self.send_json({"error": "Naim travaille : réessaie quand il a fini."})
