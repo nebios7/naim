@@ -171,7 +171,7 @@ body:not(.onchat) main > #projectBar { display: none !important; }
 /* ---- UI polish v3.1 */
 .fact .sl .ftext, .fact .sl small { display: block; }
 .fact .sl small { margin-top: 2px; }
-.turn.bot:has(.working:not([hidden])) .msgacts { display: none; }
+.turn.bot:has(div.working:not([hidden])) .msgacts { display: none; }
 #side .brand .logo, #side .brand > div:not(.logo) { display: none; }
 @media (min-width: 761px) { #side .brand { display: none; } #side { padding-top: 12px; } }
 :root { --c-chat: #5b9cf5; --c-agent: #d97757; --c-read: #5b9cf5; --c-write: #3fb9a0; --c-cmd: #e0a43c; --c-web: #a47ce8; }
@@ -954,12 +954,12 @@ header#chatHeader { overflow: hidden; }
 @container mainc (max-width: 520px) { header#chatHeader .titlebtn { display: none; } }
 
 /* the light sweep, slow and soft: also on « Raisonnement » while Naim is still thinking */
-#liveBar .ltext, .turn.bot:has(.working:not([hidden])) details.think > summary {
+#liveBar .ltext, .turn.bot:has(div.working:not([hidden])) details.think > summary {
   background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
   background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important;
   animation: naimShimmer 3.2s cubic-bezier(.4, 0, .6, 1) infinite; }
-.turn.bot:has(.working:not([hidden])) details.think > summary::before { background: var(--muted); }
-.turn.bot:has(.working:not([hidden])) details.think > summary::marker, .turn.bot:has(.working:not([hidden])) details.think > summary::-webkit-details-marker { color: var(--muted); }
+.turn.bot:has(div.working:not([hidden])) details.think > summary::before { background: var(--muted); }
+.turn.bot:has(div.working:not([hidden])) details.think > summary::marker, .turn.bot:has(div.working:not([hidden])) details.think > summary::-webkit-details-marker { color: var(--muted); }
 @keyframes naimShimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
 
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
@@ -1245,6 +1245,12 @@ aside#side .group { font-size: 11.5px; font-weight: 500; letter-spacing: .01em; 
 body.home #chatcol::before { content: ""; position: absolute; left: 50%; top: 38%; width: min(720px, 90%); height: 320px; transform: translate(-50%, -50%);
   background: radial-gradient(ellipse at center, color-mix(in srgb, var(--text) 6%, transparent), transparent 65%); pointer-events: none; z-index: 0; }
 body.home #chatcol > * { position: relative; z-index: 1; }
+/* generation details under an answer */
+.stats { display: inline-flex; flex-wrap: wrap; gap: 5px; margin-left: 4px; }
+.stats .schip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--muted); background: var(--hover); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.stats .schip svg { width: 12px; height: 12px; }
+.turn.bot .stats { opacity: 0; transition: opacity .18s var(--ease); }
+.turn.bot:hover .stats, .turn.bot:last-child .stats { opacity: 1; }
 </style>
 </head>
 <body>
@@ -2274,7 +2280,19 @@ function addBot(m, idx) {
       if (live && !stickBottom) sc.scrollTop = top;
     },
     setThinking(t) { think.hidden = !t; $("div", think).textContent = t; },
-    setStats(s) { $(".stats", d).textContent = s && S.show_stats ? `${s.tokens} tokens · ${s.tps.toFixed(1)} tok/s` : ""; },
+    setStats(s) {  // after the answer, like a pro tool: speed, length, time to the first word, total time, why it stopped
+      const el = $(".stats", d); if (!el) return;
+      if (!s || !S.show_stats) { el.innerHTML = ""; return; }
+      const sec = (x) => x == null ? null : x < 10 ? `${x.toFixed(2)} s` : x < 60 ? `${Math.round(x)} s` : `${Math.floor(x / 60)} min ${String(Math.round(x % 60)).padStart(2, "0")} s`;
+      const why = { stop: "Fin de la réponse", length: "Limite de longueur atteinte", tool_calls: "Outil appelé", stopped: "Arrêté" }[s.reason] || (s.reason ? s.reason : null);
+      const chip = (ic, txt, tip) => txt ? `<span class="schip" title="${esc(tip)}">${ic ? svgI(ic) : ""}${esc(txt)}</span>` : "";
+      el.innerHTML = chip("bolt", s.tps ? `${s.tps.toFixed(1)} tok/s` : "", "Vitesse d'écriture")
+        + chip("list", s.tokens ? `${s.tokens} tokens` : "", "Tokens écrits par Naim")
+        + chip("sched", sec(s.ttft), "Temps avant le premier mot")
+        + chip("", s.total != null ? `total ${sec(s.total)}` : "", "Durée totale de la réponse")
+        + chip("file", s.prompt ? `${s.prompt.toLocaleString("fr-FR")} lus` : "", "Tokens lus avant de répondre (instructions, outils, conversation, résultats) qui n'étaient pas déjà en mémoire")
+        + chip("", why ? `Arrêt : ${why}` : "", "Pourquoi la réponse s'est arrêtée");
+    },
     typing(text) {
       working.hidden = false; $(".wtext", working).textContent = (text || "Naim réfléchit").replace(/[.…\s]+$/, "") + "…";
       if (!v._t0) {
@@ -2674,6 +2692,7 @@ async function stream(reply, v, message, hist, extra = {}) {
         if (!line.trim()) continue;
         const ev = JSON.parse(line);
         notifyConv = conv.id;  // approvals / questions of this run: their notification leads back here
+        if (reply.ttft == null && /^(token|thinking_token|tool)$/.test(ev.type)) reply.ttft = (Date.now() - reply.time) / 1000;
         switch (ev.type) {
           case "token": reply.content += ev.text; renderText(); break;
           case "thinking_token": reply.thinking += ev.text; v.setThinking(reply.thinking); break;
@@ -2718,7 +2737,7 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "interjection_read": if (current === conv) toast("Naim a lu ton message"); break;
           case "question_result": { const st = reply.steps.find((x) => x.type === "question" && x.id === ev.id); if (st) { st.answer = ev.answer || ""; v.questionDone(st); } break; }
           case "answer": reply.content = ev.text; v.setText(ev.text); break;
-          case "stats": reply.stats = { tokens: ev.tokens, tps: ev.tps }; v.setStats(reply.stats); break;
+          case "stats": reply.stats = { ...(reply.stats || {}), tokens: ev.tokens, tps: ev.tps, prompt: ev.prompt || reply.stats?.prompt, reason: ev.reason || reply.stats?.reason }; v.setStats(reply.stats); break;
           case "stopped": reply.content += "\n\n_⏹ Arrêté._"; v.setText(reply.content); break;
           case "error": reply.steps.push({ type: "error", text: ev.text }); v.error(ev.text); break;
         }
@@ -2731,6 +2750,11 @@ async function stream(reply, v, message, hist, extra = {}) {
     v.finish(); if (current === conv) setBusy(false);
   }
   v.setText(reply.content || (reply.steps.length ? "" : "_(pas de réponse)_"));
+  if (reply.stats || reply.ttft != null) {
+    reply.stats = { ...(reply.stats || {}), ttft: reply.ttft, total: (Date.now() - reply.time) / 1000,
+                    reason: /⏹ Arrêté/.test(reply.content || "") ? "stopped" : reply.stats?.reason };
+    v.setStats(reply.stats);
+  }
   v.finish();
   delete runs[conv.id];
   v.actions(reply);

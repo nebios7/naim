@@ -169,6 +169,10 @@ class Server:
             # parallel slots (sub-agents working at the same time): llama.cpp splits -c between them,
             # so each slot keeps the full context
             slots = slots_for(cfg.get("parallel"))
+            if hardware()["ram_gb"] >= 16:
+                # one more slot for the background jobs (memory, summaries): they no longer overwrite what the
+                # conversation's slot has already read (its ~6k tokens of instructions and tools stay in cache)
+                slots = max(slots, 2)
             cmd = [exe, "-m", str(gguf), "--host", "127.0.0.1", "--port", str(PORT), "-c", str(ctx * slots),
                    # a checkpoint every 2048 tokens (default 8192): a new task re-reads only what follows Naim's fixed
                    # instructions (~7k tokens shared by every task), not the whole prompt; 16 kept (50 MB each)
@@ -283,6 +287,8 @@ def _payload(messages, tools, think, stream, options, vision=None):
             body[dst] = o[src]
     # safety cap: a small model can fall into an endless repetition; one reply never needs more than this
     body["max_tokens"] = o["num_predict"] if o.get("num_predict") else 8192
+    if o.get("slot") is not None:  # a background job uses its own slot (see start: the last one)
+        body["id_slot"] = int(o["slot"])
     if tools:
         body["tools"] = tools
         if o.get("tool_choice"):  # "required": the answer must be a tool call (constrained by llama.cpp's grammar)
@@ -327,7 +333,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         return out
 
     def chunks():
-        first, calls = None, {}  # tool calls arrive in pieces while streaming: assembled, then given at the end
+        first, calls, reason = None, {}, None  # tool calls arrive in pieces while streaming: assembled, then given at the end
         with resp:
             for raw in resp:
                 line = raw.decode("utf-8", errors="replace").strip()
@@ -349,9 +355,12 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                         first = time.time()
                     yield {"message": {"content": delta.get("content") or "", "thinking": delta.get("reasoning_content") or ""},
                            "done": False}
+                if ev.get("choices") and ev["choices"][0].get("finish_reason"):
+                    reason = ev["choices"][0]["finish_reason"]
                 if t and t.get("predicted_n"):
                     yield {"message": {}, "done": True, "eval_count": t["predicted_n"],
-                           "eval_duration": int(t.get("predicted_ms", 1) * 1e6)}
+                           "eval_duration": int(t.get("predicted_ms", 1) * 1e6), "prompt_eval_count": t.get("prompt_n", 0),
+                           "prompt_eval_duration": int(t.get("prompt_ms", 0) * 1e6), "done_reason": reason}
                 elif not t and (ev.get("usage") or {}).get("completion_tokens") and first:  # MLX: counts only
                     yield {"message": {}, "done": True, "eval_count": ev["usage"]["completion_tokens"],
                            "eval_duration": int((time.time() - first) * 1e9)}

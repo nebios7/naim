@@ -1085,7 +1085,7 @@ class Handler(BaseHTTPRequestHandler):
         """Short, deterministic model call used to extract facts for the long-term memory."""
         b = {**body, "mode": "chat"}
         options, _ = model_options(b)
-        options = {**options, "temperature": 0.1, "num_predict": 500}
+        options = {**options, "temperature": 0.1, "num_predict": 500, "slot": 1}  # its own slot: the conversation keeps its cache
         model = b.get("model") or (b.get("settings") or {}).get("model") or "naim"
         return lambda msgs: (ollama_chat(model, msgs, options=options) or {}).get("content", "")
 
@@ -1105,8 +1105,6 @@ class Handler(BaseHTTPRequestHandler):
         options, extra = model_options(body)
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
-        if body.get("history") and trivial_message(body["message"]):
-            mem = ""  # « merci », « ok » in a conversation: answer about it, not about remembered projects
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
         choice = chosen_option(body["message"], body.get("history"))
         text = (f"{body['message']} — je choisis cette option que tu as proposée : « {choice} ». Fais-le maintenant."
@@ -1125,8 +1123,7 @@ class Handler(BaseHTTPRequestHandler):
             if any((chatfiles.OUT / n.strip()).is_file() for n in named):
                 files = False  # the file exists (✉ Envoyer on its card): only send it
         web = s.get("enable_web", True) is not False and bool(WEB_NEED_RE.search(body["message"] or ""))
-        if (options.get("backend") == "llamacpp" and s.get("chat_tools", True) is not False and not body.get("images")
-                and not (trivial_message(body["message"]) and not choice)):  # « merci », « salut » : a plain reply
+        if options.get("backend") == "llamacpp" and s.get("chat_tools", True) is not False and not body.get("images"):
             # Chat with every tool, like an assistant that talks AND acts: answers stream as usual; when a tool is
             # needed, it is used in the same reply, then the answer goes on
             return self.chat_agentic(body, messages, options, stop, files=files,
@@ -1148,7 +1145,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "token", "text": msg["content"]})
             if chunk.get("done") and chunk.get("eval_duration"):
                 self.event({"type": "stats", "tokens": chunk.get("eval_count", 0),
-                            "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9)})
+                            "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
+                            "prompt": chunk.get("prompt_eval_count", 0), "reason": chunk.get("done_reason")})
         self.event({"type": "done"})
 
     FOLDER_TOOL = {"type": "function", "function": {
@@ -1271,7 +1269,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
+        prompt_tokens = 0
         nudges = 1 if body.get("_relaunched") else 0
+        plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck = {}, False
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
         file_work = bool(FILE_WORK_RE.search(asked))
@@ -1305,9 +1305,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "interjection_read", "count": len(notes)})
             last = last or stuck
             tools = None if last and used_tools else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
-            if tools and not files and not file_work:  # a question, a lesson: the answer goes in the conversation
-                tools = [t for t in tools if t["function"]["name"] in ANSWER_TOOLS]
-            opts = dict(options, tool_choice="required") if (files and step == 0) else options
+
+            opts = (dict(options, tool_choice="required") if (files and step == 0)
+                    else dict(options, tool_choice="none") if plain else options)
             content, calls, shown = "", [], 0
             stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
             thought = False
@@ -1331,7 +1331,9 @@ class Handler(BaseHTTPRequestHandler):
                     calls = msg["tool_calls"]
                 if chunk.get("done") and chunk.get("eval_duration"):
                     total_tokens += chunk.get("eval_count", 0)
-                    self.event({"type": "stats", "tokens": total_tokens, "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9)})
+                    prompt_tokens += chunk.get("prompt_eval_count", 0)
+                    self.event({"type": "stats", "tokens": total_tokens, "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
+                                "prompt": prompt_tokens, "reason": chunk.get("done_reason")})
             raw = raw_tool_calls(content)
             if not calls and raw:  # written as text: executed anyway
                 calls = raw
@@ -1375,6 +1377,13 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "user", "content": "Tu répètes la même action sans résultat : arrête-la. Change de "
                                      "méthode ou réponds maintenant avec ce que tu sais (pour un schéma : un bloc ```mermaid "
                                      "dans ta réponse)."})
+                    continue
+                if not files and not file_work and name not in ANSWER_TOOLS:
+                    # a question or a lesson: the answer goes in the conversation (the tool list stays the same so that
+                    # llama.cpp keeps what it already read; only the use is refused)
+                    messages.append({"role": "tool", "tool_name": name, "content": (
+                        "refused: this is a question, not a request for files. Answer IN the conversation (explanations "
+                        "and code blocks); create or change files only when the user asks for it.")})
                     continue
                 self.event({"type": "tool", "name": name, "args": args})
                 try:
@@ -1685,7 +1694,7 @@ def compact_conversation(body):
     """Summary of the beginning of a long conversation (earlier summary included): the app then sends it instead of
     those messages, so a long conversation stays fast and within the model's memory."""
     options, _ = model_options(body)
-    options.update(temperature=0.1, num_predict=600)  # factual and short: it is re-read at every message
+    options.update(temperature=0.1, num_predict=600, slot=1)  # factual and short; its own slot keeps the conversation's cache
     lines = []
     if body.get("previous"):
         lines.append("Earlier summary:\n" + str(body["previous"])[:6000])
