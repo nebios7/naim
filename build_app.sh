@@ -26,7 +26,8 @@ rm -rf "$tmp"
 
 # native app (window, menus, WKWebView); it starts the Python engine as a child so macOS permissions apply to Naim.app
 src="$(mktemp -d)"; cp "$here/NaimApp.swift" "$src/main.swift"   # the file with top-level code must be main.swift
-swiftc -O "$src/main.swift" "$here/NaimInput.swift" -o "$out/Contents/MacOS/Naim" -framework AppKit -framework WebKit
+swiftc -O "$src/main.swift" "$here/NaimInput.swift" "$here/NaimDictation.swift" -o "$out/Contents/MacOS/Naim" \
+  -framework AppKit -framework WebKit -framework Speech -framework AVFoundation
 rm -rf "$src"
 
 cat > "$out/Contents/Info.plist" <<'EOF'
@@ -45,6 +46,8 @@ cat > "$out/Contents/Info.plist" <<'EOF'
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSAppleEventsUsageDescription</key><string>Naim pilote Mail pour envoyer les emails que tu lui demandes.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Naim écoute ta voix quand tu cliques sur le micro, pour écrire ton message.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Naim transforme ta voix en texte (sur ce Mac quand c'est possible).</string>
   <key>NSHumanReadableCopyright</key><string>© ABDESSEMED Mohamed</string>
 </dict>
 </plist>

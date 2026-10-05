@@ -18,6 +18,7 @@ let logPath = "\(home)/Library/Logs/Naim.log"
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, NSWindowDelegate {
     var window: NSWindow!
     var web: WKWebView!
+    let dictation = NaimDictation()  // the composer's microphone
     var engine: Process?
     let bridge = InputBridge()
     var readyTimer: Timer?
@@ -49,7 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let cfg = WKWebViewConfiguration()
         cfg.websiteDataStore = .default()
         cfg.preferences.javaScriptCanOpenWindowsAutomatically = true
+        cfg.userContentController.add(dictation, name: "naimDictation")
         web = WKWebView(frame: .zero, configuration: cfg)
+        dictation.web = web
         web.uiDelegate = self
         web.navigationDelegate = self
         web.allowsMagnification = false
