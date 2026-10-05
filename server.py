@@ -1892,6 +1892,17 @@ def _busy():
     return bool(_agents) or bool(scheduler.running_ids())
 
 
+def warm_voice():
+    """Naim's natural voice is heavy to load (~1 min): loaded in the background as soon as Naim opens."""
+    try:
+        import naim_voice
+        if naim_voice.natural_available():
+            with naim_voice._nat_lock:
+                naim_voice._natural_worker()
+    except Exception as e:  # noqa: BLE001
+        print(f"voix non préchargée : {e}", flush=True)
+
+
 def warm_up():
     """When Naim opens: it reads its tools and instructions once, in the background (one invisible request of one
     token, through the very same path as a real message). The first message then starts at once instead of
@@ -1912,6 +1923,7 @@ def warm_up():
 
 def serve(port=8765):
     threading.Thread(target=warm_up, daemon=True, name="naim-warm-up").start()
+    threading.Thread(target=warm_voice, daemon=True, name="naim-warm-voice").start()
     scheduler.start_loop(_settings, ollama_chat, Agent, CHAT_PROMPT)
     if at := _private("autotrain"):
         at.start_loop(_settings, _busy)
