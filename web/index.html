@@ -1268,6 +1268,19 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 #talkBtn svg { width: 17px; height: 17px; }
 #talkBtn.on { color: var(--bg); background: var(--text); border-radius: 999px; }
 body:has(#talkBtn.on) #micBtn.rec { color: #e5484d; }
+/* conversation mode: who has the floor */
+#talkState { display: flex; align-items: center; gap: 10px; max-width: var(--w, 820px); margin: 0 auto 8px; padding: 6px 14px; border-radius: 999px; background: var(--hover); font-size: 13px; color: var(--text); width: fit-content; }
+#talkState[hidden] { display: none; }
+#talkState .tsh { color: var(--muted); font-size: 12px; }
+#talkState .tsw { display: inline-flex; align-items: center; gap: 2px; height: 14px; }
+#talkState .tsw i { width: 3px; height: 4px; border-radius: 2px; background: var(--muted); }
+#talkState[data-s=listen] .tsw i { background: #e5484d; animation: tsw .9s ease-in-out infinite; }
+#talkState[data-s=speak] .tsw i { background: var(--text); animation: tsw .6s ease-in-out infinite; }
+#talkState[data-s=think] .tsw i { animation: tsw 1.6s ease-in-out infinite; opacity: .6; }
+#talkState .tsw i:nth-child(2) { animation-delay: .1s; } #talkState .tsw i:nth-child(3) { animation-delay: .2s; }
+#talkState .tsw i:nth-child(4) { animation-delay: .3s; } #talkState .tsw i:nth-child(5) { animation-delay: .4s; }
+@keyframes tsw { 0%, 100% { height: 4px; } 50% { height: 14px; } }
+body:has(#talkState:not([hidden])) #liveBar { display: none !important; }
 </style>
 </head>
 <body>
@@ -1323,6 +1336,7 @@ body:has(#talkBtn.on) #micBtn.rec { color: #e5484d; }
       <div id="findBar" hidden><input id="findIn" placeholder="Chercher dans la conversation…" spellcheck="false"><span id="findN"></span><button class="icon" id="findPrev" title="Précédent (⇧↩)">↑</button><button class="icon" id="findNext" title="Suivant (↩)">↓</button><button class="icon" id="findClose" title="Fermer (Échap)">✕</button></div>
       <div id="scroll"><div id="thread"></div></div>
       <footer>
+        <div id="talkState" hidden><span class="tsw"><i></i><i></i><i></i><i></i><i></i></span><span class="tst"></span><span class="tsh"></span></div>
         <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris ou parle pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
         <div class="composer">
           <div class="slash" id="slash" hidden></div>
@@ -2086,7 +2100,7 @@ function renderThread() {
     const agent = S.mode === "agent";
     const rec = list.slice(0, 6);
     document.body.classList.add("home");
-    t.innerHTML = `<div class="empty"><div class="hero"><span class="logo" title="Coucou">${robotSVG()}</span><h1>${heroLetters(greeting())}</h1></div>
+    t.innerHTML = `<div class="empty"><div class="hero"><h1>${heroLetters(greeting())}</h1></div>
       <div class="sub1">${agent ? "Je travaille directement dans ton dossier : je crée, modifie, lance et vérifie le code." : "Pose une question, demande du code, un document ou une recherche sur le web."}</div></div>`;
     const chips = agent
       ? [["phone", "App iOS", "Crée une app SwiftUI et une API Flask, puis lance-la dans le simulateur"],
@@ -2169,6 +2183,15 @@ function startDictation() {
 }
 // ---- conversation mode: listen → (silence) → send → Naim answers aloud → listen again
 const talk = { on: false, timer: null }, TALK_SILENCE = 1500;
+function talkStateUpdate() {  // who has the floor: you, Naim thinking, Naim speaking
+  const el = $("#talkState"); if (!el) return;
+  el.hidden = !talk.on; if (!talk.on) return;
+  const st = voice.audio ? "speak" : dictation.on && !curRun() ? "listen" : curRun() ? "think" : "listen";
+  el.dataset.s = st;
+  $(".tst", el).textContent = { listen: "Je t'écoute…", think: "Naim réfléchit…", speak: "Naim parle…" }[st];
+  $(".tsh", el).textContent = { listen: "parle, ton message part après un court silence", think: "parle pour le guider, dis « stop » pour l'arrêter", speak: "Espace ou Échap pour lui couper la parole" }[st];
+}
+setInterval(talkStateUpdate, 250);
 function talkStart() {
   talk.on = true; $("#talkBtn").classList.add("on"); $("#talkBtn").title = "Arrêter la conversation à voix haute";
   toast("Conversation à voix haute : parle, Naim t'écoute");
@@ -2419,11 +2442,13 @@ function addBot(m, idx) {
       }
     },
     finish() {
+      const sc = $("#scroll"), stick = stickBottom && current && d.isConnected;  // WebKit may jump to the top here
       working.hidden = true; clearInterval(v._timer);
       d.dataset.done = "1"; body.style.minHeight = "";  // finished: the answer takes its real height
       if (!S.keep_actions_open) $$(".agroup", flow).forEach((g) => (g.open = false));
       $$(".arow.run", flow).forEach((r) => (r.className = "arow")); // no row keeps "running" once the reply is over
       $(".todos", d).classList.add("finished");
+      if (stick) { stickBottom = true; sc.scrollTop = sc.scrollHeight; }  // same frame: no visible jump
     },
     process(pr) {
       const c = document.createElement("div"); c.className = "procchip"; c.dataset.pid = pr.id;
@@ -2793,7 +2818,8 @@ async function stream(reply, v, message, hist, extra = {}) {
     const res = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: run.controller.signal,
       body: JSON.stringify({ run_id: runId, mode: S.mode, model: S.model, think: S.think, project: S.project, auto_yes: S.autoYes,
-        history: hist, message, settings: settingsPayload(), images: extra.images?.length ? extra.images : undefined, plan: !!extra.plan }),
+        history: hist, message, settings: settingsPayload(), images: extra.images?.length ? extra.images : undefined, plan: !!extra.plan,
+        voice: talk.on || undefined }),  // conversation mode: an answer made to be heard
     });
     const reader = res.body.getReader(), dec = new TextDecoder();
     let buf = "", pendingRender = false;

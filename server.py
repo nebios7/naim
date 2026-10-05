@@ -1138,7 +1138,10 @@ class Handler(BaseHTTPRequestHandler):
         choice = chosen_option(body["message"], body.get("history"))
         text = (f"{body['message']} — je choisis cette option que tu as proposée : « {choice} ». Fais-le maintenant."
                 if choice else body["message"])
-        user = {"role": "user", "content": text + now_note(), **({"images": body["images"]} if body.get("images") else {})}
+        spoken = ("\n\n[Conversation à voix haute : ta réponse sera lue par ta voix. Parle naturellement, en 2 à 5 phrases "
+                  "courtes, sans liste, sans titre ni symbole Markdown, sans emoji. Si du code est nécessaire, mets-le dans un "
+                  "bloc de code (il s'affiche à l'écran, il n'est pas lu) et dis en une phrase ce qu'il fait.]") if body.get("voice") else ""
+        user = {"role": "user", "content": text + spoken + now_note(), **({"images": body["images"]} if body.get("images") else {})}
         messages = [{"role": "system", "content": system}] + body.get("history", []) + [user]
         wants_schedule = bool(SCHEDULE_NEED_RE.search(body["message"] or ""))
         files = wants_file(body["message"], body.get("history")) or bool(FILE_OFFER_RE.search(choice))
