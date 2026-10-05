@@ -145,7 +145,7 @@ case ":$PATH:" in *":$bin:"*) ;; *) warn "Ajoute $bin à ton PATH pour les comma
 
 # Rebuild Naim.app only when the native app or its icon change: a new build gets a new signature and macOS would
 # forget the permissions (Accessibility, Screen Recording, Automation) the user granted.
-apphash="$(cat "$here/NaimApp.swift" "$here/NaimInput.swift" "$here/build_app.sh" "$here/make_icon.swift" | shasum | cut -c1-16)"
+apphash="$(cat "$here/NaimApp.swift" "$here/NaimInput.swift" "$here/NaimDictation.swift" "$here/build_app.sh" "$here/make_icon.swift" | shasum | cut -c1-16)"
 if [ "$(cat "$dest/.app-build-hash" 2>/dev/null)" != "$apphash" ] || [ ! -d "$HOME/Applications/Naim.app" ]; then
   "$here/build_app.sh" "$dest/app" "$python" "$dest" >/dev/null 2>&1
   mkdir -p "$HOME/Applications"
