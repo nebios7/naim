@@ -60,7 +60,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import (ANNOUNCE_RE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+from naimtools import (ANNOUNCE_RE, STOP_WORDS_RE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
@@ -726,6 +726,11 @@ class Handler(BaseHTTPRequestHandler):
             text = str(body.get("text") or "").strip()[:4000]
             if agent and text:
                 agent.interject(text)
+            if text and STOP_WORDS_RE.match(text):  # « stop » typed: the reply stops now, in Chat as in Agent
+                with _lock:
+                    flag = _runs.get(body.get("run_id"))
+                if flag:
+                    flag.set()
             self.send_json({"ok": bool(agent and text)})
         elif path == "/api/changes/revert":
             body = self.read_json()
@@ -1313,6 +1318,7 @@ class Handler(BaseHTTPRequestHandler):
             thought = False
             for chunk in stream:
                 if stop.is_set():
+                    stream.close()  # hang up: llama.cpp stops writing at once
                     break
                 if repeating(content):  # the model loops on the same line (it happens with images): cut at once
                     stream.close()

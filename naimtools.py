@@ -181,7 +181,10 @@ FEEDBACK_RE = re.compile(r"pas oblig|rien compris|pas compris|c'?est pas [cç]a|
                          r"tu (as|a) (oubli|refait|recommenc)|pas ce que", re.I)
 
 
-def chat_watched(model, messages, tools=None, think=False, options=None):
+STOP_WORDS_RE = re.compile(r"^\s*(stop|stoppe|arr[eê]te|arr[eê]tes?[- ]toi|annule)\b", re.I)  # typed while Naim works
+
+
+def chat_watched(model, messages, tools=None, think=False, options=None, cancel=None):
     """One model answer, read as it is written so that a loop can be cut at once (llama.cpp); tool calls written as text
     are recovered. Same result as a non-streamed call: {role, content, thinking?, tool_calls?}."""
     if (options or {}).get("backend") != "llamacpp":
@@ -190,6 +193,9 @@ def chat_watched(model, messages, tools=None, think=False, options=None):
         content, thinking, calls = "", "", []
         stream = ollama_chat(model, messages, tools=tools, think=think, stream=True, options=options)
         for chunk in stream:
+            if cancel is not None and cancel.is_set():  # Stop: the writing ends now (llama.cpp stops when we hang up)
+                stream.close()
+                break
             m = chunk.get("message", {})
             content += m.get("content") or ""
             thinking += m.get("thinking") or ""
@@ -2080,13 +2086,18 @@ class Agent:
     NOTEBOOK = ".naim/tache.md"
 
     def interject(self, text):
-        """A message the user typed while the agent works: read before the next step."""
+        """A message the user typed while the agent works: read before the next step (« stop »: at once)."""
+        if STOP_WORDS_RE.match(text or ""):
+            self.cancel.set()
         with self._inbox_lock:
             self._inbox.append(text)
 
     def _read_inbox(self):
         with self._inbox_lock:
             items, self._inbox = self._inbox, []
+        if any(STOP_WORDS_RE.match(i) for i in items):  # « stop » typed while Naim works: like the Stop button
+            self.cancel.set()
+            return True
         if items:
             self.messages.append({"role": "user", "content": (
                 "(Message de l'utilisateur pendant ton travail — prends-le en compte maintenant, sans recommencer ce qui "
@@ -2170,13 +2181,19 @@ class Agent:
             self._notify_finished()
             self.emit({"type": "status", "text": "Naim réfléchit..."})
             self._compact_history()
-            msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options)
+            msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options,
+                               cancel=self.cancel)
+            if self.cancel.is_set():
+                self.emit({"type": "answer", "text": "⏹ Arrêté."})
+                self._outcome = "stopped"
+                return "⏹ Arrêté."
             if self.think and not msg.get("tool_calls") and not (msg.get("content") or "").strip():
                 # the model stopped inside its reasoning (no answer, no action): same step again, without reasoning
                 if msg.get("thinking"):
                     self.emit({"type": "thinking", "text": msg["thinking"].strip()})
                 self.emit({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
-                msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options)
+                msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options,
+                                   cancel=self.cancel)
             self.messages.append(msg)
             if msg.get("thinking") and self.think:
                 self.emit({"type": "thinking", "text": msg["thinking"].strip()})
