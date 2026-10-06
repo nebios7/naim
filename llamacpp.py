@@ -140,12 +140,13 @@ class Server:
         """Start llama-server for Naim (or restart it with a new context size); wait until it is ready."""
         if BLOCKED:  # the automatic training uses the GPU
             raise RuntimeError(BLOCKED)
-        try:  # training running in its own window (Naim reopened meanwhile): do not start the engine
-            import autotrain
-            if (msg := autotrain.training_lock()):
+        for private in ("autotrain", "voicetrain"):  # a training in its own window (Naim reopened meanwhile): engine off
+            try:
+                mod = __import__(private)
+            except ImportError:
+                continue
+            if (msg := mod.training_lock()):
                 raise RuntimeError(msg)
-        except ImportError:
-            pass
         with self.lock:
             cfg = dict(CONFIG)
             if self.running and self.ctx == ctx and self.cfg == cfg and self.healthy():

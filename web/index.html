@@ -3754,6 +3754,10 @@ const TABS = {
   owner: () => `<h2>Admin</h2>
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Visible seulement sur ce Mac : l'entraînement, tes clés, les accès au modèle et les commandes du projet. Rien de cet onglet n'est publié.</p>
     ${autoTrainHTML()}
+    <div class="sgroup" id="voiceTrain" hidden>
+      <div class="srow col"><div class="sl"><b>Voix de Naim</b><small>Naim apprend sa propre voix : la voix naturelle lit environ 900 phrases, puis une voix rapide apprend à parler exactement comme elle (environ 14 h, la nuit de préférence). Naim se ferme pendant ce temps ; une fenêtre « Naim — Voix » suit la progression. Tout est gardé : pause et reprise possibles.</small></div></div>
+      <div class="srow col" id="voiceTrainBox"><small class="muted">Chargement…</small></div>
+    </div>
     <div id="ownerBody"><div class="sgroup"><div class="srow"><div class="sl">Chargement…</div></div></div></div>`,
   about: () => `<h2>À propos</h2><div class="sgroup"><div class="srow"><div class="sl"><b>Écran de bienvenue</b><small>Revoir la présentation : modèle, autorisations, apparence.</small></div><button class="btn" onclick="showOnboarding()">Revoir</button></div></div><div class="sgroup">
     ${row("Naim", "Agent de code autonome créé par ABDESSEMED Mohamed · successeur de Mimo.", '<span class="lang">v3</span>')}
@@ -3785,7 +3789,7 @@ function showSettingsTab(t) {
   if (t === "skills") loadSkillsPage();
   if (t === "memory") loadMemory();
   if (t === "learning") loadLearning();
-  if (t === "owner") { loadAutoTrain(); loadOwner(); }
+  if (t === "owner") { loadAutoTrain(); loadVoiceTrain(); loadOwner(); }
   if (t === "about") api("/api/model/version").then((v) => { const e = $("#modelVer"); if (e) e.textContent = v.name || "v2"; const d = $("#modelVerDetail"); if (d && v.detail) d.textContent = " · " + v.detail; }).catch(() => {});
   if (t === "instr") api("/api/naim-home").then((h) => { $("#globalMd").value = h.instructions || ""; $("#globalMdSave").onclick = async () => { await api("/api/global-instructions", { method: "PUT", body: { content: $("#globalMd").value } }); toast("NAIM.md enregistré"); }; });
 }
@@ -4214,6 +4218,32 @@ async function loadAutoTrain() {
   $$("[data-vdel]", grp).forEach((b) => (b.onclick = async () => { if (!confirm(`Supprimer la version ${b.dataset.vdel} ?\n\nTu ne pourras plus y revenir. La version en service et la v2 d'origine sont toujours gardées.`)) return; const x = await api("/api/autotrain/delete", { method: "POST", body: { label: b.dataset.vdel } }); toast(x.error || `Version ${x.label} supprimée (${(x.freed / 1e9).toFixed(1)} Go libérés)`); loadAutoTrain(); }));
   $$("[data-rb]", grp).forEach((b) => (b.onclick = async () => { if (!confirm(`Revenir à la version ${b.dataset.rb} ?`)) return; const x = await api("/api/autotrain/rollback", { method: "POST", body: { label: b.dataset.rb } }); toast(x.error || `Version ${x.label} remise en service`); loadAutoTrain(); }));
   if (r.running) setTimeout(() => { if ($("#autoTrain") && !$("#autoTrain").hidden) loadAutoTrain(); }, 30000);
+}
+async function loadVoiceTrain() {
+  let r; try { r = await api("/api/voicetrain"); } catch { return; }
+  const grp = $("#voiceTrain"); if (!grp) return;
+  grp.hidden = !r.available; if (!r.available) return;
+  const hm = (h) => h >= 1 ? `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}` : `${Math.round(h * 60)} min`;
+  const el = r.since ? (Date.now() / 1000 - r.since) / 3600 : 0;
+  const state = r.running === "enregistrement" ? `Enregistrement des phrases : ${r.recorded} / ${r.total}`
+    : r.running === "entraînement" ? `Apprentissage en cours depuis ${hm(el)} · reste environ ${hm(Math.max(0, r.hours - el))}`
+    : r.running === "fabrication" ? "Fabrication de la voix…"
+    : r.step === 4 ? `Voix installée le ${esc(r.installed_at)}`
+    : r.failed ? `Arrêté sur une erreur : ${esc(r.last)}` : `En pause · ${r.recorded} / ${r.total} phrases enregistrées`;
+  $("#voiceTrainBox").innerHTML = `
+    <div class="sl"><b>${state}</b></div>
+    <div style="height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0"><i style="display:block;height:100%;width:${r.pct}%;background:var(--accent, #d97757)"></i></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="vtRun">${r.running ? "Suivre dans sa fenêtre" : r.step === 4 ? "Continuer d'améliorer la voix" : "Apprendre sa voix maintenant"}</button>
+      ${r.running ? `<button class="btn" id="vtPause">Mettre en pause</button>` : ""}<button class="btn" id="vtRefresh" title="Actualiser">↻</button></div>`;
+  $("#vtRefresh").onclick = loadVoiceTrain;
+  $("#vtRun").onclick = async () => {
+    if (!confirm("Ouvrir la fenêtre « Naim — Voix » ?\n\nNaim va se fermer pour laisser la carte graphique à l'apprentissage de sa voix. La fenêtre montre la progression ; à la fin, tu peux écouter la voix et rouvrir Naim.")) return;
+    const x = await api("/api/voicetrain/run", { method: "POST", body: {} });
+    toast(x.error || "La fenêtre « Naim — Voix » s'ouvre, Naim va se fermer…");
+  };
+  if ($("#vtPause")) $("#vtPause").onclick = async () => { if (!confirm("Mettre en pause ? Tout est gardé, tu pourras reprendre où il en est.")) return; await api("/api/voicetrain/pause", { method: "POST", body: {} }); loadVoiceTrain(); };
+  if (r.running) setTimeout(() => { if ($("#voiceTrain") && !$("#voiceTrain").hidden) loadVoiceTrain(); }, 30000);
 }
 async function loadLearning() {
   loadShare(); loadAutoTrain();
