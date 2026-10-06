@@ -9,6 +9,7 @@
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/macOS-Apple%20Silicon-333">
   <a href="https://huggingface.co/redhamohamed/naim"><img alt="Modèle Naim sur Hugging Face" src="https://img.shields.io/badge/mod%C3%A8le-Naim%209B-ffcc4d"></a>
   <img alt="100 % local" src="https://img.shields.io/badge/100%25-local-3fb9a0">
+  <a href="https://huggingface.co/redhamohamed/naim"><img alt="Hugging Face : modèle privé" src="https://img.shields.io/badge/Hugging%20Face-priv%C3%A9-555?logo=huggingface&logoColor=white"></a>
 </p>
 
 **Naim** est un assistant de code autonome qui tourne **entièrement sur ton Mac** : aucun compte, aucun abonnement,
@@ -69,7 +70,7 @@ commande met Naim à jour. Détails dans [Installation](#installation).
 | ![Écran de bienvenue](docs/images/bienvenue.png) | ![Réglages du moteur](docs/images/moteur.png) |
 | **Premier lancement** — modèle, autorisations, apparence | **Moteur** — llama.cpp, agents en parallèle selon ta machine |
 | ![Choix du modèle](docs/images/modeles.png) | ![Thème clair](docs/images/theme-clair.png) |
-| **Modèles** — choix au centre (⌘L), déchargement en un clic | **Thème clair** — et 7 couleurs d'accent |
+| **Modèles** — choix du modèle (⌘L), déchargement en un clic | **Thème clair** — et 7 couleurs d'accent |
 
 ![Livrables : rapport PDF, schéma d'architecture et logo, vérifiés et présentés en cartes](docs/images/livrables.png)
 
@@ -95,7 +96,7 @@ Naim a **son propre modèle**, réservé à l'application Naim : il se télécha
 | Utilisation | dans Naim : l'application, le navigateur (`naim --web`) et le terminal (`naimtools`) |
 | Vitesse (Mac M4, 32 Go) | ~12 à 17 tokens/s en écriture, ~75 à 100 tokens/s en lecture |
 | Entraînement | affinage LoRA par auto-distillation, successeur de Mimo |
-| Page du modèle | [huggingface.co/redhamohamed/naim](https://huggingface.co/redhamohamed/naim) (privé pour l'instant : le modèle s'installe avec l'application) |
+| Page du modèle | [huggingface.co/redhamohamed/naim](https://huggingface.co/redhamohamed/naim) — **privé** (accès verrouillé) : le modèle s'installe avec l'application |
 | Licence | Apache 2.0 |
 
 Les fichiers du modèle portent son nom jusque dans leurs métadonnées (`general.architecture = naim`, vision
