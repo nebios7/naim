@@ -6,7 +6,7 @@ Serves web/index.html and a small API on 127.0.0.1 only:
   POST /api/approve                     answer an agent approval request
   POST /api/answer                      answer a question the agent asked (ask_user)
   GET  /api/autotrain                   automatic training status; POST /api/autotrain/run, /api/autotrain/rollback
-  GET  /api/voicetrain                  Naim learning its voice (owner); POST /api/voicetrain/run, /api/voicetrain/pause
+  GET  /api/voicetrain[/audio]          Naim's voices (owner); POST /api/voicetrain/{run,pause,source,clean,try,activate}
   POST /api/interject                   a message typed while the agent works (read at its next step)
   GET  /api/changes?runs=a,b            files changed by agent runs, with their diff; POST /api/changes/revert one file
   POST /api/stop                        stop a running chat/agent run
@@ -593,6 +593,19 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/voicetrain":
             vt = _private("voicetrain")
             self.send_json(vt.status() if vt else {"available": False})
+        elif path == "/api/voicetrain/audio":
+            vt = _private("voicetrain") if (self.headers.get("Host") or "").split(":")[0] in ("127.0.0.1", "localhost") else None
+            f = vt.audio(q.get("voix", ""), q.get("f", "")) if vt and re.fullmatch(r"[a-z0-9-]+", q.get("voix", "")) else None
+            if not f or not f.exists():
+                self.send_json({"error": "introuvable"}, 404)
+            else:
+                data = f.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mp4" if f.suffix in (".m4a", ".mp4") else "audio/mpeg" if f.suffix == ".mp3" else "audio/wav")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
         elif path == "/api/notify/last":
             self.send_json(dict(cu.LAST_NOTIF))
         elif path == "/api/changes":
@@ -723,12 +736,28 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(at.rollback(self.read_json().get("label", ""), _settings()))
             else:
                 self.send_json({"error": "un entraînement est déjà en cours"} if at.RUNNING["phase"] else at.launch_standalone())
-        elif path in ("/api/voicetrain/run", "/api/voicetrain/pause"):
-            vt = _private("voicetrain")
+        elif path.startswith("/api/voicetrain/"):
+            vt = _private("voicetrain") if self._owner_ok() else None  # uploads and starts programs: Naim's page only
+            b = self.read_json()
+            v = b.get("voix") or None
             if not vt or not vt.available():
                 self.send_json({"error": "indisponible"})
+            elif v and not re.fullmatch(r"[a-z0-9-]+", v):
+                self.send_json({"error": "voix inconnue"})
+            elif path.endswith("/run"):
+                self.send_json(vt.launch_standalone(v))
+            elif path.endswith("/pause"):
+                self.send_json(vt.pause())
+            elif path.endswith("/source"):
+                self.send_json(vt.add_source(b.get("nom", ""), b.get("fichier", ""), b.get("data", "")))
+            elif path.endswith("/clean"):
+                self.send_json(vt.clean(v, b.get("options") or {}))
+            elif path.endswith("/try"):
+                self.send_json(vt.try_voice(v))
+            elif path.endswith("/activate"):
+                self.send_json(vt.activate(v))
             else:
-                self.send_json(vt.pause() if path.endswith("/pause") else vt.launch_standalone())
+                self.send_json({"error": "inconnu"}, 404)
         elif path == "/api/compact":
             body = self.read_json()
             try:

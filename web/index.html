@@ -1267,6 +1267,20 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 /* conversation mode */
 #talkBtn svg { width: 17px; height: 17px; }
 #talkBtn.on { color: var(--bg); background: var(--text); border-radius: 999px; }
+/* Admin › Voix de Naim */
+.vl-row { border-top: 1px solid var(--line); padding: 10px 0; }
+.vl-row:first-child { border-top: 0; }
+.vl-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.vl-head small { color: var(--muted); }
+.vl-tag { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.vl-tag.on { color: var(--text); border-color: var(--text); }
+.vl-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.vl-acts .btn { display: inline-flex; align-items: center; gap: 6px; }
+.vl-acts .btn svg, #vlAdd svg { width: 14px; height: 14px; flex: none; }
+#vlAdd { white-space: nowrap; }
+.vl-clean { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 8px; }
+.vl-clean label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.vl-clean input[type=number] { width: 64px; }
 /* conversation mode: everything lives inside the white button, nothing else on screen.
    Five bars: listening = they rise and fall slowly, red · thinking = three dots that wave in turn
    · voice being prepared = dots breathing · speaking = a lively equalizer */
@@ -3755,8 +3769,10 @@ const TABS = {
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Visible seulement sur ce Mac : l'entraînement, tes clés, les accès au modèle et les commandes du projet. Rien de cet onglet n'est publié.</p>
     ${autoTrainHTML()}
     <div class="sgroup" id="voiceTrain" hidden>
-      <div class="srow col"><div class="sl"><b>Voix de Naim</b><small>Naim apprend sa propre voix : la voix naturelle lit environ 900 phrases, puis une voix rapide apprend à parler exactement comme elle (environ 14 h, la nuit de préférence). Naim se ferme pendant ce temps ; une fenêtre « Naim — Voix » suit la progression. Tout est gardé : pause et reprise possibles.</small></div></div>
+      <div class="srow col"><div class="sl"><b>Voix de Naim</b><small>Ajoute un enregistrement de voix, nettoie-le, écoute un essai, puis <b>Entraîner</b> : la voix lit environ 900 phrases, puis une voix rapide apprend à parler exactement comme elle (environ 14 h, la nuit de préférence). Naim se ferme pendant l'entraînement ; la fenêtre « Naim — Voix » suit la progression. Rien n'est jamais supprimé : tu peux revenir à une voix précédente.</small></div></div>
       <div class="srow col" id="voiceTrainBox"><small class="muted">Chargement…</small></div>
+      <div class="srow col" id="voiceLib"></div>
+      <input type="file" id="voiceFile" accept="audio/*,.m4a,.mp3,.wav,.aac,.caf" hidden>
     </div>
     <div id="ownerBody"><div class="sgroup"><div class="srow"><div class="sl">Chargement…</div></div></div></div>`,
   about: () => `<h2>À propos</h2><div class="sgroup"><div class="srow"><div class="sl"><b>Écran de bienvenue</b><small>Revoir la présentation : modèle, autorisations, apparence.</small></div><button class="btn" onclick="showOnboarding()">Revoir</button></div></div><div class="sgroup">
@@ -4225,25 +4241,73 @@ async function loadVoiceTrain() {
   grp.hidden = !r.available; if (!r.available) return;
   const hm = (h) => h >= 1 ? `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}` : `${Math.round(h * 60)} min`;
   const el = r.since ? (Date.now() / 1000 - r.since) / 3600 : 0;
-  const state = r.running === "enregistrement" ? `Enregistrement des phrases : ${r.recorded} / ${r.total}`
-    : r.running === "entraînement" ? `Apprentissage en cours depuis ${hm(el)} · reste environ ${hm(Math.max(0, r.hours - el))}`
-    : r.running === "fabrication" ? "Fabrication de la voix…"
-    : r.step === 4 ? `Voix installée le ${esc(r.installed_at)}`
-    : r.failed ? `Arrêté sur une erreur : ${esc(r.last)}` : `En pause · ${r.recorded} / ${r.total} phrases enregistrées`;
+  const inServ = r.voices.find((v) => v.en_service);
+  const state = r.running === "enregistrement" ? `${esc(r.nom)} · enregistrement des phrases : ${r.recorded} / ${r.total}`
+    : r.running === "entraînement" ? `${esc(r.nom)} · apprentissage depuis ${hm(el)}, reste environ ${hm(Math.max(0, r.hours - el))}`
+    : r.running === "fabrication" ? `${esc(r.nom)} · fabrication de la voix…`
+    : r.failed ? `${esc(r.nom)} · arrêté sur une erreur : ${esc(r.last)}` : "";
   $("#voiceTrainBox").innerHTML = `
-    <div class="sl"><b>${state}</b></div>
-    <div style="height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0"><i style="display:block;height:100%;width:${r.pct}%;background:var(--accent, #d97757)"></i></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" id="vtRun">${r.running ? "Suivre dans sa fenêtre" : r.step === 4 ? "Continuer d'améliorer la voix" : "Apprendre sa voix maintenant"}</button>
-      ${r.running ? `<button class="btn" id="vtPause">Mettre en pause</button>` : ""}<button class="btn" id="vtRefresh" title="Actualiser">↻</button></div>`;
-  $("#vtRefresh").onclick = loadVoiceTrain;
-  $("#vtRun").onclick = async () => {
-    if (!confirm("Ouvrir la fenêtre « Naim — Voix » ?\n\nNaim va se fermer pour laisser la carte graphique à l'apprentissage de sa voix. La fenêtre montre la progression ; à la fin, tu peux écouter la voix et rouvrir Naim.")) return;
-    const x = await api("/api/voicetrain/run", { method: "POST", body: {} });
-    toast(x.error || "La fenêtre « Naim — Voix » s'ouvre, Naim va se fermer…");
+    <div class="sl"><b>Voix en service : ${esc(inServ ? inServ.nom : r.voices.length ? "voix naturelle (non entraînée)" : "—")}</b>${state ? `<small>${state}</small>` : ""}</div>
+    ${r.running ? `<div style="height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0"><i style="display:block;height:100%;width:${r.pct}%;background:var(--accent, #d97757)"></i></div>
+    <div class="vl-acts"><button class="btn" id="vtFollow">Suivre dans sa fenêtre</button><button class="btn" id="vtPause">Mettre en pause</button></div>` : ""}`;
+  const busy = !!r.running;
+  const tags = (v) => [v.en_service ? `<span class="vl-tag on">en service</span>` : "", v.entrainee && !v.en_service ? `<span class="vl-tag">entraînée</span>` : "",
+    !v.entrainee && v.recorded ? `<span class="vl-tag">${v.recorded} / ${v.total} phrases</span>` : ""].join("");
+  const cleanTxt = (n) => { const t = [n.bruit && "bruit réduit", n.silences && "silences coupés", n.volume && "volume égalisé", (n.debut || n.fin) && `de ${n.debut || 0} à ${n.fin || "la fin"} s`].filter(Boolean); return t.length ? " · " + t.join(", ") : ""; };
+  $("#voiceLib").innerHTML = `<div class="sl" style="display:flex;align-items:center;justify-content:space-between"><b>Mes voix</b>
+      <button class="btn" id="vlAdd" style="display:inline-flex;gap:6px;align-items:center">${svgI("plus")}Ajouter un enregistrement</button></div>
+    ${r.voices.map((v) => `<div class="vl-row" data-v="${esc(v.voix)}">
+      <div class="vl-head"><b>${esc(v.nom)}</b>${tags(v)}<small>${v.reference_s ? v.reference_s + " s" : ""}${cleanTxt(v.nettoyage || {})}${v.detail ? " · " + esc(v.detail) : ""}</small></div>
+      <div class="vl-acts">
+        ${v.source ? `<button class="btn" data-play="source">${svgI("play")}Original</button>` : ""}
+        ${v.reference ? `<button class="btn" data-play="reference">${svgI("play")}${v.brut ? "Nettoyé" : "Référence"}</button>` : ""}
+        ${v.essai_etat === "en cours" ? `<button class="btn" disabled>Essai en cours… (1 à 3 min)</button>`
+          : `${v.essai ? `<button class="btn" data-play="essai">${svgI("wave")}Écouter l'essai</button>` : ""}<button class="btn" data-act="try">${svgI("refresh")}${v.essai ? "Nouvel essai" : "Essayer la voix"}</button>`}
+        ${v.final ? `<button class="btn" data-play="final">${svgI("wave")}Voix entraînée</button>` : ""}
+        ${v.brut ? `<button class="btn" data-act="clean">${svgI("sliders")}Nettoyer</button>` : ""}
+        ${v.entrainee && !v.en_service ? `<button class="btn" data-act="activate">${svgI("check")}Mettre en service</button>` : ""}
+        <button class="btn" data-act="train" ${busy ? "disabled title=\"Une voix apprend déjà\"" : ""}>${svgI("play")}${v.entrainee ? "Améliorer encore" : v.recorded ? "Reprendre l'entraînement" : "Entraîner"}</button>
+      </div>
+      ${v.essai_etat && v.essai_etat.startsWith("échec") ? `<small class="muted">${esc(v.essai_etat)}</small>` : ""}
+    </div>`).join("")}`;
+  const playing = { a: null };
+  const play = (v, f) => { playing.a?.pause(); playing.a = new Audio(`/api/voicetrain/audio?voix=${encodeURIComponent(v)}&f=${f}&t=${Date.now()}`); playing.a.play().catch(() => toast("Lecture impossible")); };
+  $$("#voiceLib [data-play]").forEach((b) => (b.onclick = () => play(b.closest("[data-v]").dataset.v, b.dataset.play)));
+  $$("#voiceLib [data-act]").forEach((b) => (b.onclick = async () => {
+    const row = b.closest("[data-v]"), v = row.dataset.v, info = r.voices.find((x) => x.voix === v);
+    if (b.dataset.act === "try") { await api("/api/voicetrain/try", { method: "POST", body: { voix: v } }); toast("Essai en cours : la voix va dire une phrase (1 à 3 min)"); loadVoiceTrain(); }
+    if (b.dataset.act === "activate") { const x = await api("/api/voicetrain/activate", { method: "POST", body: { voix: v } }); toast(x.error || `${info.nom} est maintenant la voix de Naim`); loadVoiceTrain(); }
+    if (b.dataset.act === "train") {
+      if (!confirm(`Entraîner Naim avec « ${info.nom} » ?\n\nNaim va se fermer : la voix lit environ 900 phrases (plusieurs heures), puis la voix rapide apprend (environ 14 h). La fenêtre « Naim — Voix » suit la progression ; tu peux mettre en pause et reprendre. À la fin, cette voix est mise en service (l'ancienne est gardée).`)) return;
+      const x = await api("/api/voicetrain/run", { method: "POST", body: { voix: v } }); toast(x.error || "La fenêtre « Naim — Voix » s'ouvre, Naim va se fermer…");
+    }
+    if (b.dataset.act === "clean") {
+      const open = row.querySelector(".vl-clean"); if (open) { open.remove(); return; }
+      const n = info.nettoyage || {};
+      row.insertAdjacentHTML("beforeend", `<div class="vl-clean">
+        <label><input type="checkbox" data-o="bruit" ${n.bruit ? "checked" : ""}>Réduire le bruit de fond (souffle, ventilation)</label>
+        <label><input type="checkbox" data-o="silences" ${n.silences ? "checked" : ""}>Couper les silences au début et à la fin</label>
+        <label><input type="checkbox" data-o="volume" ${n.volume ? "checked" : ""}>Égaliser le volume</label>
+        <label>Garder seulement de <input class="field" type="number" min="0" step="0.5" data-o="debut" value="${n.debut || ""}" placeholder="0"> s à <input class="field" type="number" min="0" step="0.5" data-o="fin" value="${n.fin || ""}" placeholder="fin"> s <small class="muted">(enregistrement d'origine : ${esc(String(info.brut_s ?? ""))} s)</small></label>
+        <div class="vl-acts"><button class="btn" data-c="apply">Appliquer</button><button class="btn" data-c="listen">${svgI("play")}Écouter le résultat</button><small class="muted" style="align-self:center">L'enregistrement d'origine n'est jamais modifié.</small></div></div>`);
+      const box = row.querySelector(".vl-clean");
+      const opts = () => Object.fromEntries([...box.querySelectorAll("[data-o]")].map((i) => [i.dataset.o, i.type === "checkbox" ? i.checked : (i.value === "" ? null : +i.value)]));
+      const apply = async () => { const x = await api("/api/voicetrain/clean", { method: "POST", body: { voix: v, options: opts() } }); if (x.error) toast(x.error); return x; };
+      box.querySelector("[data-c=apply]").onclick = async () => { const x = await apply(); if (!x.error) { toast(`Nettoyé : ${x.duree} s`); loadVoiceTrain(); } };
+      box.querySelector("[data-c=listen]").onclick = async () => { const x = await apply(); if (!x.error) play(v, "reference"); };
+    }
+  }));
+  $("#vlAdd").onclick = () => $("#voiceFile").click();
+  $("#voiceFile").onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    const nom = prompt("Nom de cette voix :", f.name.replace(/\.[^.]+$/, "")); if (nom === null) return;
+    const data = await new Promise((ok) => { const rd = new FileReader(); rd.onload = () => ok(String(rd.result).split(",")[1]); rd.readAsDataURL(f); });
+    const x = await api("/api/voicetrain/source", { method: "POST", body: { nom, fichier: f.name, data } });
+    toast(x.error || `Voix ajoutée (${x.duree} s). Écoute-la, nettoie-la si besoin, puis fais un essai.`); loadVoiceTrain();
   };
+  if ($("#vtFollow")) $("#vtFollow").onclick = async () => { const x = await api("/api/voicetrain/run", { method: "POST", body: {} }); toast(x.error || "La fenêtre « Naim — Voix » s'ouvre"); };
   if ($("#vtPause")) $("#vtPause").onclick = async () => { if (!confirm("Mettre en pause ? Tout est gardé, tu pourras reprendre où il en est.")) return; await api("/api/voicetrain/pause", { method: "POST", body: {} }); loadVoiceTrain(); };
-  if (r.running) setTimeout(() => { if ($("#voiceTrain") && !$("#voiceTrain").hidden) loadVoiceTrain(); }, 30000);
+  if (r.running || r.voices.some((v) => v.essai_etat === "en cours")) setTimeout(() => { if ($("#voiceTrain") && !$("#voiceTrain").hidden && !$("#voiceLib .vl-clean")) loadVoiceTrain(); }, 15000);
 }
 async function loadLearning() {
   loadShare(); loadAutoTrain();

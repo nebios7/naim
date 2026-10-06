@@ -77,6 +77,15 @@ def fast_natural_available():
     return FAST_NAT.exists() and PYTHON.exists()
 
 
+def reload():
+    """Another voice was put in service (naim.onnx replaced): the next sentence loads it."""
+    global _fast
+    with _fast_lock:
+        if _fast is not None and _fast.poll() is None:
+            _fast.terminate()
+        _fast = None
+
+
 def _fast_worker():
     global _fast
     if _fast is None or _fast.poll() is not None:
