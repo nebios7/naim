@@ -62,7 +62,8 @@ say "Modèle"
 mkdir -p "$models"
 for f in naim-Q4_K_M.gguf naim-mmproj-f16.gguf; do
   src="$(cd "$here/.." && pwd)/gguf/$f"   # developer checkout: link the local build (no extra disk space)
-  if [ -f "$src" ] && [ ! "$src" -ef "$models/$f" ]; then rm -f "$models/$f"; ln "$src" "$models/$f" 2>/dev/null || cp "$src" "$models/$f"; fi
+  # only when no model is there yet: an installed model (e.g. a newer trained version) is never replaced
+  if [ -f "$src" ] && [ ! -e "$models/$f" ]; then ln "$src" "$models/$f" 2>/dev/null || cp "$src" "$models/$f"; fi
 done
 if [ -f "$models/naim-Q4_K_M.gguf" ]; then
   ok "Modèle Naim présent"

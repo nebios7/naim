@@ -92,10 +92,15 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
 ANSWER_TOOLS = {"read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
                 "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
+# actions on the Mac itself (printer, apps, settings, music…): Naim does them with its tools, asking when it is sensitive
+MAC_ACTION = (r"appelle|appeler|passe un appel|t[ée]l[ée]phone (à|a)\b|\bsms\b|texto|imessage|envoie (un |le |ce )?message|"
+              r"imprim|impression|imprimante|\bscanne|ouvre|ferme|quitte|r[eè]gle|active|d[ée]sactive|[ée]teins|allume|"
+              r"monte le son|baisse le son|volume|luminosit|wi-?fi|bluetooth|mets? en veille|red[ée]marre|joue|musique")
+MAC_ACTION_RE = re.compile(MAC_ACTION, re.I)
 # the user wants files made or changed (a document, their project), not only an answer
-FILE_WORK_RE = re.compile(r"images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|projet|dossier|"
+FILE_WORK_RE = re.compile(r"images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
-                          r"installe|lance|ex[ée]cute|teste|\w\.[a-z]{1,5}\b", re.I)
+                          r"installe|lance|ex[ée]cute|teste|" + MAC_ACTION, re.I)  # a file name alone (« un exemple chronometre.py ») is a question
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
 d'accord dac super génial genial parfait top cool nickel très tres bonne nuit à a demain plus bientôt bientot bye ciao naim
 mohamed et encore c'est cool ça ca marche""".split())
@@ -1168,20 +1173,28 @@ class Handler(BaseHTTPRequestHandler):
         if not memory.worth_extracting(msgs[-6:]):
             return
         chat = self._memory_chat(body)
-        threading.Thread(target=memory.extract_from_messages, args=(msgs[-6:], chat, "conversation"), daemon=True).start()
+        job = lambda: memory.extract_from_messages(msgs[-6:], chat, "conversation")  # noqa: E731
+        if body.get("voice"):  # a spoken conversation: the next answer comes seconds later, it must not share the model
+            _when_idle(job)
+        else:
+            threading.Thread(target=job, daemon=True).start()
 
     # ------------------------------------------------------------ modes
     def run_chat(self, body, stop):
         options, extra = model_options(body)
+        if body.get("voice") or body.get("_warm"):  # spoken conversation (and the warm-up that prepares it): always the
+            options = {**options, "slot": 0}        # same slot, whose cache already holds Naim's instructions and the talk
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
         choice = chosen_option(body["message"], body.get("history"))
         text = (f"{body['message']} — je choisis cette option que tu as proposée : « {choice} ». Fais-le maintenant."
                 if choice else body["message"])
-        spoken = ("\n\n[Conversation à voix haute : ta réponse sera lue par ta voix. Parle naturellement, en 2 à 5 phrases "
-                  "courtes, sans liste, sans titre ni symbole Markdown, sans emoji. Si du code est nécessaire, mets-le dans un "
-                  "bloc de code (il s'affiche à l'écran, il n'est pas lu) et dis en une phrase ce qu'il fait.]") if body.get("voice") else ""
+        spoken = ("\n\n[Conversation à voix haute : ta réponse sera lue par ta voix. Si je te demande de FAIRE quelque chose "
+                  "(fichier, impression, réglage, recherche…), fais-le d'abord avec tes outils, sans l'annoncer, puis dis en une "
+                  "ou deux phrases ce que tu as fait. Sinon, parle naturellement, en 2 à 5 phrases courtes, sans liste, sans "
+                  "titre ni symbole Markdown, sans emoji. Si du code est nécessaire, mets-le dans un bloc de code (il s'affiche "
+                  "à l'écran, il n'est pas lu) et dis en une phrase ce qu'il fait.]") if body.get("voice") else ""
         user = {"role": "user", "content": text + spoken + now_note(), **({"images": body["images"]} if body.get("images") else {})}
         messages = [{"role": "system", "content": system}] + body.get("history", []) + [user]
         wants_schedule = bool(SCHEDULE_NEED_RE.search(body["message"] or ""))
@@ -1352,6 +1365,12 @@ class Handler(BaseHTTPRequestHandler):
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
                 "Markdown. Ne crée ni ne modifie aucun fichier.)"))
+        if MAC_ACTION_RE.search(body["message"] or ""):  # « imprime-le », « ouvre Safari »: it acts, it does not explain
+            messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                "\n\n(Fais-le toi-même sur ce Mac avec tes outils, ne m'explique pas comment faire. run_command agit sur le "
+                "Mac : imprimer = `lpstat -p -d` pour voir les imprimantes puis `lp -d <imprimante> <fichier>` ; ouvrir = "
+                "`open` ; réglages = `osascript` ; appeler = `open \"tel:+33…\"` (l'appel passe par l'iPhone) ; SMS ou iMessage = `osascript -e 'tell application \"Messages\" to send \"texte\" to participant \"+33…\"'` (trouve le numéro avec chercher_contact). Ce qui est sensible m'est demandé avant, c'est normal. Ne dis jamais que tu ne "
+                "peux pas avant d'avoir essayé ; si ça échoue, dis exactement pourquoi.)"))
         limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 60))
         for step in range(limit):
             if stop.is_set():
@@ -1379,14 +1398,19 @@ class Handler(BaseHTTPRequestHandler):
             last = last or stuck
             tools = None if last and used_tools else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
 
-            opts = (dict(options, tool_choice="required") if (files and step == 0)
-                    else dict(options, tool_choice="none") if plain else options)
+            # « salut », « merci » (plain): no tool_choice "none" — it removes the tools from what the engine reads, so the
+            # next real message would find nothing in common and re-read everything (~1 min); a tool call is refused instead
+            opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls, shown = "", [], 0
             stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
-            thought = False
+            thought = redirected = False
             for chunk in stream:
                 if stop.is_set():
                     stream.close()  # hang up: llama.cpp stops writing at once
+                    break
+                if helper._inbox and content.strip():  # the user speaks while Naim answers: it stops here and goes on
+                    stream.close()                      # with what was just said (read at the top of the next step)
+                    redirected = True
                     break
                 if repeating(content):  # the model loops on the same line (it happens with images): cut at once
                     stream.close()
@@ -1408,6 +1432,14 @@ class Handler(BaseHTTPRequestHandler):
                     prompt_tokens += chunk.get("prompt_eval_count", 0)
                     self.event({"type": "stats", "tokens": total_tokens, "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
                                 "prompt": prompt_tokens, "reason": chunk.get("done_reason")})
+            if not redirected and not calls and helper._inbox and not stop.is_set():
+                redirected = True  # spoken just as the answer ended: answered too, in the same reply
+            if redirected:
+                said = shown_part(content.split("<tool_call")[0])
+                if said.strip():
+                    messages.append({"role": "assistant", "content": said})
+                    self.event({"type": "token", "text": "\n\n"})
+                continue
             raw = raw_tool_calls(content)
             if not calls and raw:  # written as text: executed anyway
                 calls = raw
@@ -1451,6 +1483,10 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "user", "content": "Tu répètes la même action sans résultat : arrête-la. Change de "
                                      "méthode ou réponds maintenant avec ce que tu sais (pour un schéma : un bloc ```mermaid "
                                      "dans ta réponse)."})
+                    continue
+                if plain:  # « salut », « merci »: just an answer
+                    messages.append({"role": "tool", "tool_name": name, "content": "refused: this is a simple message, "
+                                     "answer it directly in one or two sentences, without any tool."})
                     continue
                 if not files and not file_work and name not in ANSWER_TOOLS:
                     # a question or a lesson: the answer goes in the conversation (the tool list stays the same so that
@@ -1918,6 +1954,36 @@ def model_version():
         return {"name": "v2", "detail": ""}
 
 
+_idle_jobs = []
+
+
+def _when_idle(job, quiet=60):
+    """Run a background job once Naim has answered nothing for `quiet` seconds (spoken conversations)."""
+    with _lock:
+        _idle_jobs.append(job)
+        if len(_idle_jobs) > 1:
+            return  # a waiter already runs
+
+    def wait():
+        idle_since = time.time()
+        while True:
+            time.sleep(2)
+            with _lock:
+                busy = bool(_runs)
+            if busy:
+                idle_since = time.time()
+            elif time.time() - idle_since >= quiet:
+                with _lock:
+                    jobs, _idle_jobs[:] = list(_idle_jobs), []
+                for j in jobs:
+                    try:
+                        j()
+                    except Exception as e:  # noqa: BLE001
+                        print(f"mémoire différée : {e}", flush=True)
+                return
+    threading.Thread(target=wait, daemon=True).start()
+
+
 def _private(name):
     """Optional module present only on some installations (e.g. the project owner's training); None otherwise."""
     try:
@@ -1959,7 +2025,7 @@ def warm_up():
             return
         h = Handler.__new__(Handler)
         h.event = lambda ev: None
-        body = {"message": "bonjour, es-tu prêt ?", "mode": "chat", "model": s.get("model") or "naim", "history": [],
+        body = {"message": "bonjour, es-tu prêt ?", "mode": "chat", "model": s.get("model") or "naim", "history": [], "_warm": True,
                 "project": s.get("project"), "settings": {**s, "num_predict": 1, "memory_auto": False, "think": False}}
         h.run_chat(body, threading.Event())
     except Exception as e:  # noqa: BLE001 — only a speed-up: never a problem if it fails

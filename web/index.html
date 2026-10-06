@@ -381,6 +381,7 @@ header select { max-width: 220px; text-overflow: ellipsis; }
 .code { background: var(--code); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 12px; overflow: hidden; }
 .code .bar { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); padding: 4px 6px 4px 12px; border-bottom: 1px solid var(--line); }
 .code .bar span { flex: 1; }
+.code .bar .cwrit { flex: none; color: var(--muted); font-size: 11.5px; padding: 3px 6px; }
 .code .bar button { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 2px 7px; border-radius: 5px; }
 .code .bar button:hover { color: var(--text); background: var(--hover); }
 .code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font: .87em/1.55 ui-monospace, "SF Mono", Menlo, monospace; }
@@ -477,7 +478,17 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 #viewer .vh { position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line); padding: 6px 10px; font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 #viewer pre { margin: 0; padding: 10px 12px; font: 12.5px/1.55 ui-monospace, Menlo, monospace; white-space: pre; }
 .ph { color: var(--muted); padding: 20px; font-size: 14px; }
-#preview { flex: 1; border: 0; background: #fff; width: 100%; }
+#preview { flex: 1; border: 0; background: #fff; width: 100%; height: 100%; display: block; }
+#pPreview { display: flex; flex-direction: column; }
+#pPreview[hidden] { display: none; }
+.pvbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.pvsizes { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.pvsizes button { border: 0; background: none; color: var(--muted); padding: 4px 10px; font: inherit; cursor: pointer; }
+.pvsizes button.on { background: var(--hover); color: var(--text); }
+.pvstage { flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--side); overflow: auto; }
+.pvstage.framed { padding: 14px 0; }
+.pvstage.framed #preview { flex: none; border-radius: 12px; box-shadow: 0 0 0 1px var(--line), 0 8px 28px rgba(0,0,0,.18); }
+#panel.pvwide { width: 78vw !important; }
 #procList { overflow-y: auto; max-height: 42%; border-bottom: 1px solid var(--line); padding: 6px; display: flex; flex-direction: column; gap: 4px; }
 .proc { border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; cursor: pointer; font-size: 13.5px; }
 .proc:hover { background: var(--hover); }
@@ -638,6 +649,18 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .approval { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgb(0 0 0 / .06); }
 .approval .aphead { font-weight: 500; margin-bottom: 2px; }
 .approval .aphead::before { content: "● "; color: var(--warn); }
+.aout .errplain { display: block; color: var(--text); font-family: -apple-system, system-ui, sans-serif; font-size: 13px; margin-bottom: 2px; }
+.aout .errdet summary { cursor: pointer; color: var(--muted); font-family: -apple-system, system-ui, sans-serif; font-size: 12px; list-style: none; }
+.aout .errdet summary::-webkit-details-marker { display: none; }
+.aout .errdet summary::before { content: "› "; }
+.aout .errdet[open] summary::before { content: "⌄ "; }
+.approval .apwhat { font-size: 15px; margin: 6px 0 8px; line-height: 1.4; }
+.approval .apdet { margin: 0 0 10px; }
+.approval .apdet summary { cursor: pointer; color: var(--muted); font-size: 12.5px; list-style: none; }
+.approval .apdet summary::-webkit-details-marker { display: none; }
+.approval .apdet summary::before { content: "› "; }
+.approval .apdet[open] summary::before { content: "⌄ "; }
+.approval.sensitive { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
 .approval.done { opacity: .75; }
 .approval.done .aphead::before { color: var(--muted); }
 .procchip, .subchip { border: 1px solid var(--line); background: var(--panel); border-style: solid; border-radius: 10px; padding: 7px 11px; font-size: 13.5px; color: var(--text); }
@@ -1281,6 +1304,7 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 .vl-clean { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 8px; }
 .vl-clean label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .vl-clean input[type=number] { width: 64px; }
+#onb .onbword { font-family: ui-serif, "New York", "Iowan Old Style", Georgia, serif; font-size: 44px; font-weight: 500; letter-spacing: -0.8px; text-align: center; margin: 6px 0 10px; }
 /* conversation mode: everything lives inside the white button, nothing else on screen.
    Five bars: listening = they rise and fall slowly, red · thinking = three dots that wave in turn
    · voice being prepared = dots breathing · speaking = a lively equalizer */
@@ -1407,7 +1431,8 @@ body:has(#talkBtn.on) #liveBar, body:has(#talkBtn.on) #micBtn { display: none !i
       </div>
       <div class="pbody" id="pPreview" hidden>
         <div class="procbar" id="previewBar" hidden><span class="mono" id="previewUrl" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button class="icon" id="previewReload" title="Recharger">↻</button><button class="icon" id="previewExt" title="Ouvrir dans le navigateur">↗</button></div>
-        <iframe id="preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"></iframe></div>
+        <div class="pvbar" id="pvBar"><div class="pvsizes"><button data-pv="100%" class="on" title="Pleine largeur">Ordinateur</button><button data-pv="820px" title="768 px">Tablette</button><button data-pv="390px" title="390 px">Téléphone</button></div><span style="flex:1"></span><button class="icon" id="pvRedo" title="Recharger l'aperçu">↻</button><button class="icon" id="pvBig" title="Agrandir / réduire l'aperçu">⤢</button></div>
+        <div class="pvstage" id="pvStage"><iframe id="preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"></iframe></div></div>
       <div class="pbody" id="pChanges" hidden></div>
       <div class="pbody" id="pGit" hidden>
         <div class="gsec" id="gitHead"></div>
@@ -1521,20 +1546,7 @@ function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add
 const isMac = /Mac/.test(navigator.platform);
 
 // ======================================================================= robot mascot (pixel art, 16x16 grid)
-function robotSVG(cls = "") {
-  return `<svg class="robot ${cls}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
-    <rect class="tip" x="7" y="0" width="2" height="2" fill="var(--robot-eye)"/>
-    <rect x="7.5" y="2" width="1" height="1" fill="var(--robot)"/>
-    <rect x="3" y="3" width="10" height="6" fill="var(--robot)"/>
-    <rect x="2" y="5" width="1" height="2" fill="var(--robot)"/><rect x="13" y="5" width="1" height="2" fill="var(--robot)"/>
-    <rect x="4" y="4" width="8" height="4" fill="var(--robot-d)"/>
-    <rect class="eye" x="5" y="5" width="2" height="2" fill="var(--robot-eye)"/><rect class="eye" x="9" y="5" width="2" height="2" fill="var(--robot-eye)"/>
-    <rect x="5" y="9" width="6" height="4" fill="var(--robot)"/>
-    <rect class="chest" x="7" y="10" width="2" height="1" fill="var(--robot-d)"/>
-    <rect class="arm al" x="3" y="10" width="2" height="1" fill="var(--robot)"/><rect class="arm ar" x="11" y="10" width="2" height="1" fill="var(--robot)"/>
-    <rect class="leg ll" x="5" y="13" width="2" height="2" fill="var(--robot)"/><rect class="leg lr" x="9" y="13" width="2" height="2" fill="var(--robot)"/>
-  </svg>`;
-}
+function robotSVG() { return ""; }  // no robot anywhere in Naim (it looked amateur): the name and the text are enough
 function placeRobots(root = document) { $$("[data-robot]", root).forEach((el) => { if (!el.firstChild) el.innerHTML = robotSVG(); }); }
 const workingHTML = (text = "Naim réfléchit…") => `<div class="working-line">${robotSVG("working")}<span>${esc(text)}</span></div>`;
 
@@ -1640,14 +1652,16 @@ function codeFile(prev, body) {
   const bare = (prev || "").trim().match(new RegExp("^" + FILE_RE.source + "\\s*:?$"));
   return bare ? bare[1] || bare[2] : "";
 }
-function codeBlock(lang, body, file = "") {
+function codeBlock(lang, body, file = "", open = false) {
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
-  return codeBlockRaw(lang, body, file);
+  return codeBlockRaw(lang, body, file, open);
 }
-function codeBlockRaw(lang, body, file = "") {
+function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
+  if (open) return `<div class="code writing"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} lignes</span><span class="cwrit">écriture…</span></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
   return `<div class="code"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} lignes</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">${file ? `✓ Appliquer à ${esc(file.split("/").pop())}` : "⤓ Projet"}</button>` : ""}<button data-save>Enregistrer</button><button data-copy>Copier</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
 }
+let mdLive = false;  // true while a reply is being written (its last code block may be unfinished)
 function md(src) {
   const lines = src.replace(/\r/g, "").split("\n");
   let html = "", i = 0;
@@ -1658,9 +1672,10 @@ function md(src) {
     if (fence) {
       const buf = []; i++;
       while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) buf.push(lines[i++]);
+      const open = mdLive && i >= lines.length;  // still being written: no buttons yet (they would jump at every word)
       i++;
       let k = html === "" ? -1 : i - buf.length - 3; while (k >= 0 && !lines[k].trim()) k--;
-      html += codeBlock(fence[1], buf.join("\n"), codeFile(k >= 0 ? lines[k] : "", buf.join("\n")));
+      html += codeBlock(fence[1], buf.join("\n"), codeFile(k >= 0 ? lines[k] : "", buf.join("\n")), open);
       continue;
     }
     if (/^#{1,4}\s/.test(line)) { const n = line.match(/^#+/)[0].length; html += `<h${n}>${inline(line.slice(n).trim())}</h${n}>`; i++; continue; }
@@ -1668,9 +1683,12 @@ function md(src) {
     if (/^\s*>/.test(line)) { const buf = []; while (i < lines.length && /^\s*>/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, "")); html += `<blockquote>${md(buf.join("\n"))}</blockquote>`; continue; }
     const listRe = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
     if (listRe.test(line)) {
-      const ordered = /^\s*\d/.test(line);
-      html += ordered ? "<ol>" : "<ul>";
-      while (i < lines.length && (listRe.test(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && !/^\s*```/.test(lines[i])))) {
+      const ordered = /^\s*\d/.test(line), first = parseInt(line.trim(), 10);
+      html += ordered ? (first > 1 ? `<ol start="${first}">` : "<ol>") : "<ul>";  // « 2. » after a paragraph: keeps counting
+      const sameList = (l) => !!l && listRe.test(l) && /^\s*\d/.test(l) === ordered && !/^\s{2,}/.test(l);
+      while (i < lines.length && (listRe.test(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && !/^\s*```/.test(lines[i]))
+             || (!lines[i].trim() && sameList(lines[i + 1])))) {  // a blank line between two items: still the same list
+        if (!lines[i].trim()) { i++; continue; }
         const m = lines[i].match(listRe);
         if (m && m[1].length >= 2) {
           const nested = []; while (i < lines.length && lines[i].match(listRe)?.[1].length >= 2) nested.push(lines[i++].trimStart());
@@ -1708,7 +1726,7 @@ document.addEventListener("click", async (e) => {
   const code = b.closest(".code").querySelector("code");
   const text = code.textContent, lang = code.dataset.lang, ext = EXT[(lang || "").toLowerCase()] || "txt";
   if (b.hasAttribute("data-copy")) { copyText(text); b.textContent = "Copié ✓"; setTimeout(() => (b.textContent = "Copier"), 1200); }
-  if (b.hasAttribute("data-preview")) showPreview(text);
+  if (b.hasAttribute("data-preview")) showPreview(text, b.closest(".code"));
   if (b.hasAttribute("data-save")) download(ext === "Dockerfile" ? "Dockerfile" : `naim.${ext}`, text);
   if (b.hasAttribute("data-write")) {
     const name = b.dataset.file || prompt("Chemin du fichier dans le projet :", ext === "Dockerfile" ? "Dockerfile" : `nouveau.${ext}`);
@@ -2185,6 +2203,16 @@ function dictationAvailable() { return !!(window.webkit?.messageHandlers?.naimDi
 window.naimDictation = (text, final, error) => {
   if (error) { toast(error); stopDictation(); talkStop(); return; }
   if (!dictation.on) return;  // a late result after the message was sent
+  // the Mac's recognition gives what it heard 1 to 2 s late: Naim's own sentences may still arrive after it spoke
+  if (talk.on && !(voice.audio || (voice.spoke && voice.preparing)) && Date.now() - (talk.quietAt || 0) < 8000 && talkEcho(text.trim())) return;
+  if (talk.on && !talk.bargeIn && Date.now() - (talk.quietAt || 0) < 600) return;  // the instant it stops: still its voice
+  if (talk.on && (voice.audio || (voice.spoke && voice.preparing))) {  // Naim is speaking
+    const said = text.trim();
+    if (!said || talkEcho(said, true)) return;                             // its own voice: ignored
+    if (TALK_STOP_ANY.test(said) && said.split(/\s+/).length <= 8) { talkHush(); return; }  // « stop »: it stops at once
+    if (said.split(/\s+/).length < 4) return;   // a few words while it speaks: not enough to be you
+    voiceStop(); talk.bargeIn = true;             // you really talk: it goes quiet, what you say becomes your instruction
+  }
   if (talk.on && text.trim()) { clearTimeout(talk.timer); talk.timer = setTimeout(talkSend, TALK_SILENCE); }
   const inp = $("#input");
   inp.value = dictation.base + (dictation.base && text ? " " : "") + text;
@@ -2208,9 +2236,16 @@ const talk = { on: false, timer: null }, TALK_SILENCE = 1500;
 function talkStateUpdate() {  // who has the floor, shown by the wave button itself (no extra banner)
   const b = $("#talkBtn"); if (!b) return;
   if (!talk.on) { delete b.dataset.s; return; }
-  if (voice.audio && dictation.on) stopDictation();            // it speaks: the microphone pauses (it must not hear itself)
-  else if (!voice.audio && !dictation.on && (curRun() || !voice.preparing)) talkListen();  // then it listens again
-  const st = voice.audio ? "speak" : voice.preparing ? "prep" : dictation.on && !curRun() ? "listen" : curRun() ? "think" : "listen";
+  const speakingNow = !!(voice.audio || (voice.spoke && voice.preparing));
+  if (talk.wasSpeaking && !speakingNow) {
+    talk.quietAt = Date.now();
+    if (talk.bargeIn) talk.bargeIn = false;      // it stopped because you talk: keep listening to you, nothing is cleared
+    else if (dictation.on) talkRelisten();       // it finished speaking: listen afresh, without its voice
+  }
+  talk.wasSpeaking = speakingNow;
+  if (!dictation.on && (voice.audio || curRun() || !voice.preparing)) talkListen();  // it always listens (even while it speaks)
+  let st = voice.audio ? "speak" : voice.preparing ? "prep" : dictation.on && !curRun() ? "listen" : curRun() ? "think" : "listen";
+  if (st === "prep" && voice.spoke) st = "speak";  // between two sentences of the same answer: no flicker
   if (b.dataset.s === st) return;
   b.dataset.s = st;
   b.title = { listen: "Je t'écoute (ton message part après un court silence)", think: "Naim réfléchit (parle pour le guider, « stop » pour l'arrêter)",
@@ -2227,13 +2262,46 @@ function talkStop() {
   $("#talkBtn").classList.remove("on"); $("#talkBtn").innerHTML = svgI("wave"); $("#talkBtn").title = "Conversation à voix haute : tu parles, Naim répond avec sa voix";
 }
 // it listens while Naim thinks or writes too (what you say then guides it, « stop » stops it), not while it speaks
-function talkListen() { if (talk.on && !dictation.on && !voice.audio) startDictation(); }
+function talkListen() { if (talk.on && !dictation.on) startDictation(); }
+// « stop », « arrête », « tais-toi », « chut », « c'est bon »…: Naim stops speaking and working, and listens
+const TALK_STOP = /^\s*(?:(?:non|bon|ok|c'est bon|mais|eh|hé|oh)[ ,!.]*)*(?:j'ai dit |je t'ai dit )?(?:stop|stoppe|arr[eê]te(?:[sz]|[- ]toi)?(?: de parler| ça)?|tais[- ]toi|chut|silence|ça suffit|ca suffit|c'est bon)\b/i;
+const TALK_STOP_ANY = /\b(stop|arr[eê]te[sz]? de parler|tais[- ]toi|chut)\b/i;
+function talkEcho(text, strict) {  // what the microphone heard is Naim's own voice (speakers), not you
+  const stem = (w) => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "").slice(0, 4);
+  const words = (text.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ']{3,}/g) || []);
+  if (!words.length) return true;
+  const said = new Set(((voice.said || "").toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ']{3,}/g) || []).map(stem));
+  const mine = words.filter((w) => said.has(stem(w))).length / words.length;
+  return mine > (strict ? 0.3 : 0.5);  // while it speaks (strict): a third of its words is enough to be its voice
+}
+function talkRelisten() {  // starts listening afresh: what the microphone heard until now is dropped
+  stopDictation(true); window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop();
+  $("#input").value = ""; autoGrow?.(); updateSendBtn?.();
+  setTimeout(talkListen, 350);
+}
+function talkHush() {  // you said stop: silence, the work stops, it listens again
+  voiceStop(); if (curRun()) stop();
+  $("#input").value = ""; autoGrow?.(); updateSendBtn?.();
+  stopDictation(true); window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop();
+  setTimeout(talkListen, 400);
+}
 function talkSend() {
   if (!talk.on) return;
+  const said = $("#input").value.trim();
+  if (TALK_STOP.test(said) && said.split(/\s+/).length <= 6) { talkHush(); return; }
+  if (pendingApproval && /^\s*(oui|ok|d'accord|vas[- ]y|autorise|go|c'est bon|bien sûr|ouais)\b/i.test(said)) { $("#input").value = ""; pendingApproval(true); setTimeout(talkListen, 300); return; }
+  if (pendingApproval && /^\s*(non|refuse|annule|pas question|surtout pas)\b/i.test(said)) { $("#input").value = ""; pendingApproval(false); setTimeout(talkListen, 300); return; }
   stopDictation(true); window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop();
   const working = !!curRun();
+  if (working && S.mode !== "agent" && $("#input").value.trim()) {  // Chat: you take the floor, like in a real conversation:
+    const live = curRun();                                           // his voice stops, your words join his answer
+    send();                                                          // (« 💬 Toi : … ») and he goes on with them
+    voiceStop(); voiceStart(); voice.fed = voiceSentences(live?.reply?.content || "").length;
+    setTimeout(talkListen, 300);
+    return;
+  }
   if ($("#input").value.trim()) send(); else talkListen();
-  if (working) setTimeout(talkListen, 300);  // a remark while Naim works: it keeps listening
+  if (working) setTimeout(talkListen, 300);  // a remark while Naim works (Agent): it keeps listening and guides it
 }
 // cut Naim's voice to speak: Espace or Échap (outside the text field), typing, or the wave button
 document.addEventListener("keydown", (e) => {
@@ -2271,14 +2339,14 @@ async function voiceClip(sentence) {
 function voiceStart(btn) {  // a new reading; sentences arrive with voiceFeed (while Naim writes, or all at once)
   voiceStop();
   const my = voice.token;
-  Object.assign(voice, { queue: [], fed: 0, done: false, btn: btn || null, preparing: true });
+  Object.assign(voice, { queue: [], fed: 0, done: false, btn: btn || null, preparing: true, spoke: false, said: "" });
   btn?.classList.add("speaking");
   voice.run = voiceLoop(my);
   return voice.run;
 }
 function voiceFeed(text, final) {
   const parts = voiceSentences(text), ready = final ? parts.length : Math.max(0, parts.length - 1);  // the last one may be unfinished
-  for (let i = voice.fed; i < ready; i++) voice.queue.push(parts[i]);
+  for (let i = voice.fed; i < ready; i++) { voice.queue.push(parts[i]); voice.said = ((voice.said || "") + " " + parts[i]).slice(-1500); }
   voice.fed = Math.max(voice.fed, ready);
   if (final) voice.done = true;
   voice.wake?.();
@@ -2296,9 +2364,9 @@ async function voiceLoop(my) {
     let url; try { url = await cur; failures = 0; } catch { if (++failures > 2) { toast("La voix de Naim ne répond pas"); break; } continue; }
     if (my !== voice.token) { URL.revokeObjectURL(url); break; }
     voice.preparing = false;
-    const p = voicePlayer(); voice.audio = p;
+    const p = voicePlayer(); voice.audio = p; voice.spoke = true;
     await new Promise((ok) => { p.onended = p.onerror = ok; p.src = url; p.play().catch(ok); });
-    voice.audio = null; voice.preparing = !voice.done || voice.queue.length > 0 || !!next;
+    voice.audio = null; voice.preparing = !voice.done || voice.queue.length > 0 || !!next; talk.quietAt = Date.now();
     URL.revokeObjectURL(url);
   }
   if (my === voice.token) voiceStop();
@@ -2310,6 +2378,38 @@ function voiceStop() {
   voice.audio = null;
   voice.btn?.classList.remove("speaking"); voice.btn = null;
 }
+// a failed step said simply (the raw error stays available under « Détails »)
+function errPlain(res) {
+  const r = String(res || "");
+  if (/^denied by the user/.test(r)) return "Tu as refusé : rien n'a été fait.";
+  if (/^refused: the user has just refused/.test(r)) return "Pas fait : tu venais de refuser.";
+  if (/Contacts inaccessibles/.test(r)) return "L'app Contacts n'a pas répondu.";
+  if (/is a name, Messages needs/.test(r)) return "Il faut le numéro (pas le nom) pour envoyer le message.";
+  if (/not a git repository/.test(r)) return "Ce dossier n'est pas suivi par Git.";
+  if (/No such file|introuvable|not found/i.test(r)) return "Fichier ou commande introuvable.";
+  if (/Permission denied|not permitted|Operation not permitted/i.test(r)) return "macOS a refusé l'accès.";
+  if (/timed? ?out|délai/i.test(r)) return "Trop long : arrêté.";
+  const m = r.match(/^exit code (\d+)/); if (m) return `La commande a échoué (code ${m[1]}).`;
+  return "Cette étape n'a pas marché.";
+}
+let pendingApproval = null;
+// an action asked for approval, said in plain French (the command itself stays under « Détails »)
+function approvalPlain(action, detail) {
+  const cmd = String(detail || "").replace(/^\$\s*/, "").split("\n")[0];
+  if (!/^\$|^⚠/.test(String(detail || "")) && !/^⚠|^Exécuter/.test(String(action || ""))) return "";
+  let m;
+  if ((m = cmd.match(/send\s+\\?"([^"\\]*)\\?"\s+to\s+(?:participant|buddy)\s+\\?"([^"\\]+)/i))) return `Envoyer le message « ${m[1]} » à ${m[2]}`;
+  if ((m = cmd.match(/(?:tel|facetime(?:-audio)?):\/{0,2}([+\d][\d\s().-]+)/i))) return `Appeler le ${m[1].trim()}`;
+  if ((m = cmd.match(/(?:^|[;&|]\s*)(?:lp|lpr)\s+(?:-d\s+(\S+)\s+)?(?:-\S+\s+)*["']?([^"';|&]+?)["']?\s*$/))) return `Imprimer « ${m[2].split("/").pop()} »` + (m[1] ? ` sur ${m[1].replace(/_/g, " ")}` : "");
+  if ((m = cmd.match(/set volume (?:output volume )?(\d+)/i))) return `Régler le volume du Mac à ${m[1]}`;
+  if ((m = cmd.match(/\bopen\s+-a\s+["']?([^"']+?)["']?(\s|$)/))) return `Ouvrir l'application ${m[1]}`;
+  if ((m = cmd.match(/tell application\s+\\?"([^"\\]+)/i))) return `Piloter l'application ${m[1]}`;
+  if (/\bsudo\b/.test(cmd)) return "Lancer une commande avec les droits administrateur";
+  if (/\b(shutdown|reboot|halt)\b/.test(cmd)) return "Éteindre ou redémarrer le Mac";
+  if (/\b(networksetup|pmset|systemsetup|defaults\s+write)\b/.test(cmd)) return "Modifier un réglage du Mac";
+  if (/^⚠/.test(String(action || ""))) return "Lancer une commande sur le Mac";
+  return "";
+}  // an authorisation card waiting (it can be answered by voice)
 let stickBottom = true;  // follow the conversation as it grows, until the user scrolls up to read
 function scrollDown(force) { const s = $("#scroll"); if (force) stickBottom = true; if (stickBottom) s.scrollTop = s.scrollHeight; }
 function attChips(atts, removable) {
@@ -2358,7 +2458,8 @@ function actionInfo(name, a = {}, res = "") {
     write_file: () => ({ kind: "write", label: `Écrit ${cmd(a.path)}${a.lines ? ` <span class="muted">· ${a.lines} lignes</span>` : ""}` }),
     edit_file: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : ""}` }),
     search: () => ({ kind: "read", label: `Recherché ${esc(q(a.pattern))}` }),
-    run_command: () => ({ kind: "cmd", label: `Commande ${cmd(a.command)}` }),
+    run_command: () => { const plain = approvalPlain("⚠", "$ " + (a.command || ""));  // a Mac action said simply
+      return { kind: plain && plain !== "Lancer une commande sur le Mac" ? "mac" : "cmd", label: plain && plain !== "Lancer une commande sur le Mac" ? esc(plain.replace(/^Envoyer/, "Envoi :").replace(/^Imprimer/, "Impression :").replace(/^Appeler/, "Appel :").replace(/^Régler/, "Réglage :").replace(/^Ouvrir/, "Ouverture :").replace(/^Piloter/, "Pilotage :")) : `Commande ${cmd(a.command)}` }; },
     start_process: () => ({ kind: "cmd", label: `Lancé en arrière-plan ${cmd(a.command)}` }),
     process_output: () => ({ kind: "read", label: "Vérifié un programme en cours" }),
     stop_process: () => ({ kind: "cmd", label: "Arrêté un programme" }),
@@ -2405,13 +2506,13 @@ function actionInfo(name, a = {}, res = "") {
     find_references: () => ({ kind: "read", label: `Cherché les usages de ${cmd(a.name || a.symbol)}` }),
     check_code: () => ({ kind: "cmd", label: `Vérifié le code${a.path ? " de " + cmd(a.path) : ""}` }),
     use_tools: () => ({ kind: "other", label: `Chargé les outils ${cmd(a.group || a.groups || a.name)}` }),
-    chercher_contact: () => ({ kind: "mail", label: `Cherché le contact ${esc(q(a.nom || a.name || a.query))}` }),
+    chercher_contact: () => ({ kind: "contact", label: `Cherché le contact ${esc(q(a.nom || a.name || a.query))}` }),
     wait: () => ({ kind: "cmd", label: "Attendu la fin d'un programme" }),
   });
   const human = (n) => { const t = String(n).replace(/_/g, " "); return esc(t.charAt(0).toUpperCase() + t.slice(1)); };
   return (M[name] || (() => ({ kind: "other", label: human(name) })))();
 }
-const STEP_ICON = { read: "file", write: "edit", cmd: "term", web: "globe", mem: "brain", skill: "book", mail: "mail2", mcp: "mcp", sub: "agent", screen: "eye", other: "tool" };
+const STEP_ICON = { contact: "user", mac: "bolt", read: "file", write: "edit", cmd: "term", web: "globe", mem: "brain", skill: "book", mail: "mail2", mcp: "mcp", sub: "agent", screen: "eye", other: "tool" };
 function stepIcon(name, kind) {
   if (/^(search|find_files|find_symbol|find_references|web_search|chercher_contact)$/.test(name)) return svgI("search");
   if (/^(list_files|aller_dans_dossier)$/.test(name)) return svgI("folder");
@@ -2429,6 +2530,8 @@ function groupSummary(counts) {
   if (n("mem")) parts.push("mémoire");
   if (n("sub")) parts.push("sous-agents");
   if (n("mail")) parts.push(`${n("mail")} email${n("mail") > 1 ? "s" : ""}`);
+  if (n("contact")) parts.push(`${n("contact")} contact${n("contact") > 1 ? "s" : ""}`);
+  if (n("mac")) parts.push(`${n("mac")} action${n("mac") > 1 ? "s" : ""} sur le Mac`);
   if (n("screen")) parts.push(`${n("screen")} action${n("screen") > 1 ? "s" : ""} à l'écran`);
   if (n("other")) parts.push(`${n("other")} action${n("other") > 1 ? "s" : ""}`);
   return parts.join(" · ") || "Actions";
@@ -2562,7 +2665,11 @@ function addBot(m, idx) {
       else if (name !== "run_command" || !lastOut) { const r = shownResult(res.replace(/^ok: /, "").replace(/^exit code 0\n?/, "").replace(/\n\n\[Plan[^\]]*\]$/, "")); p.innerHTML = cmd + (cmd && r ? "\n" : "") + esc(r); }
       if (ok && /^(write_file|edit_file|multi_edit|move_file|delete_file|creer_fichier)$/.test(name) && !lastRow.dataset.preview) { p.innerHTML = ""; p.hidden = true; return; }  // the step line says it all
       if (ok && !lastRow.dataset.preview && ((name !== "run_command" && name !== "start_process") || !p.textContent.replace(/^\$.*$/m, "").trim())) p.hidden = !cmd || !group?.open;
-      if (!ok) p.hidden = false;
+      if (!ok) {  // a failure: one plain sentence, the technical output under « Détails »
+        const raw = p.innerHTML;
+        p.innerHTML = `<span class="errplain">${esc(errPlain(res))}</span><details class="errdet"><summary>Détails</summary><div>${raw}</div></details>`;
+        p.hidden = false;
+      }
       if (/^ok: (wrote|edited)/.test(res)) refreshTreeSoon();
     },
     shot(img, label) {
@@ -2655,16 +2762,23 @@ function addBot(m, idx) {
     approval(ev) {
       const a = document.createElement("div"); a.className = "approval";
       const isDiff = /^(---|@@)/m.test(ev.detail) && /^\+\+\+ /m.test(ev.detail);
-      a.innerHTML = `<div class="aphead">${esc(ev.action)}</div><pre>${isDiff ? diffHtml(ev.detail) : esc(ev.detail)}</pre><div class="btns"><button class="btn primary">Autoriser</button><button class="btn">Refuser</button><button class="btn" title="Autoriser toutes les actions (réglage « Tout autoriser »)">Tout autoriser</button></div>`;
+      const plain = approvalPlain(ev.action, ev.detail);  // what Naim wants to do, in one readable sentence
+      a.innerHTML = plain
+        ? `<div class="aphead">${esc(String(ev.action).replace(/^⚠\s*/, ""))}</div><div class="apwhat">${esc(plain)}</div><details class="apdet"><summary>Détails</summary><pre>${esc(ev.detail)}</pre></details>`
+        : `<div class="aphead">${esc(ev.action)}</div><pre>${isDiff ? diffHtml(ev.detail) : esc(ev.detail)}</pre>`;
+      a.innerHTML += `<div class="btns"><button class="btn primary">Autoriser</button><button class="btn">Refuser</button><button class="btn" title="Autoriser toutes les actions (réglage « Tout autoriser »)">Tout autoriser</button></div>`;
       const [yes, no, all] = $$(".btn", a);
       if (String(ev.action).startsWith("⚠")) { all.remove(); a.classList.add("sensitive"); }  // asked every time
       const answer = async (allow, always) => {
+        pendingApproval = null;
         $(".btns", a).outerHTML = `<div class="res">${allow ? "✓ Autorisé" : "✕ Refusé"}</div>`;
         a.classList.add("done");
         if (always) { S.autoYes = true; saveSettings(); applySettings(); }
         await api("/api/approve", { method: "POST", body: { id: ev.id, allow } });
       };
       yes.onclick = () => answer(true); no.onclick = () => answer(false); all.onclick = () => answer(true, true);
+      pendingApproval = (allow) => { pendingApproval = null; answer(allow); };
+      if (talk.on) voiceSay(`J'ai besoin de ton accord : ${String(ev.action).replace(/^⚠\s*/, "")}. Tu dis oui ou non ?`);
       block(a); scrollDown(true);
       if (document.hidden || !document.hasFocus()) notify("Naim attend ton autorisation", ev.action);
     },
@@ -2805,8 +2919,8 @@ async function send(textArg, attsArg, opts = {}) {
     const note = `Toi : ${text}`;
     const canGuide = S.mode === "agent" || S.chat_tools !== false;  // the Chat with tools takes it into account too
     const r = canGuide ? await api("/api/interject", { method: "POST", body: { run_id: live.id, text } }) : { ok: false };
-    if (r.ok) { live.reply.steps.push({ type: "event", icon: "💬", text: note }); live.v?.event("💬", note); toast("Naim en tiendra compte à sa prochaine étape"); }
-    else { (live.queue ||= []).push(text); toast("Message gardé : envoyé dès que Naim a fini"); }
+    if (r.ok) { live.reply.steps.push({ type: "event", icon: "💬", text: note }); live.v?.event("💬", note); if (!talk.on) toast("Naim en tiendra compte à sa prochaine étape"); }
+    else { (live.queue ||= []).push(text); if (!talk.on) toast("Message gardé : envoyé dès que Naim a fini"); }
     return;
   }
   if ((!text && !atts.length) || live) return;
@@ -2876,7 +2990,7 @@ async function stream(reply, v, message, hist, extra = {}) {
     let buf = "", pendingRender = false;
     const speaking = voiceOK && current === conv && (talk.on || S.voice_auto);  // its voice starts with the first sentence
     if (speaking) voiceStart();
-    const renderText = () => { if (pendingRender) return; pendingRender = true; requestAnimationFrame(() => { pendingRender = false; v.setText(reply.content); if (speaking) voiceFeed(reply.content, false); if (current === conv) scrollDown(); }); };
+    const renderText = () => { if (pendingRender) return; pendingRender = true; requestAnimationFrame(() => { pendingRender = false; mdLive = true; try { v.setText(reply.content); } finally { mdLive = false; } if (speaking) voiceFeed(reply.content, false); if (current === conv) scrollDown(); }); };
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -2929,7 +3043,7 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "approval": v.approval(ev); break;
           case "question": { const st = { type: "question", id: ev.id, question: ev.question, options: ev.options || [], multiple: !!ev.multiple, answer: null }; reply.steps.push(st); v.question(st); break; }
           case "schedule": { const st = { type: "schedule", task: ev.task, deleted: !!ev.deleted }; reply.steps.push(st); v.schedule(st); loadList(); break; }
-          case "interjection_read": if (current === conv) toast("Naim a lu ton message"); break;
+          case "interjection_read": if (current === conv && !talk.on) toast("Naim a lu ton message"); break;
           case "question_result": { const st = reply.steps.find((x) => x.type === "question" && x.id === ev.id); if (st) { st.answer = ev.answer || ""; v.questionDone(st); } break; }
           case "answer": reply.content = ev.text; v.setText(ev.text); break;
           case "stats": reply.stats = { ...(reply.stats || {}), tokens: ev.tokens, tps: ev.tps, prompt: ev.prompt || reply.stats?.prompt, reason: ev.reason || reply.stats?.reason }; v.setStats(reply.stats); break;
@@ -2942,9 +3056,9 @@ async function stream(reply, v, message, hist, extra = {}) {
   } catch (e) {
     if (e.name !== "AbortError") { reply.steps.push({ type: "error", text: "Connexion perdue : " + e.message }); v.error("Connexion perdue : " + e.message); }
   } finally {
+    var wasAtBottom = stickBottom;  // read before the final rendering: replacing the text may make WebKit lose the place
     v.finish(); if (current === conv) setBusy(false);
   }
-  const wasAtBottom = stickBottom;  // the final rendering replaces the text: Safari (the app) may lose the place
   v.setText(reply.content || (reply.steps.length ? "" : "_(pas de réponse)_"));
   if (wasAtBottom && current === conv) {
     const down = () => { stickBottom = true; const sc = $("#scroll"); sc.scrollTop = sc.scrollHeight; };
@@ -3427,7 +3541,36 @@ $("#findIn").addEventListener("input", runFind);
 $("#findIn").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); } else if (e.key === "Escape") { e.preventDefault(); closeFind(); } });
 $("#findNext").onclick = () => stepFind(1); $("#findPrev").onclick = () => stepFind(-1); $("#findClose").onclick = closeFind;
 function closePanel() { $("#panel").classList.remove("show"); $("#filesBtn").classList.remove("on"); $("#procBtn").classList.remove("on"); }
-function showPreview(html) { setView("chat"); $("#previewBar").hidden = true; $("#preview").removeAttribute("src"); $("#preview").srcdoc = html; showPanel("preview"); }
+let pvLast = "";
+async function previewDoc(html, codeEl) {
+  // the other code blocks of the same answer (style.css, script.js…), then the project's files: put inside the page
+  const msg = codeEl?.closest(".msg, .bot, .reply, .assistant") || document;
+  const blocks = [...msg.querySelectorAll(".code")].map((c) => ({ file: c.querySelector(".cfile")?.textContent || "", lang: c.querySelector("code")?.dataset.lang || "", text: c.querySelector("code")?.textContent || "" }));
+  const find = async (ref, lang) => {
+    const name = ref.split(/[?#]/)[0].split("/").pop();
+    const b = blocks.find((x) => x.file && x.file.split("/").pop() === name) || blocks.filter((x) => x.lang === lang).length === 1 && blocks.find((x) => x.lang === lang);
+    if (b) return b.text;
+    if (S.project && !/^(https?:|\/\/|data:)/.test(ref)) { try { const r = await api(`/api/file?root=${encodeURIComponent(S.project)}&path=${encodeURIComponent(ref.split(/[?#]/)[0])}`); if (r.content != null) return r.content; } catch {} }
+    return null;
+  };
+  let out = html;
+  for (const m of [...html.matchAll(/<link[^>]+href=["']([^"']+\.css[^"']*)["'][^>]*>/gi)]) { const css = await find(m[1], "css"); if (css != null) out = out.replace(m[0], `<style>\n${css}\n</style>`); }
+  for (const m of [...html.matchAll(/<script([^>]*)\ssrc=["']([^"']+\.js[^"']*)["']([^>]*)><\/script>/gi)]) { const js = await find(m[2], "javascript") ?? await find(m[2], "js"); if (js != null) out = out.replace(m[0], `<script${m[1]}${m[3]}>\n${js.replace(/<\/script/gi, "<\\/script")}\n<\/script>`); }
+  if (!/<html|<body|<head/i.test(out)) out = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${out}</body></html>`;
+  return out;
+}
+async function showPreview(html, codeEl) {
+  setView("chat"); $("#previewBar").hidden = true; $("#preview").removeAttribute("src");
+  pvLast = await previewDoc(html, codeEl); $("#preview").srcdoc = pvLast; showPanel("preview");
+}
+$$("#pvBar [data-pv]").forEach((b) => (b.onclick = () => {
+  $$("#pvBar [data-pv]").forEach((x) => x.classList.toggle("on", x === b));
+  const w = b.dataset.pv, f = $("#preview");
+  $("#pvStage").classList.toggle("framed", w !== "100%");
+  f.style.width = w === "100%" ? "100%" : `min(${w}, 100%)`; f.style.height = w === "100%" ? "100%" : "calc(100% - 4px)";
+}));
+$("#pvRedo").onclick = () => { const f = $("#preview"); if (f.getAttribute("src")) f.src = f.getAttribute("src"); else if (pvLast) { f.srcdoc = ""; f.srcdoc = pvLast; } };
+$("#pvBig").onclick = () => $("#panel").classList.toggle("pvwide");
 function showPreviewUrl(url) {
   setView("chat"); $("#preview").removeAttribute("srcdoc"); $("#preview").src = url;
   $("#previewBar").hidden = false; $("#previewUrl").textContent = url; showPanel("preview");
@@ -4867,10 +5010,19 @@ function polishSettings() {
     const b = document.createElement("button"); b.id = "toBottom"; b.title = "Aller en bas"; b.innerHTML = msgI("down") + '<span class="tbdots" aria-hidden="true"><i></i><i></i><i></i></span>'; b.hidden = true;
     b.onclick = () => { stickBottom = true; sc.scrollTop = sc.scrollHeight; b.hidden = true; };
     $("#chatcol").appendChild(b);
-    let lastTop = 0;
+    let lastTop = 0, userAt = 0;
+    // only the user stops the following (trackpad, wheel, keys, scrollbar): WebKit sometimes jumps to the top by itself
+    // when a reply is rewritten at its end, and that jump must not be taken for « the user went up to read »
+    const byUser = () => { userAt = Date.now(); };
+    ["wheel", "touchmove", "mousedown", "keydown"].forEach((ev) => sc.addEventListener(ev, byUser, { passive: true }));
+    document.addEventListener("keydown", (e) => { if (/^(PageUp|PageDown|Home|End|ArrowUp|ArrowDown| )$/.test(e.key) && !e.target.closest?.("input, textarea, [contenteditable]")) byUser(); });
     sc.addEventListener("scroll", () => {
       const dist = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
-      if (sc.scrollTop < lastTop - 4 && dist > 60) stickBottom = false;  // the user went up: stop following
+      const user = Date.now() - userAt < 1200;
+      if (sc.scrollTop < lastTop - 4 && dist > 60) {
+        if (user) stickBottom = false;                                   // the user went up: stop following
+        else if (stickBottom) { sc.scrollTop = sc.scrollHeight; return; } // a jump by itself: back to the bottom at once
+      }
       else if (dist < 60) stickBottom = true;                           // back at the bottom: follow again
       lastTop = sc.scrollTop;
       b.hidden = dist < 300;
@@ -5089,7 +5241,7 @@ async function showOnboarding(step = 0) {
   const nav = (last) => `<div class="nav2">${last ? "<span></span>" : '<button class="ghost" data-onb="skip">Passer</button>'}<div style="display:flex;gap:8px">${step ? '<button class="btn" data-onb="prev">Retour</button>' : ""}<button class="btn primary" data-onb="${last ? "done" : "next"}">${last ? "Commencer" : "Suivant"}</button></div></div>`;
   let body = "";
   if (step === 0) {
-    body = `<div class="logo">${robotSVG()}</div><h2>Bienvenue dans Naim</h2>
+    body = `<div class="onbword">Naim</div><h2>Bienvenue dans Naim</h2>
       <p>Naim est un assistant de code qui tourne <b>entièrement sur ton Mac</b>. En mode <b>Chat</b>, il répond et cherche sur le web ; en mode <b>Agent</b>, il crée, modifie, lance et vérifie tes projets tout seul, contrôle l'écran, le simulateur iOS et tes emails si tu l'autorises.</p>
       <p>En 3 étapes : le modèle, les autorisations, l'apparence.</p>`;
   } else if (step === 1) {

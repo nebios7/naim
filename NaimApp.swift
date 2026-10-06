@@ -75,11 +75,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     }
 
     func showLoading(_ text: String, detail: String = "") {
+        let busy = detail.isEmpty  // starting: a moving bar; a problem: the details instead
         let html = """
-        <html><body style="margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
-        background:#161615;color:#e8e6e1;font:15px -apple-system,system-ui;-webkit-user-select:text">
-        <div style="font-size:54px">🤖</div><div style="margin-top:14px;font-weight:600">\(text)</div>
-        <pre style="margin-top:14px;max-width:80%;white-space:pre-wrap;color:#9a978f;font-size:12px">\(detail)</pre></body></html>
+        <html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><style>
+        :root { --bg:#161615; --text:#e8e6e1; --muted:#9a978f; --line:#2c2b29; }
+        @media (prefers-color-scheme: light) { :root { --bg:#faf9f5; --text:#1f1e1d; --muted:#73726c; --line:#e3e1d8; } }
+        body { margin:0; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+               background:var(--bg); color:var(--text); font:14px -apple-system,system-ui; -webkit-user-select:text; }
+        .w { font-family: ui-serif,"New York","Iowan Old Style",Georgia,serif; font-size:48px; font-weight:500; letter-spacing:-1px; }
+        .t { margin-top:10px; color:var(--muted); }
+        .bar { margin-top:22px; width:160px; height:2px; border-radius:2px; background:var(--line); overflow:hidden; }
+        .bar i { display:block; width:40%; height:100%; background:var(--text); opacity:.7; animation: m 1.4s ease-in-out infinite; }
+        @keyframes m { 0% { transform:translateX(-100%); } 100% { transform:translateX(250%); } }
+        pre { margin-top:18px; max-width:80%; white-space:pre-wrap; color:var(--muted); font-size:12px; }
+        </style></head><body><div class="w">Naim</div><div class="t">\(text)</div>
+        \(busy ? "<div class=\"bar\"><i></i></div>" : "<pre>\(detail)</pre>")</body></html>
         """
         web.loadHTMLString(html, baseURL: nil)
     }

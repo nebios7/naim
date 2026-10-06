@@ -351,6 +351,43 @@ def _ollama_chat(model, messages, tools=None, think=False, stream=False, options
     return chunks()
 
 
+# kinds of actions on the Mac itself that Naim does only once the user said yes the first time (printing, the Mac's
+# settings, driving another app, passwords, shutting down…); reading (lpstat, ls…) is never asked
+MAC_AREAS = [
+    # sending a message or calling someone: asked EVERY time (see MAC_ALWAYS_ASK), never remembered
+    ("l'envoi d'un message (SMS / iMessage)", re.compile(r"application\s+\\?\"?messages\\?\"?.*\bsend\b|\bsend\b.*\bmessages\b", re.I | re.S)),
+    ("un appel téléphonique", re.compile(r"\b(tel|facetime|facetime-audio)(://|:)\+?\d|\btel:\S", re.I)),
+    ("l'imprimante", re.compile(r"(^|[;&|]\s*|\s)(lp|lpr|lprm|cancel|lpadmin)\s", re.I)),
+    ("les réglages du Mac", re.compile(r"\b(networksetup|pmset|systemsetup|scutil|defaults\s+write|tmutil|spctl|csrutil|"
+                                       r"set volume|brightness|blueutil|softwareupdate)\b", re.I)),
+    ("le pilotage d'autres applications", re.compile(r"\bosascript\b|\bshortcuts\s+run\b", re.I)),
+    ("les mots de passe et le trousseau", re.compile(r"\b(security\s+(find|add|delete)-|sudo\b)", re.I)),
+    ("l'arrêt ou le redémarrage du Mac", re.compile(r"\b(shutdown|reboot|halt)\b|restart\b.*finder", re.I)),
+]
+MAC_GRANTS = ext.HOME / "autorisations.json"
+MAC_ALWAYS_ASK = {"l'envoi d'un message (SMS / iMessage)", "un appel téléphonique"}
+
+
+def mac_area(command):
+    return next((name for name, rx in MAC_AREAS if rx.search(" " + str(command or "") + " ")), None)
+
+
+def mac_allowed(area):
+    try:
+        return area in json.loads(MAC_GRANTS.read_text()).get("autorise", [])
+    except (OSError, ValueError):
+        return False
+
+
+def mac_allow(area):
+    try:
+        d = json.loads(MAC_GRANTS.read_text())
+    except (OSError, ValueError):
+        d = {}
+    d["autorise"] = sorted(set(d.get("autorise", [])) | {area})
+    MAC_GRANTS.write_text(json.dumps(d, ensure_ascii=False, indent=1))
+
+
 class Agent:
     """Tool-using agent loop. `approver(action, detail) -> bool` and `emit(event_dict)` let each UI plug in."""
 
@@ -529,10 +566,22 @@ class Agent:
 
     # ------------------------------------------------------------------ helpers
     def resolve(self, path):
+        path = self._undouble(path)
         p = (self.root / (path or ".")).resolve()
         if p != self.root and self.root not in p.parents:
             raise ValueError(f"path outside the project: {path}")
         return p
+
+    def _undouble(self, path):
+        """« projets/boutique/index.html » while the project already IS …/projets/boutique: the model repeated the
+        project's own folders, the file belongs at its root (unless such a sub-folder really exists)."""
+        parts = Path(str(path or "")).parts
+        if not parts or Path(str(path)).is_absolute():
+            return path
+        for k in range(min(len(parts) - 1, len(self.root.parts)), 0, -1):
+            if tuple(parts[:k]) == self.root.parts[-k:] and not (self.root / Path(*parts[:k])).is_dir():
+                return str(Path(*parts[k:]))
+        return path
 
     def rel(self, p):
         return str(p.relative_to(self.root)) or "."
@@ -1064,7 +1113,22 @@ class Agent:
             return ("note: this command starts a server that never exits, so it was started in the background "
                     "(start_process, keep=true) instead of blocking.\n" + res)
         shown = f"$ {command}" + (f"\n\n(entrée clavier)\n{stdin}" if stdin else "")
-        if not self.approve("Exécuter", shown, kind="command"):
+        if area_ := mac_area(command):
+            who = re.findall(r'(?:participant|buddy)\s+\\?"([^"\\]+)', command)
+            if area_.startswith("l'envoi") and who and not all(re.fullmatch(r"[+\d][\d\s().-]{5,}|[^@\s]+@[^@\s]+", w.strip()) for w in who):
+                return (f"error: « {who[0]} » is a name, Messages needs a phone number or an email address. Find it with "
+                        "chercher_contact first (use the number it gives), or ask the user for it.")
+        if (area := mac_area(command)) in MAC_ALWAYS_ASK:  # a message or a call: the user's yes every time
+            if not self.approver(f"⚠ {area[0].upper() + area[1:]}", shown):
+                return f"denied by the user ({area})"
+        elif area and not mac_allowed(area):
+            # something new on this Mac (its printer, its settings, another app…): the user's yes the first time,
+            # even when everything else is allowed; the yes is remembered for this kind of action only
+            if not self.approver(f"⚠ Première fois : {area}", shown + f"\n\nSi tu autorises, Naim pourra le refaire "
+                                 f"sans redemander ({area}). Tu peux le retirer dans ~/.naim/autorisations.json."):
+                return f"denied by the user (first access to: {area})"
+            mac_allow(area)
+        elif not self.approve("Exécuter", shown, kind="command"):
             return "denied by the user"
         timeout = max(5, min(int(timeout or self.command_timeout), 1800))
         proc = subprocess.Popen(command, shell=True, cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -1679,14 +1743,18 @@ class Agent:
             found = mailer.find_contact(nom)
         except mailer.MailError as e:
             return f"error: {e}"
-        without = sorted({c["nom"] for c in found if not c["email"]})
+        phones = [c for c in found if c.get("tel")]
+        without = sorted({c["nom"] for c in found if not c["email"] and not c.get("tel")})
         found = [c for c in found if c["email"]]
-        if not found:
-            return (f"Aucune adresse email pour « {nom} » dans Contacts"
-                    + (f" ({', '.join(without)} y figure(nt), mais sans adresse email)" if without else "")
-                    + " : demande l'adresse à l'utilisateur, n'en invente pas.")
-        return "\n".join(f"- {c['nom']} <{c['email']}>" for c in found[:10]) + (
-            "\nPlusieurs personnes : demande à l'utilisateur laquelle." if len({c['nom'] for c in found}) > 1 else "")
+        if not found and not phones:
+            return (f"Personne pour « {nom} » dans Contacts avec une adresse email ou un numéro"
+                    + (f" ({', '.join(without)} y figure(nt), sans email ni numéro)" if without else "")
+                    + " : demande-les à l'utilisateur, n'en invente pas.")
+        lines = [f"- {c['nom']} <{c['email']}>" for c in found[:10]]
+        lines += [f"- {c['nom']} · téléphone {c['tel']}" + (f" ({c['label']})" if c.get("label") else "") for c in phones[:10]]
+        names = {c["nom"] for c in found + phones}
+        return "\n".join(lines) + ("\nPlusieurs personnes : demande à l'utilisateur laquelle." if len(names) > 1 else "") + (
+            "\nPour un SMS, un iMessage ou un appel : utilise le NUMÉRO (jamais le nom)." if phones else "")
 
     def mail_inbox(self, limit=20):
         try:
@@ -1821,11 +1889,23 @@ class Agent:
         rule = self._rule_for(name, args) if self.rules else None
         if rule == "deny":
             return f"denied by the user's permission rules for {name}"
+        # the user just said NO: no detour to do the same thing another way (sudo, another command, the screen,
+        # another app…) until the user writes again
+        bypass = (name in ("computer", "browser", "simulator", "use_tools", "use_mcp")
+                  or (name == "run_command" and re.search(r"\b(sudo|osascript|security|open\s+-a)\b", str(args.get("command") or ""))))
+        if getattr(self, "_refused", None) and bypass:
+            return (f"refused: the user has just refused « {self._refused} ». Do not try another way to do it. Stop, and "
+                    "say in one sentence that you did not do it because they refused, then ask what they want instead.")
         self._allow_once = rule == "allow"
         try:
             result = self._dispatch(name, args, fn)
         finally:
             self._allow_once = False
+        if str(result).startswith("denied by the user"):
+            self._refused = str(args.get("command") or args.get("path") or args.get("action") or name)[:120]
+            result = (str(result) + " — The user said NO. Respect it: do NOT try any other way to do this (no sudo, no other "
+                      "command, no screen control, no other tool). Tell the user in one sentence that you did not do it "
+                      "because they refused, and ask what they want instead.")
         if name in ("write_file", "edit_file") and str(result).startswith("ok") and str(args.get("path", "")).endswith(".swift"):
             self._swift_dirty = str(args["path"]).split("/Sources/")[0] if "/Sources/" in str(args["path"]) else "."
         if name == "simulator" and args.get("action") in ("build_run", "new_app") and str(result).startswith("ok"):
@@ -1942,6 +2022,7 @@ class Agent:
                 f"l'utilisateur doit les confirmer), régénère le document et vérifie-le."]
 
     def run(self, task, images=None):
+        self._refused = None  # a new request: a former refusal does not block it
         """Run one user task to completion; returns the final answer text."""
         started, self._outcome, self._verified = time.time(), "error", None
         try:
@@ -2099,6 +2180,7 @@ class Agent:
             self.cancel.set()
             return True
         if items:
+            self._refused = None  # the user spoke again: what they now ask decides
             self.messages.append({"role": "user", "content": (
                 "(Message de l'utilisateur pendant ton travail — prends-le en compte maintenant, sans recommencer ce qui "
                 "est déjà fait) : " + "\n".join(items))})
@@ -2289,15 +2371,27 @@ class Agent:
                 args = self._args_of(call)
                 looping = self._loop_check(name, args, content)
                 content = ""  # only check the announcement once per step
+                forced = None
                 if looping and self._loops >= self.loop_limit:
-                    text = ("Je tourne en rond sur cette tâche sans progresser, je m'arrête. Essaie de la découper "
-                            "(par exemple : « crée d'abord models.py avec les classes Client, Article, Facture »).")
-                    self.emit({"type": "answer", "text": text})
-                    self._outcome = "loop"
-                    return text
+                    left = [t["text"] for t in self.todos if t["status"] not in ("done", "skipped")]
+                    if getattr(self, "_loop_nudges", 0) < 2:  # first, put it back on its plan instead of giving up
+                        self._loop_nudges = getattr(self, "_loop_nudges", 0) + 1
+                        self._loops = 0
+                        forced = ("refused: you already did exactly this, its result is above in the conversation. Do not "
+                                  "read or redo anything again: go on NOW with the next step of your plan"
+                                  + (f": « {left[0]} »" if left else " (or give your answer if everything is done)") + ".")
+                    else:
+                        done = [t["text"] for t in self.todos if t["status"] == "done"]
+                        text = ("Je tourne en rond sur cette tâche sans progresser, je m'arrête."
+                                + (f"\n\n**Fait :**\n" + "\n".join(f"- {t}" for t in done) if done else "")
+                                + (f"\n\n**Reste à faire :**\n" + "\n".join(f"- {t}" for t in left) if left else "")
+                                + "\n\nÉcris « continue » pour que je reprenne à l'étape suivante, ou demande-la-moi seule.")
+                        self.emit({"type": "answer", "text": text})
+                        self._outcome = "loop"
+                        return text
                 secret = args.get("text") if name == "computer" and args.get("sensitive") and args.get("action") == "type" else None
                 self.emit({"type": "tool", "name": name, "args": {**args, "text": "••••••"} if secret else args})
-                result = ready[i] if i in ready else self.call_tool(name, args)
+                result = forced if forced is not None else ready[i] if i in ready else self.call_tool(name, args)
                 if secret:  # a password typed by Naim stays out of the chat, the history and the learning examples
                     result = result.replace(secret, "••••••")
                     call["function"]["arguments"] = {**args, "text": "••••••"}

@@ -4,6 +4,7 @@ kept in DATA/vendor (downloaded once), drawing and export go through WebKit (nai
 """
 import html
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -99,7 +100,12 @@ def render(code, output, engine="mermaid", theme="default", background="white"):
     if not code:
         raise DiagramError("code du schéma vide")
     out.parent.mkdir(parents=True, exist_ok=True)
-    if engine == "graphviz" or code.lstrip().startswith(("digraph", "graph ", "strict ")):
+    # Graphviz: « digraph G { … } » / « graph { … } ». Mermaid also starts with « graph TD » or « flowchart LR » but has
+    # no brace: written in Mermaid, it is drawn by Mermaid even when Graphviz was asked for
+    dot_like = bool(re.match(r"\s*(strict\s+)?(di)?graph\b[^\n{]*\{", code))
+    mermaid_like = bool(re.match(r"\s*((graph|flowchart)\s+(TD|TB|BT|LR|RL)\b|(sequenceDiagram|classDiagram|stateDiagram"
+                                 r"(-v2)?|erDiagram|gantt|pie|mindmap|journey|timeline|gitGraph|quadrantChart)\b)", code))
+    if dot_like or (engine == "graphviz" and not mermaid_like):
         dot = shutil.which("dot") or next((p for p in ("/opt/homebrew/bin/dot", "/usr/local/bin/dot") if Path(p).exists()), None)
         if not dot:
             raise DiagramError("Graphviz n'est pas installé (brew install graphviz) : écris plutôt le schéma en Mermaid")

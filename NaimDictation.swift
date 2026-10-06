@@ -11,6 +11,7 @@ final class NaimDictation: NSObject, WKScriptMessageHandler {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
+    private var session = 0
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
@@ -67,7 +68,10 @@ final class NaimDictation: NSObject, WKScriptMessageHandler {
             send("", final: true, error: "Le micro ne démarre pas : \(error.localizedDescription)")
             return
         }
+        session += 1
+        let mine = session
         task = recognizer.recognitionTask(with: req) { result, error in
+            guard mine == self.session else { return }  // a former listening: ignored
             if let result = result {
                 self.send(result.bestTranscription.formattedString, final: result.isFinal)
                 if result.isFinal { self.stop() }
@@ -85,6 +89,8 @@ final class NaimDictation: NSObject, WKScriptMessageHandler {
         }
         request?.endAudio()
         request = nil
+        session += 1    // from now on, the results of this listening are ignored
+        task?.cancel()  // its late results (Naim's own voice, heard through the speakers) must not arrive afterwards
         task = nil
     }
 }

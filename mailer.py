@@ -39,9 +39,12 @@ CONTACT_SCRIPT = '''on run argv
     tell application "Contacts"
         repeat with q in argv
             repeat with p in (every person whose name contains (q as text))
-                if (count of emails of p) is 0 then set out to out & (name of p) & tab & linefeed
+                if (count of emails of p) is 0 and (count of phones of p) is 0 then set out to out & (name of p) & tab & linefeed
                 repeat with e in emails of p
                     set out to out & (name of p) & tab & (value of e) & linefeed
+                end repeat
+                repeat with t in phones of p
+                    set out to out & (name of p) & tab & "tel:" & (value of t) & tab & (label of t) & linefeed
                 end repeat
             end repeat
         end repeat
@@ -70,18 +73,30 @@ def find_contact(name):
     if not q:
         return []
     plain = "".join(c for c in unicodedata.normalize("NFD", q) if unicodedata.category(c) != "Mn")
-    r = subprocess.run(["osascript", "-e", CONTACT_SCRIPT, q] + ([plain] if plain != q else []),
-                       capture_output=True, text=True, timeout=60)
+    args = ["osascript", "-e", CONTACT_SCRIPT, q] + ([plain] if plain != q else [])
+    r = subprocess.run(args, capture_output=True, text=True, timeout=60)
+    if r.returncode != 0 and "-600" in r.stderr:  # Contacts is not running: start it in the background, then ask again
+        subprocess.run(["open", "-g", "-j", "-a", "Contacts"], capture_output=True, timeout=20)
+        import time
+        for _ in range(10):
+            time.sleep(1)
+            r = subprocess.run(args, capture_output=True, text=True, timeout=60)
+            if r.returncode == 0 or "-600" not in r.stderr:
+                break
     if r.returncode != 0:
         raise MailError("Contacts inaccessibles : " + (r.stderr.strip()[-200:] or "autorisation refusée ?"))
     seen, out = set(), []
     for line in r.stdout.splitlines():
         if "\t" in line:
-            n, a = line.split("\t", 1)
-            key = a.lower().strip() or n.strip().lower()
+            parts = line.split("\t")
+            n, a = parts[0].strip(), parts[1].strip()
+            key = a.lower() or n.lower()
             if key not in seen:
                 seen.add(key)
-                out.append({"nom": n.strip(), "email": a.strip()})  # email "" = in Contacts without an address
+                if a.startswith("tel:"):  # a phone number (for an SMS, an iMessage or a call)
+                    out.append({"nom": n, "email": "", "tel": a[4:].strip(), "label": (parts[2] if len(parts) > 2 else "").strip("_$!<>")})
+                else:
+                    out.append({"nom": n, "email": a})  # email "" = in Contacts without an address
     return out
 
 
