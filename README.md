@@ -1,13 +1,13 @@
 # Naim
 
 <p align="center">
-  <img src="docs/images/app-mac.png" alt="Naim, l'application Mac" width="880">
+  <img src="docs/images/accueil.png" alt="Naim, l'application Mac : l'accueil" width="880">
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="Licence Apache 2.0" src="https://img.shields.io/badge/licence-Apache%202.0-d97757"></a>
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/macOS-Apple%20Silicon-333">
-  <img alt="Modèle Naim 9B" src="https://img.shields.io/badge/mod%C3%A8le-Naim%209B-ffcc4d">
+  <a href="https://huggingface.co/redhamohamed/naim"><img alt="Modèle Naim sur Hugging Face" src="https://img.shields.io/badge/mod%C3%A8le-Naim%209B-ffcc4d"></a>
   <img alt="100 % local" src="https://img.shields.io/badge/100%25-local-3fb9a0">
 </p>
 
@@ -95,6 +95,7 @@ Naim a **son propre modèle**, réservé à l'application Naim : il se télécha
 | Utilisation | dans Naim : l'application, le navigateur (`naim --web`) et le terminal (`naimtools`) |
 | Vitesse (Mac M4, 32 Go) | ~12 à 17 tokens/s en écriture, ~75 à 100 tokens/s en lecture |
 | Entraînement | affinage LoRA par auto-distillation, successeur de Mimo |
+| Page du modèle | [huggingface.co/redhamohamed/naim](https://huggingface.co/redhamohamed/naim) (privé pour l'instant : le modèle s'installe avec l'application) |
 | Licence | Apache 2.0 |
 
 Les fichiers du modèle portent son nom jusque dans leurs métadonnées (`general.architecture = naim`, vision
