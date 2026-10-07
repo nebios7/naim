@@ -869,6 +869,12 @@ h1, h2, h3 { letter-spacing: -0.015em; }
 .btn:hover { background: var(--hover); }
 .btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-t); }
 .btn.primary:hover { background: var(--brand-h); border-color: var(--brand-h); }
+.srow .btn.danger { color: var(--muted); }  /* in lists: quiet, red only when pointed at */
+.srow .btn.danger:hover { color: var(--danger); }
+.attic { display: inline-flex; vertical-align: -2px; margin-right: 5px; color: var(--muted); } .attic svg { width: 14px; height: 14px; }
+.skic { display: inline-flex; vertical-align: -2px; margin-right: 6px; color: var(--muted); } .skic svg { width: 15px; height: 15px; }
+small.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+small.clamp2.open { display: block; -webkit-line-clamp: unset; }
 .btn.danger { color: var(--danger); } .btn.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .btn:disabled { opacity: .45; cursor: default; }
 .icon { border-radius: var(--r-s); transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
@@ -1340,7 +1346,7 @@ body:has(#talkBtn.on) #liveBar, body:has(#talkBtn.on) #micBtn { display: none !i
   <button class="nav" data-cmd="home" id="navHome"><span class="ni">⌂</span>Accueil</button>
   <button class="nav" data-cmd="new"><span class="ni">＋</span>Nouveau<kbd>⌘N</kbd></button>
   <button class="nav" data-cmd="artifacts" id="navArt"><span class="ni">◇</span>Artéfacts</button>
-  <button class="nav" data-cmd="schedules" id="navSch"><span class="ni">⏱</span>Planifier<span class="count" id="askCount" hidden title="Autorisations en attente"></span></button>
+  <button class="nav" data-cmd="schedules" id="navSch"><span class="ni" data-ic="sched"></span>Planifier<span class="count" id="askCount" hidden title="Autorisations en attente"></span></button>
   <button class="nav" data-cmd="settings" id="navSet"><span class="ni">⚙︎</span>Personnaliser<kbd>⌘,</kbd></button>
   <div class="searchrow"><input id="search" placeholder="Rechercher une conversation…" spellcheck="false"><button class="icon" id="newFolderIcon" title="Nouveau dossier"></button></div>
   <button class="nav" id="newFolderBtn" title="Ranger des conversations dans un dossier"><span class="ni">▢</span>Nouveau dossier</button>
@@ -2313,6 +2319,7 @@ function talkSend() {
   if (working) setTimeout(talkListen, 300);  // a remark while Naim works (Agent): it keeps listening and guides it
 }
 // cut Naim's voice to speak: Espace or Échap (outside the text field), typing, or the wave button
+document.addEventListener("click", (e) => { const c = e.target.closest?.("small.clamp2"); if (c) c.classList.toggle("open"); });  // long descriptions: 2 lines, all on click
 document.addEventListener("keydown", (e) => {
   if (!voice.audio && !voice.preparing) return;
   const typing = e.target.closest?.("input, textarea, [contenteditable]");
@@ -2422,7 +2429,7 @@ function approvalPlain(action, detail) {
 let stickBottom = true;  // follow the conversation as it grows, until the user scrolls up to read
 function scrollDown(force) { const s = $("#scroll"); if (force) stickBottom = true; if (stickBottom) s.scrollTop = s.scrollHeight; }
 function attChips(atts, removable) {
-  return (atts || []).map((a, i) => `<span class="att">${a.kind === "image" ? `<img src="data:${a.mime};base64,${a.data}" alt="">` : a.kind === "doc" ? "📑" : "📄"} <span class="aname" title="${esc(a.name)}">${esc(a.name)}</span> <small>${a.loading ? "lecture…" : a.note ? esc(a.note) : fmtSize(a.size)}</small>${removable ? `<button data-rm="${i}" title="Retirer">✕</button>` : ""}</span>`).join("");
+  return (atts || []).map((a, i) => `<span class="att">${a.kind === "image" ? `<img src="data:${a.mime};base64,${a.data}" alt="">` : `<span class="attic">${svgI("file")}</span>`} <span class="aname" title="${esc(a.name)}">${esc(a.name)}</span> <small>${a.loading ? "lecture…" : a.note ? esc(a.note) : fmtSize(a.size)}</small>${removable ? `<button data-rm="${i}" title="Retirer">✕</button>` : ""}</span>`).join("");
 }
 const imagesOf = (atts) => (atts || []).filter((a) => a.kind === "image").map((a) => a.data);
 function lightbox(src) { const l = document.createElement("div"); l.className = "lightbox"; l.innerHTML = `<img src="${src}">`; l.onclick = () => l.remove(); document.body.appendChild(l); }
@@ -3392,7 +3399,7 @@ async function updateNaimMd() {
   if (S.mode !== "agent" || !S.project) { b.hidden = true; return; }
   const r = await api(`/api/project-info?root=${encodeURIComponent(S.project)}`).catch(() => ({}));
   b.hidden = false;
-  if (r.file) { b.textContent = `📄 ${r.file}`; b.title = "Instructions du projet lues automatiquement par Naim"; b.onclick = () => { showPanel("files"); openFile(r.file); }; }
+  if (r.file) { b.innerHTML = `<span class="attic">${svgI("file")}</span>${esc(r.file)}`; b.title = "Instructions du projet lues automatiquement par Naim"; b.onclick = () => { showPanel("files"); openFile(r.file); }; }
   else { b.textContent = "＋ NAIM.md"; b.title = "Créer les instructions du projet (/init)"; b.onclick = () => runSlash("/init"); }
 }
 
@@ -3685,7 +3692,7 @@ async function loadTree() {
       n.className = "node" + (e.path === selected ? " sel" : "") + (knownFiles.size && !knownFiles.has(e.path) ? " new" : "");
       n.dataset.path = e.path;
       n.style.paddingLeft = 6 + depth * 14 + "px";
-      n.innerHTML = `<span class="tw">${e.dir ? (openDirs.has(e.path) ? "▾" : "▸") : ""}</span>${e.dir ? "📁" : "📄"} <span>${esc(e.name)}</span>`;
+      n.innerHTML = `<span class="tw">${e.dir ? (openDirs.has(e.path) ? "▾" : "▸") : ""}</span><span class="attic">${svgI(e.dir ? "folder" : "file")}</span><span>${esc(e.name)}</span>`;
       n.onclick = () => { if (e.dir) { openDirs.has(e.path) ? openDirs.delete(e.path) : openDirs.add(e.path); loadTree(); } else openFile(e.path); };
       frag.appendChild(n);
       if (e.dir && openDirs.has(e.path)) await walk(e.path, depth + 1);
@@ -4217,7 +4224,7 @@ async function loadMcpCatalog() {
   items.forEach((it) => {
     const c = document.createElement("div"); c.className = "acard";
     c.innerHTML = `<div style="padding:10px 12px;display:flex;flex-direction:column;gap:6px;flex:1">
-      <div style="display:flex;align-items:center;gap:6px"><b style="flex:1">🔌 ${esc(it.name)}</b><span class="lang">${esc(it.category)}</span></div>
+      <div style="display:flex;align-items:center;gap:6px"><b style="flex:1"><span class="attic">${svgI("mcp")}</span>${esc(it.name)}</b><span class="lang">${esc(it.category)}</span></div>
       <small style="color:var(--muted)">${esc(it.description)}</small>
       ${it.env.map((k) => `<input class="field mono" data-env="${esc(k)}" placeholder="${esc(k)}" style="font-size:12px">`).join("")}
       <div style="display:flex;gap:6px;align-items:center;margin-top:auto">${!it.ready ? `<small style="color:var(--warn)">Requis : ${esc(it.install_hint)}</small>` : ""}<div class="spacer"></div>
@@ -4290,7 +4297,7 @@ async function loadSkillsPage() {
   box.innerHTML = "";
   skills.forEach((k) => {
     const el = document.createElement("div"); el.className = "srow";
-    el.innerHTML = `<div class="sl"><b>📘 ${esc(k.name)} <span class="badge2">${esc(k.scope)}</span></b><small>${esc(k.description)}</small></div>
+    el.innerHTML = `<div class="sl"><b><span class="skic">${svgI("book")}</span>${esc(k.name)} <span class="badge2">${esc(k.scope)}</span></b><small class="clamp2" title="Cliquer pour tout lire">${esc(k.description)}</small></div>
       <div class="sc"><label class="switch" title="Activé"><input type="checkbox" ${k.enabled ? "checked" : ""}><span></span></label><button class="btn" data-edit>Modifier</button><button class="btn danger" data-del>Supprimer</button></div>`;
     $("input", el).onchange = (e) => { const set = new Set(S.disabled_skills); e.target.checked ? set.delete(k.name) : set.add(k.name); S.disabled_skills = [...set]; saveSettings(); };
     $("[data-del]", el).onclick = async () => { if (!confirm(`Supprimer le skill ${k.name} ?`)) return; await fetch(`/api/skill?path=${encodeURIComponent(k.path)}`, { method: "DELETE" }); loadSkillsPage(); };
@@ -4991,6 +4998,7 @@ api("/api/tts").then((r) => { if (!r.available || !dictationAvailable()) return;
 $(".composer .ctools").insertBefore($("#modelPick"), $("#ctxInfo"));
 fitViewport(); updateTitle();
 renderFolderPill();
+$$("[data-ic]").forEach((e) => { if (!e.innerHTML) e.innerHTML = svgI(e.dataset.ic); });  // line icons named in the markup
 function buildRail() {
   const items = [["chat", "chat", "Chat", "#5b9cf5"], ["agent", "agent", "Agent : code, fichiers, commandes", "#d97757"],
     ["sched", "schedules", "Planifier", "#e0a43c"], ["art", "artifacts", "Artéfacts", "#a47ce8"], ["models", "models", "Modèles", "#3fb9a0"],
