@@ -458,12 +458,18 @@ body.dragging .dropzone { display: grid; }
 #termIn { flex: 1; background: none; border: 0; outline: 0; color: var(--term-t); font: inherit; }
 
 /* ================= right panel */
-#panel { width: 42%; min-width: 280px; max-width: 80vw; border-left: 1px solid var(--line); background: var(--panel); display: none; flex-direction: column; position: relative; flex: none; }
+#panel { width: 42%; min-width: 280px; max-width: 80%; border-left: 1px solid var(--line); background: var(--panel); display: none; flex-direction: column; position: relative; flex: none; }
 #panel .presize { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 6; }
 #panel .presize:hover, body.resizing #panel .presize { background: linear-gradient(90deg, transparent 3px, var(--brand, #d97757) 3px, var(--brand, #d97757) 5px, transparent 5px); }
 body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { pointer-events: none; }
 #panel.show { display: flex; }
-.ptabs { display: flex; align-items: center; gap: 4px; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.ptabs { display: flex; align-items: center; gap: 4px; padding: 7px 8px; border-bottom: 1px solid var(--line); min-width: 0; }
+/* the tabs never push the panel out of the window (big zoom, narrow panel): they scroll, the close button stays */
+.ptabs > .ptab { flex: none; } .ptabs { overflow-x: auto; scrollbar-width: none; } .ptabs::-webkit-scrollbar { display: none; }
+.ptabs #closePanel, .ptabs #refreshTree { position: sticky; right: 0; background: var(--panel); }
+#panel { overflow: hidden; min-width: 0; }
+.md :not(pre) > code { overflow-wrap: anywhere; word-break: break-word; }  /* long paths wrap instead of widening the page */
+.pvbar { min-width: 0; overflow-x: auto; scrollbar-width: none; } .pvbar::-webkit-scrollbar { display: none; } .pvbar > * { flex: none; }
 .ptab { border: 0; background: none; color: var(--muted); padding: 4px 10px; border-radius: 7px; font-size: 14px; }
 .ptab.on { background: var(--side); color: var(--text); }
 .pbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -489,7 +495,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .pvstage { flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--side); overflow: auto; }
 .pvstage.framed { padding: 14px 0; }
 .pvstage.framed #preview { flex: none; border-radius: 12px; box-shadow: 0 0 0 1px var(--line), 0 8px 28px rgba(0,0,0,.18); }
-#panel.pvwide { width: 78vw !important; }
+#panel.pvwide { width: 72% !important; }  /* % of the window, not vw: the zoom would make it wider than the screen */
 #procList { overflow-y: auto; max-height: 42%; border-bottom: 1px solid var(--line); padding: 6px; display: flex; flex-direction: column; gap: 4px; }
 .proc { border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; cursor: pointer; font-size: 13.5px; }
 .proc:hover { background: var(--hover); }
