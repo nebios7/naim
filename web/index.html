@@ -654,6 +654,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .aout .errdet summary::-webkit-details-marker { display: none; }
 .aout .errdet summary::before { content: "› "; }
 .aout .errdet[open] summary::before { content: "⌄ "; }
+.md .evnote.inline { margin: 10px 0; }
 .approval .apwhat { font-size: 15px; margin: 6px 0 8px; line-height: 1.4; }
 .approval .apdet { margin: 0 0 10px; }
 .approval .apdet summary { cursor: pointer; color: var(--muted); font-size: 12.5px; list-style: none; }
@@ -2561,7 +2562,31 @@ function addBot(m, idx) {
   const block = (el) => { closeGroup(); flow.appendChild(el); return el; };
   const v = {
     el: d,
+    noteAt(text, at) {  // « 💬 Toi : … » at its place in the answer (at = length of the answer when Naim read it)
+      (v._notes ||= []).push({ text, at });
+      if (at != null) v.setText(v._text || "");
+      else block(Object.assign(document.createElement("div"), { className: "evnote", innerHTML: `<span class="evic">${menuIcon("💬")}</span><span>${esc(text)}</span>` }));
+    },
+    placeNotes(at) {  // the pending remarks were read now: they go at this place in the answer
+      let moved = false;
+      for (const n of v._notes || []) if (n.at == null) { n.at = at; moved = true; }
+      if (moved) { $$(".evnote.pending", flow).forEach((e) => e.remove()); v.setText(v._text || ""); }
+      return moved;
+    },
     setText(t) {
+      v._text = t;
+      const notes = (v._notes || []).filter((n) => n.at != null).sort((a, b) => a.at - b.at);
+      if (notes.length && t) {  // the answer cut where the user spoke, their words in between
+        let html = "", from = 0;
+        for (const n of notes) {
+          const at = Math.min(n.at, t.length);
+          html += md(t.slice(from, at)) + `<div class="evnote inline"><span class="evic">${menuIcon("💬")}</span><span>${esc(n.text)}</span></div>`;
+          from = at;
+        }
+        t = null; body.innerHTML = html + md((v._text || "").slice(from));
+        if (v._text) working.hidden = true;
+        return;
+      }
       // while Naim writes, the answer is redrawn at every word: an unfinished code block or table can make it shorter
       // for a moment, and the page would jump (WebKit does not compensate). It may only grow until it is finished,
       // and the reader's position is kept as it was.
@@ -2824,6 +2849,7 @@ function addBot(m, idx) {
       if (s.type === "process") { v.process(s.process); return; }
       if (s.type === "process_stopped") { v.processStopped(s); return; }
       if (s.type === "verify") { v.verify(s); return; }
+      if (s.type === "event" && s.at != null) { v.noteAt(s.text, s.at); return; }
       if (s.type === "event") { v.event(s.icon, s.text); return; }
       if (s.type === "subagent") { v.subagent(s); return; }
       if (s.type === "vision") { v.vision(s); return; }
@@ -2919,7 +2945,8 @@ async function send(textArg, attsArg, opts = {}) {
     const note = `Toi : ${text}`;
     const canGuide = S.mode === "agent" || S.chat_tools !== false;  // the Chat with tools takes it into account too
     const r = canGuide ? await api("/api/interject", { method: "POST", body: { run_id: live.id, text } }) : { ok: false };
-    if (r.ok) { live.reply.steps.push({ type: "event", icon: "💬", text: note }); live.v?.event("💬", note); if (!talk.on) toast("Naim en tiendra compte à sa prochaine étape"); }
+    if (r.ok) { const st = { type: "event", icon: "💬", text: note }; live.reply.steps.push(st); (live.pendingNotes ||= []).push(st);
+      live.v?.event("💬", note); [...(live.v?.el.querySelectorAll(".flow .evnote") || [])].pop()?.classList.add("pending"); (live.v._notes ||= []).push({ text: note, at: null }); if (!talk.on) toast("Naim en tiendra compte à sa prochaine étape"); }
     else { (live.queue ||= []).push(text); if (!talk.on) toast("Message gardé : envoyé dès que Naim a fini"); }
     return;
   }
@@ -3043,7 +3070,12 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "approval": v.approval(ev); break;
           case "question": { const st = { type: "question", id: ev.id, question: ev.question, options: ev.options || [], multiple: !!ev.multiple, answer: null }; reply.steps.push(st); v.question(st); break; }
           case "schedule": { const st = { type: "schedule", task: ev.task, deleted: !!ev.deleted }; reply.steps.push(st); v.schedule(st); loadList(); break; }
-          case "interjection_read": if (current === conv && !talk.on) toast("Naim a lu ton message"); break;
+          case "interjection_read": {  // Naim read the remark now: it is placed here, in its answer
+            const at = (reply.content || "").length;
+            for (const st of run.pendingNotes || []) st.at = at;
+            run.pendingNotes = [];
+            v.placeNotes(at);
+            break; }
           case "question_result": { const st = reply.steps.find((x) => x.type === "question" && x.id === ev.id); if (st) { st.answer = ev.answer || ""; v.questionDone(st); } break; }
           case "answer": reply.content = ev.text; v.setText(ev.text); break;
           case "stats": reply.stats = { ...(reply.stats || {}), tokens: ev.tokens, tps: ev.tps, prompt: ev.prompt || reply.stats?.prompt, reason: ev.reason || reply.stats?.reason }; v.setStats(reply.stats); break;
