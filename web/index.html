@@ -286,6 +286,7 @@ body.noside aside#side { display: none; }
 .status span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
 .dot.on { background: var(--ok); }
+.dot.idle { background: var(--muted); opacity: .7; }  /* waiting for the first message: not an error */
 
 /* ================= main */
 main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -4889,9 +4890,13 @@ async function checkStatus() {
     const others = (s.loaded || []).filter((m) => norm(m) !== norm(S.model));
     const onMlx = norm(S.model).split(":")[0] === "naim" && S.naim_backend === "mlx" && s.mlx?.available;
     const onLlama = !onMlx && norm(S.model).split(":")[0] === "naim" && ["llamacpp", "mlx"].includes(S.naim_backend) && s.llamacpp?.available;
-    $("#statusText").textContent = onMlx ? `MLX · naim${s.mlx.running ? "" : " (démarre au 1er message)"}` : onLlama ? `llama.cpp · naim${s.llamacpp.running ? "" : " (démarre au 1er message)"}` : !s.ollama ? "Ollama injoignable" : others.length ? `⚠ ${others.length} autre${others.length > 1 ? "s" : ""} modèle${others.length > 1 ? "s" : ""} chargé${others.length > 1 ? "s" : ""}` : `Ollama · ${S.model}`;
+    const engineOn = onMlx ? s.mlx.running : onLlama ? s.llamacpp.running : false;  // short: « Naim · prêt » / « Naim · en veille »
+    $("#dot").classList.toggle("on", (onMlx || onLlama) ? engineOn : s.ollama);
+    $("#dot").classList.toggle("idle", (onMlx || onLlama) && !engineOn);
+    $("#statusText").textContent = (onMlx || onLlama) ? `Naim · ${engineOn ? "prêt" : "en veille"}` : !s.ollama ? "Ollama injoignable" : others.length ? `⚠ ${others.length} autre${others.length > 1 ? "s" : ""} modèle${others.length > 1 ? "s" : ""} chargé${others.length > 1 ? "s" : ""}` : `Ollama · ${S.model}`;
     const st = $("#statusText").parentElement;
-    st.title = others.length ? `Chargés en mémoire : ${s.loaded.join(", ")}.\nIls ralentissent Naim (Ollama traite une requête à la fois). Clique pour les décharger.` : "État d'Ollama";
+    st.title = others.length ? `Chargés en mémoire : ${s.loaded.join(", ")}.\nIls ralentissent Naim (Ollama traite une requête à la fois). Clique pour les décharger.`
+      : (onMlx || onLlama) ? (engineOn ? "Le modèle de Naim est chargé : il répond tout de suite." : "Le modèle de Naim se charge au premier message (quelques secondes).") + " Clique pour les réglages du moteur." : "État d'Ollama";
     st.style.cursor = others.length ? "pointer" : "";
     st.onclick = others.length ? async () => { if (!confirm(`Décharger ${others.join(", ")} pour accélérer Naim ?`)) return; for (const m of others) await api("/api/models/unload", { method: "POST", body: { name: m } }); toast("Modèles déchargés"); checkStatus(); } : null;
     const changed = s.models.join() !== models.join();
@@ -4899,7 +4904,7 @@ async function checkStatus() {
     if (models.length && !models.some((m) => norm(m) === norm(S.model))) S.model = models.find((m) => norm(m) === "naim") || models[0];
     if (changed) applySettings();
     updateModelPick();
-  } catch { $("#dot").classList.remove("on"); $("#statusText").textContent = "Serveur Naim arrêté"; }
+  } catch { $("#dot").classList.remove("on", "idle"); $("#statusText").textContent = "Serveur Naim arrêté"; }
 }
 
 // ======================================================================= UI v3: rail, model picker, parameters panel, folders
