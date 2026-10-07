@@ -877,6 +877,26 @@ h1, h2, h3 { letter-spacing: -0.015em; }
 .btn.primary:hover { background: var(--brand-h); border-color: var(--brand-h); }
 .srow .btn.danger { color: var(--muted); }  /* in lists: quiet, red only when pointed at */
 .srow .btn.danger:hover { color: var(--danger); }
+details.bgjob { margin: 6px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+details.bgjob > summary { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; list-style: none; color: var(--muted); font-size: 13.5px; }
+details.bgjob > summary::-webkit-details-marker { display: none; }
+details.bgjob .bglabel { color: var(--text); }
+details.bgjob .bgtime { font-variant-numeric: tabular-nums; }
+details.bgjob .gchev { margin-left: auto; display: inline-flex; transition: transform .15s; } details.bgjob[open] .gchev { transform: rotate(180deg); }
+details.bgjob .gchev svg, details.bgjob .bgdots svg { width: 14px; height: 14px; }
+details.bgjob .bgdots { display: inline-grid; grid-template-columns: 5px 5px; gap: 3px; width: 13px; }
+details.bgjob .bgdots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent, #d97757); animation: bgdot 1.2s ease-in-out infinite; }
+details.bgjob .bgdots i:nth-child(2) { animation-delay: .3s; } details.bgjob .bgdots i:nth-child(3) { animation-delay: .9s; } details.bgjob .bgdots i:nth-child(4) { animation-delay: .6s; }
+details.bgjob.ok .bgdots, details.bgjob.ko .bgdots { display: inline-flex; width: auto; }
+details.bgjob.ok .bgdots { color: var(--ok); } details.bgjob.ko .bgdots { color: var(--warn); }
+@keyframes bgdot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+details.bgjob .bgbody { padding: 0 12px 10px; }
+details.bgjob .bgbody pre { margin: 0 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--code); white-space: pre-wrap; font-size: 12.5px; }
+details.bgjob .bgstate { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.turn.bgnote { display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: flex-start !important;
+  text-align: left; gap: 7px; color: var(--muted); font-size: 13px; margin: 6px 0 2px; max-width: var(--w, 820px); width: 100%; }
+.turn.bgnote b { color: var(--text); font-weight: 500; }
+.turn.bgnote .bgic { display: inline-flex; } .turn.bgnote .bgic svg { width: 14px; height: 14px; }
 .attic { display: inline-flex; vertical-align: -2px; margin-right: 5px; color: var(--muted); } .attic svg { width: 14px; height: 14px; }
 .skic { display: inline-flex; vertical-align: -2px; margin-right: 6px; color: var(--muted); } .skic svg { width: 15px; height: 15px; }
 small.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
@@ -2443,6 +2463,12 @@ function fmtSize(n) { return n < 1024 ? `${n} o` : n < 1048576 ? `${(n / 1024).t
 const fmtTime = (t) => t ? new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "";
 
 function addUser(m, idx) {
+  if (m.bg) {  // « Tâche de fond terminée »: one quiet line (the details went to Naim, they are not shown)
+    const d = document.createElement("div"); d.className = "turn bgnote";
+    const b = m.bg, dur = b.seconds < 60 ? `${b.seconds} s` : `${Math.floor(b.seconds / 60)} min ${String(b.seconds % 60).padStart(2, "0")}`;
+    d.innerHTML = `<span class="bgic">${svgI(b.code === 0 ? "check" : "warn")}</span><span>Tâche de fond terminée · <b>${esc(b.label)}</b> · ${b.code === 0 ? "réussie" : "code " + b.code} · ${dur}</span>`;
+    $("#thread").appendChild(d); return d;
+  }
   const d = document.createElement("div"); d.className = "turn user";
   const imgs = (m.attachments || []).filter((a) => a.kind === "image"), files = (m.attachments || []).filter((a) => a.kind !== "image");
   d.innerHTML = `${imgs.length ? `<div class="imgs">${imgs.map((a) => `<img src="data:${a.mime};base64,${a.data}" alt="${esc(a.name)}">`).join("")}</div>` : ""}${files.length ? `<div class="atts">${attChips(files)}</div>` : ""}<div class="bubble"></div>
@@ -2653,6 +2679,12 @@ function addBot(m, idx) {
       if (stick) { stickBottom = true; sc.scrollTop = sc.scrollHeight; }  // same frame: no visible jump
     },
     process(pr) {
+      if (pr.notify) {  // a background job: one compact line (dots, label, time), opened to see the command and its state
+        const c = document.createElement("details"); c.className = "bgjob run"; c.dataset.bgid = pr.id; c.dataset.t0 = String((pr.started || Date.now() / 1000) * 1000);
+        c.innerHTML = `<summary><span class="bgdots"><i></i><i></i><i></i><i></i></span><span class="bglabel">Tâche de fond · ${esc(pr.label || pr.name)}</span><span class="bgtime"></span><span class="gchev">${svgI("chevd")}</span></summary>
+          <div class="bgbody"><pre class="mono">$ ${esc(pr.command || "")}</pre><div class="bgstate"><span>En cours</span><span class="muted">Naim te prévient à la fin et fait le point</span></div></div>`;
+        block(c); bgTick(); return;
+      }
       const c = document.createElement("div"); c.className = "procchip"; c.dataset.pid = pr.id;
       c.innerHTML = `<span class="pdot run"></span><span><b>${esc(pr.name)}</b> ${pr.keep ? "tourne en arrière-plan" : "lancé pour un test"}${pr.url ? ` · <span class="mono">${esc(pr.url)}</span>` : ""}</span><button class="btn">Voir</button>`;
       $(".btn", c).onclick = () => showProcess(pr.id);
@@ -2998,7 +3030,7 @@ async function send(textArg, attsArg, opts = {}) {
   if (!current) current = { id: newId(), title: (text || atts[0].name).slice(0, 60), mode: S.mode, messages: [] };
   current.mode = S.mode; if (S.mode === "agent") current.project = S.project;
   const end = current.messages.length;
-  const userMsg = { role: "user", content: text, attachments: atts.length ? atts : undefined, time: Date.now() };
+  const userMsg = { role: "user", content: text, attachments: atts.length ? atts : undefined, time: Date.now(), ...(opts.bg ? { bg: opts.bg } : {}) };
   current.messages.push(userMsg);
   const plan = opts.plan ?? (S.mode === "agent" && S.planMode);
   const reply = { role: "assistant", content: "", thinking: "", steps: [], time: Date.now(), model: S.model, plan: plan || undefined };
@@ -3050,7 +3082,7 @@ async function stream(reply, v, message, hist, extra = {}) {
   try {
     const res = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: run.controller.signal,
-      body: JSON.stringify({ run_id: runId, mode: S.mode, model: S.model, think: S.think, project: S.project, auto_yes: S.autoYes,
+      body: JSON.stringify({ run_id: runId, conv_id: conv.id, mode: S.mode, model: S.model, think: S.think, project: S.project, auto_yes: S.autoYes,
         history: hist, message, settings: settingsPayload(), images: extra.images?.length ? extra.images : undefined, plan: !!extra.plan,
         voice: talk.on || undefined }),  // conversation mode: an answer made to be heard
     });
@@ -3190,6 +3222,48 @@ function toolLabel(name, a) {
     || (name.startsWith("mcp__") ? `Naim utilise l'outil MCP ${name.split("__").slice(1).join(" › ")}…` : "Naim travaille…");
 }
 let notifyConv = null;  // conversation of the event being handled (set by stream): where a click on its notification leads
+// ---- background jobs: Naim started a long job « in the background », the conversation goes on; when the job ends,
+// Naim comes back by itself in that conversation to report (or as soon as the user opens it)
+const bgPending = (() => { try { return JSON.parse(localStorage.getItem("naim.bgPending") || "{}"); } catch (e) { return {}; } })();
+const bgSave = () => { try { localStorage.setItem("naim.bgPending", JSON.stringify(bgPending)); } catch (e) {} };
+function bgFollowup(j) {
+  const dur = j.seconds < 60 ? `${j.seconds} s` : `${Math.floor(j.seconds / 60)} min ${String(j.seconds % 60).padStart(2, "0")} s`;
+  return `Tâche de fond terminée : « ${j.label} » (${j.code === 0 ? "réussie" : "code " + j.code}, ${dur}).\n\nDernières lignes :\n\`\`\`\n${(j.tail || "(rien)").slice(-1500)}\n\`\`\`\n\nFais le point pour moi en quelques lignes : le résultat, et ce qu'il faut faire ensuite.`;
+}
+async function bgPoll() {
+  let r; try { r = await api("/api/background"); } catch (e) { return; }
+  for (const j of r.done || []) {
+    bgEnded[j.id] = { code: j.code, at: (j.ended || Date.now() / 1000) * 1000 };
+    await api("/api/background/ack", { method: "POST", body: { id: j.id } }).catch(() => {});
+    if (!j.conv) { toast(`Tâche de fond terminée : ${j.label}`); continue; }
+    (bgPending[j.conv] ||= []).push(j); bgSave();
+    if (current?.id !== j.conv || document.hidden) notify("Naim : tâche de fond terminée", `${j.label} — Naim fait le point dans la conversation.`, { conv: j.conv });
+    if (current?.id !== j.conv) toast(`Tâche de fond terminée : ${j.label}`);
+  }
+  const live = new Set((r.running || []).map((x) => x.id));  // a line of a job that no longer runs (old conversation): over
+  for (const c of document.querySelectorAll("details.bgjob.run")) if (!live.has(c.dataset.bgid) && !bgEnded[c.dataset.bgid] && Date.now() - +c.dataset.t0 > 8000) bgEnded[c.dataset.bgid] = { code: null, at: Date.now() };
+  if (current && bgPending[current.id]?.length && !curRun()) {  // in its conversation, idle: Naim reports now
+    const j = bgPending[current.id].shift(); if (!bgPending[current.id].length) delete bgPending[current.id]; bgSave();
+    send(bgFollowup(j), [], { bg: { label: j.label, code: j.code, seconds: j.seconds } });
+  }
+}
+setInterval(bgPoll, 5000);
+// background job lines: the running time, and their end (✓ terminée / code) once the job is over
+const bgEnded = {};
+function bgTick() {
+  for (const c of document.querySelectorAll("details.bgjob")) {
+    const end = bgEnded[c.dataset.bgid], sec = Math.max(0, Math.round(((end?.at || Date.now()) - +c.dataset.t0) / 1000));
+    if (!(end && end.code == null)) $(".bgtime", c).textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")} s`;
+    if (end && c.classList.contains("run")) {
+      const fine = end.code === 0 || end.code == null;
+      c.classList.remove("run"); c.classList.add(fine ? "ok" : "ko");
+      $(".bgdots", c).innerHTML = svgI(fine ? "check" : "warn");
+      if (end.code == null) $(".bgtime", c).textContent = "";
+      $(".bgstate", c).innerHTML = `<span>${fine ? "Terminée" : "Arrêtée (code " + end.code + ")"}</span>`;
+    }
+  }
+}
+setInterval(bgTick, 1000);
 function notify(title, text, target) { if (S.notify) api("/api/notify", { method: "POST", body: { title, text, target: target || (notifyConv ? { conv: notifyConv } : null) } }).catch(() => {}); }
 // a click on a notification brings Naim back: open what it was about (once, if it is recent)
 async function openNotifTarget() {

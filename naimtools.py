@@ -222,6 +222,7 @@ class Process:
         self.id, self.name, self.command, self.cwd, self.proc = pid_id, name, command, str(cwd), proc
         self.started, self.lines, self.url, self.total = time.time(), [], None, 0
         self.lock = threading.Lock()
+        self.notify = None  # {"conv", "label"}: a background job Naim comes back to when it ends
 
     def info(self):
         code = self.proc.poll()
@@ -266,6 +267,11 @@ class ProcessManager:
             elif not p.url and (m := PORT_RE.search(line)):
                 p.url = f"http://localhost:{m.group(1)}/"
         p.proc.wait()
+        if p.notify:  # a background job: Naim is told it ended, and comes back to report (see background_done)
+            with BACKGROUND_LOCK:
+                BACKGROUND_DONE.append({"id": p.id, "conv": p.notify.get("conv"), "label": p.notify.get("label") or p.name,
+                                        "command": p.command, "code": p.proc.returncode, "seconds": round(time.time() - p.started),
+                                        "tail": p.tail(40).strip()[-3000:], "ended": time.time()})
 
     def get(self, pid_id):
         return self.procs.get(pid_id)
@@ -309,6 +315,22 @@ class ProcessManager:
 
 
 PROCESSES = ProcessManager()
+BACKGROUND_DONE, BACKGROUND_LOCK = [], threading.Lock()  # finished background jobs not yet reported to the user
+
+
+def background_state():
+    """Background jobs: those still running, and those finished but not reported yet."""
+    with BACKGROUND_LOCK:
+        done = list(BACKGROUND_DONE)
+    running = [{"id": p.id, "conv": p.notify.get("conv"), "label": p.notify.get("label") or p.name,
+                "seconds": round(time.time() - p.started)} for p in PROCESSES.procs.values()
+               if p.notify and p.proc.poll() is None]
+    return {"done": done, "running": running}
+
+
+def background_ack(job_id):
+    with BACKGROUND_LOCK:
+        BACKGROUND_DONE[:] = [d for d in BACKGROUND_DONE if d["id"] != job_id]
 
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".build", "build", "dist", ".idea", ".next"}
 
@@ -1172,15 +1194,21 @@ class Agent:
             hint = "\n(hint: the program expected keyboard input; run it again with the answers in `stdin`)"
         return f"exit code {proc.returncode}\n{out}{hint}"
 
-    def start_process(self, command, name="", keep=False):
+    def start_process(self, command, name="", keep=False, notify=False):
         if err := self._check_blocked(command) or self._check_env(command) or self._guard_own_command(command):
             return err
         if not self.approve("Lancer en arrière-plan", f"$ {command}", kind="command"):
             return "denied by the user"
+        # the user asked for a background job (« en tâche de fond, préviens-moi »): the report comes back by itself,
+        # whatever the model chose (servers and apps that keep running are not « jobs »)
+        notify = bool(notify) or (getattr(self, "_bg_intent", False) and not keep and not self.SERVER_RE.search(command.strip()))
         p = PROCESSES.start(command, self.root, name)
-        p.keep = bool(keep)
+        p.keep = bool(keep) or bool(notify)  # a background job outlives this task
+        if notify:
+            p.notify = {"conv": getattr(self, "conv_id", None), "label": name or command[:60]}
         self.started.append(p)
-        self.emit({"type": "process", "process": {**p.info(), "keep": p.keep}})
+        self.emit({"type": "process", "process": {**p.info(), "keep": p.keep, "notify": bool(p.notify),
+                                                  "label": (p.notify or {}).get("label") or p.name}})
         for _ in range(40):  # wait up to ~4 s for startup output or a URL
             time.sleep(0.1)
             if p.url or p.proc.poll() is not None or p.total >= 15:
@@ -1190,7 +1218,10 @@ class Agent:
         info = p.info()
         status = "running" if info["running"] else f"exited with code {info['exit_code']}"
         return (f"process {p.id} ({p.name}) {status}, pid {info['pid']}"
-                + (f", url {p.url}" if p.url else "") + f"\nfirst output:\n{p.tail(30).strip() or '(none yet)'}")
+                + (f", url {p.url}" if p.url else "") + f"\nfirst output:\n{p.tail(30).strip() or '(none yet)'}"
+                + ("\nBackground job: you will be told automatically when it ends, and you will report then. Now tell the "
+                   "user in one sentence what you started and that you will come back with the result, then FINISH this "
+                   "turn (do not wait for it, do not poll it)." if notify and info["running"] else ""))
 
     def wait(self, until, id=None, url=None, path=None, text=None, timeout=120):
         timeout = max(1, min(int(timeout or 120), 900))
@@ -2241,7 +2272,11 @@ class Agent:
         except OSError:
             pass
 
+    BG_INTENT_RE = re.compile(r"t[âa]che de fond|en (?:arri[èe]re[- ]plan|fond)|pr[ée]viens[- ]moi|dis[- ]moi quand|"
+                              r"quand (?:ce sera|c'est|ça sera) (?:fini|termin)|pendant ce temps", re.I)
+
     def _run(self, task, images=None):
+        self._bg_intent = bool(self.BG_INTENT_RE.search(str(task or "")))  # « en tâche de fond, préviens-moi »
         self._task_words, self._started_at = task, time.strftime("%Y-%m-%d %H:%M")
         if (prev := self._notebook_resume(task)):
             self.emit({"type": "note", "text": "Reprise de la tâche inachevée (carnet .naim/tache.md)."})

@@ -633,6 +633,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(data)
+        elif path == "/api/background":  # long jobs started « in the background »: running, and finished not reported
+            import naimtools as _nt
+            self.send_json(_nt.background_state())
         elif path == "/api/notify/last":
             self.send_json(dict(cu.LAST_NOTIF))
         elif path == "/api/changes":
@@ -785,6 +788,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(vt.activate(v))
             else:
                 self.send_json({"error": "inconnu"}, 404)
+        elif path == "/api/background/ack":
+            import naimtools as _nt
+            _nt.background_ack(self.read_json().get("id", ""))
+            self.send_json({"ok": True})
         elif path == "/api/compact":
             body = self.read_json()
             try:
@@ -1352,6 +1359,8 @@ class Handler(BaseHTTPRequestHandler):
         helper = Agent(str(folder), body.get("model", "naim"), auto_yes=bool(body.get("auto_yes")), emit=self.event,
                        approver=approver, options=options, **agent_settings(body))
         run_id = body.get("run_id") or helper.run_id
+        helper.conv_id = body.get("conv_id")  # its background jobs report back to this conversation
+        helper._bg_intent = bool(Agent.BG_INTENT_RE.search(body.get("message") or ""))
         with _lock:
             _agents[run_id] = helper  # « écris pour guider Naim » reaches this reply too
         helper._preload_tool_groups(" ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
@@ -1776,6 +1785,7 @@ class Handler(BaseHTTPRequestHandler):
                       options=options, extra_system=extra, run_id=body.get("run_id"), plan=bool(body.get("plan")),
                       **agent_settings(body))
         agent.cancel = stop  # the Stop button cancels the agent and any running command
+        agent.conv_id = body.get("conv_id")  # its background jobs report back to this conversation
         with _lock:
             _agents[body.get("run_id") or agent.run_id] = agent
 
