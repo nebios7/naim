@@ -112,6 +112,22 @@ SOCIAL_RE = re.compile(r"^\W*(?:(?:salut|bonjour|bonsoir|coucou|hello|hey|yo)\W+
                        r"(?:\W+(?:naim|toi|aujourd'hui|ce soir))?\W*$", re.I)
 
 
+# a request to DO something (create, fix, run, send…): the Agent acts, even if the message is also a question
+ACTION_RE = re.compile(r"\b(?:cr[ée]{1,2}[sz]?|cr[ée]er|fai[st]|faire|fabrique|g[ée]n[èe]re|[ée]cri[st]|[ée]crire|r[ée]dige|d[ée]veloppe|"
+                       r"construi[st]|corrige|r[ée]pare|modifie|remplace|ajoute|supprime|efface|renomme|d[ée]place|copie|"
+                       r"installe|lance|ex[ée]cute|teste|d[ée]ploie|envoie|imprime|appelle|ouvre|ferme|convertis|"
+                       r"t[ée]l[ée]charge|configure|optimise|nettoie|range|organise|planifie|mets|mettre|transforme|traduis|"
+                       r"r[ée]sume|compile|build|push|commit|sauvegarde|enregistre)\w*", re.I)
+QUESTION_RE = re.compile(r"\?\s*$|^\W*(?:c'est quoi|qu'est[- ]ce|pourquoi|comment|tu penses|que penses|quel(?:le)?s?\b|"
+                         r"est[- ]ce que|explique|dis[- ]moi|parle[- ]moi|à quoi sert|quelle est la diff[ée]rence|c'est quoi la)", re.I)
+
+
+def pure_question(text):
+    """A question that asks for nothing to be done (no action verb): it gets an answer, not a task."""
+    t = (text or "").strip()
+    return bool(t) and len(t) < 400 and bool(QUESTION_RE.search(t)) and not ACTION_RE.search(t) and not MAC_ACTION_RE.search(t)
+
+
 def trivial_message(text):
     """Only polite words (a greeting, thanks, « ok super »): no request inside."""
     t = (text or "").strip().lower()
@@ -1366,11 +1382,14 @@ class Handler(BaseHTTPRequestHandler):
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
-        file_work = bool(FILE_WORK_RE.search(asked))
+        file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
+        named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
         if not file_work and not files:
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
-                "Markdown. Ne crée ni ne modifie aucun fichier.)"))
+                "Markdown. Ne crée ni ne modifie aucun fichier.)") + (
+                f" (Le fichier {', '.join(named[:3])} est dans le dossier du projet : lis-le d'abord avec read_file, "
+                "puis explique ce que tu y vois, sans le modifier.)" if named else ""))
         if MAC_ACTION_RE.search(body["message"] or ""):  # « imprime-le », « ouvre Safari »: it acts, it does not explain
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Fais-le toi-même sur ce Mac avec tes outils, ne m'explique pas comment faire. run_command agit sur le "
@@ -1712,6 +1731,10 @@ class Handler(BaseHTTPRequestHandler):
             # « bonsoir », « merci », « ça va ? » in Agent mode: answered like in the Chat (seconds), the Agent's
             # long instructions and tools are not needed to say hello
             return self.run_chat({**body, "mode": "chat"}, stop)
+        if not body.get("images") and pure_question(msg):
+            # « c'est quoi… ? », « pourquoi mon fichier plante ? », « tu penses quoi de… ? » with nothing to DO: an
+            # answer in the conversation (it may read files, it changes nothing). Anything to do stays with the Agent.
+            return self.run_chat({**body, "mode": "chat", "_question": True}, stop)
         events = queue.Queue()
 
         def approver(action, detail):
