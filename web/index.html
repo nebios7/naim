@@ -3937,6 +3937,7 @@ const TABS = {
     </div>
     <div class="sgroup">
       ${row("Envoi d'emails", "Naim peut envoyer un email avec l'app Mail de ce Mac (comptes déjà configurés dans Mail).", sw("enable_email"))}
+      ${row("Signature des emails", "Ajoutée sous chaque email et brouillon de Naim. Vide = « Naim · Assistant de " + esc(S.user_name || "toi") + " ». Une ligne par retour (\\n).", `<input class="field" data-k="email_signature" placeholder="Naim · Assistant de ${esc(S.user_name || "…")}" value="${esc(S.email_signature || "")}" style="width:260px">`)}
       <div class="srow col"><div class="sl"><b>Emails autorisés sans confirmation</b><small>Une adresse par ligne. Vers une autre adresse, Naim te demande — sauf si « Tout autoriser » est coché (ou la tâche planifiée en « Tout autoriser ») : alors il envoie à n'importe quelle adresse, pièces jointes comprises.</small></div>
       <textarea data-k="email_allowed" class="mono" style="min-height:60px" placeholder="moi@exemple.com">${esc(S.email_allowed)}</textarea></div>
     </div>

@@ -107,7 +107,33 @@ def addresses(text):
 SIMULATED = None  # a list while Naim checks itself: emails are recorded there instead of being sent
 
 
+import json as _json  # noqa: E402
+import os as _os  # noqa: E402
+
+
+def signature():
+    """Naim's signature, added under every email it sends (settings: « email_signature », empty = none)."""
+    try:
+        s = _json.loads((Path(_os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "settings.json").read_text())
+    except (OSError, ValueError):
+        s = {}
+    if str(s.get("email_signature") or "").strip():  # the user's own signature (« \n » = new line)
+        return str(s["email_signature"]).strip().replace("\\n", "\n")
+    who = str(s.get("user_name") or "").strip()
+    return "Naim" + (f"\nAssistant de {who}" if who else "")
+
+
+def signed(body):
+    """The body with Naim's signature at the end (once: not added again if it is already there)."""
+    sig = signature()
+    text = (body or "").rstrip()
+    if not sig or text.endswith(sig) or text.endswith(sig.split("\n")[0]):
+        return text
+    return f"{text}\n\n--\n{sig}"
+
+
 def send(to, subject, body, attachments=()):
+    body = signed(body)
     rcpt = addresses(to)
     if not rcpt:
         raise MailError("aucune adresse email valide")
@@ -237,7 +263,7 @@ def inbox(limit=20, unread_only=True, include_seen=False):
 
 def draft_reply(mid, text):
     """Create a reply DRAFT (saved in Drafts, not sent) and remember the message as processed."""
-    _osa(DRAFT_SCRIPT, int(mid), text)
+    _osa(DRAFT_SCRIPT, int(mid), signed(text))
     mark_seen(mid)
 
 
