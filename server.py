@@ -1358,7 +1358,7 @@ class Handler(BaseHTTPRequestHandler):
         prompt_tokens = 0
         nudges = 1 if body.get("_relaunched") else 0
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
-        seen_calls, stuck = {}, False
+        seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
         file_work = bool(FILE_WORK_RE.search(asked))
         if not file_work and not files:
@@ -1408,9 +1408,9 @@ class Handler(BaseHTTPRequestHandler):
                 if stop.is_set():
                     stream.close()  # hang up: llama.cpp stops writing at once
                     break
-                if helper._inbox and content.strip():  # the user speaks while Naim answers: it stops here and goes on
-                    stream.close()                      # with what was just said (read at the top of the next step)
-                    redirected = True
+                if helper._inbox and content.strip() and time.time() - last_redirect > 20:  # the user speaks while
+                    stream.close()  # Naim answers: it stops here and goes on with what was just said (at most every 20 s)
+                    redirected, last_redirect = True, time.time()
                     break
                 if repeating(content):  # the model loops on the same line (it happens with images): cut at once
                     stream.close()
@@ -1463,8 +1463,24 @@ class Handler(BaseHTTPRequestHandler):
                 if content.strip():
                     self.event({"type": "token", "text": "\n\n"})
                 continue
+            asked = [w for w, rx in (("l'imprimer", r"imprim"), ("envoyer le SMS / message", r"\bsms\b|texto|imessage|message"),
+                                      ("passer l'appel", r"appell?e|appeler|appel\b")) if re.search(rx, body["message"] or "", re.I)]
+            if (not calls and not stop.is_set() and asked and not mac_tried and nudges < 3
+                    and MAC_ACTION_RE.search(body["message"] or "")):
+                # it was asked to act on the Mac (print, send, call) and finishes without even trying: back to work
+                nudges += 1
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content})
+                    self.event({"type": "token", "text": "\n\n"})
+                messages.append({"role": "user", "content": "Tu n'as pas encore fait ce que je t'ai demandé : " + ", ".join(asked)
+                                 + ". Fais-le maintenant toi-même avec run_command (imprimer : lp -d <imprimante> <fichier> ; "
+                                 "SMS : chercher_contact ou le numéro que je t'ai donné, puis osascript avec Messages ; appel : "
+                                 "open \"tel:<numéro>\"). Ne me dis pas de le faire moi-même. Je validerai si on me le demande."})
+                continue
             if stop.is_set() or not calls:
                 break
+            if any(c["function"]["name"] == "run_command" for c in calls):
+                mac_tried = True
             messages.append({"role": "assistant", "content": content, "tool_calls": calls})
             if content.strip():
                 self.event({"type": "token", "text": "\n\n"})
