@@ -2748,7 +2748,25 @@ function addBot(m, idx) {
       if (bad) el.open = true;
       block(el);
     },
-    event(icon, t) { const n = document.createElement("div"); n.className = "evnote"; n.innerHTML = `<span class="evic">${menuIcon(icon)}</span><span>${esc(t)}</span>`; block(n); },
+    event(icon, t) {
+      // a skill, an MCP server or a memory used by Naim is part of its work: it goes INSIDE the block of actions, at
+      // its place in time (first if it came first), not as a tag above the task
+      const kind = { "📘": "skill", "🧠": "mem", "🔌": "mcp", "🛠": "mcp" }[icon];
+      if (kind) {
+        if (!group) {
+          group = document.createElement("details"); group.className = "agroup"; group.open = !!S.live_actions && !v._replay;
+          group.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum"></span></summary><div class="arows"></div>`;
+          flow.appendChild(group);
+        }
+        counts[kind] = (counts[kind] || 0) + 1;
+        $(".gsum", group).textContent = groupSummary(counts);
+        const row = document.createElement("div"); row.className = "arow ok";
+        row.innerHTML = `<div class="aline"><span class="aic">${menuIcon(icon)}</span><span class="alabel">${esc(t)}</span></div>`;
+        $(".arows", group).appendChild(row);
+        return;
+      }
+      const n = document.createElement("div"); n.className = "evnote"; n.innerHTML = `<span class="evic">${menuIcon(icon)}</span><span>${esc(t)}</span>`; block(n);
+    },
     subagent(ev) {
       // one card per sub-agent, side by side: name, what it is doing now, how long
       let grid = flow.querySelector(".subgrid");

@@ -565,10 +565,13 @@ class Agent:
         return "\n\n".join(parts)
 
     # ------------------------------------------------------------------ helpers
-    def resolve(self, path):
-        path = self._undouble(path)
-        p = (self.root / (path or ".")).resolve()
+    def resolve(self, path, read=False):
+        path = self._undouble(os.path.expanduser(str(path or ".")))  # « ~/… » is the user's home, as in the Terminal
+        p = (self.root / path).resolve()
         if p != self.root and self.root not in p.parents:
+            skills = (ext.HOME / "skills").resolve()
+            if read and (p == skills or skills in p.parents):  # its skills' files (examples, templates): readable
+                return p
             raise ValueError(f"path outside the project: {path}")
         return p
 
@@ -584,7 +587,11 @@ class Agent:
         return path
 
     def rel(self, p):
-        return str(p.relative_to(self.root)) or "."
+        try:
+            return str(p.relative_to(self.root)) or "."
+        except ValueError:  # outside the project (its skills' files): shown from the home folder
+            home = Path.home()
+            return "~/" + str(p.relative_to(home)) if home in p.parents else str(p)
 
     @staticmethod
     def _parse_rules(text):
@@ -640,7 +647,7 @@ class Agent:
 
     # ------------------------------------------------------------------ tools
     def list_files(self, path="."):
-        base = self.resolve(path)
+        base = self.resolve(path, read=True)
         if not base.is_dir():
             return f"error: not a directory: {path}"
         out = []
@@ -653,7 +660,7 @@ class Agent:
         return "\n".join(out) or "(empty directory)"
 
     def read_file(self, path):
-        p = self.resolve(path)
+        p = self.resolve(path, read=True)
         if not p.is_file():
             return f"error: file not found: {path}"
         if p.suffix.lower() in DOC_EXTS:  # Word, PDF, Excel, PowerPoint…: their text, never the raw bytes
