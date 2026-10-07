@@ -476,6 +476,10 @@ class Agent:
                 self.emit({"type": "note", "text": f"MCP indisponible : {e}"})
         if self.plan:
             tools = [t for t in tools if t["function"]["name"] in READ_ONLY]
+        elif self.options.get("backend") in ("llamacpp", "mlx"):
+            # the local engine keeps what it already read only if the tool list never changes (the tools come first in
+            # what it reads): all of them, always the same, instead of groups loaded according to the request words
+            self._tool_groups = {}
         else:  # specialised tools wait in their group until the task needs them
             self._tool_groups = {}
             for g, (names, _desc, _rx) in TOOL_GROUPS.items():
@@ -1373,7 +1377,7 @@ class Agent:
             self.emit({"type": "subagent", "name": name, "status": "start", "task": t.get("task", "")})
             child = Agent(self.root, self.model, self.think, self.auto_yes, self.approver,
                           lambda ev, n=name: self.emit({**ev, "sub": n}) if ev["type"] not in ("status",) else None,
-                          options=self.options, extra_system=self.extra_system, max_steps=min(self.max_steps, 25),
+                          options={k: v for k, v in self.options.items() if k != "slot"},  # sub-agents: any free slot (in parallel) extra_system=self.extra_system, max_steps=min(self.max_steps, 25),
                           auto_writes=self.auto_writes, auto_commands=self.auto_commands, blocked=self.blocked,
                           run_id=self.run_id, subagent=True, features={**self.features, "subagents": False},
                           disabled_skills=self.disabled_skills, auto_mcp=self.auto_mcp, power=self.power)

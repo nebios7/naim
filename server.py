@@ -106,6 +106,12 @@ d'accord dac super génial genial parfait top cool nickel très tres bonne nuit 
 mohamed et encore c'est cool ça ca marche""".split())
 
 
+# small talk with a question mark: « ça va ? », « Salut Naim, comment vas-tu ? », « tu vas bien ? »
+SOCIAL_RE = re.compile(r"^\W*(?:(?:salut|bonjour|bonsoir|coucou|hello|hey|yo)\W+)?(?:naim\W+)?(?:et toi\W+)?"
+                       r"(?:ça va|ca va|comment (?:ça va|ca va|vas[- ]tu|tu vas|allez[- ]vous)|tu vas bien|vous allez bien)"
+                       r"(?:\W+(?:naim|toi|aujourd'hui|ce soir))?\W*$", re.I)
+
+
 def trivial_message(text):
     """Only polite words (a greeting, thanks, « ok super »): no request inside."""
     t = (text or "").strip().lower()
@@ -1160,7 +1166,7 @@ class Handler(BaseHTTPRequestHandler):
         """Short, deterministic model call used to extract facts for the long-term memory."""
         b = {**body, "mode": "chat"}
         options, _ = model_options(b)
-        options = {**options, "temperature": 0.1, "num_predict": 500, "slot": 1}  # its own slot: the conversation keeps its cache
+        options = {**options, "temperature": 0.1, "num_predict": 500, "slot": llamacpp.bg_slot()}  # its own slot: Chat and Agent keep their cache
         model = b.get("model") or (b.get("settings") or {}).get("model") or "naim"
         return lambda msgs: (ollama_chat(model, msgs, options=options) or {}).get("content", "")
 
@@ -1182,8 +1188,8 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------ modes
     def run_chat(self, body, stop):
         options, extra = model_options(body)
-        if body.get("voice") or body.get("_warm"):  # spoken conversation (and the warm-up that prepares it): always the
-            options = {**options, "slot": 0}        # same slot, whose cache already holds Naim's instructions and the talk
+        if options.get("backend") == "llamacpp":  # the Chat's own slot: its instructions and the conversation stay read
+            options = {**options, "slot": llamacpp.SLOT_CHAT}
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
@@ -1701,6 +1707,11 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def run_agent(self, body, stop):
+        msg = (body.get("message") or "").strip()
+        if not body.get("images") and (trivial_message(msg) or SOCIAL_RE.match(msg)):
+            # « bonsoir », « merci », « ça va ? » in Agent mode: answered like in the Chat (seconds), the Agent's
+            # long instructions and tools are not needed to say hello
+            return self.run_chat({**body, "mode": "chat"}, stop)
         events = queue.Queue()
 
         def approver(action, detail):
@@ -1734,6 +1745,8 @@ class Handler(BaseHTTPRequestHandler):
             return entry["answer"]
 
         options, extra = model_options(body)
+        if options.get("backend") == "llamacpp":  # the Agent's own slot: its (longer) instructions and tools stay read
+            options = {**options, "slot": llamacpp.SLOT_AGENT}
         agent = Agent(body.get("project") or str(Path.home()), body.get("model", "naim"),
                       think=bool(body.get("think")), auto_yes=bool(body.get("auto_yes")),
                       approver=approver, asker=asker, emit=events.put, history=body.get("history", []),
@@ -2037,15 +2050,34 @@ def warm_up():
     try:
         time.sleep(4)
         s = _settings()
-        if s.get("naim_backend", "llamacpp") != "llamacpp" or s.get("mode") == "agent" or not llamacpp.available():
+        if s.get("naim_backend", "llamacpp") != "llamacpp" or not llamacpp.available():
             return
         h = Handler.__new__(Handler)
         h.event = lambda ev: None
         body = {"message": "bonjour, es-tu prêt ?", "mode": "chat", "model": s.get("model") or "naim", "history": [], "_warm": True,
                 "project": s.get("project"), "settings": {**s, "num_predict": 1, "memory_auto": False, "think": False}}
-        h.run_chat(body, threading.Event())
+        order = ["agent", "chat"] if s.get("mode") == "agent" else ["chat", "agent"]  # the mode in use first
+        for mode in order:
+            if mode == "chat":
+                h.run_chat(body, threading.Event())
+            else:
+                warm_agent(s)
     except Exception as e:  # noqa: BLE001 — only a speed-up: never a problem if it fails
         print(f"préchauffage impossible : {e}", flush=True)
+
+
+def warm_agent(s):
+    """The Agent's instructions and tools (longer than the Chat's) read once in its own slot: its first task, even a
+    « bonsoir », then starts at once instead of waiting for that reading (~3 min on a MacBook Air)."""
+    body = {"model": s.get("model") or "naim", "settings": {**s, "num_predict": 1, "think": False}}
+    options, extra = model_options(body)
+    options = {**options, "slot": llamacpp.SLOT_AGENT, "num_predict": 1}
+    agent = Agent(s.get("project") or str(Path.home()), body["model"], think=False, auto_yes=bool(s.get("autoYes")),
+                  approver=lambda *a: False, asker=lambda *a, **k: None, emit=lambda ev: None, history=[],
+                  options=options, extra_system=extra, **agent_settings(body))  # built like a real task (same tools)
+    for _ in ollama_chat(body["model"], agent.messages + [{"role": "user", "content": "bonjour"}], tools=agent.tools,
+                         stream=True, options=options):
+        pass
 
 
 def serve(port=8765):

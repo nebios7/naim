@@ -171,9 +171,10 @@ class Server:
             # so each slot keeps the full context
             slots = slots_for(cfg.get("parallel"))
             if hardware()["ram_gb"] >= 16:
-                # one more slot for the background jobs (memory, summaries): they no longer overwrite what the
-                # conversation's slot has already read (its ~6k tokens of instructions and tools stay in cache)
-                slots = max(slots, 2)
+                # its own slot for each kind of work, so that none overwrites what another has already read:
+                # 0 = Chat, 1 = Agent (their instructions and tools differ: ~6k and ~10k tokens to read), last =
+                # background jobs (memory, summaries). Sub-agents get the slots in between.
+                slots = max(slots, 3)
             cmd = [exe, "-m", str(gguf), "--host", "127.0.0.1", "--port", str(PORT), "-c", str(ctx * slots),
                    # a checkpoint every 2048 tokens (default 8192): a new task re-reads only what follows Naim's fixed
                    # instructions (~7k tokens shared by every task), not the whole prompt; 16 kept (50 MB each)
@@ -231,6 +232,27 @@ class Server:
 
 
 SERVER = Server()
+SLOT_CHAT, SLOT_AGENT = 0, 1
+_slots_seen = {"n": 0, "at": 0.0}
+
+
+def total_slots():
+    """How many slots the running llama-server has (asked to it: it may have been started by another Naim)."""
+    import time as _t
+    if _t.time() - _slots_seen["at"] > 30:
+        try:
+            with urllib.request.urlopen(URL + "/props", timeout=2) as r:
+                _slots_seen["n"] = int(json.load(r).get("total_slots") or 1)
+            _slots_seen["at"] = _t.time()  # remembered only when the engine answered (it may be starting)
+        except (urllib.error.URLError, OSError, ValueError):
+            return _slots_seen["n"] or 1
+    return _slots_seen["n"]
+
+
+def bg_slot():
+    """The slot of the background jobs (memory, summaries): the last one, never the Chat's nor the Agent's."""
+    n = total_slots()
+    return n - 1 if n >= 3 else (1 if n == 2 else 0)
 atexit.register(SERVER.stop)
 
 
@@ -288,7 +310,7 @@ def _payload(messages, tools, think, stream, options, vision=None):
             body[dst] = o[src]
     # safety cap: a small model can fall into an endless repetition; one reply never needs more than this
     body["max_tokens"] = o["num_predict"] if o.get("num_predict") else 8192
-    if o.get("slot") is not None:  # a background job uses its own slot (see start: the last one)
+    if o.get("slot") is not None and int(o["slot"]) < total_slots():  # its own slot (Chat 0, Agent 1, background last)
         body["id_slot"] = int(o["slot"])
     if tools:
         body["tools"] = tools
