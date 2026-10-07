@@ -1,30 +1,54 @@
-// Renders the Naim app icon (1024x1024 PNG): the grey pixel robot on a rounded dark-grey square.
+// Renders the Naim app icon (1024x1024 PNG): the name « Naim » in a serif face, light on a rounded dark square,
+// with the thin line of the launch window under it (the same look as the app's launch screen, no robot).
 import AppKit
 
 let size: CGFloat = 1024
 let image = NSImage(size: NSSize(width: size, height: size))
 image.lockFocus()
 
+// the macOS icon grid: a rounded square inset from the canvas, with a soft shadow
 let inset: CGFloat = 100
 let rect = NSRect(x: inset, y: inset, width: size - 2 * inset, height: size - 2 * inset)
-NSColor(calibratedRed: 0.149, green: 0.149, blue: 0.141, alpha: 1).setFill()   // #262624
-NSBezierPath(roundedRect: rect, xRadius: 185, yRadius: 185).fill()
+let shape = NSBezierPath(roundedRect: rect, xRadius: 185, yRadius: 185)
+NSGraphicsContext.saveGraphicsState()
+let shadow = NSShadow()
+shadow.shadowColor = NSColor(calibratedWhite: 0, alpha: 0.35)
+shadow.shadowBlurRadius = 24
+shadow.shadowOffset = NSSize(width: 0, height: -10)
+shadow.set()
+NSColor(calibratedRed: 0.086, green: 0.086, blue: 0.082, alpha: 1).setFill()   // #161615, like the launch window
+shape.fill()
+NSGraphicsContext.restoreGraphicsState()
+// a faint light from the top, so the square is not flat
+NSGradient(starting: NSColor(calibratedWhite: 1, alpha: 0.07), ending: NSColor(calibratedWhite: 1, alpha: 0))!
+    .draw(in: shape, angle: -90)
+NSColor(calibratedWhite: 1, alpha: 0.08).setStroke()
+shape.lineWidth = 3
+shape.stroke()
 
-// same 16x16 pixel robot as the web UI (x, y, w, h, color); y grows downward in the grid
-let body = NSColor(calibratedRed: 0.788, green: 0.780, blue: 0.749, alpha: 1)   // #c9c7bf
-let dark = NSColor(calibratedRed: 0.122, green: 0.118, blue: 0.114, alpha: 1)   // #1f1e1d
-let eye = NSColor(calibratedRed: 0.941, green: 0.933, blue: 0.902, alpha: 1)    // #f0eee6
-let pixels: [(CGFloat, CGFloat, CGFloat, CGFloat, NSColor)] = [
-    (7, 0, 2, 2, eye), (7.5, 2, 1, 1, body), (3, 3, 10, 6, body), (2, 5, 1, 2, body), (13, 5, 1, 2, body),
-    (4, 4, 8, 4, dark), (5, 5, 2, 2, eye), (9, 5, 2, 2, eye), (5, 9, 6, 4, body), (7, 10, 2, 1, dark),
-    (3, 10, 2, 1, body), (11, 10, 2, 1, body), (5, 13, 2, 2, body), (9, 13, 2, 2, body),
-]
-let cell: CGFloat = 38
-let origin = NSPoint(x: (size - 16 * cell) / 2, y: (size - 15 * cell) / 2)
-for (x, y, w, h, color) in pixels {
-    color.setFill()
-    NSRect(x: origin.x + x * cell, y: size - origin.y - (y + h) * cell, width: w * cell, height: h * cell).fill()
+// « Naim » in a serif face (New York, else Georgia / Times)
+let text = NSColor(calibratedRed: 0.910, green: 0.902, blue: 0.882, alpha: 1)    // #e8e6e1
+func serif(_ size: CGFloat) -> NSFont {
+    if let ny = NSFont.systemFont(ofSize: size, weight: .medium).fontDescriptor.withDesign(.serif),
+       let f = NSFont(descriptor: ny, size: size) { return f }
+    return NSFont(name: "Georgia", size: size) ?? NSFont(name: "Times New Roman", size: size)!
 }
+let font = serif(250)
+let para = NSMutableParagraphStyle()
+para.alignment = .center
+let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: text, .kern: -6, .paragraphStyle: para]
+let word = NSAttributedString(string: "Naim", attributes: attrs)
+let wsize = word.size()
+let wordY = (size - wsize.height) / 2 + 30
+word.draw(in: NSRect(x: 0, y: wordY, width: size, height: wsize.height))
+
+// the thin line of the launch window, under the name
+let lineW: CGFloat = 250, lineH: CGFloat = 8, lineY = wordY - 38
+NSColor(calibratedWhite: 1, alpha: 0.14).setFill()
+NSBezierPath(roundedRect: NSRect(x: (size - lineW) / 2, y: lineY, width: lineW, height: lineH), xRadius: 4, yRadius: 4).fill()
+text.withAlphaComponent(0.75).setFill()
+NSBezierPath(roundedRect: NSRect(x: (size - lineW) / 2 + 40, y: lineY, width: 100, height: lineH), xRadius: 4, yRadius: 4).fill()
+
 image.unlockFocus()
 
 let rep = NSBitmapImageRep(data: image.tiffRepresentation!)!
