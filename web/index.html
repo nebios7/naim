@@ -654,7 +654,9 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .aout .errdet summary::-webkit-details-marker { display: none; }
 .aout .errdet summary::before { content: "› "; }
 .aout .errdet[open] summary::before { content: "⌄ "; }
-.md .evnote.inline { margin: 10px 0; }
+.evnote { width: fit-content; max-width: 100%; }  /* the remark takes the size of its text, not the whole width */
+.md .evnote.inline { margin: 12px 0; padding: 3px 12px 3px 9px; border-radius: 999px; background: var(--side); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.md .evnote.inline span:last-child { color: var(--text); }
 .approval .apwhat { font-size: 15px; margin: 6px 0 8px; line-height: 1.4; }
 .approval .apdet { margin: 0 0 10px; }
 .approval .apdet summary { cursor: pointer; color: var(--muted); font-size: 12.5px; list-style: none; }
@@ -2580,7 +2582,9 @@ function addBot(m, idx) {
         let html = "", from = 0;
         for (const n of notes) {
           const at = Math.min(n.at, t.length);
-          html += md(t.slice(from, at)) + `<div class="evnote inline"><span class="evic">${menuIcon("💬")}</span><span>${esc(n.text)}</span></div>`;
+          let part = t.slice(from, at).replace(/\s+$/, "");
+          if (part && !/[.!?:…»)\]`]$/.test(part)) part += "…";  // cut in the middle of a sentence: it shows
+          html += md(part) + `<div class="evnote inline"><span class="evic">${menuIcon("💬")}</span><span>${esc(n.text)}</span></div>`;
           from = at;
         }
         t = null; body.innerHTML = html + md((v._text || "").slice(from));
