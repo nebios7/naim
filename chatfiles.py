@@ -59,7 +59,12 @@ def _unique(folder, name):
 def _html(content, title):
     content = content or ""
     if re.search(r"<(html|body|div|p|h1|table|section)\b", content, re.I):
-        return content if "<html" in content.lower() else f"<!doctype html><meta charset='utf-8'><title>{escape(title)}</title>{content}"
+        if "<html" not in content.lower():
+            return f"<!doctype html><meta charset='utf-8'><title>{escape(title)}</title>{content}"
+        if not re.search(r"<meta[^>]+charset", content, re.I):  # without it, WebKit reads the accents as Latin-1 (« Ã© »)
+            content = re.sub(r"(<head[^>]*>)", r"\1<meta charset='utf-8'>", content, count=1, flags=re.I) if re.search(r"<head", content, re.I) \
+                else re.sub(r"(<html[^>]*>)", r"\1<head><meta charset='utf-8'></head>", content, count=1, flags=re.I)
+        return content
     return docs.markdown_html(content, title)
 
 
