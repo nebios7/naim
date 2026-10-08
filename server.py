@@ -1144,7 +1144,9 @@ class Handler(BaseHTTPRequestHandler):
             # replace Naim with the file), so the page sends it here and it lands in ~/Downloads, shown in the Finder
             b = self.read_json()
             try:
-                name = Path(str(b.get("name") or "naim.txt")).name.lstrip(".") or "naim.txt"
+                name = Path(str(b.get("name") or "")).name.lstrip(".")
+                if not name:
+                    raise ValueError("nom de fichier manquant")
                 data = base64.b64decode(b["base64"]) if b.get("base64") else str(b.get("text") or "").encode()
                 dl = Path.home() / "Downloads"
                 p = Path(name)
@@ -1404,6 +1406,7 @@ class Handler(BaseHTTPRequestHandler):
     def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
         prompt_tokens = 0
+        started = time.time()  # files made from now on are this reply's deliverables
         nudges = 1 if body.get("_relaunched") else 0
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
@@ -1597,6 +1600,15 @@ class Handler(BaseHTTPRequestHandler):
                         result = helper.call_tool(name, args)
                         if name == "send_email":
                             sent, mail_error = (True, None) if str(result).startswith("ok") else (sent, result)
+                        elif (name in ("convert_document", "make_diagram", "run_command", "write_file", "edit_file")
+                              and helper.root.resolve() != Path.home().resolve() and not str(result).startswith(("error", "refused"))):
+                            # a PDF, a plan, an image made by another tool than creer_fichier: shown too, with Ouvrir / Finder
+                            here = helper.root if helper.root.resolve() != chatfiles.OUT.resolve() else None
+                            known = {f["path"] for f in made}
+                            new_files = [f for f in helper._deliverables(started) if f["path"] not in known]
+                            if new_files and (here or not made):
+                                made.extend(reversed(new_files))
+                                self.event({"type": "deliverables", "root": str(helper.root), "files": list(reversed(made))})
                 except Exception as e:  # a tool error is told to the model, never a crash of the reply
                     result = f"error: {e}"
                 result = str(result)

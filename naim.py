@@ -150,6 +150,17 @@ def run_server():
     atexit.register(PROCESSES.stop_all)
     atexit.register(extensions.MCP.stop_all)
     atexit.register(llamacpp.SERVER.stop)
+    parent = os.getppid()
+    try:
+        by_app = "Naim.app" in subprocess.run(["ps", "-o", "comm=", "-p", str(parent)], capture_output=True, text=True).stdout
+    except OSError:
+        by_app = False
+    if by_app:  # Naim.app force-quit: its engine must not stay alone, the next Naim would reuse this old code
+        def orphan_watch():
+            while os.getppid() == parent:
+                time.sleep(3)
+            os.kill(os.getpid(), signal.SIGTERM)
+        threading.Thread(target=orphan_watch, daemon=True, name="naim-orphan-watch").start()
     print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} moteur Naim prêt sur {URL}", flush=True)
     try:
         httpd.serve_forever()
