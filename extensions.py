@@ -895,7 +895,8 @@ SKILL_TRIGGERS = {
     "pdf": r"\bpdf\b",
     "excel": r"\b(excel|xlsx|tableur)\b",
     "word": r"\b(word|docx)\b",
-    "presentation": r"\b(pr[ée]sentation|powerpoint|pptx|diapo)",
+    # slides; « la page de présentation d'un café » is a web page, not slides
+    "presentation": r"\b(powerpoint|pptx|diapo|keynote|slides?\b)|(?<!page de )(?<!site de )(?<!page d'accueil et de )\bpr[ée]sentation\b(?! (?:d'une? |du |de la )?(?:site|page|web))",
     "analyse-donnees": r"\b(csv|analyse[rz]? (les |des )?donn[ée]es|pandas|graphiques?|statistiques)\b",
     "scraping": r"\b(scrap\w*|extraire .* site)\b",
     "react-native": r"\breact[- ]?nati\w*|\bexpo\b|\bapp(lication)? mobile (en |avec )?(js|javascript|react)",
