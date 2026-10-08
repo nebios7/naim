@@ -159,13 +159,15 @@ def with_first_request(message, history):
     nothing asked first (« … et imprime-le ») is forgotten. Else the message unchanged."""
     msg = (message or "").strip()
     hist = [h for h in (history or []) if h.get("role") in ("user", "assistant")]
-    if not msg or len(msg) > 120 or len(hist) < 2 or hist[-1].get("role") != "assistant":
+    # only a short answer (« Un programme de calcul », « en PDF ») — a sentence of its own is a new request
+    if not msg or len(msg.split()) > 8 or len(hist) < 2 or hist[-1].get("role") != "assistant":
         return message
     if "?" not in str(hist[-1].get("content") or "")[-400:]:
         return message
     first = str(hist[-2].get("content") or "").strip() if hist[-2].get("role") == "user" else ""
-    if not first or trivial_message(first) or first.lower() in msg.lower():
-        return message
+    if (not first or trivial_message(first) or SOCIAL_RE.match(first) or first.lower() in msg.lower()
+            or not (MAKE_RE.search(first) or MAC_ACTION_RE.search(first) or FILE_WORK_RE.search(first))):
+        return message  # « Salut, comment vas-tu ? » is not a request to come back to
     return f"{first}\n\n(Réponse à ta question : {msg}. Fais maintenant TOUT ce que je demandais ci-dessus.)"
 
 

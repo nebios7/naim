@@ -2275,9 +2275,11 @@ window.naimDictation = (text, final, error) => {
   if (talk.on && (voice.audio || (voice.spoke && voice.preparing))) {  // Naim is speaking
     const said = text.trim();
     if (!said || talkEcho(said, true)) return;                             // its own voice: ignored
-    if (TALK_STOP_ANY.test(said) && said.split(/\s+/).length <= 8) { talkHush(); return; }  // « stop »: it stops at once
-    if (said.split(/\s+/).length < 4) return;   // a few words while it speaks: not enough to be you
-    voiceStop(); talk.bargeIn = true;             // you really talk: it goes quiet, what you say becomes your instruction
+    // only the words to stop it count while it speaks: the Mac often mishears its voice through the speakers (« est-ce que
+    // tu parles tonton… »), and such words, taken for you, were sent as your message. Once it is silent, it listens to you.
+    const hit = said.split(/\s+/).slice(-8).join(" ").match(TALK_STOP_ANY);
+    if (hit && !(voice.said || "").toLowerCase().includes(hit[0].toLowerCase())) { talkHush(); return; }  // « stop », « attends »: it stops at once (not its own « attends »)
+    return;
   }
   if (talk.on && text.trim()) { clearTimeout(talk.timer); talk.timer = setTimeout(talkSend, TALK_SILENCE); }
   const inp = $("#input");
@@ -2337,7 +2339,7 @@ function talkStop() {
 function talkListen() { if (talk.on && !dictation.on) startDictation(); }
 // « stop », « arrête », « tais-toi », « chut », « c'est bon »…: Naim stops speaking and working, and listens
 const TALK_STOP = /^\s*(?:(?:non|bon|ok|c'est bon|mais|eh|hé|oh)[ ,!.]*)*(?:j'ai dit |je t'ai dit )?(?:stop|stoppe|arr[eê]te(?:[sz]|[- ]toi)?(?: de parler| ça)?|tais[- ]toi|chut|silence|ça suffit|ca suffit|c'est bon)\b/i;
-const TALK_STOP_ANY = /\b(stop|arr[eê]te[sz]? de parler|tais[- ]toi|chut)\b/i;
+const TALK_STOP_ANY = /\b(stop|arr[eê]te[sz]?|attends|attend|tais[- ]toi|chut|silence)\b/i;
 function talkEcho(text, strict) {  // what the microphone heard is Naim's own voice (speakers), not you
   const stem = (w) => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "").slice(0, 4);
   const words = (text.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ']{3,}/g) || []);
