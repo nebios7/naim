@@ -287,6 +287,8 @@ body.noside aside#side { display: none; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
 .dot.on { background: var(--ok); }
 .dot.idle { background: var(--muted); opacity: .7; }  /* waiting for the first message: not an error */
+/* opening preparation (instructions and tools read once): a slow amber pulse, then green « prêt » */
+.dot.warming, .modelpick .mdot.warming { background: var(--warn, #d9a441); opacity: 1; animation: lpulse 1.6s ease-in-out infinite; }
 
 /* ================= main */
 main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -5014,9 +5016,13 @@ async function checkStatus() {
     const engineOn = onMlx ? s.mlx.running : onLlama ? s.llamacpp.running : false;  // short: « Naim · prêt » / « Naim · en veille »
     $("#dot").classList.toggle("on", (onMlx || onLlama) ? engineOn : s.ollama);
     $("#dot").classList.toggle("idle", (onMlx || onLlama) && !engineOn);
-    $("#statusText").textContent = (onMlx || onLlama) ? `Naim · ${engineOn ? "prêt" : "en veille"}` : !s.ollama ? "Ollama injoignable" : others.length ? `⚠ ${others.length} autre${others.length > 1 ? "s" : ""} modèle${others.length > 1 ? "s" : ""} chargé${others.length > 1 ? "s" : ""}` : `Ollama · ${S.model}`;
+    const warming = onLlama && s.warm && s.warm.state !== "ready";
+    $("#dot").classList.toggle("warming", warming);
+    if (warming) { $("#dot").classList.remove("idle"); clearTimeout(checkStatus._t); checkStatus._t = setTimeout(checkStatus, 4000); }
+    $("#statusText").textContent = warming ? `Naim · préparation${s.warm.step ? " " + s.warm.step : "…"}` : (onMlx || onLlama) ? `Naim · ${engineOn ? "prêt" : "en veille"}` : !s.ollama ? "Ollama injoignable" : others.length ? `⚠ ${others.length} autre${others.length > 1 ? "s" : ""} modèle${others.length > 1 ? "s" : ""} chargé${others.length > 1 ? "s" : ""}` : `Ollama · ${S.model}`;
     const st = $("#statusText").parentElement;
     st.title = others.length ? `Chargés en mémoire : ${s.loaded.join(", ")}.\nIls ralentissent Naim (Ollama traite une requête à la fois). Clique pour les décharger.`
+      : warming ? "Naim lit une fois ses instructions et ses outils (Chat puis Agent), quelques minutes après l'ouverture. Tu peux déjà écrire : la première réponse sera seulement plus lente."
       : (onMlx || onLlama) ? (engineOn ? "Le modèle de Naim est chargé : il répond tout de suite." : "Le modèle de Naim se charge au premier message (quelques secondes).") + " Clique pour les réglages du moteur." : "État d'Ollama";
     st.style.cursor = others.length ? "pointer" : "";
     st.onclick = others.length ? async () => { if (!confirm(`Décharger ${others.join(", ")} pour accélérer Naim ?`)) return; for (const m of others) await api("/api/models/unload", { method: "POST", body: { name: m } }); toast("Modèles déchargés"); checkStatus(); } : null;
@@ -5222,8 +5228,13 @@ function updateModelPick() {
   const onLlama = !onMlx && norm(S.model).split(":")[0] === "naim" && ["llamacpp", "mlx"].includes(S.naim_backend) && lastStatus?.llamacpp?.available;
   const loaded = onMlx ? !!lastStatus.mlx.running : onLlama ? !!lastStatus.llamacpp.running : (lastStatus?.loaded || []).some((m) => norm(m) === norm(S.model));
   const ctx = onLlama && lastStatus.llamacpp.ctx ? lastStatus.llamacpp.ctx : S.num_ctx;
-  $("#mpName").textContent = S.model;
-  $("#mpDot").classList.toggle("on", loaded);
+  const warming = onLlama && lastStatus?.warm && lastStatus.warm.state !== "ready";
+  $("#mpDot").classList.toggle("on", loaded && !warming);
+  $("#mpDot").classList.toggle("warming", !!warming);
+  if (warming) updateModelPick.warmed = false;
+  else if (updateModelPick.warmed === false) { updateModelPick.warmed = true; updateModelPick.readyUntil = Date.now() + 5000; setTimeout(updateModelPick, 5100); }
+  $("#mpName").textContent = warming ? "préparation…" : Date.now() < (updateModelPick.readyUntil || 0) ? "prêt" : S.model;  // same width as the name: nothing moves
+  $("#modelPick").title = warming ? "Naim se prépare (lecture de ses instructions) : la première réponse sera plus lente" : "Choisir le modèle (⌘L)";
   $("#mpInfo").textContent = `${loaded ? "chargé" : "prêt"} · ${Math.round(ctx / 1024)}k${onMlx ? " · MLX" : onLlama ? " · llama.cpp" : ""}`;
 }
 function openModelPicker() {

@@ -452,7 +452,8 @@ class Handler(BaseHTTPRequestHandler):
                 except (urllib.error.URLError, OSError, ValueError):
                     pass
             self.send_json({"ollama": models is not None, "models": models or [], "loaded": loaded, "home": str(Path.home()),
-                            "llamacpp": llamacpp.SERVER.status(), "mlx": _mlx_status()})
+                            "llamacpp": llamacpp.SERVER.status(), "mlx": _mlx_status(),
+                            "warm": {**WARM, "since": round(time.time() - WARM["t0"])}})
         elif path == "/api/settings":
             self.send_json(json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {})
         elif path == "/api/conversations":
@@ -2137,6 +2138,10 @@ def warm_voice():
         print(f"voix non préchargée : {e}", flush=True)
 
 
+# where the opening preparation stands, shown discreetly under the conversations (« Naim · préparation… » → « prêt »)
+WARM = {"state": "starting", "step": "", "t0": time.time()}
+
+
 def warm_up():
     """When Naim opens: it reads its tools and instructions once, in the background (one invisible request of one
     token, through the very same path as a real message). The first message then starts at once instead of
@@ -2145,19 +2150,23 @@ def warm_up():
         time.sleep(4)
         s = _settings()
         if s.get("naim_backend", "llamacpp") != "llamacpp" or not llamacpp.available():
+            WARM["state"] = "ready"
             return
         h = Handler.__new__(Handler)
         h.event = lambda ev: None
         body = {"message": "bonjour, es-tu prêt ?", "mode": "chat", "model": s.get("model") or "naim", "history": [], "_warm": True,
                 "project": s.get("project"), "settings": {**s, "num_predict": 1, "memory_auto": False, "think": False}}
         order = ["agent", "chat"] if s.get("mode") == "agent" else ["chat", "agent"]  # the mode in use first
-        for mode in order:
+        for i, mode in enumerate(order):
+            WARM.update(state="warming", step=f"{'Chat' if mode == 'chat' else 'Agent'} ({i + 1}/2)")
             if mode == "chat":
                 h.run_chat(body, threading.Event())
             else:
                 warm_agent(s)
     except Exception as e:  # noqa: BLE001 — only a speed-up: never a problem if it fails
         print(f"préchauffage impossible : {e}", flush=True)
+    finally:
+        WARM.update(state="ready", step="", done=time.time())
 
 
 def warm_agent(s):
