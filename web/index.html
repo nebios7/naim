@@ -2330,8 +2330,10 @@ function talkStart() {
   talk.on = true; $("#talkBtn").classList.add("on"); $("#talkBtn").innerHTML = `<span class="tw">${"<i></i>".repeat(5)}</span>`; voiceUnlock();
   talkListen();
 }
+const TALK_BYE = /\b(au revoir|bonne (nuit|soirée|journée)|à (plus|tout à l'heure|demain|bientôt)|bye|ciao|salut naim, à|on (s'arrête|arrête) là|c'est fini pour (aujourd'hui|ce soir)|fin de la conversation)\b/i;
 function talkStop() {
   if (!talk.on) return;
+  talk.endAfter = false;
   talk.on = false; clearTimeout(talk.timer); stopDictation(); voiceStop();
   $("#talkBtn").classList.remove("on"); $("#talkBtn").innerHTML = svgI("wave"); $("#talkBtn").title = "Conversation à voix haute : tu parles, Naim répond avec sa voix";
 }
@@ -2363,6 +2365,11 @@ function talkSend() {
   if (!talk.on) return;
   const said = $("#input").value.trim();
   if (TALK_STOP.test(said) && said.split(/\s+/).length <= 6) { talkHush(); return; }
+  if (TALK_BYE.test(said) && said.split(/\s+/).length <= 10) {
+    // « au revoir », « bonne nuit », « à plus »: the work stops, he says goodbye with his voice, then the conversation ends
+    if (curRun()) stop();
+    talk.endAfter = true;
+  }
   if (curRun() && !pendingApproval && (said.split(/\s+/).length < 3 || talkEcho(said))) {
     // while Naim works, a few words (« aussi », « et nous », « tu ») or its own voice are not an instruction: they would
     // make it start its answer over again and again
@@ -3211,7 +3218,9 @@ async function stream(reply, v, message, hist, extra = {}) {
   if (voice.run && !voice.done) {  // the voice already speaks: it gets the end of the answer
     if (/⏹ Arrêté/.test(reply.content || "")) voiceStop(); else voiceFeed(reply.content || "", true);
   }
-  if (talk.on && current === conv) (voice.run || Promise.resolve()).then(() => setTimeout(talkListen, 250));  // then it listens again
+  if (talk.on && current === conv) (voice.run || Promise.resolve()).then(() => setTimeout(() => {
+    if (talk.endAfter) { earcon("off"); talkStop(); toast("Conversation vocale terminée"); } else talkListen();  // « au revoir »: it ends here
+  }, 250));  // then it listens again
   if (reply.stats || reply.ttft != null) {
     reply.stats = { ...(reply.stats || {}), ttft: reply.ttft, total: (Date.now() - reply.time) / 1000,
                     reason: /⏹ Arrêté/.test(reply.content || "") ? "stopped" : reply.stats?.reason };
@@ -3339,7 +3348,13 @@ async function stop() {
   await api("/api/stop", { method: "POST", body: { run_id: run.id } }).catch(() => {});
   setTimeout(() => runs[run.conv.id]?.controller.abort(), 4000);
 }
-function setBusy(on) { updateSendBtn(); updateLiveBar(); }
+function setBusy(on) { updateSendBtn(); updateLiveBar(); guidePlaceholder(); }
+// while Naim works, the input itself says it can guide him (always visible, whatever the window width)
+function guidePlaceholder() {
+  const inp = $("#input"), busy = !!curRun();
+  if (busy && inp.dataset.base == null && dictation.ph == null) { inp.dataset.base = inp.placeholder; inp.placeholder = talk.on ? "Parle pour guider Naim sans l'arrêter, « stop » pour l'arrêter…" : "Écris pour guider Naim sans l'arrêter (Échap pour l'arrêter)…"; }
+  else if (!busy && inp.dataset.base != null) { inp.placeholder = inp.dataset.base; delete inp.dataset.base; }
+}
 function updateSendBtn() {
   const typing = !!$("#input").value.trim(), busy = !!curRun();
   $("#send").textContent = busy && !typing ? "■" : "↑";
@@ -3349,6 +3364,7 @@ $("#input").addEventListener("input", updateSendBtn);
 $("#send").onclick = () => (curRun() && !$("#input").value.trim() ? stop() : send());
 const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span>';
 function updateLiveBar() {
+  guidePlaceholder();
   const r = curRun(), bar = $("#liveBar");
   bar.hidden = !r || view !== "chat"; document.body.classList.toggle("haslive", !bar.hidden); document.body.classList.toggle("busyrun", !!r);
   if (!r) return;
