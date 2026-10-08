@@ -97,6 +97,9 @@ MAC_ACTION = (r"appelle|appeler|passe un appel|t[ée]l[ée]phone (à|a)\b|\bsms\
               r"imprim|impression|imprimante|\bscanne|ouvre|ferme|quitte|r[eè]gle|active|d[ée]sactive|[ée]teins|allume|"
               r"monte le son|baisse le son|volume|luminosit|wi-?fi|bluetooth|mets? en veille|red[ée]marre|joue|musique")
 MAC_ACTION_RE = re.compile(MAC_ACTION, re.I)
+# making something new (a skill's job), as opposed to acting on a file that already exists
+MAKE_RE = re.compile(r"\b(cr[ée]e[rz]?|fais|faire|fait|g[ée]n[èe]re[rz]?|dessine[rz]?|[ée]cri[st]|[ée]crire|r[ée]dige[rz]?|"
+                     r"pr[ée]pare[rz]?|construi\w*|con[çc]oi\w*|plans?|sch[ée]mas?|nouveau|nouvelle)\b", re.I)
 # the user wants files made or changed (a document, their project), not only an answer
 FILE_WORK_RE = re.compile(r"images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
@@ -1432,7 +1435,9 @@ class Handler(BaseHTTPRequestHandler):
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
         named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
-        if not plain and not body.get("_question") and helper.features.get("skills", True) and helper.auto_skill:
+        # « imprime mon CV PDF », « envoie le document »: acting on a file that exists is not making one, no skill
+        acting_only = bool(MAC_ACTION_RE.search(body["message"] or "")) and not MAKE_RE.search(body["message"] or "")
+        if not plain and not acting_only and not body.get("_question") and helper.features.get("skills", True) and helper.auto_skill:
             # the same skills as the Agent (a house plan, a pro email…): their method and tools, not a drawing made up by hand
             recent = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
                                                     if m.get("role") == "user"])
@@ -1453,7 +1458,7 @@ class Handler(BaseHTTPRequestHandler):
         if MAC_ACTION_RE.search(body["message"] or ""):  # « imprime-le », « ouvre Safari »: it acts, it does not explain
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Fais-le toi-même sur ce Mac avec tes outils, ne m'explique pas comment faire. run_command agit sur le "
-                "Mac : imprimer = `lpstat -p -d` pour voir les imprimantes (« inactive » veut dire prête, au repos) puis `lp -d <imprimante> <fichier>` ; ouvrir = "
+                "Mac : imprimer = `lpstat -p -d` pour voir les imprimantes (« inactive » veut dire prête, au repos) puis `lp -d <imprimante> <fichier>` (un fichier à moi qui n'est pas dans le dossier : find_files le cherche sur tout le Mac ; s'il y en a plusieurs ou si le nom ne correspond pas, demande-moi lequel et attends ma réponse, n'imprime jamais un autre fichier) ; ouvrir = "
                 "`open` ; réglages = `osascript` ; appeler = `open \"tel:+33…\"` (l'appel passe par l'iPhone) ; SMS ou iMessage = `osascript -e 'tell application \"Messages\" to send \"texte\" to participant \"+33…\"'` (trouve le numéro avec chercher_contact). Ce qui est sensible m'est demandé avant, c'est normal. Ne dis jamais que tu ne "
                 "peux pas avant d'avoir essayé ; si ça échoue, dis exactement pourquoi.)"))
         limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 60))

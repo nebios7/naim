@@ -387,7 +387,7 @@ MAC_AREAS = [
     ("l'arrêt ou le redémarrage du Mac", re.compile(r"\b(shutdown|reboot|halt)\b|restart\b.*finder", re.I)),
 ]
 MAC_GRANTS = ext.HOME / "autorisations.json"
-MAC_ALWAYS_ASK = {"l'envoi d'un message (SMS / iMessage)", "un appel téléphonique"}
+MAC_ALWAYS_ASK = {"l'envoi d'un message (SMS / iMessage)", "un appel téléphonique", "l'imprimante"}  # printing: the user sees which file, every time
 
 
 def mac_area(command):
@@ -778,7 +778,38 @@ class Agent:
             hits = [f for f in base.glob("**/" + pat) if f.is_file() and not any(part in SKIP_DIRS for part in f.relative_to(base).parts)]
         hits.sort(key=lambda f: f.stat().st_mtime, reverse=True)
         out = [self.rel(f) for f in hits[:200]]
+        if not out and (found := self._spotlight(pat)):
+            # « imprime mon CV »: the user's own files are anywhere on the Mac, not only in the work folder
+            return ("(nothing in the work folder; found on the Mac by Spotlight, newest first — use the full path; if "
+                    "several could match, ask the user which one before acting on it)\n" + "\n".join(found))
         return "\n".join(out) + ("\n... (truncated)" if len(hits) > 200 else "") if out else f"(no file matches {pattern})"
+
+    @staticmethod
+    def _spotlight(pattern, limit=30):
+        """Files of the user named like `pattern` anywhere in their home folder (Spotlight index, instant)."""
+        import fnmatch
+        name = Path(pattern).name
+        words = [w for w in re.split(r"[*?\[\]]+", name) if w.strip(". ")]
+        term = max(words, key=len).strip(". ") if words else ""
+        if len(term) < 2:
+            return []
+        try:
+            res = subprocess.run(["mdfind", "-onlyin", str(Path.home()), "-name", term], capture_output=True, text=True, timeout=15)
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        glob = name if any(c in name for c in "*?[") else f"*{name}*"
+        files = []
+        for line in res.stdout.splitlines():
+            f = Path(line)
+            if ("/Library/" in line or "/." in line or not fnmatch.fnmatch(f.name.lower(), glob.lower())
+                    or any(part in SKIP_DIRS for part in f.parts)):
+                continue
+            try:
+                if f.is_file():
+                    files.append((f.stat().st_mtime, line.replace(str(Path.home()), "~", 1)))
+            except OSError:
+                pass
+        return [x for _, x in sorted(files, reverse=True)[:limit]]
 
     def multi_edit(self, path, edits):
         p = self.resolve(path)
