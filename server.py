@@ -1452,7 +1452,7 @@ class Handler(BaseHTTPRequestHandler):
         if MAC_ACTION_RE.search(body["message"] or ""):  # « imprime-le », « ouvre Safari »: it acts, it does not explain
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Fais-le toi-même sur ce Mac avec tes outils, ne m'explique pas comment faire. run_command agit sur le "
-                "Mac : imprimer = `lpstat -p -d` pour voir les imprimantes puis `lp -d <imprimante> <fichier>` ; ouvrir = "
+                "Mac : imprimer = `lpstat -p -d` pour voir les imprimantes (« inactive » veut dire prête, au repos) puis `lp -d <imprimante> <fichier>` ; ouvrir = "
                 "`open` ; réglages = `osascript` ; appeler = `open \"tel:+33…\"` (l'appel passe par l'iPhone) ; SMS ou iMessage = `osascript -e 'tell application \"Messages\" to send \"texte\" to participant \"+33…\"'` (trouve le numéro avec chercher_contact). Ce qui est sensible m'est demandé avant, c'est normal. Ne dis jamais que tu ne "
                 "peux pas avant d'avoir essayé ; si ça échoue, dis exactement pourquoi.)"))
         limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 60))

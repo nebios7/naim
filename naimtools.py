@@ -1192,6 +1192,10 @@ class Agent:
         hint = ""
         if proc.returncode and not stdin and re.search(r"NoSuchElementException|EOFError|EOF when reading|end of file", out):
             hint = "\n(hint: the program expected keyboard input; run it again with the answers in `stdin`)"
+        if re.search(r"\blpstat\b", command) and re.search(r"\b(inactive|idle)\b", out, re.I):
+            # French CUPS: « inactive, mais activée » means idle = ready, not switched off
+            hint += ("\n(note: « inactive » / « idle » here means the printer is ready and waiting: print now with "
+                     "`lp -d <printer> <file>`. Only « désactivée » / « disabled » means it is stopped.)")
         return f"exit code {proc.returncode}\n{out}{hint}"
 
     def start_process(self, command, name="", keep=False, notify=False):
