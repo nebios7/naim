@@ -1348,7 +1348,7 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 /* conversation mode: everything lives inside the white button, nothing else on screen.
    Five bars: listening = they rise and fall slowly, red · thinking = three dots that wave in turn
    · voice being prepared = dots breathing · speaking = a lively equalizer */
-body:has(#talkBtn.on) #liveBar, body:has(#talkBtn.on) #micBtn { display: none !important; }
+body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { display: none !important; }
 #talkBtn .tw { display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 18px; height: 16px; }
 #talkBtn .tw i { width: 2.4px; height: 6px; border-radius: 2px; background: currentColor; transition: height .25s, width .25s, opacity .25s; }
 #talkBtn .tw i:nth-child(1), #talkBtn .tw i:nth-child(5) { height: 3px; }
@@ -3316,6 +3316,7 @@ function updateLiveBar() {
   const done = todos.filter((t) => t.status === "done" || t.status === "skipped").length, prog = $(".lprog", bar);
   prog.hidden = !todos.length; if (todos.length) $("i", prog).style.width = Math.round(100 * done / todos.length) + "%";
   const label = (r.status || "Naim réfléchit").replace(/[.…\s]+$/, "");
+  bar.classList.toggle("writing", /^Naim écrit /.test(label));  // a long file being written: shown even in a spoken conversation
   if (bar.dataset.label !== label + step) {  // rewritten only when it changes: the dots keep their rhythm
     bar.dataset.label = label + step;
     $(".ltext", bar).innerHTML = (step ? `<span class="lstep">${step}</span>` : "") + `<span class="lword">${esc(label)}…</span>`;
