@@ -1020,15 +1020,9 @@ header#chatHeader { overflow: hidden; }
 .turn.bot:has(div.working:not([hidden])) details.think > summary::before { background: var(--muted); }
 .turn.bot:has(div.working:not([hidden])) details.think > summary::marker, .turn.bot:has(div.working:not([hidden])) details.think > summary::-webkit-details-marker { color: var(--muted); }
 @keyframes naimShimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
-/* nothing shown yet (the Agent does not stream its reasoning): the same light sweep in the thread, until the first
-   step or word replaces it */
-.turn.bot:has(div.working:not([hidden])):has(details.think[hidden]):has(.md:empty) .flow:empty { display: block; }
-.turn.bot:has(div.working:not([hidden])):has(details.think[hidden]):has(.md:empty) .flow:empty::before {
-  content: "Réflexion…"; display: inline-block; font-size: 13px; padding: 2px 6px 2px 2px;
-  background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
-  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation: naimShimmer 3.2s cubic-bezier(.4, 0, .6, 1) infinite; }
-
+/* the sweep is sized to the words (not the whole bar width), like « Raisonnement »: the light really crosses them */
+#liveBar .ltext { flex: 0 1 auto; }
+#liveBar .ltime { margin-left: auto; }
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }

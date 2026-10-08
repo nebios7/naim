@@ -148,6 +148,21 @@ def shown_part(text):
     return text
 
 
+def with_first_request(message, history):
+    """« Un programme de calcul » answering Naim's own question: the request it answers comes back with it, so that
+    nothing asked first (« … et imprime-le ») is forgotten. Else the message unchanged."""
+    msg = (message or "").strip()
+    hist = [h for h in (history or []) if h.get("role") in ("user", "assistant")]
+    if not msg or len(msg) > 120 or len(hist) < 2 or hist[-1].get("role") != "assistant":
+        return message
+    if "?" not in str(hist[-1].get("content") or "")[-400:]:
+        return message
+    first = str(hist[-2].get("content") or "").strip() if hist[-2].get("role") == "user" else ""
+    if not first or trivial_message(first) or first.lower() in msg.lower():
+        return message
+    return f"{first}\n\n(Réponse à ta question : {msg}. Fais maintenant TOUT ce que je demandais ci-dessus.)"
+
+
 def chosen_option(message, history):
     """« 2 », « la 2 », « option 2 » after Naim offered numbered choices: the text of that choice, else ''."""
     m = re.fullmatch(r"\s*(?:(?:la|le|l'|option|choix|n°|num[ée]ro)\s*)?(\d{1,2})\s*[.)!]?\s*", message or "", re.I)
@@ -1237,7 +1252,7 @@ class Handler(BaseHTTPRequestHandler):
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
         choice = chosen_option(body["message"], body.get("history"))
         text = (f"{body['message']} — je choisis cette option que tu as proposée : « {choice} ». Fais-le maintenant."
-                if choice else body["message"])
+                if choice else with_first_request(body["message"], body.get("history")))
         spoken = ("\n\n[Conversation à voix haute : ta réponse sera lue par ta voix. Si je te demande de FAIRE quelque chose "
                   "(fichier, impression, réglage, recherche…), fais-le d'abord avec tes outils, sans l'annoncer, puis dis en une "
                   "ou deux phrases ce que tu as fait. Sinon, parle naturellement, en 2 à 5 phrases courtes, sans liste, sans "
@@ -1837,7 +1852,7 @@ class Handler(BaseHTTPRequestHandler):
 
         def work():
             try:
-                agent.run(body["message"], images=body.get("images"))
+                agent.run(with_first_request(body["message"], body.get("history")), images=body.get("images"))
             except Exception as e:
                 events.put({"type": "error", "text": str(e)})
             finally:
