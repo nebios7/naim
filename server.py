@@ -1307,7 +1307,10 @@ class Handler(BaseHTTPRequestHandler):
         for base in (Path.home() / "Desktop", Path.home() / "Documents", Path.home() / "Downloads", Path.home()):
             for dirpath, dirnames, _ in os.walk(base):
                 depth = len(Path(dirpath).relative_to(base).parts)
-                dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS and d != "Library"] if depth < 3 else []
+                # Library, Photos, Music, Movies: never a work folder, and reading them can stop on a macOS permission prompt
+                dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS
+                               and not (base == Path.home() and depth == 0 and d in ("Library", "Pictures", "Music", "Movies", "Applications"))
+                               and not d.endswith((".photoslibrary", ".musiclibrary", ".app"))] if depth < 3 else []
                 hits += [Path(dirpath) / d for d in dirnames if norm(d) == want]
         uniq = {}
         for h in hits:  # same folder reached twice (case-insensitive disk, home + Desktop walk)
@@ -1579,7 +1582,9 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 self.event({"type": "tool", "name": name, "args": args})
                 try:
-                    if name == "aller_dans_dossier":
+                    if name == "aller_dans_dossier" and str(args.get("dossier") or "").strip() in ("", ".", "./"):
+                        result = f"ok: you are already in {helper.root}.\nFiles:\n" + helper.list_files(".")[:3000]  # nothing to search
+                    elif name == "aller_dans_dossier":
                         options_ = self.find_folders(args.get("dossier", ""))
                         found = options_[0] if options_ else None
                         if not found:
