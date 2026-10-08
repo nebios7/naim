@@ -1752,8 +1752,16 @@ function md(src) {
 // ======================================================================= code block actions
 const EXT = { python: "py", py: "py", javascript: "js", js: "js", typescript: "ts", ts: "ts", java: "java", kotlin: "kt", swift: "swift", go: "go", rust: "rs", c: "c", cpp: "cpp", "c++": "cpp", csharp: "cs", cs: "cs", php: "php", ruby: "rb", html: "html", css: "css", sql: "sql", bash: "sh", sh: "sh", shell: "sh", json: "json", yaml: "yml", yml: "yml", markdown: "md", md: "md", xml: "xml", svg: "svg", dockerfile: "Dockerfile" };
 const shq = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
-function download(name, text, type = "text/plain") {
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click();
+// the Mac window cannot follow a blob download link (it would show the file in place of Naim, with no way back):
+// the file goes to the server, which puts it in ~/Downloads and shows it in the Finder
+function saveDownload(name, body) {
+  api("/api/save-download", { method: "POST", body: { name, ...body } })
+    .then((x) => toast(x.ok ? `Enregistré dans Téléchargements : ${x.path.split("/").pop()}` : "Enregistrement impossible : " + (x.error || "")))
+    .catch(() => toast("Enregistrement impossible"));
+}
+function download(name, text, type = "text/plain") { saveDownload(name, { text: String(text ?? "") }); }
+function downloadBlob(name, blob) {
+  const r = new FileReader(); r.onload = () => saveDownload(name, { base64: String(r.result).split(",")[1] || "" }); r.readAsDataURL(blob);
 }
 document.addEventListener("click", (e) => { if (e.target.closest(".wstop")) stop(); });
 document.addEventListener("click", async (e) => {
@@ -1813,7 +1821,7 @@ document.addEventListener("click", (e) => {
   if (!svg) return toast("Le schéma n'est pas dessiné");
   const text = new XMLSerializer().serializeToString(svg);
   if (b.hasAttribute("data-dsvg")) download("schema.svg", text, "image/svg+xml");
-  if (b.hasAttribute("data-dpng")) svgToPng(text, (blob) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "schema.png"; a.click(); });
+  if (b.hasAttribute("data-dpng")) svgToPng(text, (blob) => downloadBlob("schema.png", blob));
   if (b.hasAttribute("data-dbig")) showPreview(`<!doctype html><meta charset="utf-8"><body style="margin:0;background:#fff;display:flex;justify-content:center;padding:24px">${text}</body>`);
 });
 

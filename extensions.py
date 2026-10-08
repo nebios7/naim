@@ -916,6 +916,8 @@ SKILL_TRIGGERS = {
     "controle-ecran": r"\b(clique\w*|[ée]cran|calculatrice|ouvre l'app\w*|application (mac|du mac)|r[ée]glages syst[eè]me)\b",
     "node-typescript": r"\b(node(\.js)?|typescript|npm|express|tsx?)\b",
     "projet-existant": r"\b(ajoute|modifie|am[ée]liore|change|mets? [àa] jour|int[eè]gre)\b",
+    # a house or flat plan: drawn to scale by the plan-maison skill tools, not as a Mermaid diagram
+    "plan-maison": r"\bplans? (d['’]|c['’])?archit|\b(plans?|sch[ée]mas?|croquis|dessin)\b[^.?!]{0,40}\b(maisons?|appartements?|villas?|pavillons?|logements?|duplex|plain[- ]pied)\b|\b(maisons?|appartements?|villas?)\b[^.?!]{0,20}\bt[1-7]\b",
     "schemas": r"\b(sch[ée]mas?|diagrammes?|organigrammes?|flowchart|mermaid|uml|mcd|erd|logigrammes?|carte mentale|mind ?map|gantt)\b",
     "rapport": r"\b(rapport(?! de bug| d'erreur)|dossier technique|cahier des charges|compte[- ]rendu|livre blanc|note de synth[eè]se)\b",
     "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|affiche|flyer|infographie|carte de visite)\b",
@@ -931,7 +933,7 @@ def match_skill(task, root=None, disabled=()):
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
-    first = ("react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
+    first = ("plan-maison", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     ordered = list(first) + [n for n in SKILL_TRIGGERS if n not in generic and n not in first] + list(generic)
     for name in ordered:
         if name in by_name and re.search(SKILL_TRIGGERS[name], text):

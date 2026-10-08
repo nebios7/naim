@@ -1139,6 +1139,23 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "path": str(dst)})
             except (ValueError, OSError) as e:
                 self.send_json({"error": str(e)}, 400)
+        elif path == "/api/save-download":
+            # a file made in the page (schema.svg, naim.py…): the Mac window cannot download a blob link (it would
+            # replace Naim with the file), so the page sends it here and it lands in ~/Downloads, shown in the Finder
+            b = self.read_json()
+            try:
+                name = Path(str(b.get("name") or "naim.txt")).name.lstrip(".") or "naim.txt"
+                data = base64.b64decode(b["base64"]) if b.get("base64") else str(b.get("text") or "").encode()
+                dl = Path.home() / "Downloads"
+                p = Path(name)
+                dst, n = dl / name, 2
+                while dst.exists():
+                    dst, n = dl / f"{p.stem} ({n}){p.suffix}", n + 1
+                dst.write_bytes(data)
+                subprocess.Popen(["open", "-R", str(dst)])
+                self.send_json({"ok": True, "path": str(dst)})
+            except (ValueError, OSError, KeyError) as e:
+                self.send_json({"error": str(e)}, 400)
         elif path == "/api/reveal":
             b = self.read_json()
             target = Path(b.get("path", "")).expanduser()
@@ -1393,6 +1410,18 @@ class Handler(BaseHTTPRequestHandler):
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
         named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
+        if not plain and not body.get("_question") and helper.features.get("skills", True) and helper.auto_skill:
+            # the same skills as the Agent (a house plan, a pro email…): their method and tools, not a drawing made up by hand
+            recent = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
+                                                    if m.get("role") == "user"])
+            sk = (ext.match_skill(body["message"], helper.root, helper.disabled_skills)
+                  or (ext.match_skill(recent, helper.root, helper.disabled_skills) if file_work else None))
+            if sk and sk["name"] not in ("debug", "application-web", "api-rest", "projet-existant") and (file_work or sk["name"] != "schemas"):
+                file_work = True  # « un plan de maison T4 » makes files even without « crée »
+                _, skill_body = ext.parse_skill(Path(sk["path"]))
+                self.event({"type": "skill", "name": sk["name"]})
+                messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
+                                    f"\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}")
         if not file_work and not files:
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
