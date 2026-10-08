@@ -1334,7 +1334,11 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 .profile small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
 /* dictation */
 #micBtn svg { width: 17px; height: 17px; }
-#micBtn.rec { color: #e5484d; animation: micpulse 1.1s ease-in-out infinite; }
+#micBtn.rec { color: #fff; background: #e5484d; border-radius: 999px; position: relative; animation: none; }
+#micBtn.rec::after { content: ""; position: absolute; inset: -3px; border-radius: 999px; border: 2px solid #e5484d;
+  animation: micring 1.4s ease-out infinite; pointer-events: none; }
+@keyframes micring { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(1.45); } }
+@media (prefers-reduced-motion: reduce) { #micBtn.rec::after { animation: none; } }
 @keyframes micpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 /* Naim's voice */
 .msgacts [data-a=speak].speaking { color: var(--text); animation: micpulse 1.1s ease-in-out infinite; }
@@ -1607,7 +1611,7 @@ const DEFAULTS = {
   mode: "chat", model: "naim", think: false, project: "", autoYes: false,
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
-  notify: true, sound: false, show_stats: true, show_time: false, wrap_code: false,
+  notify: true, sound: false, mic_sounds: true, show_stats: true, show_time: false, wrap_code: false,
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
@@ -2279,11 +2283,12 @@ window.naimDictation = (text, final, error) => {
   const inp = $("#input");
   inp.value = dictation.base + (dictation.base && text ? " " : "") + text;
   inp.dispatchEvent(new Event("input"));
-  if (final) stopDictation(true);
+  if (final) { if (!talk.on) earcon("off"); stopDictation(true); }
 };
 function startDictation() {
   dictation.on = true; dictation.base = $("#input").value.trimEnd(); dictation.lastAt = Date.now();
   $("#micBtn").classList.add("rec"); $("#micBtn").title = "Arrêter la dictée";
+  const inp = $("#input"); if (!talk.on) { dictation.ph ??= inp.placeholder; inp.placeholder = "J'écoute… parle, Naim écrit ce que tu dis"; }
   const native = window.webkit?.messageHandlers?.naimDictation;
   if (native) { native.postMessage({ action: "start", lang: "fr-FR" }); return; }
   const R = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2387,6 +2392,7 @@ function stopDictation(quiet) {
   if (!dictation.on) return;
   dictation.on = false;
   $("#micBtn").classList.remove("rec"); $("#micBtn").title = "Dicter (parle, Naim écrit)";
+  if (dictation.ph != null) { $("#input").placeholder = dictation.ph; dictation.ph = null; }
   if (!quiet) { window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop(); }
   $("#input").focus();
 }
@@ -3307,6 +3313,21 @@ async function openNotifTarget() {
 }
 window.addEventListener("focus", () => setTimeout(openNotifTarget, 150));
 document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(openNotifTarget, 150); });
+// small earcons for the microphone (like a phone): two soft notes up when listening starts, down when it stops
+let earCtx = null;
+function earcon(kind) {
+  if (S.mic_sounds === false) return;
+  try {
+    earCtx ||= new AudioContext(); const c = earCtx, t0 = c.currentTime + 0.01;
+    const notes = { on: [587, 880], off: [784, 523], send: [988] }[kind] || [];
+    notes.forEach((f, i) => {
+      const o = c.createOscillator(), g = c.createGain(), t = t0 + i * 0.075;
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.06, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.16);
+    });
+  } catch {}
+}
 function ding() {
   try { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.08, c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.35); o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + 0.35); } catch {}
 }
@@ -3912,6 +3933,7 @@ const TABS = {
       ${row("Envoyer avec", "", sel("send_key", [["enter", "Entrée (Maj+Entrée = nouvelle ligne)"], ["mod", "⌘+Entrée (Entrée = nouvelle ligne)"]]))}
       ${row("Notification quand Naim a fini", "Si la fenêtre est en arrière-plan, ou quand l'agent attend une autorisation.", sw("notify"))}
       ${row("Son à la fin d'une réponse", "", sw("sound"))}
+      ${row("Sons du micro", "Un petit son quand l'écoute commence et s'arrête", sw("mic_sounds"))}
       ${row("Lire les réponses à voix haute", "Avec la voix de Naim, sur ce Mac (voix d'un lecteur de livres audio, Multilingual LibriSpeech, CC BY 4.0). Le bouton ♪ sous chaque réponse la lit aussi à la demande.", sw("voice_auto"))}
 
       ${row("Afficher la vitesse (tokens/s)", "", sw("show_stats"))}
@@ -5126,9 +5148,9 @@ const RICON = {
   auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 000 16z" fill="currentColor"/>',
 };
 const svgI = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${RICON[k]}</svg>`;
-if (dictationAvailable()) { const m = $("#micBtn"); m.hidden = false; m.innerHTML = svgI("mic"); m.onclick = () => { if (talk.on) talkStop(); dictation.on ? stopDictation() : startDictation(); }; }
+if (dictationAvailable()) { const m = $("#micBtn"); m.hidden = false; m.innerHTML = svgI("mic"); m.onclick = () => { if (talk.on) talkStop(); if (dictation.on) { earcon("off"); stopDictation(); } else { earcon("on"); startDictation(); } }; }
 api("/api/tts").then((r) => { if (!r.available || !dictationAvailable()) return;  // speaking needs both: dictation and Naim's voice
-  const t = $("#talkBtn"); t.hidden = false; t.innerHTML = svgI("wave"); t.onclick = () => (talk.on ? talkStop() : talkStart()); }).catch(() => {});
+  const t = $("#talkBtn"); t.hidden = false; t.innerHTML = svgI("wave"); t.onclick = () => { earcon(talk.on ? "off" : "on"); talk.on ? talkStop() : talkStart(); }; }).catch(() => {});
 // header like a pro IDE: title on the left, tools on the right; mode and model live in the composer
 $(".composer .ctools").insertBefore($("#modelPick"), $("#ctxInfo"));
 fitViewport(); updateTitle();
