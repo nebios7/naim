@@ -97,6 +97,9 @@ MAC_ACTION = (r"appelle|appeler|passe un appel|t[ée]l[ée]phone (à|a)\b|\bsms\
               r"imprim|impression|imprimante|\bscanne|ouvre|ferme|quitte|r[eè]gle|active|d[ée]sactive|[ée]teins|allume|"
               r"monte le son|baisse le son|volume|luminosit|wi-?fi|bluetooth|mets? en veille|red[ée]marre|joue|musique")
 MAC_ACTION_RE = re.compile(MAC_ACTION, re.I)
+# « n'imprime pas », « ne lance pas encore », « attends mon signal »: the user does NOT want the action now
+NOT_NOW_RE = re.compile(r"\bn['’e]\s*(?:\w+\s+){0,2}?(?:pas|rien|plus|jamais)\b|\bpas encore\b|\battends?\b|\bstop\b|"
+                        r"\bne (?:pas|rien) (?:lancer|imprimer|envoyer|appeler)", re.I)
 # making something new (a skill's job), as opposed to acting on a file that already exists
 MAKE_RE = re.compile(r"\b(cr[ée]e[rz]?|fais|faire|fait|g[ée]n[èe]re[rz]?|dessine[rz]?|[ée]cri[st]|[ée]crire|r[ée]dige[rz]?|"
                      r"pr[ée]pare[rz]?|construi\w*|con[çc]oi\w*|plans?|sch[ée]mas?|nouveau|nouvelle)\b", re.I)
@@ -1432,6 +1435,7 @@ class Handler(BaseHTTPRequestHandler):
         nudges = 1 if body.get("_relaunched") else 0
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
+        heard = []  # what the user said while Naim worked
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
         named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
@@ -1481,6 +1485,7 @@ class Handler(BaseHTTPRequestHandler):
                 stop.set()  # « Stop » typed while Naim works: it stops, like the stop button
                 self.event({"type": "stopped"})
                 break
+            heard += notes
             if notes:
                 nudges = 0  # a new instruction (« passons à autre chose, crée… »): it gets its own reminders to act
                 messages.append({"role": "user", "content": "(Message de l'utilisateur pendant ton travail — prends-le en "
@@ -1558,7 +1563,8 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             asked = [w for w, rx in (("l'imprimer", r"imprim"), ("envoyer le SMS / message", r"\bsms\b|texto|imessage|message"),
                                       ("passer l'appel", r"appell?e|appeler|appel\b")) if re.search(rx, body["message"] or "", re.I)]
-            if (not calls and not stop.is_set() and asked and not mac_tried and nudges < 3
+            said_no = NOT_NOW_RE.search(" ".join([body["message"] or ""] + heard))  # « n'imprime pas », « attends mon signal »
+            if (not calls and not stop.is_set() and asked and not mac_tried and nudges < 3 and not said_no
                     and MAC_ACTION_RE.search(body["message"] or "")):
                 # it was asked to act on the Mac (print, send, call) and finishes without even trying: back to work
                 nudges += 1

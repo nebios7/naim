@@ -2249,6 +2249,7 @@ async function heroShow() {  // a light runs over the greeting, letter by letter
 const dictation = { on: false, base: "", rec: null };
 function dictationAvailable() { return !!(window.webkit?.messageHandlers?.naimDictation || window.webkitSpeechRecognition || window.SpeechRecognition); }
 window.naimDictation = (text, final, error) => {
+  dictation.lastAt = Date.now();
   if (error) { toast(error); stopDictation(); talkStop(); return; }
   if (!dictation.on) return;  // a late result after the message was sent
   // the Mac's recognition gives what it heard 1 to 2 s late: Naim's own sentences may still arrive after it spoke
@@ -2268,7 +2269,7 @@ window.naimDictation = (text, final, error) => {
   if (final) stopDictation(true);
 };
 function startDictation() {
-  dictation.on = true; dictation.base = $("#input").value.trimEnd();
+  dictation.on = true; dictation.base = $("#input").value.trimEnd(); dictation.lastAt = Date.now();
   $("#micBtn").classList.add("rec"); $("#micBtn").title = "Arrêter la dictée";
   const native = window.webkit?.messageHandlers?.naimDictation;
   if (native) { native.postMessage({ action: "start", lang: "fr-FR" }); return; }
@@ -2291,6 +2292,11 @@ function talkStateUpdate() {  // who has the floor, shown by the wave button its
     else if (dictation.on) talkRelisten();       // it finished speaking: listen afresh, without its voice
   }
   talk.wasSpeaking = speakingNow;
+  // the Mac's recognition can stay open yet deliver nothing after a long session (minutes while Naim works): when it has
+  // been silent 45 s and you are not in the middle of a sentence, it is restarted, unseen
+  if (dictation.on && !speakingNow && !$("#input").value.trim() && Date.now() - (dictation.lastAt || 0) > 45000) {
+    dictation.lastAt = Date.now(); talkRelisten();
+  }
   if (!dictation.on && (voice.audio || curRun() || !voice.preparing)) talkListen();  // it always listens (even while it speaks)
   let st = voice.audio ? "speak" : voice.preparing ? "prep" : dictation.on && !curRun() ? "listen" : curRun() ? "think" : "listen";
   if (st === "prep" && voice.spoke) st = "speak";  // between two sentences of the same answer: no flicker
