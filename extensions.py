@@ -917,7 +917,8 @@ SKILL_TRIGGERS = {
     "node-typescript": r"\b(node(\.js)?|typescript|npm|express|tsx?)\b",
     "projet-existant": r"\b(ajoute|modifie|am[ée]liore|change|mets? [àa] jour|int[eè]gre)\b",
     # a house or flat plan: drawn to scale by the plan-maison skill tools, not as a Mermaid diagram
-    "plan-maison": r"\bplans? (d['’]|c['’])?archit|\b(plans?|sch[ée]mas?|croquis|dessin)\b[^.?!]{0,40}\b(maisons?|appartements?|villas?|pavillons?|logements?|duplex|plain[- ]pied)\b|\b(maisons?|appartements?|villas?)\b[^.?!]{0,20}\bt[1-7]\b",
+    "plan-maison": r"\bplans? (d['’]|c['’])?archit|\b(plans?|sch[ée]mas?|croquis|dessin)\b[^.?!]{0,40}\b(maisons?|appartements?|villas?|pavillons?|logements?|duplex|plain[- ]pied)\b|\b(maisons?|appartements?|villas?)\b[^.?!]{0,20}\bt[1-7]\b"
+                   r"|\b(plans?|sch[ée]mas?|croquis|dessine\w*)\b[^.?!]{0,30}\b[tf][1-7]\b|\b[tf][1-7]\b[^.?!]{0,15}\d+ ?(m²|m2\b|m[eè]tres? carr)",
     "schemas": r"\b(sch[ée]mas?|diagrammes?|organigrammes?|flowchart|mermaid|uml|mcd|erd|logigrammes?|carte mentale|mind ?map|gantt)\b",
     "rapport": r"\b(rapport(?! de bug| d'erreur)|dossier technique|cahier des charges|compte[- ]rendu|livre blanc|note de synth[eè]se)\b",
     "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|affiche|flyer|infographie|carte de visite)\b",
