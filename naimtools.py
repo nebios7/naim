@@ -172,7 +172,7 @@ def repeating(text):
 
 # a reply that only announces an action (« Je vais envoyer… ») instead of doing it
 ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
-                         r"envoie|prépare|regarde|vérifie|imprime|appelle)\b|(?:je vais|laisse-moi)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
+                         r"envoie|prépare|regarde|vérifie|imprime|appelle)\b|(?:je vais|laisse-moi|je dois|il (?:me )?faut|je commence par|commençons par)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
                          r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim))",
                          re.I | re.M)
 # a remark on the previous result (« pas obligé de… », « t'as rien compris », « c'est pas ça »), not a new request
