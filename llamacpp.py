@@ -10,6 +10,7 @@ server do not care which backend answers.
 import atexit
 import http.client
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -357,6 +358,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
 
     def chunks():
         first, calls, reason = None, {}, None  # tool calls arrive in pieces while streaming: assembled, then given at the end
+        told = 0.0  # last « writing » progress given (a whole file written in a tool call is otherwise invisible)
         with resp:
             for raw in resp:
                 line = raw.decode("utf-8", errors="replace").strip()
@@ -374,6 +376,11 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                         f = tc.get("function") or {}
                         c["name"] += f.get("name") or ""
                         c["args"] += f.get("arguments") or ""
+                        if time.time() - told > 1.0 and len(c["args"]) > 400:
+                            told = time.time()
+                            path = re.search(r'"(?:path|nom|output|file|filename)"\s*:\s*"([^"]{1,200})"', c["args"])
+                            yield {"message": {}, "done": False,
+                                   "writing": {"name": c["name"], "chars": len(c["args"]), "path": path.group(1) if path else ""}}
                     if first is None and (delta.get("content") or delta.get("reasoning_content")):
                         first = time.time()
                     yield {"message": {"content": delta.get("content") or "", "thinking": delta.get("reasoning_content") or ""},

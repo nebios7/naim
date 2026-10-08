@@ -181,10 +181,20 @@ FEEDBACK_RE = re.compile(r"pas oblig|rien compris|pas compris|c'?est pas [cç]a|
                          r"tu (as|a) (oubli|refait|recommenc)|pas ce que", re.I)
 
 
-STOP_WORDS_RE = re.compile(r"^\s*(stop|stoppe|arr[eê]te|arr[eê]tes?[- ]toi|annule)\b", re.I)  # typed while Naim works
+# typed or said while Naim works: « stop », « non arrête », « n'imprime rien du tout stop stop »
+STOP_WORDS_RE = re.compile(r"^\s*(?:(?:non|bon|ok|mais|attends)[ ,!.]*)*(stop|stoppe|arr[eê]te|arr[eê]tes?[- ]toi|annule)\b"
+                           r"|\bstop\b|\barr[eê]te[- ]toi\b", re.I)
 
 
-def chat_watched(model, messages, tools=None, think=False, options=None, cancel=None):
+def writing_text(w):
+    """« Naim écrit index.html… 12 Ko »: what a long tool call is writing, while it is written."""
+    what = Path(w.get("path") or "").name or {"write_file": "un fichier", "creer_fichier": "un fichier", "edit_file": "une modification",
+                                               "run_command": "une commande"}.get(w.get("name"), "")
+    kb = w.get("chars", 0) / 1024
+    return f"Naim écrit {what}… {kb:.0f} Ko" if kb >= 1 else f"Naim écrit {what}…"
+
+
+def chat_watched(model, messages, tools=None, think=False, options=None, cancel=None, on_writing=None):
     """One model answer, read as it is written so that a loop can be cut at once (llama.cpp); tool calls written as text
     are recovered. Same result as a non-streamed call: {role, content, thinking?, tool_calls?}."""
     if (options or {}).get("backend") != "llamacpp":
@@ -196,6 +206,8 @@ def chat_watched(model, messages, tools=None, think=False, options=None, cancel=
             if cancel is not None and cancel.is_set():  # Stop: the writing ends now (llama.cpp stops when we hang up)
                 stream.close()
                 break
+            if chunk.get("writing") and on_writing:
+                on_writing(chunk["writing"])
             m = chunk.get("message", {})
             content += m.get("content") or ""
             thinking += m.get("thinking") or ""
@@ -2245,7 +2257,7 @@ class Agent:
 
     def interject(self, text):
         """A message the user typed while the agent works: read before the next step (« stop »: at once)."""
-        if STOP_WORDS_RE.match(text or ""):
+        if STOP_WORDS_RE.search(text or ""):
             self.cancel.set()
         with self._inbox_lock:
             self._inbox.append(text)
@@ -2253,7 +2265,7 @@ class Agent:
     def _read_inbox(self):
         with self._inbox_lock:
             items, self._inbox = self._inbox, []
-        if any(STOP_WORDS_RE.match(i) for i in items):  # « stop » typed while Naim works: like the Stop button
+        if any(STOP_WORDS_RE.search(i) for i in items):  # « stop » typed while Naim works: like the Stop button
             self.cancel.set()
             return True
         if items:
@@ -2345,7 +2357,7 @@ class Agent:
             self.emit({"type": "status", "text": "Naim réfléchit..."})
             self._compact_history()
             msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options,
-                               cancel=self.cancel)
+                               cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}))
             if self.cancel.is_set():
                 self.emit({"type": "answer", "text": "⏹ Arrêté."})
                 self._outcome = "stopped"
@@ -2356,7 +2368,7 @@ class Agent:
                     self.emit({"type": "thinking", "text": msg["thinking"].strip()})
                 self.emit({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
                 msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options,
-                                   cancel=self.cancel)
+                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}))
             self.messages.append(msg)
             if msg.get("thinking") and self.think:
                 self.emit({"type": "thinking", "text": msg["thinking"].strip()})

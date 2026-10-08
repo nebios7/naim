@@ -61,7 +61,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import (ANNOUNCE_RE, STOP_WORDS_RE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+from naimtools import (ANNOUNCE_RE, STOP_WORDS_RE, writing_text, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
@@ -824,7 +824,7 @@ class Handler(BaseHTTPRequestHandler):
             text = str(body.get("text") or "").strip()[:4000]
             if agent and text:
                 agent.interject(text)
-            if text and STOP_WORDS_RE.match(text):  # « stop » typed: the reply stops now, in Chat as in Agent
+            if text and STOP_WORDS_RE.search(text):  # « stop » typed: the reply stops now, in Chat as in Agent
                 with _lock:
                     flag = _runs.get(body.get("run_id"))
                 if flag:
@@ -1477,11 +1477,12 @@ class Handler(BaseHTTPRequestHandler):
                                  "essentiel, puis réponds avec ce que tu as trouvé.)"})
             with helper._inbox_lock:  # what the user typed while Naim was working: taken into account now
                 notes, helper._inbox = helper._inbox, []
-            if any(re.match(r"\s*(stop|stoppe|arr[eê]te|arr[eê]tes?[- ]toi|annule)\b", n, re.I) for n in notes):
+            if any(STOP_WORDS_RE.search(n) for n in notes):
                 stop.set()  # « Stop » typed while Naim works: it stops, like the stop button
                 self.event({"type": "stopped"})
                 break
             if notes:
+                nudges = 0  # a new instruction (« passons à autre chose, crée… »): it gets its own reminders to act
                 messages.append({"role": "user", "content": "(Message de l'utilisateur pendant ton travail — prends-le en "
                                  "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
                 self.event({"type": "interjection_read", "count": len(notes)})
@@ -1505,6 +1506,8 @@ class Handler(BaseHTTPRequestHandler):
                 if repeating(content):  # the model loops on the same line (it happens with images): cut at once
                     stream.close()
                     break
+                if chunk.get("writing"):  # a whole file written in a tool call: shown while it is written
+                    self.event({"type": "status", "text": writing_text(chunk["writing"])})
                 msg = chunk.get("message", {})
                 if msg.get("thinking"):
                     thought = True
