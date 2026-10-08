@@ -1025,6 +1025,17 @@ header#chatHeader { overflow: hidden; }
 /* the sweep is sized to the words (not the whole bar width), like « Raisonnement »: the light really crosses them */
 #liveBar .ltext { flex: 0 1 auto; }
 #liveBar .ltime { margin-left: auto; }
+/* end of an answer, quieter: suggestions as small chips (the text already lists them), « Annuler » as a light button,
+   the figures (tok/s, tokens, time) only when the pointer is on the answer */
+body .suggest .chip { display: inline-flex; align-items: center; gap: 6px; width: auto; max-width: 100%; border-radius: 999px;
+  padding: 4px 11px; font-size: 12.5px; color: var(--muted); background: none; transform: none; }
+body .suggest .chip:hover { color: var(--text); background: var(--hover); transform: none; }
+.suggest .chip svg { width: 13px; height: 13px; flex: none; }
+.suggest .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ractions .btn:not(.primary) { font-size: 12.5px; padding: 3px 10px; background: none; color: var(--muted); border-color: var(--line); }
+.ractions .btn:not(.primary):hover { color: var(--text); background: var(--hover); }
+.turn.bot:last-child:not(:hover) .stats { opacity: 0; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -1677,7 +1688,9 @@ function inline(s) {
     .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, "$1<em>$2</em>")
     .replace(/(^|\W)_([^_\s][^_]*?)_(?!\w)/g, "$1<em>$2</em>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>")
-    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // a bare address (http://localhost:5050/…) is a link too, opened in the browser
+    .replace(/(^|[\s(«])(https?:\/\/[^\s<«»"]*[^\s<«»".,;:!?)])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[+i])}</code>`);
 }
 const PREVIEWABLE = /^(html|svg)$/i;
@@ -2779,7 +2792,7 @@ function addBot(m, idx) {
     note(t) { const n = document.createElement("div"); n.className = "md fnote"; n.innerHTML = md(t); block(n); },
     vision(ev) {
       const el = document.createElement("details"); el.className = "agroup";
-      el.innerHTML = `<summary><span class="gchev">›</span><span class="gsum">Image analysée <span class="muted">· ${esc(ev.model)}</span></span></summary><pre class="aout"></pre>`;
+      el.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum">Image analysée <span class="muted">· ${esc(ev.model)}</span></span></summary><pre class="aout"></pre>`;
       $("pre", el).textContent = ev.text; block(el);
     },
     todos(list) {
@@ -2793,7 +2806,7 @@ function addBot(m, idx) {
     verify(ev) {
       const bad = ev.failures.length;
       const el = document.createElement("details"); el.className = "agroup";
-      el.innerHTML = `<summary><span class="gchev">›</span><span class="adot ${bad ? "" : "okd"}" style="${bad ? "background:var(--danger)" : ""}"></span><span class="gsum" style="color:var(--text)">Vérifié ${ev.checked} page${ev.checked > 1 ? "s" : ""}${bad ? ` · <b style="color:var(--danger)">${bad} en erreur</b> — Naim corrige` : " · tout fonctionne"}</span></summary><pre class="aout"></pre>`;
+      el.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="adot ${bad ? "" : "okd"}" style="${bad ? "background:var(--danger)" : ""}"></span><span class="gsum" style="color:var(--text)">Vérifié ${ev.checked} page${ev.checked > 1 ? "s" : ""}${bad ? ` · <b style="color:var(--danger)">${bad} en erreur</b> — Naim corrige` : " · tout fonctionne"}</span></summary><pre class="aout"></pre>`;
       $("pre", el).textContent = bad ? ev.failures.join("\n\n") : "Toutes les pages répondent correctement.";
       if (bad) el.open = true;
       block(el);
@@ -2870,7 +2883,7 @@ function addBot(m, idx) {
       const sug = suggestionsOf(r.content || "");
       if (sug.length && m === current?.messages[current.messages.length - 1]) {
         const sb = document.createElement("div"); sb.className = "suggest";
-        sug.forEach((t) => { const c = document.createElement("button"); c.className = "chip"; c.textContent = "✨ " + t; c.onclick = () => { if (!curRun()) { sb.remove(); send(t); } }; sb.appendChild(c); });
+        sug.forEach((t) => { const c = document.createElement("button"); c.className = "chip"; c.innerHTML = svgI("spark") + `<span>${esc(t)}</span>`; c.title = "Demander à Naim : " + t; c.onclick = () => { if (!curRun()) { sb.remove(); send(t); } }; sb.appendChild(c); });
         d.insertBefore(sb, $(".msgacts", d));
       }
     },
