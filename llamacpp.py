@@ -250,6 +250,26 @@ def total_slots():
     return _slots_seen["n"]
 
 
+_slot_ctx_seen = {"n": 0, "at": 0.0}
+
+
+def slot_ctx():
+    """The real room of one conversation in the running engine (its context divided between its slots), or 0."""
+    import time as _t
+    if _t.time() - _slot_ctx_seen["at"] > 30:
+        try:
+            with urllib.request.urlopen(URL + "/props", timeout=2) as r:
+                p = json.load(r)
+            _slot_ctx_seen.update(n=int((p.get("default_generation_settings") or {}).get("n_ctx") or 0), at=_t.time())
+        except (urllib.error.URLError, OSError, ValueError):
+            pass
+    return _slot_ctx_seen["n"]
+
+
+class ContextFull(Exception):
+    """The conversation no longer fits in the engine's room: the caller shortens it and asks again."""
+
+
 def bg_slot():
     """The slot of the background jobs (memory, summaries): the last one, never the Chat's nor the Agent's."""
     n = total_slots()
@@ -332,6 +352,11 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         try:
             resp = urllib.request.urlopen(req, timeout=1800)
             break
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace") if e.code == 400 else ""
+            if "exceeds the available context" in body or "context size" in body:
+                raise ContextFull(body[:300]) from e
+            raise
         except (http.client.RemoteDisconnected, ConnectionError, urllib.error.URLError) as e:
             # the shared llama-server was stopped (another Naim window quit, crash): start it again once
             if attempt == 2 or isinstance(e, urllib.error.HTTPError):
@@ -388,7 +413,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 if ev.get("choices") and ev["choices"][0].get("finish_reason"):
                     reason = ev["choices"][0]["finish_reason"]
                 if t and t.get("predicted_n"):
-                    yield {"message": {}, "done": True, "eval_count": t["predicted_n"],
+                    yield {"message": {}, "done": True, "eval_count": t["predicted_n"], "prompt_total": t.get("cache_n", 0) + t.get("prompt_n", 0),
                            "eval_duration": int(t.get("predicted_ms", 1) * 1e6), "prompt_eval_count": t.get("prompt_n", 0),
                            "prompt_eval_duration": int(t.get("prompt_ms", 0) * 1e6), "done_reason": reason}
                 elif not t and (ev.get("usage") or {}).get("completion_tokens") and first:  # MLX: counts only

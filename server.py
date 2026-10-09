@@ -1500,7 +1500,21 @@ class Handler(BaseHTTPRequestHandler):
             # next real message would find nothing in common and re-read everything (~1 min); a tool call is refused instead
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
             content, calls, shown = "", [], 0
-            stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
+            try:
+                stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
+            except llamacpp.ContextFull:
+                # the conversation outgrew the engine's room: the oldest exchanges go (the instructions, the request
+                # and the last steps stay), and the same step is asked again
+                self.event({"type": "status", "text": "Naim allège la conversation pour continuer…"})
+                head = [m for m in messages[:1]]
+                tail = messages[-6:]
+                while tail and tail[0].get("role") == "tool":
+                    tail = tail[1:]
+                for m in tail:
+                    if m.get("role") == "tool" and len(str(m.get("content") or "")) > 4000:
+                        m["content"] = str(m["content"])[:4000] + "\n… (raccourci)"
+                messages[:] = head + tail
+                stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
             thought = redirected = False
             for chunk in stream:
                 if stop.is_set():
@@ -1605,9 +1619,10 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "tool", "tool_name": name, "content": "refused: this is a simple message, "
                                      "answer it directly in one or two sentences, without any tool."})
                     continue
-                if not files and not file_work and name not in ANSWER_TOOLS:
+                if not files and not file_work and name not in ANSWER_TOOLS and not name.startswith("mcp__"):
                     # a question or a lesson: the answer goes in the conversation (the tool list stays the same so that
-                    # llama.cpp keeps what it already read; only the use is refused)
+                    # llama.cpp keeps what it already read; only the use is refused). MCP tools always pass: they are
+                    # how Naim reads and acts on external services (e.g. the user's Internet box through BOXAI)
                     messages.append({"role": "tool", "tool_name": name, "content": (
                         "refused: this is a question, not a request for files. Answer IN the conversation (explanations "
                         "and code blocks); create or change files only when the user asks for it.")})

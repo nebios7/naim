@@ -1435,6 +1435,24 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 @keyframes tws { 0% { height: 3px; } 100% { height: 14px; } }
 @keyframes twt { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
 @keyframes twp { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+/* one dark palette for « Sombre » and « Automatique »: warm neutral greys toward black, never blue */
+:root[data-theme="dark"] {
+    --bg: #262624; --panel: #30302e; --side: #1f1e1d; --hover: #353532; --text: #f0eee6; --muted: #a3a19b; --line: #3d3d3a;
+    --accent: #f0eee6; --accent-soft: #353532; --user: #3a3a37; --code: #1f1e1d;
+    --brand: #f0eee6; --brand-h: #dcdad2; --brand-t: #262624; --brand-soft: rgb(240 238 230 / .10);
+    --c-chat: #f0eee6; --send: #f0eee6; --send-t: #262624; --robot-d: #1f1e1d; --robot-eye: #f0eee6;
+    --shadow: 0 1px 2px rgb(0 0 0 / .35), 0 14px 36px rgb(0 0 0 / .4);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]), :root:not([data-theme]) {
+    --bg: #262624; --panel: #30302e; --side: #1f1e1d; --hover: #353532; --text: #f0eee6; --muted: #a3a19b; --line: #3d3d3a;
+    --accent: #f0eee6; --accent-soft: #353532; --user: #3a3a37; --code: #1f1e1d;
+    --brand: #f0eee6; --brand-h: #dcdad2; --brand-t: #262624; --brand-soft: rgb(240 238 230 / .10);
+    --c-chat: #f0eee6; --send: #f0eee6; --send-t: #262624; --robot-d: #1f1e1d; --robot-eye: #f0eee6;
+    --shadow: 0 1px 2px rgb(0 0 0 / .35), 0 14px 36px rgb(0 0 0 / .4);
+  }
+}
+
 </style>
 </head>
 <body>

@@ -194,7 +194,7 @@ def writing_text(w):
     return f"Naim écrit {what}… {kb:.0f} Ko" if kb >= 1 else f"Naim écrit {what}…"
 
 
-def chat_watched(model, messages, tools=None, think=False, options=None, cancel=None, on_writing=None):
+def chat_watched(model, messages, tools=None, think=False, options=None, cancel=None, on_writing=None, on_size=None):
     """One model answer, read as it is written so that a loop can be cut at once (llama.cpp); tool calls written as text
     are recovered. Same result as a non-streamed call: {role, content, thinking?, tool_calls?}."""
     if (options or {}).get("backend") != "llamacpp":
@@ -208,6 +208,8 @@ def chat_watched(model, messages, tools=None, think=False, options=None, cancel=
                 break
             if chunk.get("writing") and on_writing:
                 on_writing(chunk["writing"])
+            if chunk.get("prompt_total") and on_size:
+                on_size(chunk["prompt_total"])  # the real size of what the engine read
             m = chunk.get("message", {})
             content += m.get("content") or ""
             thinking += m.get("thinking") or ""
@@ -2181,19 +2183,43 @@ class Agent:
         if changed:
             self.emit({"type": "todos", "todos": self.todos})
 
-    def _ctx_tokens(self):
+    def _msgs_tokens(self):
         return sum(len(json.dumps(m, ensure_ascii=False)) for m in self.messages) // 3
 
-    def _compact_history(self):
+    def _ctx_tokens(self):
+        # what the engine reads besides the messages (the tool list, the template: ~9 000 tokens) is measured on its
+        # last answer; before the first one, a rough estimate
+        extra = getattr(self, "_extra_tokens", None)
+        if extra is None:
+            extra = len(json.dumps(self.tools or [], ensure_ascii=False)) // 6
+        return self._msgs_tokens() + extra
+
+    def _measured(self, total):
+        """The engine said how many tokens it read: the part that is not the messages is remembered."""
+        self._extra_tokens = max(0, total - self._sent_msgs_tokens)
+
+    def _room(self):
+        """Tokens one request may use: the setting, or the engine's real room per conversation when it is known."""
+        room = int(self.options.get("num_ctx") or 16384)
+        if self.options.get("backend") == "llamacpp":
+            try:
+                import llamacpp
+                room = max(room, llamacpp.slot_ctx() or 0)
+            except Exception:  # noqa: BLE001 — the setting is a safe default
+                pass
+        return room
+
+    def _compact_history(self, force=False):
         """When the conversation nears the context size, shorten old tool results and arguments.
-        The system prompt, the user's task and the recent steps are kept intact, so the model never loses the task."""
-        budget = int((self.options.get("num_ctx") or 16384) * 0.6)
-        if self._ctx_tokens() < budget:
+        The system prompt, the user's task and the recent steps are kept intact, so the model never loses the task.
+        force: the engine said it no longer fits — shortened now, keeping fewer recent steps."""
+        budget = int(self._room() * 0.6)
+        if not force and self._ctx_tokens() < budget:
             return
         # compact down to ~40% so this (cache-invalidating) pass happens rarely
         self.messages = [m for m in self.messages if not str(m.get("content", "")).startswith("(Rappel) ")]
         task_idx = getattr(self, "_task_idx", 1)
-        keep_from = max(task_idx + 1, len(self.messages) - 6)
+        keep_from = max(task_idx + 1, len(self.messages) - (3 if force else 6))
         while keep_from < len(self.messages) and self.messages[keep_from].get("role") == "tool":
             keep_from += 1  # never split a tool call from its results
         old = self.messages[task_idx + 1:keep_from]
@@ -2217,6 +2243,10 @@ class Agent:
                    "carnet complet dans .naim/tache.md) "
                    + ("J'ai " + ", ".join(dict.fromkeys(facts)) + "." if facts else "J'ai commencé la tâche.")}
         self.messages = self.messages[:task_idx + 1] + [summary] + self.messages[keep_from:]
+        if force:  # the engine refused: the big outputs kept (a whole file read) are cut too, the files stay on disk
+            for m in self.messages[task_idx + 2:]:
+                if m.get("role") == "tool" and len(str(m.get("content") or "")) > 4000:
+                    m["content"] = str(m["content"])[:4000] + "\n… (raccourci : relis le fichier si besoin)"
         if self._ctx_tokens() >= budget and self.todos:
             # still too long: re-state the plan right after the task so it stays in view
             self.messages.insert(task_idx + 1, {"role": "user", "content": "(Rappel) " + self._todo_text()})
@@ -2361,8 +2391,19 @@ class Agent:
             self._notify_finished()
             self.emit({"type": "status", "text": "Naim réfléchit..."})
             self._compact_history()
-            msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options,
-                               cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}))
+            self._sent_msgs_tokens = self._msgs_tokens()
+            try:
+                msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options,
+                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
+            except Exception as e:  # noqa: BLE001
+                if type(e).__name__ != "ContextFull":
+                    raise
+                # the conversation outgrew the engine's room: older steps are summed up, and the same step is asked again
+                self.emit({"type": "status", "text": "Naim résume ses étapes précédentes pour continuer…"})
+                self._compact_history(force=True)
+                self._sent_msgs_tokens = self._msgs_tokens()
+                msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options,
+                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
             if self.cancel.is_set():
                 self.emit({"type": "answer", "text": "⏹ Arrêté."})
                 self._outcome = "stopped"
@@ -2373,7 +2414,7 @@ class Agent:
                     self.emit({"type": "thinking", "text": msg["thinking"].strip()})
                 self.emit({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
                 msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options,
-                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}))
+                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
             self.messages.append(msg)
             if msg.get("thinking") and self.think:
                 self.emit({"type": "thinking", "text": msg["thinking"].strip()})
