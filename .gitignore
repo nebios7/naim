@@ -12,4 +12,5 @@ owner_admin.py
 voicetrain.py
 # private: Naim's system prompt and tool descriptions (delivered with the model by Naim's server)
 naim_prompts.json
+naim_prompts.*.json
 .serena/
