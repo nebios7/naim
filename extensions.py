@@ -447,7 +447,7 @@ try:  # detailed, field-tested versions (override the short ones)
 except ImportError:
     pass
 # built-in skills rewritten in skills_pro: an older unedited copy is upgraded once (backed up in skills/.anciens)
-UPGRADED = {"ci-cd", "projet-existant", "debug", "application-web", "api-rest", "ios-swiftui",
+UPGRADED = {"react-app", "ci-cd", "projet-existant", "debug", "application-web", "api-rest", "ios-swiftui",
             "veille-email", "controle-ecran", "tri-emails", "node-typescript", "pdf", "word", "excel", "presentation", "analyse-donnees"}
 
 

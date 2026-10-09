@@ -1053,6 +1053,12 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .agroup > .arows .procchip { border: 0; background: none; padding: 0; font-size: 13.5px; }
 .agroup > .arows .vline .aic { color: var(--ok); }
 
+/* an opened command: the command in its own coloured box, what it printed under it */
+.aout .cmdline { display: block; white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px; margin: 0; color: var(--text); font-weight: 400; }
+.aout:has(> .cmdline:only-child) { padding: 6px; }
+.aout:has(> .cmdline:only-child) .cmdline { margin: 0; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -2214,7 +2220,13 @@ function shownResult(r) {
     .replace(/\s*This file is done:[\s\S]*$/, "").replace(/\s*It is a real \w+ file:[^\n]*/g, "")
     .replace(/\s*Note: \d+ lines is long[^\n]*/g, "").replace(/\n*\[STOP:[^\]]*\]/g, "")
     .replace(/\s*\((?:Tableau lu en texte|Le modèle actuel)[^)]*\)/g, "")
-    .replace(/\s*Il est affiché à l'utilisateur[\s\S]*$/, "").trim();
+    .replace(/\s*Il est affiché à l'utilisateur[\s\S]*$/, "")
+    // notes written for Naim, not for you: a server started in the background is said plainly
+    .replace(/^note: this command starts a server[^\n]*\n(?:\(start_process[^\n]*\n)?/m, "")
+    .replace(/^\(start_process, keep=true\) instead of blocking\.\n?/m, "")
+    .replace(/^process (p\d+) \(([^)]*)\) running, pid \d+(?:, (http\S+))?/m, (_, id, name, url) => `Lancé en arrière-plan${url ? ` · ${url}` : ""}`)
+    .replace(/^first output:\n?/m, "")
+    .replace(/\n\((?:hint|note): [^)]*\)/g, "").trim();
 }
 function renderThread() {
   const t = $("#thread"); t.innerHTML = "";
@@ -2784,7 +2796,7 @@ function addBot(m, idx) {
       row.innerHTML = `<div class="aline"><span class="aic">${stepIcon(name, info.kind)}</span>${sub ? `<span class="subtag">${esc(sub)}</span>` : ""}<span class="alabel">${info.label}</span></div><pre class="aout" hidden></pre>`;
       const pre = $(".aout", row);
       if ((name === "run_command" || name === "start_process") && args.command) {
-        pre.innerHTML = `<span class="cmdline">$ ${esc(args.command)}</span>\n`; pre.hidden = !group.open;
+        pre.innerHTML = `<span class="cmdline">$ ${highlight(args.command, "bash")}</span>\n`; pre.hidden = !group.open;
       } else if (name === "write_file" && typeof args.content === "string" && !v._replay) {
         const lines = args.content.split("\n"); const lang = (EXT_LANG[(args.path || "").split(".").pop()] || "");
         pre.innerHTML = highlight(lines.slice(0, 14).join("\n"), lang) + (lines.length > 14 ? `\n<span class="muted">… ${lines.length - 14} lignes de plus</span>` : "");
@@ -3203,7 +3215,7 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "review": { const t = `Vérification : ${ev.problems.join(" · ")}`; reply.steps.push({ type: "event", icon: "🔎", text: t }); v.event("🔎", t); break; }
           case "verify": reply.steps.push({ type: "verify", checked: ev.checked, failures: ev.failures }); v.verify(ev); break;
           case "process_stopped": reply.steps.push({ type: "process_stopped", id: ev.id, name: ev.name }); v.processStopped(ev); break;
-          case "process": reply.steps.push({ type: "process", process: ev.process }); v.process(ev.process);
+          case "process": reply.steps.push({ type: "process", process: ev.process }); v.process(ev.process); if (ev.process?.url && !ev.process.notify) reply.appUrl = ev.process.url;
             if (S.auto_preview !== false && ev.process.url && ev.process.keep && current === conv) setTimeout(() => showPreviewUrl(ev.process.url), 1200);
             break;
           case "output": if (lastTool) lastTool.output = (lastTool.output + ev.text).slice(-8000); v.output(ev.text); break;
@@ -3257,6 +3269,10 @@ async function stream(reply, v, message, hist, extra = {}) {
   v.finish();
   delete runs[conv.id];
   v.actions(reply);
+  // an application it started and that still runs: it is the deliverable, it opens in the preview (like a PDF)
+  if (reply.appUrl && S.auto_preview !== false && current === conv && !/⏹ Arrêté/.test(reply.content || "")) {
+    api("/api/processes").then((ps) => { if ((ps || []).some((p) => p.running && p.url === reply.appUrl)) showPreviewUrl(reply.appUrl); }).catch(() => {});
+  }
   // Chat mode: a PDF or an image Naim just created opens in the preview right away
   const made = reply.deliverables?.files?.[0];
   if (made && S.auto_preview !== false && conv.mode !== "agent" && current === conv && /^(pdf|png|jpe?g|gif|svg)$/.test(made.ext)) {
