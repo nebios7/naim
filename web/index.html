@@ -1089,6 +1089,14 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .aout .cmdline:hover .ccopy { opacity: 1; } .aout .ccopy:hover { background: var(--hover); color: var(--text); }
 .aout .ccopy svg { width: 14px; height: 14px; } .aout .ccopy.done { color: var(--ok); opacity: 1; }
 
+/* steps exactly like the reference: no icon, quiet text, the command box straight under an opened step */
+.agroup > .arows .aline .aic, .agroup > .arows .aline .subtag { display: none; }
+.agroup > .arows .aline { color: var(--muted); font-size: 13.5px; }
+.agroup > .arows .aline .alabel code, .agroup > .arows .aline .alabel .mono { color: inherit; font-family: inherit; font-size: inherit; }
+.agroup > .arows .aout { margin-left: 0; }
+.aout .ptitle { display: none; }
+.agroup > summary { font-size: 14px; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -2723,24 +2731,22 @@ function stepIcon(name, kind) {
   if (/^(list_files|aller_dans_dossier)$/.test(name)) return svgI("folder");
   return svgI(STEP_ICON[kind] || "tool");
 }
-function groupSummary(counts) {
+function groupSummary(counts) {  // what was done, said like a person: « Lu 2 fichiers, exécuté 3 commandes »
+  const n = (k) => counts[k] || 0, pl = (k, one, many) => `${n(k)} ${n(k) > 1 ? many : one}`;
   const parts = [];
-  const n = (k) => counts[k] || 0;
-  if (n("read")) parts.push(`${n("read")} lecture${n("read") > 1 ? "s" : ""}`);
-  if (n("write")) parts.push(`${n("write")} fichier${n("write") > 1 ? "s" : ""} écrit${n("write") > 1 ? "s" : ""}`);
-  if (n("cmd")) parts.push(`${n("cmd")} commande${n("cmd") > 1 ? "s" : ""}`);
-  if (n("web")) parts.push(`${n("web")} recherche${n("web") > 1 ? "s" : ""} web`);
-  if (n("mcp")) parts.push(`${n("mcp")} outil${n("mcp") > 1 ? "s" : ""} MCP`);
-  if (n("skill")) parts.push(`${n("skill")} skill${n("skill") > 1 ? "s" : ""}`);
-  if (n("hook")) parts.push(`${n("hook")} hook${n("hook") > 1 ? "s" : ""}`);
-  if (n("mem")) parts.push("mémoire");
-  if (n("sub")) parts.push("sous-agents");
-  if (n("mail")) parts.push(`${n("mail")} email${n("mail") > 1 ? "s" : ""}`);
-  if (n("contact")) parts.push(`${n("contact")} contact${n("contact") > 1 ? "s" : ""}`);
-  if (n("mac")) parts.push(`${n("mac")} action${n("mac") > 1 ? "s" : ""} sur le Mac`);
-  if (n("screen")) parts.push(`${n("screen")} action${n("screen") > 1 ? "s" : ""} à l'écran`);
-  if (n("other")) parts.push(`${n("other")} action${n("other") > 1 ? "s" : ""}`);
-  return parts.join(" · ") || "Actions";
+  if (n("read")) parts.push(`lu ${pl("read", "fichier", "fichiers")}`);
+  if (n("write")) parts.push(`écrit ${pl("write", "fichier", "fichiers")}`);
+  if (n("cmd") || n("mac")) { const c = n("cmd") + n("mac"); parts.push(`exécuté ${c} commande${c > 1 ? "s" : ""}`); }
+  if (n("web")) parts.push(`fait ${pl("web", "recherche web", "recherches web")}`);
+  if (n("mcp")) parts.push(`utilisé ${pl("mcp", "outil MCP", "outils MCP")}`);
+  if (n("mail")) parts.push(`traité ${pl("mail", "e-mail", "e-mails")}`);
+  if (n("contact")) parts.push(`cherché ${pl("contact", "contact", "contacts")}`);
+  if (n("screen")) parts.push(`fait ${pl("screen", "action à l'écran", "actions à l'écran")}`);
+  if (n("sub")) parts.push("réparti le travail");
+  if (n("hook")) parts.push(`lancé ${pl("hook", "hook", "hooks")}`);
+  if (n("other")) parts.push(`fait ${pl("other", "action", "actions")}`);
+  const t = parts.join(", ");
+  return t ? t[0].toUpperCase() + t.slice(1) : "Travail";
 }
 const EXT_LANG = { py: "python", js: "javascript", ts: "typescript", html: "html", css: "css", java: "java", swift: "swift", php: "php", go: "go", rs: "rust", sql: "sql", sh: "bash", json: "json", yml: "yaml", yaml: "yaml", md: "markdown", kt: "kotlin", c: "c", cpp: "cpp" };
 function toolMeta(name, a) {
@@ -2959,6 +2965,7 @@ function addBot(m, idx) {
       // a skill, an MCP server or a memory used by Naim is part of its work: it goes INSIDE the block of actions, at
       // its place in time (first if it came first), not as a tag above the task
       const kind = { "📘": "skill", "🧠": "mem", "🔌": "mcp", "🛠": "mcp", "🪝": "hook" }[icon];
+      if (kind === "skill" || kind === "mem") return;  // its method and memory: used, not shown
       if (kind) {
         if (!group) {
           group = document.createElement("details"); group.className = "agroup"; group.open = !!S.live_actions && !v._replay;
@@ -3299,6 +3306,11 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "tool": {
             const a = ev.args || {};
             if (ev.name === "update_todos") { lastTool = null; break; }
+            // what it wrote before acting (« Je regarde ton agenda… ») goes ABOVE its steps, like the Agent's notes
+            if (!ev.sub && conv.mode !== "agent" && !talk.on && (reply.content || "").trim()) {
+              const said = reply.content.trim(); reply.content = "";
+              reply.steps.push({ type: "note", text: said }); v.note(said); v.setText("");
+            }
             lastTool = { type: "tool", name: ev.name, sub: ev.sub, output: "",
               args: { path: a.path || a.output, source: a.source, question: a.question, key: a.key, command: a.command, pattern: a.pattern, target: a.target, id: a.id, query: a.query, url: a.url, name: a.name, fact: a.fact, action: a.action, names: a.names, server: a.server, to: a.to, subject: a.subject, text: a.text, keys: a.keys, app: a.app, scheme: a.scheme, bundle_id: a.bundle_id, nom: a.nom, dossier: a.dossier, method: a.method, group: a.group, ...toolMeta(ev.name, a) } };
             reply.steps.push(lastTool); v.addStep(ev.name, lastTool.args, ev.sub); v.typing(toolLabel(ev.name, a));

@@ -1487,6 +1487,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
                                     f"\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}")
+        if (file_work or files) and not plain and not body.get("_relaunched"):
+            # like a colleague: a sentence on what it is about to do, then the work (the steps stay in their block)
+            messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                "\n\n[Commence ta réponse par une phrase, pour moi, qui dit ce que tu vas faire, puis, dans la même "
+                "réponse, fais-le aussitôt avec tes outils. À la fin, réponds à ma demande.]"))
         if not file_work and not files:
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
