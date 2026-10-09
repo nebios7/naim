@@ -119,7 +119,9 @@ def report():
     """The state as text (for the Admin screen)."""
     r = STATE["results"]
     if not STATE["started"]:
-        return "Aucune vérification lancée."
+        return ("Aucune vérification lancée depuis l'ouverture de Naim.\n"
+                "Clique d'abord sur « Vérifier Naim » : 8 essais réels (salut, leçon, schéma, PDF, e-mail simulé, programme, "
+                "remarque), 10 à 20 minutes. N'utilise pas Naim pendant ce temps, puis reviens ici.")
     lines = []
     for x in r:
         lines.append(f"{'OK    ' if x['ok'] else 'ÉCHEC '} {x['name']} ({x['secs']} s) : {x['what']}")
