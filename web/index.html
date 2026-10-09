@@ -1106,6 +1106,14 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .agroup > .arows > .arow { padding: 11px 14px; }
 .agroup > summary { font-size: 14.5px; }
 
+/* a guidance remark (« Toi : … »): a rounded block, not a giant pill; long text shows 3 lines, a click shows all */
+.evnote, .md .evnote.inline { border-radius: 12px; align-items: flex-start; }
+.evnote .evic { margin-top: 2px; flex: none; }
+.evnote span:last-child { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; line-height: 1.5; }
+.evnote.long { cursor: pointer; }
+.evnote.long:not(.open)::after { content: "Afficher plus"; align-self: flex-end; flex: none; color: var(--muted); font-size: 12px; margin-left: 6px; text-decoration: underline; }
+.evnote.open span:last-child { -webkit-line-clamp: unset; display: block; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -1901,6 +1909,10 @@ function downloadBlob(name, blob) {
   const r = new FileReader(); r.onload = () => saveDownload(name, { base64: String(r.result).split(",")[1] || "" }); r.readAsDataURL(blob);
 }
 document.addEventListener("click", (e) => { if (e.target.closest(".wstop")) stop(); });
+document.addEventListener("click", (e) => { const n = e.target.closest(".evnote.long"); if (n) n.classList.toggle("open"); });
+// long remarks are marked once drawn (3 lines shown, a click shows all)
+new MutationObserver(() => $$(".evnote:not([data-l])").forEach((n) => { n.dataset.l = 1; if ((n.textContent || "").length > 180) n.classList.add("long"); }))
+  .observe(document.body, { childList: true, subtree: true });
 document.addEventListener("click", async (e) => {  // « Copier » on an opened command
   const b = e.target.closest(".ccopy"); if (!b) return;
   e.stopPropagation();
