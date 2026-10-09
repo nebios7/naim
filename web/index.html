@@ -1059,6 +1059,36 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .aout:has(> .cmdline:only-child) { padding: 6px; }
 .aout:has(> .cmdline:only-child) .cmdline { margin: 0; }
 
+/* the work in progress lives in the conversation (dots, light, time on the group being done): no second line above
+   the input */
+#liveBar { display: none !important; }
+.glive .bgdots, .liveline .bgdots { display: inline-grid; grid-template-columns: 5px 5px; gap: 3px; width: 13px; flex: none; }
+.glive .bgdots i, .liveline .bgdots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent, #d97757); animation: bgdot 1.2s ease-in-out infinite; }
+.glive .bgdots i:nth-child(2), .liveline .bgdots i:nth-child(2) { animation-delay: .3s; }
+.glive .bgdots i:nth-child(3), .liveline .bgdots i:nth-child(3) { animation-delay: .9s; }
+.glive .bgdots i:nth-child(4), .liveline .bgdots i:nth-child(4) { animation-delay: .6s; }
+.glive { display: inline-flex; margin-right: 6px; }
+.agroup.live > summary .gsum, .liveline .ltxt {
+  background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: naimShimmer 3.2s cubic-bezier(.4, 0, .6, 1) infinite; }
+.agroup.live > summary .gtime, .liveline .ltm { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 6px; order: 1; }
+.agroup.live > summary .gchev { order: 2; }
+.liveline { display: flex; align-items: center; gap: 8px; font-size: 13.5px; padding: 2px 0; }
+.liveline .ltxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* shell colours (as in the code blocks) and the opened command as a panel: a title, the coloured command, the output */
+.hv { color: #e5a35c; } .ho { color: #c586c0; } .hflag { color: var(--muted); }
+:root[data-theme="light"] .hv { color: #b25e00; } :root[data-theme="light"] .ho { color: #a03fa0; }
+.aout:has(> .cmdline) { background: var(--panel); border-radius: 10px; padding: 8px 10px 10px; }
+.aout .ptitle { display: block; font: 500 12.5px -apple-system, system-ui, sans-serif; color: var(--text); margin: 0 0 6px 2px; }
+
+.aout .cmdline { position: relative; padding-right: 34px; }
+.aout .ccopy { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px;
+  background: none; color: var(--muted); cursor: pointer; opacity: .55; transition: opacity .15s, background .15s; }
+.aout .cmdline:hover .ccopy { opacity: 1; } .aout .ccopy:hover { background: var(--hover); color: var(--text); }
+.aout .ccopy svg { width: 14px; height: 14px; } .aout .ccopy.done { color: var(--ok); opacity: 1; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -1651,8 +1681,32 @@ const curRun = () => (current ? runs[current.id] : null);
 // ======================================================================= syntax highlighting
 const KW = new Set(("abstract and as assert async await break case catch class const continue def default defer del do elif else enum export extends extern false final finally fn for foreach from func function go guard if impl implements import in include instanceof interface is lambda let match mod module mut namespace new nil none not null of or override package pass private protected pub public raise readonly return self select static struct super switch template this throw throws trait true try type typedef typeof union unsafe use using val var void volatile when where while with yield echo require_once require print println printf int float double bool boolean char string str long short byte unsigned signed auto None True False").split(" "));
 const SQLKW = new Set("SELECT FROM WHERE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE PRIMARY KEY FOREIGN REFERENCES JOIN LEFT RIGHT INNER OUTER ON GROUP BY ORDER HAVING LIMIT AND OR NOT NULL AS DISTINCT COUNT SUM AVG MIN MAX INDEX ALTER DROP IF EXISTS DESC ASC UNIQUE DEFAULT AUTO_INCREMENT INT VARCHAR TEXT DATE".split(" "));
+// shell, like a terminal-aware editor: the command of each segment, keywords, strings, variables, options
+const SH_KW = new Set("for in do done if then else elif fi while until case esac function select time".split(" "));
+function highlightShell(code) {
+  const re = /(#[^\n]*)|("(?:\\.|[^"\\])*"|'[^']*')|(\$\{[^}]*\}|\$\(|\$[\w@#?*!-]+)|(&&|\|\||[|;&<>()]|\n)|(\s--?[\w-]+(?:=[^\s]*)?)|([^\s|;&<>()"'$#]+)/g;
+  let out = "", last = 0, m, start = true;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index));
+    const [tok, cm, str, v, op, flag, word] = m;
+    if (cm) out += `<span class="hc">${esc(tok)}</span>`;
+    else if (str) { out += `<span class="hs">${esc(tok)}</span>`; start = false; }
+    else if (v) { out += `<span class="hv">${esc(tok)}</span>`; start = v === "$(" ; }
+    else if (op) { out += `<span class="ho">${esc(tok)}</span>`; start = true; }
+    else if (flag) out += `<span class="hflag">${esc(tok)}</span>`;
+    else if (word) {
+      if (SH_KW.has(word)) { out += `<span class="hk">${esc(word)}</span>`; start = !/^(in|case)$/.test(word); }
+      else if (start && !/=/.test(word)) { out += `<span class="hf">${esc(word)}</span>`; start = false; }
+      else if (/^\d+(\.\d+)?$/.test(word)) out += `<span class="hn">${esc(word)}</span>`;
+      else out += esc(word);
+    }
+    last = re.lastIndex;
+  }
+  return out + esc(code.slice(last));
+}
 function highlight(code, lang) {
   lang = (lang || "").toLowerCase();
+  if (/^(sh|bash|zsh|shell|console|terminal)$/.test(lang)) return highlightShell(code);
   if (/^(html|xml|svg|vue)$/.test(lang)) {
     return esc(code).replace(/(&lt;!--[\s\S]*?--&gt;)|(&lt;\/?)([\w-]+)|([\w-]+)(=)(&quot;.*?&quot;|&#39;.*?&#39;)/g,
       (m, c, open, tag, attr, eq, val) => c ? `<span class="hc">${c}</span>` : open ? `${open}<span class="ht">${tag}</span>` : `<span class="hf">${attr}</span>${eq}<span class="hs">${val}</span>`);
@@ -1808,6 +1862,11 @@ function downloadBlob(name, blob) {
   const r = new FileReader(); r.onload = () => saveDownload(name, { base64: String(r.result).split(",")[1] || "" }); r.readAsDataURL(blob);
 }
 document.addEventListener("click", (e) => { if (e.target.closest(".wstop")) stop(); });
+document.addEventListener("click", async (e) => {  // « Copier » on an opened command
+  const b = e.target.closest(".ccopy"); if (!b) return;
+  e.stopPropagation();
+  if (await copyText(b.dataset.cmd || "")) { b.classList.add("done"); b.innerHTML = svgI("check"); setTimeout(() => { b.classList.remove("done"); b.innerHTML = svgI("copy"); }, 1400); }
+});
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-copy],[data-preview],[data-save],[data-write],[data-run]");
   if (!b) return;
@@ -2684,7 +2743,8 @@ function addBot(m, idx) {
   const block = (el) => { closeGroup(); flow.appendChild(el); return el; };
   // part of the work (a page checked, a server started): a line INSIDE the group of steps, like the other steps
   const inGroup = (el) => {
-    const g = group || (flow.lastElementChild?.classList.contains("agroup") && $(".arows", flow.lastElementChild) ? flow.lastElementChild : null);
+    const lw = lastWork(flow);
+    const g = group || (lw?.classList.contains("agroup") && $(".arows", lw) ? lw : null);
     if (!g) return block(el);
     const r = document.createElement("div"); r.className = "arow ok"; r.appendChild(el); $(".arows", g).appendChild(r); return el;
   };
@@ -2796,7 +2856,7 @@ function addBot(m, idx) {
       row.innerHTML = `<div class="aline"><span class="aic">${stepIcon(name, info.kind)}</span>${sub ? `<span class="subtag">${esc(sub)}</span>` : ""}<span class="alabel">${info.label}</span></div><pre class="aout" hidden></pre>`;
       const pre = $(".aout", row);
       if ((name === "run_command" || name === "start_process") && args.command) {
-        pre.innerHTML = `<span class="cmdline">$ ${highlight(args.command, "bash")}</span>\n`; pre.hidden = !group.open;
+        pre.innerHTML = `<span class="ptitle">Terminal</span><span class="cmdline"><button class="ccopy" title="Copier la commande" data-cmd="${esc(args.command)}">${svgI("copy")}</button><span class="ho">$</span> ${highlight(args.command, "bash")}</span>\n`; pre.hidden = !group.open;
       } else if (name === "write_file" && typeof args.content === "string" && !v._replay) {
         const lines = args.content.split("\n"); const lang = (EXT_LANG[(args.path || "").split(".").pop()] || "");
         pre.innerHTML = highlight(lines.slice(0, 14).join("\n"), lang) + (lines.length > 14 ? `\n<span class="muted">… ${lines.length - 14} lignes de plus</span>` : "");
@@ -2813,7 +2873,7 @@ function addBot(m, idx) {
     },
     output(t) {
       if (!lastRow) return; lastOut += t; const p = $(".aout", lastRow); p.hidden = false;
-      const cmd = $(".cmdline", p)?.outerHTML || "";
+      const cmd = ($(".ptitle", p)?.outerHTML || "") + ($(".cmdline", p)?.outerHTML || "");
       p.innerHTML = cmd + (cmd ? "\n" : "") + esc(lastOut.slice(-20000)); p.scrollTop = p.scrollHeight;
     },
     stepResult(name, res) {
@@ -2821,11 +2881,11 @@ function addBot(m, idx) {
       const ok = !/^(error|denied|stopped|blocked|not allowed)/.test(res) && !/^exit code [1-9]/.test(res);
       lastRow.className = "arow " + (ok ? "ok" : "err");
       const p = $(".aout", lastRow);
-      const cmd = $(".cmdline", p)?.outerHTML || "";
+      const cmd = ($(".ptitle", p)?.outerHTML || "") + ($(".cmdline", p)?.outerHTML || "");
       if (lastRow.dataset.preview) { /* keep the code preview */ }
       else if (name !== "run_command" || !lastOut) { const r = shownResult(res.replace(/^ok: /, "").replace(/^exit code 0\n?/, "").replace(/\n\n\[Plan[^\]]*\]$/, "")); p.innerHTML = cmd + (cmd && r ? "\n" : "") + esc(r); }
       if (ok && /^(write_file|edit_file|multi_edit|move_file|delete_file|creer_fichier)$/.test(name) && !lastRow.dataset.preview) { p.innerHTML = ""; p.hidden = true; return; }  // the step line says it all
-      if (ok && !lastRow.dataset.preview && ((name !== "run_command" && name !== "start_process") || !p.textContent.replace(/^\$.*$/m, "").trim())) p.hidden = !cmd || !group?.open;
+      if (ok && !lastRow.dataset.preview && ((name !== "run_command" && name !== "start_process") || !p.textContent.replace($(".ptitle", p)?.textContent || "", "").replace($(".cmdline", p)?.textContent || "", "").trim())) p.hidden = !cmd || !group?.open;
       if (!ok) {  // a failure: one plain sentence, the technical output under « Détails »
         const raw = p.innerHTML;
         p.innerHTML = `<span class="errplain">${esc(errPlain(res))}</span><details class="errdet"><summary>Détails</summary><div>${raw}</div></details>`;
@@ -2864,7 +2924,7 @@ function addBot(m, idx) {
       el.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="adot ${bad ? "" : "okd"}" style="${bad ? "background:var(--danger)" : ""}"></span><span class="gsum" style="color:var(--text)">Vérifié ${ev.checked} page${ev.checked > 1 ? "s" : ""}${bad ? ` · <b style="color:var(--danger)">${bad} en erreur</b> — Naim corrige` : " · tout fonctionne"}</span></summary><pre class="aout"></pre>`;
       $("pre", el).textContent = bad ? ev.failures.join("\n\n") : "Toutes les pages répondent correctement.";
       if (bad) el.open = true;
-      if (!bad && (group || flow.lastElementChild?.classList.contains("agroup"))) {  // all good: one more line of the work
+      if (!bad && (group || lastWork(flow)?.classList.contains("agroup"))) {  // all good: one more line of the work
         const line = document.createElement("div"); line.className = "vline";
         line.innerHTML = `<div class="aline"><span class="aic">${svgI("check")}</span><span class="alabel">Vérifié ${ev.checked} page${ev.checked > 1 ? "s" : ""} · tout fonctionne</span></div>`;
         inGroup(line); return;
@@ -3401,8 +3461,14 @@ function setBusy(on) { updateSendBtn(); updateLiveBar(); guidePlaceholder(); }
 // while Naim works, the input itself says it can guide him (always visible, whatever the window width)
 function guidePlaceholder() {
   const inp = $("#input"), busy = !!curRun();
-  if (busy && inp.dataset.base == null && dictation.ph == null) { inp.dataset.base = inp.placeholder; inp.placeholder = talk.on ? "Parle pour guider Naim sans l'arrêter, « stop » pour l'arrêter…" : "Écris pour guider Naim sans l'arrêter (Échap pour l'arrêter)…"; }
-  else if (!busy && inp.dataset.base != null) { inp.placeholder = inp.dataset.base; delete inp.dataset.base; }
+  const GUIDE = ["Parle pour guider Naim sans l'arrêter, « stop » pour l'arrêter…", "Écris pour guider Naim sans l'arrêter (Échap pour l'arrêter)…"];
+  if (busy && dictation.ph == null) {
+    const want = GUIDE[talk.on ? 0 : 1];
+    if (inp.placeholder !== want) {
+      if (!GUIDE.includes(inp.placeholder)) inp.dataset.base = inp.placeholder;  // the usual text, put back at the end
+      inp.placeholder = want;
+    }
+  } else if (!busy && inp.dataset.base != null) { inp.placeholder = inp.dataset.base; delete inp.dataset.base; }
 }
 function updateSendBtn() {
   const typing = !!$("#input").value.trim(), busy = !!curRun();
@@ -3412,11 +3478,42 @@ function updateSendBtn() {
 $("#input").addEventListener("input", updateSendBtn);
 $("#send").onclick = () => (curRun() && !$("#input").value.trim() ? stop() : send());
 const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span>';
+// the last piece of work in a reply (the live line at the bottom is not one)
+function lastWork(flow) { return [...flow.children].filter((c) => !c.classList.contains("liveline")).pop() || null; }
+const LDOTS = '<span class="bgdots"><i></i><i></i><i></i><i></i></span>';
+// like a pro tool: what Naim is doing is shown IN the conversation, on the work itself — the group of steps being
+// done carries the dots, the light and the time (« 9 lectures · 1 skill · 1 min 26 ») ; before any step, one line
+// « Naim réfléchit… 12 s » in its place
+function liveInThread(r, label, step, time) {
+  const mine = r?.v?.el;
+  $$(".agroup.live").forEach((g) => { if (g.closest(".turn") !== mine || g !== lastWork(g.parentElement)) { g.classList.remove("live"); $(".glive", g)?.remove(); $(".gtime", g)?.remove(); } });
+  $$(".liveline").forEach((l) => { if (!r || l.closest(".turn") !== mine) l.remove(); });
+  if (!r || !mine) return;
+  const flow = $(".flow", mine); if (!flow) return;
+  const last = lastWork(flow), writing = /^Naim écrit /.test(label) ? label.replace(/^Naim /, "") : "";
+  if (last?.classList.contains("agroup") && $(".arows", last)) {
+    $(".liveline", flow)?.remove();
+    last.classList.add("live");
+    const sum = $(":scope > summary", last);
+    if (!$(".glive", sum)) { const gl = document.createElement("span"); gl.className = "glive"; gl.innerHTML = LDOTS; sum.prepend(gl); }
+    let gt = $(".gtime", sum); if (!gt) { gt = document.createElement("span"); gt.className = "gtime"; $(".gchev", sum).before(gt); }
+    gt.textContent = "· " + (writing ? writing + " · " : "") + time;
+  } else if ((r.reply?.content || "").trim() && !writing) {
+    $(".liveline", flow)?.remove();  // it is writing its answer: the words themselves show it works
+  } else {
+    let l = $(".liveline", flow);
+    if (!l) { l = document.createElement("div"); l.className = "liveline"; l.innerHTML = LDOTS + '<span class="ltxt"></span><span class="ltm"></span>'; }
+    if (l !== flow.lastElementChild) flow.appendChild(l);
+    const txt = (step ? step + " · " : "") + label + "…";
+    if ($(".ltxt", l).textContent !== txt) $(".ltxt", l).textContent = txt;
+    $(".ltm", l).textContent = time;
+  }
+}
 function updateLiveBar() {
   guidePlaceholder();
   const r = curRun(), bar = $("#liveBar");
   bar.hidden = !r || view !== "chat"; document.body.classList.toggle("haslive", !bar.hidden); document.body.classList.toggle("busyrun", !!r);
-  if (!r) return;
+  if (!r) { liveInThread(null); return; }
   r.t0 ||= Date.now();
   const todos = r.reply.todos || [], cur = todos.findIndex((t) => t.status === "in_progress");
   const step = todos.length ? `Étape ${cur >= 0 ? cur + 1 : todos.filter((t) => t.status === "done").length}/${todos.length}` : "";
@@ -3430,6 +3527,7 @@ function updateLiveBar() {
   }
   const sec = Math.round((Date.now() - r.t0) / 1000);
   $(".ltime", bar).textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")}`;
+  liveInThread(view === "chat" ? r : null, label, step, $(".ltime", bar).textContent);
 }
 setInterval(() => {
   updateLiveBar();
@@ -3438,7 +3536,9 @@ setInterval(() => {
     if (t && curRun()) t.textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")}`;
   });
 }, 1000);
-function autoGrow() { const i = $("#input"); i.style.height = "auto"; i.style.height = Math.min(i.scrollHeight, 260) + "px"; }
+function autoGrow() {  // empty: one line (a long placeholder must not make the box tall)
+  const i = $("#input"); i.style.height = "auto"; if (i.value) i.style.height = Math.min(i.scrollHeight, 260) + "px";
+}
 $("#input").addEventListener("input", () => { autoGrow(); updateCtx(); });
 $("#input").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" || e.isComposing) return;
