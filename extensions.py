@@ -933,6 +933,10 @@ SKILL_TRIGGERS = {
     "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|affiche|flyer|infographie|carte de visite)\b",
     "recherche-approfondie": r"\b(recherche approfondie|enqu[eê]te sur|[ée]tat de l'art|[ée]tude de march[ée]|analyse concurrentielle|recoupe|compare les sources|veille approfondie|deep research)\b",
     "github": r"\b(pull[- ]?requests?|github|gh pr|branches?|merge|fusionne\w*|git push|pousse\w* (le code|sur|la branche))\b",
+    # acting on the Mac itself (last of the specialised ones: « crée une application de rappels » is an app)
+    "mac": r"\b(sms|texto|imessage|envoie[rz]? (un |le |ce )?(message|texto)|appell?e[rz]?|t[ée]l[ée]phone[rz]? (à|a)|facetime|"
+           r"agenda|calendrier|rendez-vous|rdv|rappelle-moi|(un |des |mes )rappels?|ajoute (une |la )?note|dans (mes )?notes|"
+           r"musique|mets? (de la |la )?musique|volume|wi-?fi|bluetooth|mets? (le mac |l'[ée]cran )?en veille|batterie|notification|imprim\w*)\b",
     # « ci » alone is French (« celle-ci », « ci-dessous »): only the real terms
     "ci-cd": r"\b(ci ?/ ?cd|ci-cd|cicd|int[ée]gration continue|d[ée]ploiement continu|github actions?|gitlab[- ]ci|jenkins|"
              r"pipelines? (ci|de d[ée]ploiement|d'int[ée]gration))\b",

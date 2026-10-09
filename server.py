@@ -1443,14 +1443,16 @@ class Handler(BaseHTTPRequestHandler):
         named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
         # « imprime mon CV PDF », « envoie le document »: acting on a file that exists is not making one, no skill
         acting_only = bool(MAC_ACTION_RE.search(body["message"] or "")) and not MAKE_RE.search(body["message"] or "")
-        if not plain and not acting_only and not body.get("_question") and helper.features.get("skills", True) and helper.auto_skill:
+        if not plain and not body.get("_question") and helper.features.get("skills", True) and helper.auto_skill:
             # the same skills as the Agent (a house plan, a pro email…): their method and tools, not a drawing made up by hand
             recent = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
                                                     if m.get("role") == "user"])
             sk = (ext.match_skill(body["message"], helper.root, helper.disabled_skills)
                   or (ext.match_skill(recent, helper.root, helper.disabled_skills) if file_work else None))
-            if sk and sk["name"] not in ("debug", "application-web", "api-rest", "projet-existant") and (file_work or sk["name"] != "schemas"):
-                file_work = True  # « un plan de maison T4 » makes files even without « crée »
+            if acting_only and sk and sk["name"] != "mac":
+                sk = None  # acting on an existing file (« imprime mon CV ») needs no skill — except the Mac recipes
+            if sk and sk["name"] not in ("debug", "application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):
+                file_work = file_work or sk["name"] != "mac"  # « un plan de maison T4 » makes files even without « crée »
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +

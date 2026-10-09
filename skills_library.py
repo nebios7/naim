@@ -250,6 +250,75 @@ Objectif : une réponse fiable et sourcée, pas un résumé de la première page
 - Tester d'abord sur une seule page, afficher 3 résultats, puis généraliser.
 """),
     # ------------------------------------------------------------------ apps & stacks
+    "mac": ("Agir sur le Mac de l'utilisateur : SMS et iMessage, appels, Calendrier, Rappels, Notes, Musique, volume, Wi-Fi, notifications, applications.", """# Agir sur le Mac (messages, appels, agenda, applications)
+
+## Principe
+L'utilisateur te demande de FAIRE quelque chose sur son Mac : fais-le toi-même avec run_command, n'explique pas
+comment le faire. Les actions sensibles (message, appel, impression) lui sont demandées avant, par Naim : c'est
+normal, ne demande pas une deuxième fois en texte. Après, dis en une phrase ce qui a été fait ; si la commande a
+échoué, dis exactement pourquoi (jamais « c'est fait » sur un échec).
+
+## Contacts (toujours avant un message ou un appel)
+- chercher_contact avec le nom. Plusieurs personnes ou plusieurs numéros : demande lequel et ATTENDS la réponse.
+- Numéro au format international : +33 6 12 34 56 78 → `+33612345678`.
+
+## SMS / iMessage
+```bash
+osascript -e 'tell application "Messages" to send "TEXTE" to participant "+33612345678"'
+```
+- Un guillemet dans le texte : remplace-le par ’ (apostrophe typographique). Pas de retour à la ligne dans le texte.
+- iMessage si la personne en a, sinon SMS via l'iPhone (le Mac le choisit seul).
+
+## Appel téléphonique / FaceTime
+```bash
+open "tel:+33612345678"            # appel normal, passe par l'iPhone
+open "facetime://+33612345678"     # FaceTime vidéo
+open "facetime-audio://+33612345678"
+```
+
+## Calendrier (agendas : demander lequel si ce n'est pas clair ; par défaut le premier qui n'est pas « Anniversaires »)
+Voir les agendas : `osascript -e 'tell application "Calendar" to get name of every calendar'`
+Créer un rendez-vous (la date se construit par morceaux : jamais une date en texte, elle dépend de la langue) :
+```bash
+osascript -e 'set d to current date' -e 'set day of d to 1' -e 'set year of d to 2026' -e 'set month of d to 10' \\
+  -e 'set day of d to 10' -e 'set hours of d to 14' -e 'set minutes of d to 0' -e 'set seconds of d to 0' \\
+  -e 'tell application "Calendar" to tell calendar "Domicile" to make new event with properties {summary:"Dentiste", start date:d, end date:(d + 3600)}'
+```
+Rendez-vous du jour :
+```bash
+osascript -e 'set a to current date' -e 'set hours of a to 0' -e 'set minutes of a to 0' -e 'set seconds of a to 0' \\
+  -e 'tell application "Calendar" to get {summary, start date} of (every event of every calendar whose start date ≥ a and start date < (a + 86400))'
+```
+
+## Rappels
+```bash
+osascript -e 'set d to (current date) + 3600' -e 'tell application "Reminders" to make new reminder in list "Rappels" with properties {name:"Acheter du pain", remind me date:d}'
+```
+(sans heure : enlève `remind me date:d`). Listes : `tell application "Reminders" to get name of every list`.
+
+## Notes
+```bash
+osascript -e 'tell application "Notes" to make new note in folder "Notes" with properties {name:"Courses", body:"<h1>Courses</h1><p>Pain, lait</p>"}'
+```
+
+## Musique, son, écran
+- Musique : `osascript -e 'tell application "Music" to play'` · `pause` · `next track` · `play playlist "Nom"`.
+- Volume : `osascript -e 'set volume output volume 40'` (0 à 100) · couper : `osascript -e 'set volume with output muted'`.
+- Notification : `osascript -e 'display notification "Texte" with title "Naim"'`.
+- Capture d'écran : `screencapture -x ~/Desktop/capture.png` puis look_at pour la regarder.
+
+## Applications et système
+- Ouvrir : `open -a "Safari"` · un site : `open "https://…"` · un fichier avec son application : `open "chemin"`.
+- Quitter : `osascript -e 'quit app "Safari"'`.
+- Wi-Fi : `networksetup -setairportpower en0 off` (ou `on`) · batterie : `pmset -g batt`.
+- Mettre l'écran en veille : `pmset displaysleepnow` · le Mac en veille : `pmset sleepnow`.
+- Imprimer : `lpstat -p -d` puis `lp -d <imprimante> "<fichier>"` (« inactive » veut dire prête).
+
+## Si ça échoue
+- `-1743` ou « pas autorisé » : macOS doit autoriser Naim à piloter cette application (Réglages Système ›
+  Confidentialité et sécurité › Automatisation › Naim). Dis-le simplement.
+- `-600` : l'application n'est pas ouverte → `open -a "Nom"`, attends 2 s, recommence une fois.
+"""),
     "react-app": ("Créer une application React (Vite) soignée et complète, la lancer et l'ouvrir : boutique, tableau de bord, outil…", """# Application React (Vite) — un livrable fini, beau et lancé
 
 ## Ce que l'utilisateur attend
