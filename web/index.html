@@ -1036,6 +1036,23 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .ractions .btn:not(.primary):hover { color: var(--text); background: var(--hover); }
 .turn.bot:last-child:not(:hover) .stats { opacity: 0; }
 
+/* steps like a pro tool: « 4 lectures · 2 fichiers écrits › » ; opened, a framed list, one step per line with a thin
+   line between them and a small › on the steps that have details */
+.agroup > summary .gchev { order: 2; }
+.agroup > summary { gap: 4px; }
+.agroup > .arows { margin: 8px 0 4px; padding: 0; gap: 0; border: 1px solid var(--line); border-left-color: var(--line); border-radius: 12px; overflow: hidden; }
+.agroup > .arows > .arow { padding: 9px 12px; border-top: 1px solid var(--line); }
+.agroup > .arows > .arow:first-child { border-top: 0; }
+.agroup > .arows .aline { color: var(--muted); }
+.agroup > .arows .aline:hover, .agroup > .arows .arow.run .aline { color: var(--text); }
+.agroup > .arows .arow:has(> .aout:not(:empty)) > .aline::after { content: ""; width: 12px; height: 12px; flex: none; background: currentColor; opacity: .7;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat; transition: transform .15s; }
+.agroup > .arows .arow:has(> .aout:not([hidden]):not(:empty)) > .aline::after { transform: rotate(90deg); }
+.agroup > .arows .aout { margin: 8px 0 0 24px; }
+.agroup > .arows .procchip { border: 0; background: none; padding: 0; font-size: 13.5px; }
+.agroup > .arows .vline .aic { color: var(--ok); }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -2653,6 +2670,12 @@ function addBot(m, idx) {
   $("[data-a=raw]", d).onclick = () => { raw = !raw; body.innerHTML = raw ? `<pre style="white-space:pre-wrap;font:13px ui-monospace,Menlo,monospace">${esc(m?.content || "")}</pre>` : md(m?.content || ""); };
   const closeGroup = () => { group = null; counts = {}; };
   const block = (el) => { closeGroup(); flow.appendChild(el); return el; };
+  // part of the work (a page checked, a server started): a line INSIDE the group of steps, like the other steps
+  const inGroup = (el) => {
+    const g = group || (flow.lastElementChild?.classList.contains("agroup") && $(".arows", flow.lastElementChild) ? flow.lastElementChild : null);
+    if (!g) return block(el);
+    const r = document.createElement("div"); r.className = "arow ok"; r.appendChild(el); $(".arows", g).appendChild(r); return el;
+  };
   const v = {
     el: d,
     noteAt(text, at) {  // « 💬 Toi : … » at its place in the answer (at = length of the answer when Naim read it)
@@ -2734,7 +2757,7 @@ function addBot(m, idx) {
       const c = document.createElement("div"); c.className = "procchip"; c.dataset.pid = pr.id;
       c.innerHTML = `<span class="pdot run"></span><span><b>${esc(pr.name)}</b> ${pr.keep ? "tourne en arrière-plan" : "lancé pour un test"}${pr.url ? ` · <span class="mono">${esc(pr.url)}</span>` : ""}</span><button class="btn">Voir</button>`;
       $(".btn", c).onclick = () => showProcess(pr.id);
-      block(c); refreshProcCount();
+      inGroup(c); refreshProcCount();
     },
     processStopped(ev) {
       const c = flow.querySelector(`.procchip[data-pid="${ev.id}"]`);
@@ -2824,6 +2847,11 @@ function addBot(m, idx) {
       el.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="adot ${bad ? "" : "okd"}" style="${bad ? "background:var(--danger)" : ""}"></span><span class="gsum" style="color:var(--text)">Vérifié ${ev.checked} page${ev.checked > 1 ? "s" : ""}${bad ? ` · <b style="color:var(--danger)">${bad} en erreur</b> — Naim corrige` : " · tout fonctionne"}</span></summary><pre class="aout"></pre>`;
       $("pre", el).textContent = bad ? ev.failures.join("\n\n") : "Toutes les pages répondent correctement.";
       if (bad) el.open = true;
+      if (!bad && (group || flow.lastElementChild?.classList.contains("agroup"))) {  // all good: one more line of the work
+        const line = document.createElement("div"); line.className = "vline";
+        line.innerHTML = `<div class="aline"><span class="aic">${svgI("check")}</span><span class="alabel">Vérifié ${ev.checked} page${ev.checked > 1 ? "s" : ""} · tout fonctionne</span></div>`;
+        inGroup(line); return;
+      }
       block(el);
     },
     event(icon, t) {
