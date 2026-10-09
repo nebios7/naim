@@ -1131,6 +1131,9 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 /* while the block is being written: the very same bar, its buttons shown but inactive (nothing appears, nothing jumps) */
 .md .code.writing .bar button { opacity: .4; pointer-events: none; }
 
+/* the time and the actions under an answer appear when it is finished, not while it is being written */
+body.busyrun #thread .turn.bot:last-child .msgacts { visibility: hidden; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -1396,8 +1399,6 @@ body { letter-spacing: -0.006em; }
 /* code blocks: quiet header, tools on hover */
 .md .code { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
 .md .code .bar { background: transparent; border-bottom: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
-.md .code .bar button { opacity: 0; transition: opacity .15s; }
-.md .code:hover .bar button, .md .code .bar button:focus-visible { opacity: 1; }
 /* composer: only what matters */
 #tempPill { display: none !important; }
 .composer { border-radius: 20px !important; }
@@ -1857,6 +1858,19 @@ function codeBlock(lang, body, file = "", open = false) {
 function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
   return `<div class="code${open ? " writing" : ""}"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} lignes</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">${file ? `✓ Appliquer à ${esc(file.split("/").pop())}` : "⤓ Projet"}</button>` : ""}<button data-save>Enregistrer</button><button data-copy>Copier</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
+}
+// redraw an answer without rebuilding what did not change: each top-level block is kept when its HTML is the same, so
+// finished code blocks, their buttons and the text already read stay still while the end of the answer is written
+function morphInto(el, html) {
+  const tpl = document.createElement("div"); tpl.innerHTML = html;
+  const next = [...tpl.childNodes], cur = [...el.childNodes];
+  let i = 0;
+  for (; i < next.length; i++) {
+    const a = cur[i], b = next[i];
+    if (a && a.nodeType === b.nodeType && (a.nodeType === 1 ? a.outerHTML === b.outerHTML : a.textContent === b.textContent)) continue;
+    if (a) el.replaceChild(b, a); else el.appendChild(b);
+  }
+  for (let j = cur.length - 1; j >= next.length; j--) cur[j].remove();
 }
 let mdLive = false;  // true while a reply is being written (its last code block may be unfinished)
 function md(src) {
@@ -2848,7 +2862,7 @@ function addBot(m, idx) {
       // for a moment, and the page would jump (WebKit does not compensate). It may only grow until it is finished,
       // and the reader's position is kept as it was.
       const sc = $("#scroll"), top = sc.scrollTop, before = body.offsetHeight, live = !!working && !d.dataset.done;
-      body.innerHTML = t ? md(t) : "";
+      morphInto(body, t ? md(t) : "");
       if (t) working.hidden = true;
       if (live && t && body.offsetHeight < before) body.style.minHeight = before + "px";
       if (live && !stickBottom) sc.scrollTop = top;
