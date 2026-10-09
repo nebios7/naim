@@ -1114,6 +1114,17 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .evnote.long:not(.open)::after { content: "Afficher plus"; align-self: flex-end; flex: none; color: var(--muted); font-size: 12px; margin-left: 6px; text-decoration: underline; }
 .evnote.open span:last-child { -webkit-line-clamp: unset; display: block; }
 
+/* code blocks as one box (language discreet at the top left, actions top right), sober tables, rating on hover */
+.md .code { background: var(--code); border: 1px solid var(--line); border-radius: 12px; }
+.md .code .bar { border-bottom: 0 !important; background: transparent !important; padding: 6px 8px 0 14px; }
+.md .code pre { border: 0 !important; background: transparent !important; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; padding: 6px 14px 14px; }
+.md table { border: 0 !important; border-radius: 0 !important; border-collapse: collapse; }
+.md th, .md td { border: 0 !important; border-bottom: 1px solid var(--line) !important; padding: 8px 14px 8px 0 !important; background: none !important; }
+.md th { font-weight: 600; color: var(--text); }
+.md tr:nth-child(even) td { background: none !important; }
+.md tr:last-child td { border-bottom: 0 !important; }
+.turn.bot:last-child:not(:hover) .fb:not(:has(.rate.on)) { opacity: 0; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
