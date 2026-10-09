@@ -1496,6 +1496,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
                                     f"\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}")
+        if any(m.get("role") == "assistant" for m in (body.get("history") or [])) and not body.get("_relaunched"):
+            # mid-conversation: no « Salut Mohamed ! » at the start of every answer
+            messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                "\n\n(La conversation est déjà en cours : ne me salue pas et ne commence pas par mon prénom, réponds directement.)"))
         if (file_work or files) and not plain and not body.get("_relaunched"):
             # like a colleague: a sentence on what it is about to do, then the work (the steps stay in their block)
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
