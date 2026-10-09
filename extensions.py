@@ -259,7 +259,7 @@ class MCPManager:
         HOME.mkdir(parents=True, exist_ok=True)
         clean = {}
         for k, v in servers.items():
-            c = {x: v[x] for x in ("type", "url", "headers", "command", "args", "env", "cwd") if v.get(x) not in (None, "", [], {})}
+            c = {x: v[x] for x in ("type", "url", "headers", "command", "args", "env", "cwd", "always") if v.get(x) not in (None, "", [], {}, False)}
             if v.get("enabled") is False or v.get("disabled"):
                 c["disabled"] = True
             clean[k] = c
@@ -293,14 +293,15 @@ class MCPManager:
             srv = self.servers.get(name)
             out.append({"name": name, "type": "http" if cfg.get("url") else "stdio", "url": cfg.get("url", ""),
                         "headers": cfg.get("headers", {}), "command": cfg.get("command", ""), "args": cfg.get("args", []),
-                        "env": cfg.get("env", {}), "enabled": cfg.get("enabled", True) is not False,
+                        "env": cfg.get("env", {}), "enabled": cfg.get("enabled", True) is not False, "always": bool(cfg.get("always")),
                         "running": bool(srv and srv.alive), "error": srv.error if srv else None,
                         "tools": [{"name": t["name"], "description": t.get("description", "")} for t in (srv.tools if srv else [])],
                         "log": "".join(srv.log[-20:]) if srv else ""})
         return out
 
     def agent_tools(self):
-        """Ollama tool definitions for every tool of every enabled server, plus a lookup table."""
+        """Tool definitions of the servers marked « toujours prêt » (read with every request), plus a lookup table
+        for the tools of every enabled server (the others are described on demand, see deferred / describe)."""
         defs, lookup = [], {}
         for name, cfg in self.config().items():
             if cfg.get("enabled") is False:
@@ -311,10 +312,49 @@ class MCPManager:
             for t in srv.tools:
                 tid = _tool_id(name, t["name"])
                 lookup[tid] = (name, t["name"])
-                schema = t.get("inputSchema") or {"type": "object", "properties": {}}
-                defs.append({"type": "function", "function": {
-                    "name": tid, "description": f"[MCP {name}] {t.get('description', '')}"[:1000], "parameters": schema}})
+                if cfg.get("always"):
+                    schema = t.get("inputSchema") or {"type": "object", "properties": {}}
+                    defs.append({"type": "function", "function": {
+                        "name": tid, "description": f"[MCP {name}] {t.get('description', '')}"[:1000], "parameters": schema}})
         return defs, lookup
+
+    def deferred(self):
+        """Enabled servers whose tools are NOT read with every request: one line each (what it does, its tools).
+        Their details come only when a task asks for them (use_mcp), the tool list never changes."""
+        try:
+            import mcp_catalog
+            known = {k: v[1] for k, v in mcp_catalog.CATALOG.items()}
+        except ImportError:
+            known = {}
+        out = []
+        for name, cfg in self.config().items():
+            if cfg.get("enabled") is False or cfg.get("always"):
+                continue
+            srv = self.get(name)
+            if not srv or srv.error:
+                continue
+            first = (srv.tools[0].get("description", "") if srv.tools else "").split(". ")[0]
+            what = known.get(name) or cfg.get("description") or (first[:140] + ("…" if len(first) > 140 else ""))
+            out.append({"name": name, "description": what, "tools": [t["name"] for t in srv.tools]})
+        return out
+
+    def describe(self, name):
+        """The tools of one server with their parameters, as text (nothing is added to the tool list)."""
+        srv = self.get(name, on_demand=True)
+        if srv is None:
+            raise ValueError(f"serveur MCP inconnu : {name}")
+        if srv.error:
+            raise ValueError(f"le serveur MCP {name} ne démarre pas : {srv.error}")
+        lines, lookup = [], {}
+        for t in srv.tools:
+            lookup[_tool_id(name, t["name"])] = (name, t["name"])
+            sch = t.get("inputSchema") or {}
+            req = set(sch.get("required") or [])
+            props = ", ".join(f"{k}{'' if k in req else '?'}: {(v or {}).get('type', 'any')}"
+                              + (f" ({str((v or {}).get('description'))[:60]})" if (v or {}).get("description") else "")
+                              for k, v in (sch.get("properties") or {}).items())
+            lines.append(f"- {t['name']}: {t.get('description', '')[:200]}\n  arguments: {{{props}}}")
+        return "\n".join(lines), lookup
 
     def on_demand(self):
         """Disabled servers Naim may load itself when a task needs them: [{name, description}]."""

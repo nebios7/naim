@@ -99,6 +99,15 @@ def _load_prompts():
 
 
 globals().update(_load_prompts())
+# MCP on demand, like a tool search: the tool list never changes during a task (the engine keeps what it read),
+# a server's tools are described when asked, then called through this same tool
+USE_MCP_TOOL = {"type": "function", "function": {"name": "use_mcp", "description": (
+    "Use the tools of an MCP server listed in your instructions. 1) use_mcp(server) → its tools and their arguments. "
+    "2) use_mcp(server, tool, arguments) → calls that tool. A server from the catalogue is added first (the user confirms)."),
+    "parameters": {"type": "object", "properties": {
+        "server": {"type": "string", "description": "server name, as listed"},
+        "tool": {"type": "string", "description": "tool name (without the mcp__ prefix); omit to see the server's tools"},
+        "arguments": {"type": "object", "description": "the tool's arguments"}}, "required": ["server"]}}}
 
 
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -501,13 +510,14 @@ class Agent:
             tools.append(CONTACT_TOOL)
             tools += MAIL_TOOLS
         lookup = {}
-        self._mcp_on_demand = []
+        self._mcp_on_demand, self._mcp_deferred = [], []
         if self.features["mcp"]:
             try:
-                mcp_defs, lookup = ext.MCP.agent_tools()
+                mcp_defs, lookup = ext.MCP.agent_tools()  # only the servers marked « toujours prêt » in full
                 tools += mcp_defs
+                self._mcp_deferred = ext.MCP.deferred()   # enabled servers: one line each, details on demand
                 self._mcp_on_demand = ext.MCP.on_demand()  # disabled servers: Naim loads them itself when needed
-                if self._mcp_on_demand:
+                if self._mcp_deferred or self._mcp_on_demand:
                     tools.append(USE_MCP_TOOL)
             except Exception as e:  # a broken MCP server must never break the agent
                 self.emit({"type": "note", "text": f"MCP indisponible : {e}"})
@@ -593,6 +603,11 @@ class Agent:
             parts.append("Specialised tool groups (call use_tools with the group name when the task needs one; a group "
                          "that obviously matches the request is already loaded):\n"
                          + "\n".join(f"- {g}: {TOOL_GROUPS[g][1]}" for g in self._tool_groups))
+        if getattr(self, "_mcp_deferred", None):
+            parts.append("Your MCP servers (their tools are not listed here to stay fast: when the task needs one, call "
+                         "use_mcp(server) to see its tools and arguments, then use_mcp(server, tool, arguments)):\n"
+                         + "\n".join(f"- {m['name']}: {m['description']} — outils : {', '.join(m['tools'][:12])}"
+                                      + (" …" if len(m["tools"]) > 12 else "") for m in self._mcp_deferred))
         if getattr(self, "_mcp_on_demand", None):
             parts.append("MCP servers available on demand (call use_mcp with the server name ONLY when the task needs "
                          "it; your built-in tools come first):\n"
@@ -1896,11 +1911,27 @@ class Agent:
                               "Voici la capture d'écran demandée.", "images": imgs})
 
     # ---- MCP
-    def use_mcp(self, server):
+    def use_mcp(self, server, tool=None, arguments=None):
+        server = str(server or "").strip()
+        if tool:  # call one tool of the server
+            tool = str(tool).split("__")[-1]
+            tid = ext._tool_id(server, tool)
+            if tid not in self.mcp_lookup:
+                try:
+                    _, lookup = ext.MCP.describe(server)
+                    self.mcp_lookup.update(lookup)
+                except Exception as e:  # noqa: BLE001
+                    return f"error: {e}"
+            if tid not in self.mcp_lookup:
+                return f"error: no tool « {tool} » on {server}. Call use_mcp(server=\"{server}\") to see its tools."
+            self.emit({"type": "status", "text": f"Naim utilise l'outil MCP {server} › {tool}…"})
+            return self.call_mcp(tid, arguments if isinstance(arguments, dict) else {})
+        deferred = next((m for m in getattr(self, "_mcp_deferred", []) if m["name"] == server), None)
         entry = next((m for m in self._mcp_on_demand if m["name"] == server), None)
-        if not entry:
-            return "error: unknown or already loaded server. Available on demand: " + ", ".join(m["name"] for m in self._mcp_on_demand)
-        if entry.get("catalog"):  # not configured yet: add it (the user confirms), loaded on demand from now on
+        if not deferred and not entry:
+            known = [m["name"] for m in getattr(self, "_mcp_deferred", [])] + [m["name"] for m in self._mcp_on_demand]
+            return "error: unknown MCP server. Available: " + ", ".join(known)
+        if entry and entry.get("catalog"):  # not configured yet: add it (the user confirms), loaded on demand from now on
             import mcp_catalog
             desc = entry["description"].split(" (à ajouter")[0]
             if not self.approve(f"Ajouter le serveur MCP « {server} »", f"{desc}\n\nNaim l'ajoute à ses serveurs MCP (chargé seulement "
@@ -1911,18 +1942,14 @@ class Agent:
             cfg["enabled"] = False  # on demand
             servers[server] = cfg
             ext.MCP.save_config(servers)
-        self.emit({"type": "status", "text": f"Naim active le serveur MCP {server}…"})
+        self.emit({"type": "status", "text": f"Naim consulte les outils MCP de {server}…"})
         try:
-            defs, lookup = ext.MCP.tools_of(server)
-        except Exception as e:
+            text, lookup = ext.MCP.describe(server)
+        except Exception as e:  # noqa: BLE001
             return f"error: {e}"
-        known = {t["function"]["name"] for t in self.tools}
-        self.tools += [d for d in defs if d["function"]["name"] not in known]
         self.mcp_lookup.update(lookup)
-        self._mcp_on_demand = [m for m in self._mcp_on_demand if m["name"] != server]
-        self.emit({"type": "skill", "name": f"MCP {server}"})
-        return (f"ok: MCP server {server} loaded for this task. New tools:\n"
-                + "\n".join(f"- {d['function']['name']}: {d['function']['description'][:140]}" for d in defs))
+        return (f"ok: tools of the MCP server {server} (call one with use_mcp(server=\"{server}\", tool=…, arguments={{…}})):\n"
+                + text)
 
     def call_mcp(self, tid, args):
         server, tool = self.mcp_lookup[tid]

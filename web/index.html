@@ -2680,7 +2680,8 @@ function actionInfo(name, a = {}, res = "") {
     mail_junk: () => ({ kind: "mail", label: "Mis un spam dans Indésirables" }),
     mail_done: () => ({ kind: "mail", label: "Classé un email « pour info »" }),
     send_email: () => ({ kind: "mail", label: `Envoyé un email à ${cmd(a.to)}${a.subject ? ` <span class="muted">· ${esc(a.subject)}</span>` : ""}` }),
-    use_mcp: () => ({ kind: "mcp", label: `Activé le serveur MCP ${cmd(a.server)}` }),
+    use_mcp: () => a.tool ? { kind: "mcp", label: `${esc(String(a.tool).split("__").pop())} <span class="muted">· ${esc(a.server || "")}</span>` }
+                          : { kind: "mcp", label: `Consulté les outils MCP ${cmd(a.server)}` },
     convert_document: () => ({ kind: "write", label: `Converti ${a.source ? cmd(a.source) + " en " : ""}${cmd(a.path)}` }),
     make_diagram: () => ({ kind: "write", label: `Dessiné le schéma ${cmd(a.path)}` }),
     look_at: () => ({ kind: "read", label: `Vérifié le rendu de ${cmd(a.path)}` }),
@@ -3400,7 +3401,7 @@ function toolLabel(name, a) {
     edit_file: `Naim modifie ${a.path || ""}…`, search: "Naim cherche dans le code…", run_command: `Naim exécute « ${(a.command || "").slice(0, 60)} »…`,
     start_process: `Naim lance « ${(a.command || "").slice(0, 60)} » en arrière-plan…`, open: `Naim ouvre ${a.target || ""}…`,
     web_search: `Naim cherche sur le web : ${a.query || ""}…`, web_fetch: `Naim lit ${a.url || "une page web"}…`, remember: "Naim mémorise…",
-    use_skill: `Naim charge le skill ${a.name || ""}…`, create_skill: "Naim crée un skill…", install_skill: "Naim récupère des skills sur internet…", use_mcp: `Naim active le serveur MCP ${a.server || ""}…`, send_email: "Naim envoie l'email…", planifier: "Naim planifie la tâche…", ask_user: "Naim attend ta réponse…", browser: "Naim teste dans le navigateur…", convert_document: "Naim crée le document…", make_diagram: "Naim dessine le schéma…", look_at: "Naim vérifie le rendu…", delegate: "Naim répartit le travail entre des sous-agents…",
+    use_skill: `Naim charge le skill ${a.name || ""}…`, create_skill: "Naim crée un skill…", install_skill: "Naim récupère des skills sur internet…", use_mcp: a.tool ? `Naim utilise l'outil MCP ${a.server || ""} › ${a.tool}…` : `Naim consulte les outils MCP de ${a.server || ""}…`, send_email: "Naim envoie l'email…", planifier: "Naim planifie la tâche…", ask_user: "Naim attend ta réponse…", browser: "Naim teste dans le navigateur…", convert_document: "Naim crée le document…", make_diagram: "Naim dessine le schéma…", look_at: "Naim vérifie le rendu…", delegate: "Naim répartit le travail entre des sous-agents…",
     computer: a.action === "screenshot" ? "Naim regarde l'écran…" : "Naim utilise l'ordinateur…",
     simulator: a.action === "build_run" ? "Naim compile l'app iOS…" : a.action === "screenshot" ? "Naim regarde le simulateur…" : "Naim utilise le simulateur iOS…" })[name]
     || (name.startsWith("mcp__") ? `Naim utilise l'outil MCP ${name.split("__").slice(1).join(" › ")}…` : "Naim travaille…");
@@ -4183,7 +4184,7 @@ const TABS = {
     </div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Journal du moteur</b></div><pre class="aout" id="llamaLog" style="max-height:260px;margin:0"></pre></div></div>`,
   mcp: () => `<h2>Serveurs MCP</h2>
-    <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Les serveurs MCP donnent à Naim de nouveaux outils (GitHub, bases de données, navigateur…). Configuration : <span class="mono">~/.naim/mcp.json</span> (format standard <span class="mono">mcpServers</span>).<br><b>Activé</b> : chargé à chaque tâche. <b>Désactivé</b> : disponible à la demande — Naim le charge lui-même (outil <span class="mono">use_mcp</span>) seulement quand la tâche en a besoin, ce qui le garde rapide.</p>
+    <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Les serveurs MCP donnent à Naim de nouveaux outils (GitHub, bases de données, navigateur…). Configuration : <span class="mono">~/.naim/mcp.json</span> (format standard <span class="mono">mcpServers</span>).<br><b>Activé</b> : Naim connaît le serveur et consulte ses outils seulement quand une tâche en a besoin (outil <span class="mono">use_mcp</span>), ce qui le garde rapide. <b>Toujours prêt</b> : ses outils sont lus à chaque message (plus lourd, à garder pour un serveur utilisé tout le temps). <b>Désactivé</b> : Naim peut encore le démarrer lui-même si une tâche en a vraiment besoin.</p>
     <div class="sgroup" id="mcpList"><div class="srow"><div class="sl">Chargement…</div></div></div>
     <h2 style="margin-top:22px">Catalogue</h2>
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Installe un serveur en un clic. Ceux qui demandent une clé te la demandent avant l'installation.</p>
@@ -4407,7 +4408,7 @@ function bindSettings() {
     $("#cuPerm").onclick = async () => { show(await api("/api/computer/permissions", { method: "POST", body: {} })); toast("Active « Naim » dans les deux listes des Réglages Système, puis relance Naim."); };
   }
 }
-const cfgOf = (x) => x.type === "http" ? { type: "http", url: x.url, headers: x.headers, enabled: x.enabled } : { command: x.command, args: x.args, env: x.env, enabled: x.enabled };
+const cfgOf = (x) => x.type === "http" ? { type: "http", url: x.url, headers: x.headers, enabled: x.enabled, always: x.always } : { command: x.command, args: x.args, env: x.env, enabled: x.enabled, always: x.always };
 const MCP_PRESETS = {
   "fichiers": { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "~/Documents"] },
   "web-fetch": { command: "uvx", args: ["mcp-server-fetch"] },
@@ -4605,11 +4606,12 @@ async function loadMcp() {
   servers.forEach((m) => {
     const el = document.createElement("div"); el.className = "srow col";
     el.innerHTML = `<div style="display:flex;gap:10px;align-items:center"><span class="pdot ${m.running ? "run" : m.error ? "err" : ""}"></span><div class="sl"><b>${esc(m.name)} <span class="badge2">${m.type === "http" ? "distant" : "local"}</span></b><small class="mono">${esc(m.type === "http" ? m.url : [m.command, ...m.args].join(" "))}</small></div>
-      <div class="sc"><label class="switch" title="Activé"><input type="checkbox" ${m.enabled ? "checked" : ""} data-mcp-toggle><span></span></label><button class="btn" data-mcp-restart>${m.running ? "Redémarrer" : "Démarrer"}</button><button class="btn danger" data-mcp-del>Supprimer</button></div></div>
+      <div class="sc"><label class="chk" title="Toujours prêt : ses outils sont lus à chaque message (plus lourd). Sinon Naim les consulte seulement quand une tâche en a besoin." style="font-size:12.5px;color:var(--muted);gap:5px"><input type="checkbox" ${m.always ? "checked" : ""} data-mcp-always ${m.enabled ? "" : "disabled"}>Toujours prêt</label><label class="switch" title="Activé"><input type="checkbox" ${m.enabled ? "checked" : ""} data-mcp-toggle><span></span></label><button class="btn" data-mcp-restart>${m.running ? "Redémarrer" : "Démarrer"}</button><button class="btn danger" data-mcp-del>Supprimer</button></div></div>
       ${m.error ? `<div class="error mono" style="font-size:12px;white-space:pre-wrap">${esc(m.error)}\n${esc(m.log.slice(-600))}</div>` : ""}
       ${m.tools.length ? `<div class="tlist">${m.tools.map((t) => `<span title="${esc(t.description)}">${esc(t.name)}</span>`).join("")}</div>` : ""}`;
     const save = async (mut) => { const cfg = Object.fromEntries(servers.map((x) => [x.name, cfgOf(x)])); mut(cfg); await api("/api/mcp", { method: "PUT", body: { servers: cfg } }); loadMcp(); };
     $("[data-mcp-toggle]", el).onchange = (e) => save((c) => (c[m.name].enabled = e.target.checked));
+    $("[data-mcp-always]", el).onchange = (e) => save((c) => (c[m.name].always = e.target.checked));
     $("[data-mcp-del]", el).onclick = () => confirm(`Supprimer le serveur ${m.name} ?`) && save((c) => delete c[m.name]);
     $("[data-mcp-restart]", el).onclick = async (e) => { e.target.textContent = "…"; await api(`/api/mcp/${encodeURIComponent(m.name)}/restart`, { method: "POST", body: {} }); loadMcp(); };
     box.appendChild(el);
