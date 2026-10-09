@@ -1097,6 +1097,15 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .aout .ptitle { display: none; }
 .agroup > summary { font-size: 14px; }
 
+/* opened step, as in the reference: no card inside the frame — the command in a slightly darker box, the output
+   right under it on the frame itself; step titles at reading size */
+.agroup > .arows .aout, .agroup > .arows .aout:has(> .cmdline) { background: none; border: 0; padding: 0; border-radius: 0; margin: 10px 0 2px; max-height: 340px; }
+.agroup > .arows .aout .cmdline { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 10px 40px 10px 12px; margin: 0; font-size: 12.5px; line-height: 1.6; }
+.agroup > .arows .aout { font-size: 12.5px; line-height: 1.6; color: var(--text); }
+.agroup > .arows .aline { font-size: 14.5px; }
+.agroup > .arows > .arow { padding: 11px 14px; }
+.agroup > summary { font-size: 14.5px; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
