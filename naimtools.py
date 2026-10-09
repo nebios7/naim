@@ -2341,6 +2341,11 @@ class Agent:
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
             task = f"{task}\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
+        if not feedback and not getattr(self, "subagent", False):
+            # like a colleague: it says in a sentence or two what it is about to do, then does it at once
+            task += ("\n\n[Commence ta réponse par une ou deux phrases, pour moi, qui disent ce que tu vas faire et comment "
+                     "(sans me poser de question si la demande est claire ou si je t'ai dit de ne rien demander), puis, dans "
+                     "la même réponse, commence aussitôt avec tes outils.]")
         recent = " ".join(str(m.get("content") or "") for m in self.messages[-4:] if m.get("role") == "user")
         self._preload_tool_groups(f"{task} {recent}")
         self.messages.append({"role": "user", "content": task + now_note(), **({"images": images} if images else {})})
@@ -2450,6 +2455,7 @@ class Agent:
                     if (ANNOUNCE_RE.search(content) and len(content) < 400 and not self.plan
                             and self._stall_pushbacks < 3):  # « Je vais supprimer les fichiers… » without doing it
                         self._stall_pushbacks += 1
+                        self.emit({"type": "note", "text": content})  # what it said it will do stays shown
                         self.messages.append({"role": "assistant", "content": content})
                         self.messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), puis dis-moi le résultat."})
                         continue

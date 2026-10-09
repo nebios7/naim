@@ -2792,7 +2792,7 @@ function addBot(m, idx) {
       const info = actionInfo(name, args);
       counts[info.kind] = (counts[info.kind] || 0) + 1;
       $(".gsum", group).textContent = groupSummary(counts);
-      const row = document.createElement("div"); row.className = "arow run";
+      const row = document.createElement("div"); row.className = "arow run"; row.dataset.tool = "1";
       row.innerHTML = `<div class="aline"><span class="aic">${stepIcon(name, info.kind)}</span>${sub ? `<span class="subtag">${esc(sub)}</span>` : ""}<span class="alabel">${info.label}</span></div><pre class="aout" hidden></pre>`;
       const pre = $(".aout", row);
       if ((name === "run_command" || name === "start_process") && args.command) {
@@ -2839,7 +2839,12 @@ function addBot(m, idx) {
       el.src = "data:image/jpeg;base64," + img; el.onclick = () => el.classList.toggle("big");
       lastRow.appendChild(el);
     },
-    note(t) { const n = document.createElement("div"); n.className = "md fnote"; n.innerHTML = md(t); block(n); },
+    note(t) {
+      const n = document.createElement("div"); n.className = "md fnote"; n.innerHTML = md(t);
+      // what it says it will do comes BEFORE its work: a group holding only the skill it loaded stays open for the steps
+      if (group && !$(".arow[data-tool]", group) && group.parentNode === flow) { flow.insertBefore(n, group); return; }
+      block(n);
+    },
     vision(ev) {
       const el = document.createElement("details"); el.className = "agroup";
       el.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum">Image analysée <span class="muted">· ${esc(ev.model)}</span></span></summary><pre class="aout"></pre>`;
