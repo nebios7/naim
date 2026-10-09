@@ -5013,10 +5013,16 @@ async function loadMemory() {
   };
 }
 async function loadModels() {
-  const r = await api("/api/models");
+  const [r, ll] = await Promise.all([api("/api/models").catch((e) => ({ error: String(e) })), api("/api/llama").catch(() => ({}))]);
   const box = $("#mlist"); if (!box) return;
-  if (r.error) { box.innerHTML = `<div class="srow"><div class="sl error">Ollama injoignable : ${esc(r.error)}</div></div>`; return; }
-  box.innerHTML = r.models.map((m) => `<div class="srow"><div class="sl"><b>${esc(m.name)}${norm(m.name) === norm(S.model) ? '<span class="badge2">par défaut</span>' : ""}${m.loaded ? '<span class="badge2">en mémoire</span>' : ""}${(m.caps || []).filter((c) => c !== "completion").map((c) => `<span class="badge2" title="${esc(c)}">${{ vision: "👁 vision", tools: "🛠 outils", thinking: "🧠 raisonnement", embedding: "embedding", insert: "insert" }[c] || esc(c)}</span>`).join("")}</b><small>${[m.params, m.quant, m.family, fmtSize(m.size)].filter(Boolean).join(" · ")}</small></div>
+  // Naim's own engine first (llama.cpp): the model it really uses
+  const own = (ll.files || []).map((f) => `<div class="srow"><div class="sl"><b>${esc(f.name.replace(/\.gguf$/, ""))}<span class="badge2">moteur de Naim</span>${ll.running ? '<span class="badge2">en marche</span>' : ""}${ll.vision ? '<span class="badge2">vision</span>' : ""}</b><small>llama.cpp · ${fmtSize(f.size)}${ll.ctx ? ` · ${Math.round(ll.ctx / 1024)}k de contexte` : ""}</small></div></div>`).join("");
+  if (r.error) {  // Ollama is optional: not running is not an error
+    box.innerHTML = own + `<div class="srow"><div class="sl"><b>Ollama</b><small>Facultatif : seulement pour essayer d'autres modèles. Il n'est pas lancé, Naim n'en a pas besoin.</small></div><div class="sc"><button class="btn" id="ollamaStart">Démarrer Ollama</button></div></div>`;
+    $("#ollamaStart").onclick = async (e) => { e.target.textContent = "…"; await api("/api/ollama/start", { method: "POST", body: {} }).catch(() => {}); setTimeout(loadModels, 4000); };
+    return;
+  }
+  box.innerHTML = own + r.models.map((m) => `<div class="srow"><div class="sl"><b>${esc(m.name)}${norm(m.name) === norm(S.model) ? '<span class="badge2">par défaut</span>' : ""}${m.loaded ? '<span class="badge2">en mémoire</span>' : ""}${(m.caps || []).filter((c) => c !== "completion").map((c) => `<span class="badge2" title="${esc(c)}">${{ vision: "👁 vision", tools: "🛠 outils", thinking: "🧠 raisonnement", embedding: "embedding", insert: "insert" }[c] || esc(c)}</span>`).join("")}</b><small>${[m.params, m.quant, m.family, fmtSize(m.size)].filter(Boolean).join(" · ")}</small></div>
     <div class="sc"><button class="btn" data-m="use" data-n="${esc(m.name)}">Utiliser</button>${m.loaded ? `<button class="btn" data-m="unload" data-n="${esc(m.name)}">Décharger</button>` : ""}<button class="btn danger" data-m="del" data-n="${esc(m.name)}">Supprimer</button></div></div>`).join("") || '<div class="srow"><div class="sl">Aucun modèle</div></div>';
   $$("[data-m]", box).forEach((b) => (b.onclick = async () => {
     const n = b.dataset.n;

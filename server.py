@@ -535,7 +535,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/computer":
             self.send_json(cu.status())
         elif path == "/api/llama":
-            self.send_json({**llamacpp.SERVER.status(), "log": llamacpp.SERVER.log_tail()})
+            files = [{"name": f.name, "size": f.stat().st_size} for f in sorted(llamacpp.MODELS.glob("*.gguf"))
+                     if "mmproj" not in f.name]  # Naim's own model files (the vision part goes with them)
+            self.send_json({**llamacpp.SERVER.status(), "log": llamacpp.SERVER.log_tail(), "files": files})
         elif path == "/api/schedules":
             self.send_json({"tasks": scheduler.load(), "running": scheduler.running_ids(), "pending": scheduler.pending()})
         elif path == "/api/naim-home":
@@ -1117,6 +1119,13 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, KeyError, subprocess.SubprocessError) as e:
                 code, out = 1, str(e)
             self.send_json({"ok": code == 0, "output": out})
+        elif path == "/api/ollama/start":
+            # only when the user asks for it (Personnaliser › Modèles installés): Naim itself runs on llama.cpp
+            if Path("/Applications/Ollama.app").exists():
+                subprocess.Popen(["open", "-g", "-a", "Ollama"])
+            elif shutil.which("ollama"):
+                subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            self.send_json({"ok": True})
         elif path == "/api/hooks-file":
             # the user's hooks file (or the project's), created with a commented example the first time, then opened
             b = self.read_json()
