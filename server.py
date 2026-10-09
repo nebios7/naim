@@ -1708,6 +1708,14 @@ class Handler(BaseHTTPRequestHandler):
                             here = helper.root if helper.root.resolve() != chatfiles.OUT.resolve() else None
                             known = {f["path"] for f in made}
                             new_files = [f for f in helper._deliverables(started) if f["path"] not in known]
+                            if name == "write_file" and args.get("path"):  # a code file too (Calculatrice.java…): shown, with where it is
+                                try:
+                                    fp = helper.resolve(args["path"])
+                                    rel = helper.rel(fp)
+                                    if fp.is_file() and rel not in known and all(f["path"] != rel for f in new_files):
+                                        new_files.append({"path": rel, "size": fp.stat().st_size, "ext": fp.suffix.lower()[1:]})
+                                except (OSError, ValueError):
+                                    pass
                             if new_files and (here or not made):
                                 made.extend(reversed(new_files))
                                 self.event({"type": "deliverables", "root": str(helper.root), "files": list(reversed(made))})
