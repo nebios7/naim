@@ -37,6 +37,18 @@ def reachable(url, timeout=1.5):
         return False
 
 
+def uses_ollama():
+    """True when Naim's settings choose Ollama as the engine (the default engine is Naim's own llama.cpp)."""
+    import json
+    data = Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim"))
+    try:
+        s = json.loads((data / "settings.json").read_text())
+    except (OSError, ValueError):
+        return False
+    model = str(s.get("model") or "naim").split(":")[0]
+    return s.get("naim_backend", "llamacpp") == "ollama" or model != "naim"
+
+
 def ensure_ollama():
     tags = f"{OLLAMA_HOST.rstrip('/')}/api/tags"
     if reachable(tags):
@@ -141,7 +153,8 @@ def run_server():
     import extensions
     import llamacpp
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # run the atexit cleanups below
-    threading.Thread(target=ensure_ollama, daemon=True).start()  # Ollama is optional: do not delay the window
+    if uses_ollama():  # Ollama is optional: started only when the chosen engine is Ollama (not with llama.cpp / MLX)
+        threading.Thread(target=ensure_ollama, daemon=True).start()
     if port_in_use():
         print(f"Naim tourne déjà sur {URL}", file=sys.stderr)
         return
@@ -186,10 +199,12 @@ def main():
     if args.tools:
         import naimtools
         sys.argv = ["naimtools"] + rest
-        ensure_ollama()
+        if uses_ollama():
+            ensure_ollama()
         return naimtools.main()
 
-    ensure_ollama()
+    if uses_ollama():
+        ensure_ollama()
     owned = start_server()
     if owned:  # background programs launched from Naim stop when Naim quits
         import atexit
