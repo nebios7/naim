@@ -1078,8 +1078,8 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .liveline .ltxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* shell colours (as in the code blocks) and the opened command as a panel: a title, the coloured command, the output */
-.hv { color: #e5a35c; } .ho { color: #c586c0; } .hflag { color: var(--muted); }
-:root[data-theme="light"] .hv { color: #b25e00; } :root[data-theme="light"] .ho { color: #a03fa0; }
+.hv { color: #e5a35c; } .ho { color: inherit; } .hflag { color: var(--muted); }
+:root[data-theme="light"] .hv { color: #b25e00; }
 .aout:has(> .cmdline) { background: var(--panel); border-radius: 10px; padding: 8px 10px 10px; }
 .aout .ptitle { display: block; font: 500 12.5px -apple-system, system-ui, sans-serif; color: var(--text); margin: 0 0 6px 2px; }
 
@@ -1435,6 +1435,10 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 @keyframes tws { 0% { height: 3px; } 100% { height: 14px; } }
 @keyframes twt { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
 @keyframes twp { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+/* code colours in dark, as in the reference app: functions and commands blue, strings and arguments green,
+   keywords pink, numbers cyan, variables orange */
+:root[data-theme="dark"] { --k: #e08bd8; --s: #a3dc7b; --n: #66c2cd; --f: #7fb4ea; --c: #8a8880; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --k: #e08bd8; --s: #a3dc7b; --n: #66c2cd; --f: #7fb4ea; --c: #8a8880; } }
 /* one dark palette for « Sombre » and « Automatique »: warm neutral greys toward black, never blue */
 :root[data-theme="dark"] {
     --bg: #262624; --panel: #30302e; --side: #1f1e1d; --hover: #353532; --text: #f0eee6; --muted: #a3a19b; --line: #3d3d3a;
@@ -1711,12 +1715,12 @@ function highlightShell(code) {
     else if (str) { out += `<span class="hs">${esc(tok)}</span>`; start = false; }
     else if (v) { out += `<span class="hv">${esc(tok)}</span>`; start = v === "$(" ; }
     else if (op) { out += `<span class="ho">${esc(tok)}</span>`; start = true; }
-    else if (flag) out += `<span class="hflag">${esc(tok)}</span>`;
+    else if (flag) out += `<span class="hs">${esc(tok)}</span>`;
     else if (word) {
-      if (SH_KW.has(word)) { out += `<span class="hk">${esc(word)}</span>`; start = !/^(in|case)$/.test(word); }
+      if (SH_KW.has(word)) { out += `<span class="hk">${esc(word)}</span>`; start = !/^(in|case|for|select)$/.test(word); }
       else if (start && !/=/.test(word)) { out += `<span class="hf">${esc(word)}</span>`; start = false; }
       else if (/^\d+(\.\d+)?$/.test(word)) out += `<span class="hn">${esc(word)}</span>`;
-      else out += esc(word);
+      else out += `<span class="hs">${esc(word)}</span>`;
     }
     last = re.lastIndex;
   }
