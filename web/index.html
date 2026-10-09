@@ -3294,7 +3294,19 @@ async function stream(reply, v, message, hist, extra = {}) {
         notifyConv = conv.id;  // approvals / questions of this run: their notification leads back here
         if (reply.ttft == null && /^(token|thinking_token|tool)$/.test(ev.type)) reply.ttft = (Date.now() - reply.time) / 1000;
         switch (ev.type) {
-          case "token": reply.content += ev.text; renderText(); break;
+          case "token": {
+            reply.content += ev.text;
+            // mid-conversation, a « Salut Mohamed ! » at the very start is dropped (it greets only once)
+            if (!reply._greet && conv.messages.filter((x) => x.role === "assistant").length > 1) {
+              const t = reply.content.trimStart(), low = t.toLowerCase(), W = ["salut", "bonjour", "bonsoir", "coucou", "hello", "hey"];
+              const partial = W.some((w) => low.length < w.length && w.startsWith(low));            // « Sal… » : maybe
+              const open = W.some((w) => low.startsWith(w)) && !/[!.?\n]/.test(t);               // « Salut Moh… » : not ended
+              if ((partial || open) && t.length < 45) break;  // wait a few words before showing anything
+              const g = /^\s*(salut|bonjour|bonsoir|coucou|hello|hey)\b[^.!?\n]{0,30}[!.]\s*/i;
+              reply._greet = true;
+              reply.content = reply.content.replace(g, "");
+            }
+            renderText(); break; }
           case "thinking_token": reply.thinking += ev.text; v.setThinking(reply.thinking); break;
           case "thinking": reply.thinking += (reply.thinking ? "\n\n" : "") + ev.text; v.setThinking(reply.thinking); break;
           case "status": if (!ev.sub) v.typing(ev.text); break;
