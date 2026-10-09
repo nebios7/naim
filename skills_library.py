@@ -338,19 +338,57 @@ React Native ≠ React web : ne JAMAIS utiliser Vite ni `create-react-app` ici.
 - Vérifier les dépendances (`command -v`), messages clairs sur stderr, codes de sortie.
 - Tester avec `bash -n script.sh` puis un essai réel ; `shellcheck` s'il est installé.
 """),
-    "ci-cd": ("Mettre en place une intégration et un déploiement continus (GitHub Actions / GitLab CI).", """# CI/CD
+    "ci-cd": ("Mettre en place une intégration et un déploiement continus (GitHub Actions / GitLab CI) : tests automatiques à chaque envoi, puis déploiement.", """# CI/CD : tests automatiques, puis déploiement
 
-1. Détecter la plateforme : dossier `.github/` ou dépôt GitHub → GitHub Actions ; `.gitlab-ci.yml` ou GitLab → GitLab CI.
-2. Pipeline minimal, un job par étape : installation (avec cache des dépendances) → lint → tests → build.
-   - Python : `actions/setup-python`, `pip install -r requirements.txt`, `ruff check .`, `pytest -q`.
-   - Node : `actions/setup-node` avec `cache: npm`, `npm ci`, `npm run lint`, `npm test`, `npm run build`.
-   - PHP : `shivammathur/setup-php`, `composer install`, `phpunit`.
-3. Déclencheurs : `push` et `pull_request` sur la branche principale ; matrice de versions seulement si utile.
-4. Déploiement (job séparé, seulement sur la branche principale, après les tests) : Docker (build + push),
-   SSH/rsync vers un VPS, ou la plateforme cible. Utiliser des SECRETS (`${{ secrets.NOM }}`), jamais de clé en clair.
-5. Vérifier le YAML localement (`python3 -c "import yaml,sys;yaml.safe_load(open(sys.argv[1]))" fichier.yml`)
-   et, si `act` est installé, lancer `act -j test`. Ajouter le badge de statut au README.
-6. Résumer : fichiers créés, secrets à configurer (où et lesquels), comment voir les exécutions.
+## Quand l'utiliser
+- On te demande « CI/CD », « GitHub Actions », « GitLab CI », « intégration continue », « déploiement automatique »,
+  « lancer les tests à chaque push ».
+- PAS pour : lancer les tests une fois sur ce Mac (fais-le avec run_command), déployer à la main sur un serveur
+  (skill deploiement-vps), ni pour un document, un article ou une question générale.
+
+## Avant d'écrire quoi que ce soit
+1. Lire le projet : `list_files`, puis le fichier de dépendances (`requirements.txt` / `pyproject.toml`, `package.json`,
+   `composer.json`) et la façon dont les tests se lancent aujourd'hui.
+2. Lancer ces tests UNE fois sur le Mac. S'ils échouent ici, ils échoueront en CI : le dire et les corriger d'abord.
+3. Plateforme : `git remote -v` → github.com = GitHub Actions (`.github/workflows/ci.yml`) ; gitlab = `.gitlab-ci.yml`.
+   Pas de dépôt distant : GitHub Actions par défaut, et le dire.
+
+## Modèle GitHub Actions (Python) — à adapter, pas à recopier aveuglément
+```yaml
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+```
+Node : `actions/setup-node@v4` avec `node-version: 20` et `cache: npm`, puis `npm ci`, `npm test`, `npm run build`
+(seulement les scripts qui existent dans package.json). PHP : `shivammathur/setup-php@v2`, `composer install`, `vendor/bin/phpunit`.
+
+## Déploiement (seulement si demandé)
+- Un job `deploy` séparé, `needs: test`, et `if: github.ref == 'refs/heads/main'` : on ne déploie jamais un code qui échoue.
+- Les accès (clé SSH, mot de passe, jeton) vont dans les SECRETS du dépôt : `${{ secrets.NOM }}`. Jamais en clair dans le YAML.
+
+## Pièges fréquents
+- Branche `master` et non `main` : vérifier avec `git branch`.
+- Des tests qui ont besoin d'une base de données ou d'un fichier `.env` : ajouter un `services:` ou des variables, sinon ils échouent en CI.
+- Ne pas ajouter de lint (ruff, eslint) qui n'existe pas déjà dans le projet : la CI échouerait pour du style.
+
+## Vérifier
+- YAML valide : `python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" .github/workflows/ci.yml`.
+- Les commandes du YAML relancées une par une sur le Mac donnent le même résultat.
+- Si `act` est installé : `act -j test`.
+
+## Répondre
+En quelques lignes : le fichier créé, ce qu'il fait (« à chaque push : installation puis tests »), les secrets à
+créer (nom exact et où : Settings › Secrets and variables › Actions) et où voir les exécutions (onglet Actions).
 """),
     # ------------------------------------------------------------------ quality
     "securite": ("Relire un projet pour trouver les failles de sécurité et les corriger.", """# Revue de sécurité

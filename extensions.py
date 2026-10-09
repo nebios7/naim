@@ -447,7 +447,7 @@ try:  # detailed, field-tested versions (override the short ones)
 except ImportError:
     pass
 # built-in skills rewritten in skills_pro: an older unedited copy is upgraded once (backed up in skills/.anciens)
-UPGRADED = {"projet-existant", "debug", "application-web", "api-rest", "ios-swiftui",
+UPGRADED = {"ci-cd", "projet-existant", "debug", "application-web", "api-rest", "ios-swiftui",
             "veille-email", "controle-ecran", "tri-emails", "node-typescript", "pdf", "word", "excel", "presentation", "analyse-donnees"}
 
 
@@ -886,10 +886,14 @@ def last_traceback(text, max_lines=12):
 
 # ============================================================================ automatic skill choice
 SKILL_TRIGGERS = {
-    "application-web": r"\b(appli(cation)?s?|app|site|web|flask|fastapi|django|express|page|factur\w*|gestion)\b",
+    # making a web app (« ouvre le site de la CAF », « imprime la page 2 » are not)
+    "application-web": r"\b(cr[ée]\w*|fai[st]|faire|d[ée]velopp\w*|code[rz]?|construi\w*|programme[rz]?)\b[^.?!]{0,50}\b(appli(cation)?s?|app|site|page web|"
+                       r"logiciel)\b|\b(flask|fastapi|django)\b",
     "api-rest": r"\b(api|rest|endpoint|crud)\b",
     "tests-unitaires": r"\b(tests?|unitaires?|pytest|jest|junit)\b",
-    "debug": r"\b(bug|erreur|error|plante|crash|marche pas|fonctionne pas|debug|corrige)\b",
+    # code that fails (« corrige les fautes de ce texte » is proofreading, not debugging)
+    "debug": r"\b(bugs?|error|plante|crash|debug|traceback|exception)\b|\b(erreur|marche pas|fonctionne pas)\b[^.?!]{0,40}\b(code|script|programme|appli\w*|site|commande|fichier \w+\.\w+)\b|"
+             r"\bcorrige\b[^.?!]{0,30}\b(code|script|programme|bug|erreur|appli\w*|fonction|\w+\.(py|js|ts|html|css|php|swift|java))\b",
     "git-commit": r"\bcommit\b",
     "readme": r"\b(readme)\b",
     "pdf": r"\bpdf\b",
@@ -911,12 +915,16 @@ SKILL_TRIGGERS = {
     "performance": r"\b(lent|lenteur|performance|optimis\w*|acc[ée]l[ée]r\w*)\b",
     "refactoring": r"\b(refacto\w*|nettoie[rz]? le code|restructur\w*)\b",
     "doc-api": r"\b(document\w* (l')?api|openapi|swagger)\b",
-    "frontend-design": r"\b(design|designer|interface|belle|beau|joli\w*|esth[ée]tique|landing|ui|ux|couleurs?|th[èe]mes?|mise en page|look|maquette|style)\b",
+    # the look of an interface (a site, an app, a screen), not of a text document
+    "frontend-design": r"\b(design|interface|landing|ui|ux|maquette)\b|\b(belle|beau|joli\w*|esth[ée]tique|couleurs?|th[èe]mes?|look|style|moche)\b[^.?!]{0,40}\b(site|page web|appli\w*|app|interface|[ée]cran)\b|"
+                       r"\b(site|page web|appli\w*|app|interface|[ée]cran)\b[^.?!]{0,40}\b(belle|beau|joli\w*|esth[ée]tique|couleurs?|th[èe]mes?|look|style|moche)\b",
     "veille-email": r"(nouvelles|nouveaut|actualit|veille|newsletter).*\b(e-?mail|mail)\b|\b(e-?mail|mail)\b.*(nouvelles|nouveaut|actualit|veille)",
     "tri-emails": r"\b(r[ée]pond\w* (aux?|à mes) (e-?mails?|mails?)|tri\w* (mes |les )?(e-?mails|mails)|traite\w* (mes |les )?(nouveaux )?(e-?mails|mails)|spams?|bo[iî]te (mail|de r[ée]ception))\b",
     "controle-ecran": r"\b(clique\w*|[ée]cran|calculatrice|ouvre l'app\w*|application (mac|du mac)|r[ée]glages syst[eè]me)\b",
     "node-typescript": r"\b(node(\.js)?|typescript|npm|express|tsx?)\b",
-    "projet-existant": r"\b(ajoute|modifie|am[ée]liore|change|mets? [àa] jour|int[eè]gre)\b",
+    # changing an existing code project (« ajoute une conclusion à mon texte » is not)
+    "projet-existant": r"\b(ajoute|modifie|am[ée]liore|change|mets? [àa] jour|int[eè]gre)\b[^.?!]{0,50}\b(code|projet|appli\w*|programme|script|fonction|"
+                       r"site|api|module|classe|fichier \w+\.(py|js|ts|php|swift|java))\b",
     # a house or flat plan: drawn to scale by the plan-maison skill tools, not as a Mermaid diagram
     "plan-maison": r"\bplans? (d['’]|c['’])?archit|\b(plans?|sch[ée]mas?|croquis|dessin)\b[^.?!]{0,40}\b(maisons?|appartements?|villas?|pavillons?|logements?|duplex|plain[- ]pied)\b|\b(maisons?|appartements?|villas?)\b[^.?!]{0,20}\bt[1-7]\b"
                    r"|\b(plans?|sch[ée]mas?|croquis|dessine\w*)\b[^.?!]{0,30}\b[tf][1-7]\b|\b[tf][1-7]\b[^.?!]{0,15}\d+ ?(m²|m2\b|m[eè]tres? carr)",
@@ -925,12 +933,18 @@ SKILL_TRIGGERS = {
     "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|affiche|flyer|infographie|carte de visite)\b",
     "recherche-approfondie": r"\b(recherche approfondie|enqu[eê]te sur|[ée]tat de l'art|[ée]tude de march[ée]|analyse concurrentielle|recoupe|compare les sources|veille approfondie|deep research)\b",
     "github": r"\b(pull[- ]?requests?|github|gh pr|branches?|merge|fusionne\w*|git push|pousse\w* (le code|sur|la branche))\b",
-    "ci-cd": r"\b(ci|cd|ci/cd|int[ée]gration continue|d[ée]ploiement continu|pipeline|github actions?|gitlab[- ]ci|workflow)\b",
+    # « ci » alone is French (« celle-ci », « ci-dessous »): only the real terms
+    "ci-cd": r"\b(ci ?/ ?cd|ci-cd|cicd|int[ée]gration continue|d[ée]ploiement continu|github actions?|gitlab[- ]ci|jenkins|"
+             r"pipelines? (ci|de d[ée]ploiement|d'int[ée]gration))\b",
 }
 
 
 def match_skill(task, root=None, disabled=()):
     """Pick the enabled skill that best fits the task (keyword triggers, then description overlap)."""
+    if re.search(r"(Document|Fichier) joint « ", task or ""):
+        # attached files come first, the user's own words last: only their words choose the skill (a Word file
+        # about health that says « celle-ci » is not a CI/CD request)
+        task = task.rsplit("\n\n", 1)[-1]
     text = task.lower()
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
