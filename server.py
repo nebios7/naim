@@ -1117,6 +1117,24 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, KeyError, subprocess.SubprocessError) as e:
                 code, out = 1, str(e)
             self.send_json({"ok": code == 0, "output": out})
+        elif path == "/api/hooks-file":
+            # the user's hooks file (or the project's), created with a commented example the first time, then opened
+            b = self.read_json()
+            try:
+                import hooks as naim_hooks
+                f = naim_hooks.files(b.get("project") or ".")[0 if b.get("scope") != "project" else 1]
+                if b.get("scope") == "project" and not b.get("project"):
+                    raise ValueError("choisis d'abord un dossier de projet")
+                if not f.exists():
+                    f.parent.mkdir(parents=True, exist_ok=True)
+                    f.write_text(json.dumps({"hooks": {
+                        "PreToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command":
+                            "python3 -c \"import json,sys; c=json.load(sys.stdin)['tool_input'].get('command',''); sys.exit(2 if 'rm -rf' in c else 0)\" || { echo 'rm -rf est interdit ici' >&2; exit 2; }"}]}],
+                        "PostToolUse": [], "UserPromptSubmit": [], "Stop": []}}, ensure_ascii=False, indent=2) + "\n")
+                subprocess.Popen(["open", "-t", str(f)])
+                self.send_json({"ok": True, "path": str(f)})
+            except (OSError, ValueError) as e:
+                self.send_json({"error": str(e)}, 400)
         elif path == "/api/open-url":
             url = self.read_json().get("url", "")
             ok = bool(re.match(r"^https?://", url))
@@ -1439,6 +1457,18 @@ class Handler(BaseHTTPRequestHandler):
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
         heard = []  # what the user said while Naim worked
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
+        hk = helper._user_hooks()
+        if hk.get("UserPromptSubmit") and not body.get("_warm") and not body.get("_relaunched"):
+            import hooks as naim_hooks
+            blocked, msg, ctx = naim_hooks.run(hk, "UserPromptSubmit", {"prompt": body["message"], "session_id": run_id}, helper.root)
+            if blocked or ctx or msg:
+                self.event({"type": "hook", "event": "UserPromptSubmit", "blocked": blocked, "text": msg or ctx})
+            if blocked:
+                self.event({"type": "token", "text": f"Message bloqué par un de tes hooks : {msg}"})
+                self.event({"type": "done"})
+                return
+            if ctx:
+                messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + f"\n\n[Contexte ajouté par un hook de l'utilisateur]\n{ctx}")
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
         named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
         # « imprime mon CV PDF », « envoie le document »: acting on a file that exists is not making one, no skill
@@ -1452,7 +1482,7 @@ class Handler(BaseHTTPRequestHandler):
             if acting_only and sk and sk["name"] != "mac":
                 sk = None  # acting on an existing file (« imprime mon CV ») needs no skill — except the Mac recipes
             if sk and sk["name"] not in ("debug", "application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):
-                file_work = file_work or sk["name"] != "mac"  # « un plan de maison T4 » makes files even without « crée »
+                file_work = True  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
@@ -1835,7 +1865,8 @@ class Handler(BaseHTTPRequestHandler):
             # « bonsoir », « merci », « ça va ? » in Agent mode: answered like in the Chat (seconds), the Agent's
             # long instructions and tools are not needed to say hello
             return self.run_chat({**body, "mode": "chat"}, stop)
-        if not body.get("images") and pure_question(msg):
+        mac_ask = (sk := ext.match_skill(msg)) is not None and sk["name"] == "mac"  # « mes rendez-vous ? » reads the Mac
+        if not body.get("images") and pure_question(msg) and not mac_ask:
             # « c'est quoi… ? », « pourquoi mon fichier plante ? », « tu penses quoi de… ? » with nothing to DO: an
             # answer in the conversation (it may read files, it changes nothing). Anything to do stays with the Agent.
             return self.run_chat({**body, "mode": "chat", "_question": True}, stop)

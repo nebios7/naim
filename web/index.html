@@ -2162,7 +2162,7 @@ function renderList() {
   }
   if (!box.children.length) box.innerHTML = `<div class="group">${q ? "Aucun résultat" : "Aucune conversation"}</div>`;
 }
-const MENU_ICONS = { "↻": "refresh", "🔔": "bell", "📄": "file", "📑": "file", "🧹": "wand", "🛠": "tool", "🗓": "calendar",
+const MENU_ICONS = { "🪝": "bolt", "↻": "refresh", "🔔": "bell", "📄": "file", "📑": "file", "🧹": "wand", "🛠": "tool", "🗓": "calendar",
   "🔒": "lock", "🔓": "unlock", "⏱": "sched", "🔌": "mcp", "☷": "list", "☰": "list", "◫": "columns", "🌐": "globe", "📦": "models",
   "⭐": "star", "★": "star", "🚫": "ban", "✅": "check", "✓": "check", "✗": "x", "✕": "x", "👁": "eye", "⚡": "bolt", "✋": "hand",
   "🧑": "user", "🤖": "robot", "⚠": "warn", "⚠️": "warn", "▾": "chevd", "▸": "chevr", "⌂": "home", "🗺": "map", "❓": "help",
@@ -2731,6 +2731,7 @@ function groupSummary(counts) {
   if (n("web")) parts.push(`${n("web")} recherche${n("web") > 1 ? "s" : ""} web`);
   if (n("mcp")) parts.push(`${n("mcp")} outil${n("mcp") > 1 ? "s" : ""} MCP`);
   if (n("skill")) parts.push(`${n("skill")} skill${n("skill") > 1 ? "s" : ""}`);
+  if (n("hook")) parts.push(`${n("hook")} hook${n("hook") > 1 ? "s" : ""}`);
   if (n("mem")) parts.push("mémoire");
   if (n("sub")) parts.push("sous-agents");
   if (n("mail")) parts.push(`${n("mail")} email${n("mail") > 1 ? "s" : ""}`);
@@ -2956,7 +2957,7 @@ function addBot(m, idx) {
     event(icon, t) {
       // a skill, an MCP server or a memory used by Naim is part of its work: it goes INSIDE the block of actions, at
       // its place in time (first if it came first), not as a tag above the task
-      const kind = { "📘": "skill", "🧠": "mem", "🔌": "mcp", "🛠": "mcp" }[icon];
+      const kind = { "📘": "skill", "🧠": "mem", "🔌": "mcp", "🛠": "mcp", "🪝": "hook" }[icon];
       if (kind) {
         if (!group) {
           group = document.createElement("details"); group.className = "agroup"; group.open = !!S.live_actions && !v._replay;
@@ -3284,6 +3285,10 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "checkpoint": reply.checkpoint = ev.run_id; break;
           case "memory": reply.steps.push({ type: "event", icon: "🧠", text: `Mémorisé : ${ev.fact}` }); v.event("🧠", `Mémorisé : ${ev.fact}`); break;
           case "skill": reply.steps.push({ type: "event", icon: "📘", text: `Skill utilisé : ${ev.name}` }); v.event("📘", `Skill utilisé : ${ev.name}`); break;
+          case "hook": {  // one of the user's hooks ran: a line of the work, like a skill
+            const when = { PreToolUse: "avant", PostToolUse: "après", UserPromptSubmit: "à l'envoi", Stop: "à la fin" }[ev.event] || "";
+            const t = `Hook ${when}${ev.tool ? " " + ev.tool : ""}${ev.blocked ? " · bloqué" : ""}${ev.text ? " — " + ev.text.split("\n")[0].slice(0, 140) : ""}`;
+            reply.steps.push({ type: "event", icon: "🪝", text: t }); v.event("🪝", t); break; }
           case "skill_created": reply.steps.push({ type: "event", icon: "✨", text: `Nouveau skill enregistré : ${ev.name}` }); v.event("✨", `Nouveau skill enregistré : ${ev.name}`); break;
           case "vision": reply.steps.push({ type: "vision", model: ev.model, text: ev.text }); v.vision(ev); break;
           case "subagent": { const now = Date.now(); const prev = reply.steps.find((x) => x.type === "subagent" && x.name === ev.name);
@@ -4287,7 +4292,9 @@ const TABS = {
       <div style="display:flex;gap:6px;flex-wrap:wrap">${["autoriser run_command: npm test*", "autoriser run_command: pytest*", "autoriser write_file: *.md", "refuser run_command: git push*", "refuser write_file: *.env", "autoriser mcp__*: *"].map((t) => `<button class="ghost" data-perm="${esc(t)}">＋ ${esc(t)}</button>`).join("")}</div></div></div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Hooks après écriture</b><small>Commande lancée automatiquement après chaque fichier écrit ou modifié : <span class="mono">motif: commande</span> ({file} = le fichier). Le résultat est renvoyé à Naim.</small></div>
       <textarea data-k="hooks" class="mono" style="min-height:80px" placeholder="*.py: .venv/bin/black {file}&#10;*.js: npx prettier --write {file}">${esc(S.hooks)}</textarea>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${["*.py: python3 -m py_compile {file}", "*.py: .venv/bin/black -q {file}", "*.js: npx prettier --write {file}", "*.php: php -l {file}", "*.swift: swiftc -parse {file}"].map((t) => `<button class="ghost" data-hook="${esc(t)}">＋ ${esc(t)}</button>`).join("")}</div></div></div>`,
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${["*.py: python3 -m py_compile {file}", "*.py: .venv/bin/black -q {file}", "*.js: npx prettier --write {file}", "*.php: php -l {file}", "*.swift: swiftc -parse {file}"].map((t) => `<button class="ghost" data-hook="${esc(t)}">＋ ${esc(t)}</button>`).join("")}</div></div></div>
+    <div class="sgroup"><div class="srow col"><div class="sl"><b>Hooks</b><small>Des commandes à toi, lancées toutes seules : <b>avant</b> un outil (pour le bloquer), <b>après</b> un outil, <b>à l'envoi</b> d'un message (pour ajouter du contexte) et <b>à la fin</b> du travail (pour renvoyer Naim au travail). Une commande qui sort avec le code 2 bloque, et son message est donné à Naim. Fichiers : <span class="mono">~/.naim/hooks.json</span> (tous les projets) ou <span class="mono">.naim/hooks.json</span> dans un projet, au même format que les autres agents de code.</small></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-hookfile="user">Ouvrir mes hooks</button><button class="btn" data-hookfile="project">Hooks de ce projet</button></div></div></div>`,
   models: () => `<h2>Modèles installés</h2>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Télécharger un modèle</b><small>Le modèle Naim s'installe depuis l'écran de bienvenue. Ici, d'autres modèles Ollama ou Hugging Face si tu en veux.</small></div>
       <div style="display:flex;gap:8px"><input class="field mono" id="pullName" placeholder="nom du modèle" style="flex:1"><button class="btn primary" id="pullBtn">Télécharger</button></div>
@@ -4386,6 +4393,10 @@ function bindSettings() {
   });
   $$("#spane [data-add]").forEach((b) => (b.onclick = () => { const ta = $("#spane textarea[data-k=system_prompt]"); ta.value = (ta.value.trim() + "\n" + b.dataset.add).trim(); ta.dispatchEvent(new Event("input")); }));
   $$("#spane [data-perm]").forEach((b) => (b.onclick = () => { const ta = $("#spane textarea[data-k=permissions]"); ta.value = (ta.value.trim() + "\n" + b.dataset.perm).trim(); ta.dispatchEvent(new Event("input")); }));
+  $$("#spane [data-hookfile]").forEach((b) => (b.onclick = async () => {
+    const r = await api("/api/hooks-file", { method: "POST", body: { scope: b.dataset.hookfile, project: S.project || "" } });
+    toast(r.ok ? `Ouvert : ${r.path.replace(/^\/Users\/[^/]+/, "~")}` : "Impossible : " + (r.error || ""));
+  }));
   $$("#spane [data-hook]").forEach((b) => (b.onclick = () => { const ta = $("#spane textarea[data-k=hooks]"); ta.value = (ta.value.trim() + "\n" + b.dataset.hook).trim(); ta.dispatchEvent(new Event("input")); }));
   $("#resetModel") && ($("#resetModel").onclick = () => { for (const k of ["temperature", "top_p", "top_k", "repeat_penalty", "num_ctx", "num_predict", "seed", "keep_alive"]) S[k] = DEFAULTS[k]; saveSettings(); showSettingsTab("model"); toast("Valeurs par défaut rétablies"); });
   $("#sPick") && ($("#sPick").onclick = async () => { const r = await api("/api/pick-folder"); if (r.path) { S.project = r.path; saveSettings(); showSettingsTab("agent"); } });

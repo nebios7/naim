@@ -26,6 +26,7 @@ import computer as cu
 import diagrams
 import docs
 import extensions as ext
+import hooks as naim_hooks
 import learning
 import mailer
 import skill_hub
@@ -1987,6 +1988,14 @@ class Agent:
         if getattr(self, "_refused", None) and bypass:
             return (f"refused: the user has just refused « {self._refused} ». Do not try another way to do it. Stop, and "
                     "say in one sentence that you did not do it because they refused, then ask what they want instead.")
+        hk = self._user_hooks()
+        if hk.get("PreToolUse") and name != "update_todos":
+            blocked, msg, _ = naim_hooks.run(hk, "PreToolUse", {"tool_name": name, "tool_input": args, "session_id": self.run_id},
+                                             self.root, tool=name)
+            if blocked or msg:
+                self.emit({"type": "hook", "event": "PreToolUse", "tool": name, "blocked": blocked, "text": msg})
+            if blocked:
+                return f"blocked by the user's hook (PreToolUse): {msg} — do not do it another way; adapt or ask the user."
         self._allow_once = rule == "allow"
         try:
             result = self._dispatch(name, args, fn)
@@ -2004,7 +2013,21 @@ class Agent:
         if self.hooks and name in ("write_file", "edit_file") and str(result).startswith("ok") and args.get("path"):
             if h := self._run_hooks(args["path"]):
                 result += "\n" + h
+        if hk.get("PostToolUse") and name != "update_todos":
+            blocked, msg, ctx = naim_hooks.run(hk, "PostToolUse", {"tool_name": name, "tool_input": args, "tool_response": str(result)[:20000],
+                                                                    "session_id": self.run_id}, self.root, tool=name)
+            note = "\n".join(x for x in (msg, ctx) if x)
+            if note:
+                self.emit({"type": "hook", "event": "PostToolUse", "tool": name, "blocked": blocked, "text": note})
+                result = f"{result}\n[Hook après {name}{' — à corriger' if blocked else ''}] {note}"
         return result
+
+    def _user_hooks(self):
+        """The user's hooks (~/.naim/hooks.json and the project's .naim/hooks.json), read again at most every 5 s."""
+        now = time.time()
+        if now - getattr(self, "_hk_at", 0) > 5:
+            self._hk, self._hk_at = naim_hooks.load(self.root), now
+        return self._hk
 
     def _dispatch(self, name, args, fn):
         if name in self.mcp_lookup:
@@ -2360,6 +2383,20 @@ class Agent:
             task = (f"{task}\n\n[Carnet de la tâche précédente, restée inachevée : reprends là où elle s'est arrêtée, "
                     f"sans refaire ce qui est coché. Vérifie d'abord l'état des fichiers listés.]\n{prev}")
             self._task_words = (prev.split("Demande : ", 1)[-1].split("\n", 1)[0] or task)[:1500]
+        hk = self._user_hooks()
+        if hk.get("UserPromptSubmit") and not self.subagent:
+            blocked, msg, ctx = naim_hooks.run(hk, "UserPromptSubmit", {"prompt": task, "session_id": self.run_id}, self.root)
+            if blocked:
+                self.emit({"type": "hook", "event": "UserPromptSubmit", "blocked": True, "text": msg})
+                text = f"Message bloqué par un de tes hooks : {msg}"
+                self.emit({"type": "answer", "text": text})
+                self._outcome = "stopped"
+                return text
+            if ctx or msg:
+                self.emit({"type": "hook", "event": "UserPromptSubmit", "blocked": False, "text": ctx or msg})
+            if ctx:
+                task = f"{task}\n\n[Contexte ajouté par un hook de l'utilisateur]\n{ctx}"
+        self._stop_hooks = 0
         feedback = len(self.messages) > 1 and bool(FEEDBACK_RE.search(task or ""))
         if feedback:  # a remark on what was just done, not a new task: answer it, fix only what it asks
             task = (f"{task}\n\n[Remarque de l'utilisateur sur ce que tu viens de faire. Commence par dire en une phrase ce "
@@ -2501,6 +2538,15 @@ class Agent:
                         self.messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), puis dis-moi le résultat."})
                         continue
                     self._outcome = "answer"
+                hk = self._user_hooks()
+                if hk.get("Stop") and not self.subagent and getattr(self, "_stop_hooks", 0) < 2:
+                    blocked, msg, _ = naim_hooks.run(hk, "Stop", {"last_answer": content, "session_id": self.run_id}, self.root)
+                    if blocked:  # the user's end check says it is not finished: back to work, with its reason
+                        self._stop_hooks = getattr(self, "_stop_hooks", 0) + 1
+                        self.emit({"type": "hook", "event": "Stop", "blocked": True, "text": msg})
+                        self.messages.append({"role": "user", "content": f"(Vérification de fin, par un hook de l'utilisateur) {msg}\n"
+                                              "Corrige cela maintenant avec tes outils, puis donne ta réponse finale."})
+                        continue
                 self.emit({"type": "answer", "text": content})
                 return content
             if content:
