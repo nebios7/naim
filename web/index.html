@@ -1125,12 +1125,11 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .md tr:last-child td { border-bottom: 0 !important; }
 .turn.bot:last-child:not(:hover) .fb:not(:has(.rate.on)) { opacity: 0; }
 
-/* code block actions only when the pointer is on the block (nothing appears or jumps while Naim writes), all in the same
-   quiet grey */
-.md .code .bar button, .md .code .bar .cwrit { opacity: 0; transition: opacity .15s; }
-.md .code:hover .bar button { opacity: 1; }
+/* code block actions in the same quiet grey (« Projet » too) */
 .md .code .bar button[data-write] { color: var(--muted); }
 .md .code .bar button:hover { color: var(--text); }
+/* while the block is being written: the very same bar, its buttons shown but inactive (nothing appears, nothing jumps) */
+.md .code.writing .bar button { opacity: .4; pointer-events: none; }
 
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
@@ -1857,8 +1856,7 @@ function codeBlock(lang, body, file = "", open = false) {
 }
 function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
-  if (open) return `<div class="code writing"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} lignes</span><span class="cwrit">écriture…</span></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
-  return `<div class="code"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} lignes</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">${file ? `✓ Appliquer à ${esc(file.split("/").pop())}` : "⤓ Projet"}</button>` : ""}<button data-save>Enregistrer</button><button data-copy>Copier</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
+  return `<div class="code${open ? " writing" : ""}"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} lignes</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">${file ? `✓ Appliquer à ${esc(file.split("/").pop())}` : "⤓ Projet"}</button>` : ""}<button data-save>Enregistrer</button><button data-copy>Copier</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
 }
 let mdLive = false;  // true while a reply is being written (its last code block may be unfinished)
 function md(src) {
