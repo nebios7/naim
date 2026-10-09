@@ -1125,6 +1125,13 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .md tr:last-child td { border-bottom: 0 !important; }
 .turn.bot:last-child:not(:hover) .fb:not(:has(.rate.on)) { opacity: 0; }
 
+/* code block actions only when the pointer is on the block (nothing appears or jumps while Naim writes), all in the same
+   quiet grey */
+.md .code .bar button, .md .code .bar .cwrit { opacity: 0; transition: opacity .15s; }
+.md .code:hover .bar button { opacity: 1; }
+.md .code .bar button[data-write] { color: var(--muted); }
+.md .code .bar button:hover { color: var(--text); }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
