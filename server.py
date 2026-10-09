@@ -1500,7 +1500,7 @@ class Handler(BaseHTTPRequestHandler):
             # mid-conversation: no « Salut Mohamed ! » at the start of every answer
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(La conversation est déjà en cours : ne me salue pas et ne commence pas par mon prénom, réponds directement.)"))
-        if (file_work or files) and not plain and not body.get("_relaunched"):
+        if (file_work or files) and not plain and not body.get("_relaunched") and not (body["message"] or "").startswith("Continue exactement"):
             # like a colleague: a sentence on what it is about to do, then the work (the steps stay in their block)
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n[Commence ta réponse par une phrase, pour moi, qui dit ce que tu vas faire, puis, dans la même "

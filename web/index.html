@@ -2799,7 +2799,7 @@ function addBot(m, idx) {
   $("[data-a=copy]", d).onclick = () => { copyText(m?.content || body.innerText); toast("Copié"); };
   const sp = $("[data-a=speak]", d); if (sp) sp.onclick = () => { voiceUnlock(); voice.btn === sp ? voiceStop() : voiceSay(m?.content || body.innerText, sp); };
   $("[data-a=regen]", d).onclick = () => regenerate();
-  $("[data-a=cont]", d).onclick = () => { if (!curRun()) send("Continue exactement là où tu t'es arrêté, sans répéter.", []); };
+  $("[data-a=cont]", d).onclick = () => continueReply();
   $("[data-a=raw]", d).onclick = () => { raw = !raw; body.innerHTML = raw ? `<pre style="white-space:pre-wrap;font:13px ui-monospace,Menlo,monospace">${esc(m?.content || "")}</pre>` : md(m?.content || ""); };
   const closeGroup = () => { group = null; counts = {}; };
   const block = (el) => { closeGroup(); flow.appendChild(el); return el; };
@@ -3266,6 +3266,20 @@ async function send(textArg, attsArg, opts = {}) {
   }
   await stream(reply, v, content, histFor(current, end), { images: imagesOf(atts), plan });
 }
+// « Continuer »: the rest is written INTO the same answer (no bubble from you, a cut code block goes on in its block)
+async function continueReply() {
+  if (curRun() || !current) return;
+  const idx = current.messages.length - 1, last = current.messages[idx];
+  if (!last || last.role !== "assistant") return;
+  const hist = histFor(current, current.messages.length);
+  const turns = $$("#thread .turn.bot"); turns[turns.length - 1]?.remove();
+  const v = addBot(last, idx); if (last.todos) v.todos(last.todos); for (const st of last.steps || []) v.replay(st); v.setText(last.content || "");
+  const tail = (last.content || "").slice(-300);
+  const inCode = ((last.content || "").match(/```/g) || []).length % 2 === 1;
+  await stream(last, v, "Continue exactement là où tu t'es arrêté, sans rien répéter : commence par les caractères qui suivent"
+    + (inCode ? " (tu es au milieu d'un bloc de code : continue le code, sans rouvrir de bloc ```)" : "")
+    + ". Fin de ta réponse précédente :\n" + tail, hist, { cont: true });
+}
 async function regenerate() {
   if (curRun() || !current) return;
   let i = current.messages.length - 1;
@@ -3351,7 +3365,7 @@ async function stream(reply, v, message, hist, extra = {}) {
             const a = ev.args || {};
             if (ev.name === "update_todos") { lastTool = null; break; }
             // what it wrote before acting (« Je regarde ton agenda… ») goes ABOVE its steps, like the Agent's notes
-            if (!ev.sub && conv.mode !== "agent" && !talk.on && (reply.content || "").trim()) {
+            if (!ev.sub && conv.mode !== "agent" && !talk.on && !extra.cont && (reply.content || "").trim()) {
               const said = reply.content.trim(); reply.content = "";
               reply.steps.push({ type: "note", text: said }); v.note(said); v.setText("");
             }
