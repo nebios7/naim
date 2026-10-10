@@ -1534,11 +1534,23 @@ class Handler(BaseHTTPRequestHandler):
                                                     if m.get("role") == "user"])
             sk = (ext.match_skill(body["message"], helper.root, helper.disabled_skills)
                   or (ext.match_skill(recent, helper.root, helper.disabled_skills) if file_work else None))
-            if not sk and re.search(r"\b(photos?|images?|r[ée]sultats?|annonces?)\b", body["message"] or "", re.I):
-                # « je ne vois pas les photos », « encore d'autres images »: the search under way goes on with its photos
+            generic_app = bool(sk and sk["name"] == "application-web" and not re.search(
+                r"\b(web|site|page|flask|fastapi|django|navigateur)\b", body["message"] or "", re.I))
+            if generic_app:
+                sk = None  # « une application simple » in a conversation about a Mac app is that Mac app: see the follow-up below
+            if not sk:
+                # a follow-up keeps the skill of the work under way: « je ne vois pas les photos » (search),
+                # « crée PRIMA, installe-la et lance-la » / « relance-la » (the Mac app being made)
+                m_ = body["message"] or ""
+                keep = (("recherche-produits",) if re.search(r"\b(photos?|images?|r[ée]sultats?|annonces?)\b", m_, re.I) else ()) + (
+                    ("app-macos", "react-app", "react-native", "application-web", "plan-maison")
+                    if re.search(r"\b(cr[ée]\w*|install\w*|lance\w*|relance\w*|refai\w*|recommence\w*|continue\w*|corrige\w*|r[ée]pare\w*|termine\w*|finis\w*|r[ée]essaie\w*|compile\w*)\b", m_, re.I) else ())
                 asked_before = [str(m.get("content") or "") for m in (body.get("history") or []) if m.get("role") == "user"][-4:]
-                sk = next((k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before))
-                           if k and k["name"] == "recherche-produits"), None)
+                if generic_app:
+                    keep = ("app-macos", "react-app", "react-native")  # an application stays an application
+                found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k and k["name"] in keep] if keep else []
+                sk = (next((k for k in found if k["name"] != "application-web"), None) or (found[0] if found else None)
+                      or ext.match_skill(body["message"], helper.root, helper.disabled_skills))  # nothing under way: the generic one
             if acting_only and sk and sk["name"] != "mac":
                 sk = None  # acting on an existing file (« imprime mon CV ») needs no skill — except the Mac recipes
             if sk and sk["name"] not in ("debug", "application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):

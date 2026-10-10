@@ -756,6 +756,10 @@ class Agent:
     BUILT_EXTS = {".xlsx", ".docx", ".pdf", ".odt", ".rtf"}
 
     def write_file(self, path, content):
+        if re.search(r"\.app/Contents/", str(path)):
+            return ("refused: a Mac application (.app) is never assembled by hand (a script or a fake executable shows no window). "
+                    "Use the app-macos skill: put the SwiftUI code in apps/<Nom>/<Nom>App.swift, then run "
+                    "bash ~/.naim/skills/app-macos/build_app.sh <Nom> apps/<Nom> --install --open and read its output.")
         p = self.resolve(path)
         if err := self._guard_own_path(p, "Écrire"):
             return err
@@ -1204,8 +1208,14 @@ class Agent:
                 return f"blocked: the user's settings forbid commands containing {pattern!r}"
         return None
 
+    APP_BUNDLE_RE = re.compile(r"\b(mkdir|cp|ditto|mv|tee|chmod|touch|cat\s*>|echo\b[^|;&]*>)[^|;&]*\.app(/Contents)?\b|>\s*\S*\.app/", re.I)
+
     def _check_env(self, command):
         """Keep dependencies out of the system Python: require a project virtual environment."""
+        if self.APP_BUNDLE_RE.search(command) and "build_app.sh" not in command:
+            return ("refused: a Mac application (.app) is never assembled by hand (a script or a fake executable shows no window). "
+                    "Use the app-macos skill: put the SwiftUI code in apps/<Nom>/<Nom>App.swift, then run "
+                    "bash ~/.naim/skills/app-macos/build_app.sh <Nom> apps/<Nom> --install --open and read its output.")
         if "--break-system-packages" in command:
             return ("refused: never use --break-system-packages. Create a virtual environment in the project: "
                     "python3 -m venv .venv && .venv/bin/pip install <packages>, then run with .venv/bin/python")
