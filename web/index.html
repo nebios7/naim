@@ -1511,6 +1511,18 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
   }
 }
 
+
+/* « Sombre » only (Automatique and Clair keep their own palettes): near-black greys, luminous white text */
+:root[data-theme="dark"] {
+  --bg: #1b1b1a; --panel: #232322; --side: #141413; --hover: #2b2b29; --text: #faf9f5; --muted: #a8a69e; --line: #313130;
+  --accent: #faf9f5; --accent-soft: #2b2b29; --user: #2b2b29; --code: #141413; --term: #141413;
+  --brand: #faf9f5; --brand-h: #e6e4dd; --brand-t: #1b1b1a; --brand-soft: rgb(250 249 245 / .09);
+  --c-chat: #faf9f5; --send: #faf9f5; --send-t: #1b1b1a; --robot-d: #141413; --robot-eye: #faf9f5;
+  --shadow: 0 1px 2px rgb(0 0 0 / .5), 0 16px 40px rgb(0 0 0 / .55);
+}
+:root[data-theme="dark"] body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: auto; }
+:root[data-theme="dark"] .md { color: #f2f1ec; letter-spacing: .005em; }
+:root[data-theme="dark"] .md strong, :root[data-theme="dark"] .md b, :root[data-theme="dark"] .md h1, :root[data-theme="dark"] .md h2, :root[data-theme="dark"] .md h3 { color: #ffffff; }
 </style>
 </head>
 <body>
