@@ -966,7 +966,7 @@ SKILL_TRIGGERS = {
     "projet-existant": r"\b(ajoute|modifie|am[ée]liore|change|mets? [àa] jour|int[eè]gre)\b[^.?!]{0,50}\b(code|projet|appli\w*|programme|script|fonction|"
                        r"site|api|module|classe|fichier \w+\.(py|js|ts|php|swift|java))\b",
     # a house or flat plan: drawn to scale by the plan-maison skill tools, not as a Mermaid diagram
-    "plan-maison": r"\bplans? (d['’]|c['’])?archit|\b(plans?|sch[ée]mas?|croquis|dessin)\b[^.?!]{0,40}\b(maisons?|appartements?|villas?|pavillons?|logements?|duplex|plain[- ]pied)\b|\b(maisons?|appartements?|villas?)\b[^.?!]{0,20}\bt[1-7]\b"
+    "plan-maison": r"\bplans? (d['’]|c['’])?archit|\b(plans?|sch[ée]mas?|croquis|dessin)\b[^.?!]{0,40}\b(maisons?|appartements?|villas?|pavillons?|logements?|duplex|plain[- ]pied)\b|\b(fai\w*|cr[ée]\w*|con[cç]\w*|imagin\w*|dessin\w*)\b[^.?!]{0,30}\b(maisons?|appartements?|villas?)\b[^.?!]{0,20}\bt[1-7]\b"
                    r"|\b(plans?|sch[ée]mas?|croquis|dessine\w*)\b[^.?!]{0,30}\b[tf][1-7]\b|\b[tf][1-7]\b[^.?!]{0,15}\d+ ?(m²|m2\b|m[eè]tres? carr)",
     "schemas": r"\b(sch[ée]mas?|diagrammes?|organigrammes?|flowchart|mermaid|uml|mcd|erd|logigrammes?|carte mentale|mind ?map|gantt)\b",
     "rapport": r"\b(rapport(?! de bug| d'erreur)|dossier technique|cahier des charges|compte[- ]rendu|livre blanc|note de synth[eè]se)\b",
@@ -982,7 +982,10 @@ SKILL_TRIGGERS = {
                           r"(t[ée]l[ée]phone|smartphone|ordinateur|pc|casque|t[ée]l[ée]vis\w*|tv|voiture|v[ée]lo|chaussures?|montre|frigo|"
                           r"lave-linge|canap[ée]|appartement|maison [àa] (vendre|louer)))\b"
                           r"|\b(maisons?|appartements?|studios?|terrains?|villas?|biens?)\b[^.?!]{0,30}\b([àa] (vendre|louer)|en vente|immobili\w*)\b"
-                          r"|\b(annonces? immobili\w*|immobilier [àa]|encore (plus )?de photos|d'autres photos|plus de photos)\b",
+                          r"|\b(annonces? immobili\w*|immobilier [àa]|encore (plus )?de photos|d'autres photos|plus de photos)\b"
+                          r"|\b(cherch\w*|trouv\w*|recherch\w*)\b[^.?!]{0,40}\b(maisons?|appartements?|studios?|villas?|lofts?|terrains?|[tf][1-6])\b"
+                          r"|\b(maisons?|appartements?|studios?|villas?|terrains?|voitures?|[tf][1-6])\b[^.?!]{0,60}(\d[\d .]*\s*(k?€|euros?|k\b)|budget|pas plus de|moins de)"
+                          r"|\b(cherch\w*|trouv\w*|recherch\w*)\b[^.?!]{0,80}\bavec (des |les |de )?photos?\b",
     # acting on the Mac itself (last of the specialised ones: « crée une application de rappels » is an app)
     "mac": r"\b(sms|texto|imessage|envoie[rz]? (un |le |ce )?(message|texto)|appell?e[rz]?|t[ée]l[ée]phone[rz]? (à|a)|facetime|"
            r"agenda|calendrier|rendez-vous|rdv|rappelle-moi|(un |des |mes )rappels?|ajoute (une |la )?note|dans (mes )?notes|"
