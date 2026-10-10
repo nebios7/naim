@@ -420,6 +420,23 @@ class Handler(BaseHTTPRequestHandler):
         host = (self.headers.get("Host") or "").split(":")[0]
         return host in ("127.0.0.1", "localhost") and self.headers.get("X-Naim") == "1"
 
+    def _foreign(self):
+        """A request another web page made: refused. Only Naim's page (and local programs) may use the API.
+
+        Host must be Naim's own address (a site that re-points its domain to 127.0.0.1 — DNS rebinding — sends its
+        own name). A browser always sends Origin on POST/PUT/DELETE: a page from another site could otherwise run
+        commands through /api/terminal or /api/chat without the user knowing. Programs (urllib, curl) send none."""
+        if (self.headers.get("Host") or "").split(":")[0] not in ("127.0.0.1", "localhost"):
+            return True
+        origin = self.headers.get("Origin")
+        if origin is None or self.command == "GET":
+            return False
+        own = {f"http://{h}:{self.server.server_address[1]}" for h in ("127.0.0.1", "localhost")}
+        return origin not in own
+
+    def _refuse(self):
+        self.send_json({"error": "requête refusée : elle ne vient pas de Naim"}, 403)
+
     def send_json(self, obj, code=200):
         data = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(code)
@@ -442,6 +459,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ GET
     def do_GET(self):
+        if self._foreign():
+            return self._refuse()
         path, q = self.route()
         if path in ("/", "/index.html"):
             data = (WEB / "index.html").read_bytes()
@@ -744,6 +763,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ PUT / DELETE
     def do_PUT(self):
+        if self._foreign():
+            return self._refuse()
         path, _ = self.route()
         if path == "/api/mcp":
             b = self.read_json()
@@ -794,6 +815,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_DELETE(self):
+        if self._foreign():
+            return self._refuse()
         path, q = self.route()
         if path.startswith("/api/schedules/"):
             scheduler.delete(path.rsplit("/", 1)[1])
@@ -811,6 +834,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ POST
     def do_POST(self):
+        if self._foreign():
+            return self._refuse()
         path, _ = self.route()
         if path == "/api/owner/action":
             mod = _private("owner_admin") if self._owner_ok() else None
