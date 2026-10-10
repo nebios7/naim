@@ -976,6 +976,11 @@ SKILL_TRIGGERS = {
     # a Mac application in SwiftUI (built without an Xcode project); an iPhone app stays ios-swiftui
     "app-macos": r"\b(swift ?ui|swift|uiswuift|ui ?swift)\b(?![^.?!]*\b(ios|iphone|ipad|simulateur)\b)"
                  r"|\bapp(lication)?s?\b[^.?!]{0,30}\b(mac|macos|pour le bureau)\b|\.app\b|dans (mes |le dossier )?applications",
+    # looking for something to buy (a product, a good): photos, prices and advice
+    "recherche-produits": r"\b(ach[eè]te\w*|acheter|prix d[eu']|combien co[uû]te|meilleure? (prix|offre|rapport)|compar\w* (les )?(prix|offres|mod[eè]les|produits)|"
+                          r"o[uù] (trouver|acheter)|bons? plans?|promos?|soldes|pas cher|moins cher|recherche\w* (des |de )?biens?|cherche[rz]? (un |une |des |le |la |les )?"
+                          r"(t[ée]l[ée]phone|smartphone|ordinateur|pc|casque|t[ée]l[ée]vis\w*|tv|voiture|v[ée]lo|chaussures?|montre|frigo|"
+                          r"lave-linge|canap[ée]|appartement|maison [àa] (vendre|louer)))\b",
     # acting on the Mac itself (last of the specialised ones: « crée une application de rappels » is an app)
     "mac": r"\b(sms|texto|imessage|envoie[rz]? (un |le |ce )?(message|texto)|appell?e[rz]?|t[ée]l[ée]phone[rz]? (à|a)|facetime|"
            r"agenda|calendrier|rendez-vous|rdv|rappelle-moi|(un |des |mes )rappels?|ajoute (une |la )?note|dans (mes )?notes|"
@@ -996,7 +1001,7 @@ def match_skill(task, root=None, disabled=()):
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
-    first = ("plan-maison", "app-macos", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
+    first = ("plan-maison", "app-macos", "recherche-produits", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     ordered = list(first) + [n for n in SKILL_TRIGGERS if n not in generic and n not in first] + list(generic)
     for name in ordered:
         if name in by_name and re.search(SKILL_TRIGGERS[name], text):

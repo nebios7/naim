@@ -535,6 +535,36 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({**model_download.STATE, "missing": [f for f, _ in model_download.missing()]})
         elif path == "/api/computer":
             self.send_json(cu.status())
+        elif path == "/api/img":
+            # a photo from the web shown in an answer: fetched by Naim (shops refuse images shown from elsewhere),
+            # kept in a small cache, served to the page
+            import hashlib
+            u = q.get("u", "")
+            if not u.startswith("https://"):
+                self.send_error(400)
+                return
+            cache = ext.HOME / "cache" / "images"
+            f = cache / hashlib.sha1(u.encode()).hexdigest()
+            try:
+                if not f.exists():
+                    req = urllib.request.Request(u, headers={"User-Agent": ext.UA, "Accept": "image/*", "Referer": u.split("/", 3)[0] + "//" + u.split("/")[2] + "/"})
+                    with urllib.request.urlopen(req, timeout=15) as r:
+                        ctype = r.headers.get("Content-Type", "")
+                        data = r.read(8_000_001)
+                    if not ctype.startswith("image/") or len(data) > 8_000_000:
+                        raise ValueError("pas une image")
+                    cache.mkdir(parents=True, exist_ok=True)
+                    f.write_bytes(data)
+                    f.with_suffix(".type").write_text(ctype)
+                data, ctype = f.read_bytes(), (f.with_suffix(".type").read_text() if f.with_suffix(".type").exists() else "image/jpeg")
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Cache-Control", "max-age=86400")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except (OSError, ValueError, urllib.error.URLError):
+                self.send_error(404)
         elif path == "/api/self-check":
             import naim_check
             last = naim_check.last_saved()

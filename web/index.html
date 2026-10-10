@@ -1134,6 +1134,13 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 /* the time and the actions under an answer appear when it is finished, not while it is being written */
 body.busyrun #thread .turn.bot:last-child .msgacts { visibility: hidden; }
 
+/* photos in an answer: a row of thumbnails (several in a paragraph make a gallery), full size on click */
+.md img.mdimg { width: 168px; height: 128px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--code); cursor: zoom-in; margin: 0 8px 8px 0; vertical-align: top; }
+.md p:has(> img.mdimg) { line-height: 0; display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.md p:has(> img.mdimg) > br { display: none; }
+.md p:has(> img.mdimg) > img.mdimg { margin: 0; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -1834,6 +1841,8 @@ function inline(s) {
     .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, "$1<em>$2</em>")
     .replace(/(^|\W)_([^_\s][^_]*?)_(?!\w)/g, "$1<em>$2</em>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>")
+    // a photo from the web (product search…): a thumbnail, the full image on click
+    .replace(/!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)/g, (_, alt, url) => `<img class="mdimg" src="/api/img?u=${encodeURIComponent(url.replace(/&amp;/g, "&"))}" alt="${alt}" title="${alt}" loading="lazy" onerror="this.remove()">`)
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     // a bare address (http://localhost:5050/…) is a link too, opened in the browser
     .replace(/(^|[\s(«])(https?:\/\/[^\s<«»"]*[^\s<«»".,;:!?)])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
@@ -1939,6 +1948,7 @@ function downloadBlob(name, blob) {
   const r = new FileReader(); r.onload = () => saveDownload(name, { base64: String(r.result).split(",")[1] || "" }); r.readAsDataURL(blob);
 }
 document.addEventListener("click", (e) => { if (e.target.closest(".wstop")) stop(); });
+document.addEventListener("click", (e) => { const im = e.target.closest(".md img.mdimg"); if (im) lightbox(im.src); });
 document.addEventListener("click", (e) => { const n = e.target.closest(".evnote.long"); if (n) n.classList.toggle("open"); });
 // long remarks are marked once drawn (3 lines shown, a click shows all)
 new MutationObserver(() => $$(".evnote:not([data-l])").forEach((n) => { n.dataset.l = 1; if ((n.textContent || "").length > 180) n.classList.add("long"); }))
