@@ -26,7 +26,7 @@ rm -rf "$tmp"
 
 # native app (window, menus, WKWebView); it starts the Python engine as a child so macOS permissions apply to Naim.app
 src="$(mktemp -d)"; cp "$here/NaimApp.swift" "$src/main.swift"   # the file with top-level code must be main.swift
-swiftc -O "$src/main.swift" "$here/NaimInput.swift" "$here/NaimDictation.swift" -o "$out/Contents/MacOS/Naim" \
+swiftc -O "$src/main.swift" "$here/NaimInput.swift" "$here/NaimDictation.swift" "$here/NaimQuick.swift" -o "$out/Contents/MacOS/Naim" \
   -framework AppKit -framework WebKit -framework Speech -framework AVFoundation
 rm -rf "$src"
 

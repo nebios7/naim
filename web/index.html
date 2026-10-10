@@ -2152,6 +2152,8 @@ const COMMANDS = {
   stop: () => stop(),
 };
 window.naimCmd = (name) => COMMANDS[name]?.();
+// the menu bar's quick bar: the text goes in as if typed here, in a new or in the current conversation
+window.naimQuick = (text, fresh) => { if (fresh) newConv(); $("#input").value = text; autoGrow(); updateSendBtn(); send(); return true; };
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-cmd]"); if (b) { e.preventDefault(); naimCmd(b.dataset.cmd); } });
 
 // the page is zoomed with CSS zoom, which media queries ignore: the layout follows the width that is really available

@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     let dictation = NaimDictation()  // the composer's microphone
     var engine: Process?
     let bridge = InputBridge()
+    let quick = NaimQuick()  // the icon in the menu bar and its floating input bar
     var readyTimer: Timer?
     var started = Date()
 
@@ -28,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenus()
         buildWindow()
+        quick.openMain = { [weak self] in self?.window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
+        quick.deliver = { [weak self] text, fresh in self?.ask(text, fresh: fresh) }
+        quick.install()
         showLoading("Démarrage de Naim…")
         NSApp.activate(ignoringOtherApps: true)
         // clicks and typing are done by this app (Accessibility is checked for Naim.app): start the bridge first
@@ -191,6 +195,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         showLoading("Redémarrage du moteur…")
         startEngine()
         waitUntilReady()
+    }
+
+    // a message from the menu bar: show the window, then hand it to the page (retried while it is still loading)
+    func ask(_ text: String, fresh: Bool, tries: Int = 40) {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        guard let data = try? JSONSerialization.data(withJSONObject: [text]),
+              let arg = String(data: data, encoding: .utf8) else { return }
+        web.evaluateJavaScript("window.naimQuick ? window.naimQuick(\(arg)[0], \(fresh)) : false") { [weak self] result, _ in
+            if (result as? Bool) != true && tries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self?.ask(text, fresh: fresh, tries: tries - 1) }
+            }
+        }
     }
 
     // MARK: app lifecycle
