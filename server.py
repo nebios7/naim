@@ -61,7 +61,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import (ANNOUNCE_RE, STOP_WORDS_RE, writing_text, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+from naimtools import (ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
@@ -1325,6 +1325,7 @@ class Handler(BaseHTTPRequestHandler):
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
+        system += "\n\n" + WRITING_STYLE  # how to write an answer (fixed text, read once)
         import naim_check
         if les := naim_check.lessons():  # rules Naim wrote after its own failed checks
             system += "\n\n" + les

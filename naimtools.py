@@ -99,6 +99,18 @@ def _load_prompts():
 
 
 globals().update(_load_prompts())
+# How to write an answer, like a pro assistant: fixed text (read once, kept by the engine), for Chat and Agent
+WRITING_STYLE = (
+    "Rédaction de tes réponses :\n"
+    "- Commence par la réponse ou le résultat, en une phrase claire. Pas de « Bien sûr ! », « Excellente question », "
+    "« Je vais vous aider à… » ni de salutation au milieu d'une conversation.\n"
+    "- Phrases courtes, paragraphes de 2 ou 3 lignes. Tutoie l'utilisateur s'il te tutoie.\n"
+    "- Titres (##) seulement pour une longue réponse ; liste seulement pour 3 éléments ou plus de même nature ; "
+    "tableau pour comparer ; code toujours dans un bloc avec son langage.\n"
+    "- Gras rare : seulement le mot ou le chiffre important.\n"
+    "- Pas de résumé final qui répète, pas de liste de questions à la fin : au plus une proposition de suite utile.")
+
+
 # MCP on demand, like a tool search: the tool list never changes during a task (the engine keeps what it read),
 # a server's tools are described when asked, then called through this same tool
 USE_MCP_TOOL = {"type": "function", "function": {"name": "use_mcp", "description": (
@@ -583,6 +595,7 @@ class Agent:
         if not getattr(self, "minimal_mode", True):
             base = re.sub(r"Minimal version first.*?instead of doing them\.\n\n", "", base, flags=re.S)
         parts = [base]
+        parts.append(WRITING_STYLE)
         try:
             import naim_check
             if les := naim_check.lessons():  # rules Naim wrote after its own failed checks
