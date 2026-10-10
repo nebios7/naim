@@ -105,6 +105,11 @@ def _run(port, settings):
         mailer.SIMULATED = None
         shutil.rmtree(folder, ignore_errors=True)
         STATE.update(running=False, finished=time.strftime("%H:%M"), current="")
+        try:
+            _save()
+            learn(STATE["results"])
+        except Exception as e:  # noqa: BLE001 — saving or learning must never break Naim
+            print(f"vérification : enregistrement impossible ({e})", flush=True)
 
 
 def start(port, settings):
@@ -118,6 +123,11 @@ def start(port, settings):
 def report():
     """The state as text (for the Admin screen)."""
     r = STATE["results"]
+    if not STATE["started"] and (last := last_saved()):
+        n_ok = sum(x["ok"] for x in last["results"])
+        return (f"Dernière vérification : {last['date']} — {n_ok}/{len(last['results'])} cas réussis.\n"
+                + "\n".join(f"{'OK    ' if x['ok'] else 'ÉCHEC '} {x['name']} : {x['what']}" for x in last["results"])
+                + (f"\n\n{lessons()}" if lessons() else ""))
     if not STATE["started"]:
         return ("Aucune vérification lancée depuis l'ouverture de Naim.\n"
                 "Clique d'abord sur « Vérifier Naim » : 8 essais réels (salut, leçon, schéma, PDF, e-mail simulé, programme, "
@@ -136,3 +146,88 @@ def report():
             "Clique à nouveau pour voir la suite." if STATE["running"]
             else f"Vérification terminée à {STATE['finished']} : {n_ok}/{len(r)} cas réussis.")
     return head + ("\n\n" + "\n".join(lines) if lines else "")
+
+
+# ============================================================================ automatic check and lessons
+import extensions as ext  # noqa: E402
+
+REPORTS = ext.HOME / "verification"
+LESSONS = ext.HOME / "lecons.md"
+
+
+def _save():
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    data = {"date": time.strftime("%Y-%m-%d %H:%M"), "results": STATE["results"]}
+    (REPORTS / (time.strftime("%Y-%m-%d_%H%M") + ".json")).write_text(json.dumps(data, ensure_ascii=False, indent=1))
+
+
+def last_saved():
+    """The latest report kept on disk: {date, results} or None."""
+    files = sorted(REPORTS.glob("*.json")) if REPORTS.exists() else []
+    try:
+        return json.loads(files[-1].read_text()) if files else None
+    except (OSError, ValueError):
+        return None
+
+
+def learn(results):
+    """Level 2: for each failed case, one short rule in ~/.naim/lecons.md (read by Naim in Chat and Agent).
+    One rule per case, replaced when the case fails again; a case that passes again loses its rule. Code is never touched."""
+    import re
+    import llamacpp
+    rules = {}
+    if LESSONS.exists():
+        for m in re.finditer(r"^- \*\*(.+?)\*\* : (.+)$", LESSONS.read_text(), re.M):
+            rules[m.group(1)] = m.group(2)
+    for x in results:
+        if x["ok"]:
+            rules.pop(x["name"], None)
+            continue
+        ask = (f"Un essai automatique de l'assistant Naim a échoué.\nEssai : {x['name']}\nAttendu : {x['what']}\n"
+               f"Outils utilisés : {', '.join(x['tools']) or 'aucun'}\nRéponse donnée : {x['answer'][:400]}\n"
+               f"Erreurs : {'; '.join(x['errors'])[:300]}\n\nÉcris UNE seule règle courte (25 mots au plus), à l'impératif, "
+               "en français, que Naim devra suivre pour réussir ce genre de demande la prochaine fois. Rien d'autre.")
+        try:
+            out = llamacpp.chat([{"role": "user", "content": ask}], stream=False,
+                                options={"slot": llamacpp.bg_slot(), "num_predict": 80, "temperature": 0.2, "num_ctx": 8192})
+            rule = re.sub(r"\s+", " ", (out.get("content") or "").strip().strip('"«» '))[:220]
+        except Exception:  # noqa: BLE001
+            rule = ""
+        if rule:
+            rules[x["name"]] = rule
+    if rules:
+        LESSONS.write_text("# Leçons de mes vérifications (écrites par Naim)\n\nRègles tirées des essais ratés. "
+                           "Tu peux corriger ou effacer ce fichier.\n\n"
+                           + "\n".join(f"- **{k}** : {v}" for k, v in rules.items()) + "\n")
+    elif LESSONS.exists():
+        LESSONS.write_text("# Leçons de mes vérifications (écrites par Naim)\n\nAucune : tous les essais réussissent.\n")
+
+
+def lessons():
+    """The rules, for Naim's instructions ('' when there are none)."""
+    try:
+        t = LESSONS.read_text()
+    except OSError:
+        return ""
+    lines = [l for l in t.splitlines() if l.startswith("- **")]
+    return ("Leçons de tes vérifications précédentes (suis-les) :\n" + "\n".join(lines)) if lines else ""
+
+
+def start_auto(port, get_settings, busy, last_activity):
+    """Level 1: once a day, when the Mac has been idle for 30 min (no conversation, nothing running), the check runs
+    by itself; the report waits for the next opening of Naim."""
+    def loop():
+        time.sleep(600)
+        while True:
+            try:
+                s = get_settings()
+                last = last_saved()
+                age = (time.time() - time.mktime(time.strptime(last["date"], "%Y-%m-%d %H:%M"))) if last else 1e9
+                idle = time.time() - last_activity() >= 1800 and not busy()
+                if s.get("self_check", True) is not False and age >= 20 * 3600 and idle and not STATE["running"]:
+                    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} vérification automatique (Mac inactif)", flush=True)
+                    start(port, s)
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(300)
+    threading.Thread(target=loop, daemon=True, name="naim-auto-check").start()

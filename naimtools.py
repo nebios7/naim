@@ -583,6 +583,12 @@ class Agent:
         if not getattr(self, "minimal_mode", True):
             base = re.sub(r"Minimal version first.*?instead of doing them\.\n\n", "", base, flags=re.S)
         parts = [base]
+        try:
+            import naim_check
+            if les := naim_check.lessons():  # rules Naim wrote after its own failed checks
+                parts.append(les)
+        except Exception:  # noqa: BLE001
+            pass
         if glob := ext.global_instructions():
             parts.append(f"The user's global instructions (~/.naim/NAIM.md):\n{glob}")
         name, text = ext.project_instructions(self.root)

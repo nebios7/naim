@@ -1729,7 +1729,7 @@ const DEFAULTS = {
   mode: "chat", model: "naim", think: false, project: "", autoYes: false,
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
-  notify: true, sound: false, mic_sounds: true, show_stats: true, show_time: false, wrap_code: false,
+  notify: true, sound: false, mic_sounds: true, self_check: true, show_stats: true, show_time: false, wrap_code: false,
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
@@ -4218,6 +4218,7 @@ const TABS = {
       ${row("Notification quand Naim a fini", "Si la fenêtre est en arrière-plan, ou quand l'agent attend une autorisation.", sw("notify"))}
       ${row("Son à la fin d'une réponse", "", sw("sound"))}
       ${row("Sons du micro", "Un petit son quand l'écoute commence et s'arrête", sw("mic_sounds"))}
+      ${row("Se vérifier tout seul", "Une fois par jour, quand le Mac est inactif depuis 30 min : 8 essais réels, puis des leçons pour ce qui a raté (~/.naim/lecons.md)", sw("self_check"))}
       ${row("Lire les réponses à voix haute", "Avec la voix de Naim, sur ce Mac (voix d'un lecteur de livres audio, Multilingual LibriSpeech, CC BY 4.0). Le bouton ♪ sous chaque réponse la lit aussi à la demande.", sw("voice_auto"))}
 
       ${row("Afficher la vitesse (tokens/s)", "", sw("show_stats"))}
@@ -5820,6 +5821,12 @@ async function migrateLocal() {
 }
 (async () => {
   await loadSettings(); await migrateLocal(); await checkStatus(); applySettings();
+  api("/api/self-check").then((r) => {  // the check Naim ran by itself while the Mac was idle: said once, quietly
+    const l = r && r.last; let seen = ""; try { seen = localStorage.getItem("naim-check-seen") || ""; } catch {}
+    if (!l || l.date === seen) return;
+    try { localStorage.setItem("naim-check-seen", l.date); } catch {}
+    toast(`Vérification du ${l.date} : ${l.ok}/${l.total} réussis` + (l.failed.length ? ` — à revoir : ${l.failed.join(", ")} (Naim en a tiré des leçons, voir Admin)` : ""));
+  }).catch(() => {});
   await loadList(); setView("chat"); renderThread(); updateTitle();
   setInterval(checkStatus, 15000);
   buildRail(); polishUI(); polishSettings(); iconizeMsgActs(); updateRail(); placeRobots();

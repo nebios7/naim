@@ -219,6 +219,7 @@ ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _pending = {}  # approval id -> {"event": threading.Event, "allow": bool}
 _agents = {}  # run id -> running Agent (to pass it the messages typed while it works)
 _runs = {}     # run id -> threading.Event (stop flag)
+LAST_ACTIVITY = [time.time()]  # last request from the user (the automatic check waits for 30 min of quiet)
 _lock = threading.Lock()
 
 
@@ -534,6 +535,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({**model_download.STATE, "missing": [f for f, _ in model_download.missing()]})
         elif path == "/api/computer":
             self.send_json(cu.status())
+        elif path == "/api/self-check":
+            import naim_check
+            last = naim_check.last_saved()
+            self.send_json({"running": naim_check.STATE["running"], "last": last and {
+                "date": last["date"], "ok": sum(x["ok"] for x in last["results"]), "total": len(last["results"]),
+                "failed": [x["name"] for x in last["results"] if not x["ok"]]}, "lessons": naim_check.lessons()})
         elif path == "/api/llama":
             files = [{"name": f.name, "size": f.stat().st_size} for f in sorted(llamacpp.MODELS.glob("*.gguf"))
                      if "mmproj" not in f.name]  # Naim's own model files (the vision part goes with them)
@@ -1225,6 +1232,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": bool(flag)})
         elif path == "/api/chat":
             body = self.read_json()
+            if not body.get("_warm"):
+                LAST_ACTIVITY[0] = time.time()
             run_id = body.get("run_id") or uuid.uuid4().hex
             stop = threading.Event()
             with _lock:
@@ -1286,6 +1295,9 @@ class Handler(BaseHTTPRequestHandler):
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
+        import naim_check
+        if les := naim_check.lessons():  # rules Naim wrote after its own failed checks
+            system += "\n\n" + les
         choice = chosen_option(body["message"], body.get("history"))
         text = (f"{body['message']} — je choisis cette option que tu as proposée : « {choice} ». Fais-le maintenant."
                 if choice else with_first_request(body["message"], body.get("history")))
@@ -2274,6 +2286,8 @@ def warm_agent(s):
 
 
 def serve(port=8765):
+    import naim_check
+    naim_check.start_auto(port, _settings, lambda: bool(_runs) or bool(_agents), lambda: LAST_ACTIVITY[0])
     threading.Thread(target=warm_up, daemon=True, name="naim-warm-up").start()
     threading.Thread(target=warm_voice, daemon=True, name="naim-warm-voice").start()
     scheduler.start_loop(_settings, ollama_chat, Agent, CHAT_PROMPT)
