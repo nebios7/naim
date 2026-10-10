@@ -980,7 +980,9 @@ SKILL_TRIGGERS = {
     "recherche-produits": r"\b(ach[eè]te\w*|acheter|prix d[eu']|combien co[uû]te|meilleure? (prix|offre|rapport)|compar\w* (les )?(prix|offres|mod[eè]les|produits)|"
                           r"o[uù] (trouver|acheter)|bons? plans?|promos?|soldes|pas cher|moins cher|recherche\w* (des |de )?biens?|cherche[rz]? (un |une |des |le |la |les )?"
                           r"(t[ée]l[ée]phone|smartphone|ordinateur|pc|casque|t[ée]l[ée]vis\w*|tv|voiture|v[ée]lo|chaussures?|montre|frigo|"
-                          r"lave-linge|canap[ée]|appartement|maison [àa] (vendre|louer)))\b",
+                          r"lave-linge|canap[ée]|appartement|maison [àa] (vendre|louer)))\b"
+                          r"|\b(maisons?|appartements?|studios?|terrains?|villas?|biens?)\b[^.?!]{0,30}\b([àa] (vendre|louer)|en vente|immobili\w*)\b"
+                          r"|\b(annonces? immobili\w*|immobilier [àa]|encore (plus )?de photos|d'autres photos|plus de photos)\b",
     # acting on the Mac itself (last of the specialised ones: « crée une application de rappels » is an app)
     "mac": r"\b(sms|texto|imessage|envoie[rz]? (un |le |ce )?(message|texto)|appell?e[rz]?|t[ée]l[ée]phone[rz]? (à|a)|facetime|"
            r"agenda|calendrier|rendez-vous|rdv|rappelle-moi|(un |des |mes )rappels?|ajoute (une |la )?note|dans (mes )?notes|"
