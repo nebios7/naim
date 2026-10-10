@@ -491,6 +491,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 #pPreview { display: flex; flex-direction: column; }
 #pPreview[hidden] { display: none; }
 .pvbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+#pvBar.image .pvsizes { display: none; }
 .pvsizes { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .pvsizes button { border: 0; background: none; color: var(--muted); padding: 4px 10px; font: inherit; cursor: pointer; }
 .pvsizes button.on { background: var(--hover); color: var(--text); }
@@ -2067,7 +2068,7 @@ function delivCards(dl) {
       if (f.ext === "pdf") showPreview(`<!doctype html><meta charset="utf-8"><style>html{background:#525659;min-height:100%}body{margin:0;background:#525659;padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}img{max-width:100%;box-shadow:0 2px 10px #0006;background:#fff}</style><body><scr${""}ipt>
         let n = 1; const next = () => { const i = new Image(); i.onload = () => { document.body.appendChild(i); n++; if (n <= 40) next(); }; i.src = "${location.origin}/api/thumb?${q}&w=1100&page=" + n; }; next();
       </scr${""}ipt></body>`);
-      else if (/^(png|jpe?g|gif|svg)$/.test(f.ext)) showPreviewUrl(`${location.origin}/api/raw?${q}`);
+      else if (/^(png|jpe?g|gif|svg)$/.test(f.ext)) showImagePreview(`${location.origin}/api/raw?${q}`, f.path.split("/").pop());
       else api("/api/reveal", { method: "POST", body: { root: dl.root, path: f.path } });
     }
     if (e.target.closest("[data-ddl]")) api("/api/save-copy", { method: "POST", body: { root: dl.root, path: f.path } }).then((x) => toast(x.ok ? `⬇ Copié dans Téléchargements : ${x.path.split("/").pop()}` : "Téléchargement impossible : " + (x.error || "")));
@@ -4078,7 +4079,17 @@ async function previewDoc(html, codeEl) {
   if (!/<html|<body|<head/i.test(out)) out = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${out}</body></html>`;
   return out;
 }
-async function showPreview(html, codeEl) {
+// an image fits the panel (click: real size); the device widths are for web pages only
+function showImagePreview(url, name) {
+  showPreview(`<!doctype html><meta charset="utf-8"><title>${esc(name || "")}</title><style>html,body{margin:0;height:100%;background:#1e1e1e}
+    body{display:flex;align-items:center;justify-content:center;overflow:auto;cursor:zoom-in}
+    img{max-width:calc(100% - 24px);max-height:calc(100% - 24px);object-fit:contain;box-shadow:0 2px 12px #0008;border-radius:4px}
+    body.real{display:block;cursor:zoom-out}body.real img{max-width:none;max-height:none;margin:12px;border-radius:0}</style>
+    <body onclick="this.classList.toggle('real')"><img src="${url}" alt=""></body>`, null, true);
+}
+async function showPreview(html, codeEl, image = false) {
+  $("#pvBar").classList.toggle("image", !!image);
+  if (image) { $$("#pvBar [data-pv]").forEach((x) => x.classList.toggle("on", x.dataset.pv === "100%")); $("#pvStage").classList.remove("framed"); $("#preview").style.width = "100%"; $("#preview").style.height = "100%"; }
   setView("chat"); $("#previewBar").hidden = true; $("#preview").removeAttribute("src");
   pvLast = await previewDoc(html, codeEl); $("#preview").srcdoc = pvLast; showPanel("preview");
 }
@@ -4091,6 +4102,7 @@ $$("#pvBar [data-pv]").forEach((b) => (b.onclick = () => {
 $("#pvRedo").onclick = () => { const f = $("#preview"); if (f.getAttribute("src")) f.src = f.getAttribute("src"); else if (pvLast) { f.srcdoc = ""; f.srcdoc = pvLast; } };
 $("#pvBig").onclick = () => $("#panel").classList.toggle("pvwide");
 function showPreviewUrl(url) {
+  $("#pvBar").classList.remove("image");
   setView("chat"); $("#preview").removeAttribute("srcdoc"); $("#preview").src = url;
   $("#previewBar").hidden = false; $("#previewUrl").textContent = url; showPanel("preview");
 }
