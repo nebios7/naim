@@ -1141,6 +1141,9 @@ body.busyrun #thread .turn.bot:last-child .msgacts { visibility: hidden; }
 .md p:has(> img.mdimg) > br { display: none; }
 .md p:has(> img.mdimg) > img.mdimg { margin: 0; }
 
+.md img.mdimg { flex: none; }
+.md img.mdimg.off { cursor: default; }
+
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
@@ -1842,7 +1845,7 @@ function inline(s) {
     .replace(/(^|\W)_([^_\s][^_]*?)_(?!\w)/g, "$1<em>$2</em>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>")
     // a photo from the web (product search…): a thumbnail, the full image on click
-    .replace(/!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)/g, (_, alt, url) => `<img class="mdimg" src="/api/img?u=${encodeURIComponent(url.replace(/&amp;/g, "&"))}" alt="${alt}" title="${alt}" loading="lazy" onerror="this.remove()">`)
+    .replace(/!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)/g, (_, alt, url) => `<img class="mdimg" data-u="${url}" src="/api/img?u=${encodeURIComponent(url.replace(/&amp;/g, "&"))}" alt="${alt}" title="${alt}" loading="lazy" onerror="imgOff(this)">`)
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     // a bare address (http://localhost:5050/…) is a link too, opened in the browser
     .replace(/(^|[\s(«])(https?:\/\/[^\s<«»"]*[^\s<«»".,;:!?)])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
@@ -1886,6 +1889,7 @@ function morphChildren(el, from) {
     if (a && a.nodeType === b.nodeType) {
       if (a.nodeType !== 1) { if (a.textContent !== b.textContent) a.textContent = b.textContent; continue; }
       if (a.outerHTML === b.outerHTML) continue;
+      if (a.tagName === "IMG" && b.tagName === "IMG" && a.dataset.u && a.dataset.u === b.dataset.u) continue;  // the same photo (loaded or not): kept
       // same kind of block (a paragraph of photos growing, a list getting a new item): updated inside, so what is
       // already shown — a loaded photo — is kept; a code block or anything else is replaced whole
       if (a.tagName === b.tagName && /^(P|UL|OL|LI|DIV|TABLE|THEAD|TBODY|TR|BLOCKQUOTE)$/.test(a.tagName) && !a.classList.contains("code")
@@ -1896,10 +1900,14 @@ function morphChildren(el, from) {
   for (let j = cur.length - 1; j >= next.length; j--) cur[j].remove();
 }
 let mdLive = false;  // true while a reply is being written (its last code block may be unfinished)
+// a photo that cannot be shown keeps its place (nothing below moves): a quiet frame that says so
+const OFF_IMG = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="168" height="128"><rect width="168" height="128" fill="#1f1e1d"/><text x="84" y="68" font-family="-apple-system,sans-serif" font-size="11" fill="#908e88" text-anchor="middle">Photo indisponible</text></svg>');
+function imgOff(i) { i.onerror = null; i.classList.add("off"); i.src = OFF_IMG; }
 function md(src) {
   // while Naim writes, a photo line not finished yet (« ![Sony…](https://… ») stays hidden until it is complete:
   // otherwise it shows as raw text for a moment, then turns into a thumbnail and the answer jumps
   if (mdLive) src = src.replace(/(^|\n)!\[[^\n]*$/, (m, nl) => (/\)\s*$/.test(m) ? m : nl));
+  if (mdLive) src = src.replace(/\*\*([^*\n]*)$/, (m, rest) => ((src.match(/\*\*/g) || []).length % 2 ? rest : m)).replace(/(^|[^*])\*$/, "$1");  // « **Pièc » or a lone « * » being written: no raw stars
   const lines = src.replace(/\r/g, "").split("\n");
   let html = "", i = 0;
   const isBlock = (l) => /^\s*(```|#{1,4}\s|[-*+]\s+|\d+[.)]\s+|>|\|.*\||(-{3,}|\*{3,})\s*$)/.test(l);
@@ -1965,7 +1973,7 @@ function downloadBlob(name, blob) {
   const r = new FileReader(); r.onload = () => saveDownload(name, { base64: String(r.result).split(",")[1] || "" }); r.readAsDataURL(blob);
 }
 document.addEventListener("click", (e) => { if (e.target.closest(".wstop")) stop(); });
-document.addEventListener("click", (e) => { const im = e.target.closest(".md img.mdimg"); if (im) lightbox(im.src); });
+document.addEventListener("click", (e) => { const im = e.target.closest(".md img.mdimg:not(.off)"); if (im) lightbox(im.src); });
 document.addEventListener("click", (e) => { const n = e.target.closest(".evnote.long"); if (n) n.classList.toggle("open"); });
 // long remarks are marked once drawn (3 lines shown, a click shows all)
 new MutationObserver(() => $$(".evnote:not([data-l])").forEach((n) => { n.dataset.l = 1; if ((n.textContent || "").length > 180) n.classList.add("long"); }))

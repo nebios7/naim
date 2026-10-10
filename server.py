@@ -551,7 +551,10 @@ class Handler(BaseHTTPRequestHandler):
                     with urllib.request.urlopen(req, timeout=15) as r:
                         ctype = r.headers.get("Content-Type", "")
                         data = r.read(8_000_001)
-                    if not ctype.startswith("image/") or len(data) > 8_000_000:
+                    sniff = {b"\xff\xd8\xff": "image/jpeg", b"\x89PNG": "image/png", b"GIF8": "image/gif", b"RIFF": "image/webp"}
+                    if not ctype.startswith("image/"):  # some sites send a photo as « octet-stream »: recognised by its content
+                        ctype = next((t for sig, t in sniff.items() if data.startswith(sig)), "")
+                    if not ctype or len(data) > 8_000_000:
                         raise ValueError("pas une image")
                     cache.mkdir(parents=True, exist_ok=True)
                     f.write_bytes(data)
