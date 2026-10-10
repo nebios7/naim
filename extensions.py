@@ -970,7 +970,7 @@ SKILL_TRIGGERS = {
                    r"|\b(plans?|sch[ée]mas?|croquis|dessine\w*)\b[^.?!]{0,30}\b[tf][1-7]\b|\b[tf][1-7]\b[^.?!]{0,15}\d+ ?(m²|m2\b|m[eè]tres? carr)",
     "schemas": r"\b(sch[ée]mas?|diagrammes?|organigrammes?|flowchart|mermaid|uml|mcd|erd|logigrammes?|carte mentale|mind ?map|gantt)\b",
     "rapport": r"\b(rapport(?! de bug| d'erreur)|dossier technique|cahier des charges|compte[- ]rendu|livre blanc|note de synth[eè]se)\b",
-    "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|affiche|flyer|infographie|carte de visite)\b",
+    "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|flyer|infographie|carte de visite)\b|\b(une|cette|mon|ma|ton|des|l['’]|d['’])\s?affiches?\b",  # « affiche-moi les photos » is not a poster
     "recherche-approfondie": r"\b(recherche approfondie|enqu[eê]te sur|[ée]tat de l'art|[ée]tude de march[ée]|analyse concurrentielle|recoupe|compare les sources|veille approfondie|deep research)\b",
     "github": r"\b(pull[- ]?requests?|github|gh pr|branches?|merge|fusionne\w*|git push|pousse\w* (le code|sur|la branche))\b",
     # a Mac application in SwiftUI (built without an Xcode project); an iPhone app stays ios-swiftui
