@@ -3845,6 +3845,42 @@ def _ask():
     return EDITOR.ask()
 
 
+GREETING_RE = re.compile(r"^\W*(?:salut|bonjour|bonsoir|coucou|hello|hey|yo)\b[\s,!.]*(?:naim\b[\s,!.]*)?", re.I)
+EXPLAIN_RE = re.compile(r"^\W*(?:explique|expliques|parle[- ]moi|dis[- ]moi|apprends[- ]moi|c'est quoi|qu'est[- ]ce|pourquoi|comment)\b", re.I)
+
+
+def _answer_only(task):
+    """A greeting, thanks, a question or « explique-moi … » with nothing to do: an answer in the conversation, like
+    the app's Chat (the Agent would make a file of it: « explique-moi le python » became python_basics.py)."""
+    try:
+        import server
+        if server.trivial_message(task) or server.SOCIAL_RE.match(task) or server.pure_question(task):
+            return True
+        rest = GREETING_RE.sub("", task)
+        return bool(EXPLAIN_RE.match(rest)) and not server.ACTION_RE.search(rest)
+    except Exception:  # noqa: BLE001 — without the classifier, everything goes to the Agent as before
+        return False
+
+
+def _chat_answer(agent, task):
+    """The answer, written straight away (no tools): Naim's Chat instructions, the conversation so far."""
+    system = (CHAT_PROMPT + "\n\n" + WRITING_STYLE + "\n\n(Réponds ici, dans la conversation : explications courtes et "
+              "exemples de code complets en blocs Markdown. Ne crée ni ne modifie aucun fichier.)")
+    try:
+        if (mem := ext.memory_prompt()):
+            system += "\n\n" + mem
+    except Exception:  # noqa: BLE001
+        pass
+    talk = [m for m in agent.messages[1:] if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str)
+            and m.get("content") and not m.get("tool_calls")][-12:]
+    msgs = [{"role": "system", "content": system}] + talk + [{"role": "user", "content": task + now_note()}]
+    SPIN.text = "Naim réfléchit…"
+    msg = ollama_chat(agent.model, msgs, options=agent.options)
+    text = (msg.get("content") or "").strip() or "…"
+    agent.messages += [{"role": "user", "content": task}, {"role": "assistant", "content": text}]  # the context goes on
+    cli_emit({"type": "answer", "text": text})
+
+
 def _engine_options(model):
     """Naim's own engine (llama.cpp, started on demand) for the model « naim »; Ollama only for other models."""
     try:
@@ -3880,7 +3916,10 @@ def main():
         SPIN.start()
         t0 = time.time()
         try:
-            agent.run(task)
+            if _answer_only(task):
+                _chat_answer(agent, task)
+            else:
+                agent.run(task)
         except KeyboardInterrupt:  # Ctrl+C: the task stops, Naim stays open
             agent.cancel.set()
             SPIN.stop()
