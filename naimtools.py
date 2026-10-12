@@ -3378,7 +3378,7 @@ SHAPE = ["..XXXXXXXXXXXX..",
 
 
 def _robot(col=None, blink=False, wave=False, pen=False, glow=True):
-    """The robot: left half green, right half white (the flag), a red band on the forehead; eyes cut out (closed when
+    """The robot: white, a red band on the forehead; eyes cut out (closed when
     it blinks); one pixel higher when it hops; a golden pen beside it when it writes."""
     g = [list(r) for r in SHAPE]
     if blink:
@@ -3393,7 +3393,7 @@ def _robot(col=None, blink=False, wave=False, pen=False, glow=True):
         for x in range(0, 16, 2):
             k = "".join("1" if g[y + dy][x + dx] != "." else "0" for dy, dx in ((0, 0), (0, 1), (1, 0), (1, 1)))
             ch = QUAD[k]
-            rgb = RED if (y == 0 and x in (6, 8) and not wave) else GREEN if x < 8 else WHITE
+            rgb = RED if (y == 0 and x in (6, 8) and not wave) else WHITE
             line += f"\033[{_col(rgb)}m{ch}\033[0m" if ch != " " else " "
         if pen and y == 2:
             line += f"\033[{_col((232, 192, 96))}m╱\033[0m"
