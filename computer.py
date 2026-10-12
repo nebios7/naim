@@ -631,7 +631,10 @@ class Simulator:
             return res
         bid = bundle_id(app)
         launched = self.launch(bid, d["udid"]) if bid else "bundle id introuvable, app non lancée"
-        return f"ok: compilé ({scheme}), installé et lancé sur {d['name']}.\n{launched}\nApp : {app}"
+        # the user must SEE it: the Simulator window, in front (the device can run with its window closed)
+        subprocess.run(["open", "-a", "Simulator", "--args", "-CurrentDeviceUDID", d["udid"]], capture_output=True)
+        subprocess.run(["osascript", "-e", 'tell application "Simulator" to activate'], capture_output=True)
+        return f"ok: compilé ({scheme}), installé et lancé sur {d['name']}, fenêtre du simulateur affichée.\n{launched}\nApp : {app}"
 
     def screenshot(self, device=None):
         d = self._booted(device)
