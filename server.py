@@ -1375,6 +1375,14 @@ class Handler(BaseHTTPRequestHandler):
                   "ou deux phrases ce que tu as fait. Sinon, parle naturellement, en 2 à 5 phrases courtes, sans liste, sans "
                   "titre ni symbole Markdown, sans emoji. Si du code est nécessaire, mets-le dans un bloc de code (il s'affiche "
                   "à l'écran, il n'est pas lu) et dis en une phrase ce qu'il fait.]") if body.get("voice") else ""
+        prev = next((str(m.get("content") or "") for m in reversed(body.get("history") or []) if m.get("role") == "assistant"), "")
+        if prev and trivial_message(body["message"]):
+            # « merci », « ok », « salut » in the middle of a conversation: it follows what was just said (a short
+            # message alone made the model answer « je vais bien, je suis Naim… » as if the conversation started)
+            spoken += ("\n\n[Message court au milieu de notre conversation. Ta dernière réponse parlait de : « "
+                       + re.sub(r"\s+", " ", re.sub(r"```.*?```", " ", prev, flags=re.S))[:220].strip()
+                       + " ». Réponds à ce message dans ce contexte, en une ou deux phrases (un merci : de rien, et propose "
+                         "la suite logique de ce sujet). Ne te présente pas, ne dis pas comment tu vas, ne recommence pas la conversation.]")
         user = {"role": "user", "content": text + spoken + now_note(), **({"images": body["images"]} if body.get("images") else {})}
         messages = [{"role": "system", "content": system}] + body.get("history", []) + [user]
         wants_schedule = bool(SCHEDULE_NEED_RE.search(body["message"] or ""))
