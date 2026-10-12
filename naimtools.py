@@ -3416,12 +3416,11 @@ class _Bot:
         box(3, 10, 4, 11, b["body"]); box(9, 10, 10, 11, b["body"])   # legs
         box(2, 12, 5, 12, b["body"]); box(8, 12, 11, 12, b["body"])   # feet
         dx, dy = self.look
-        if self.blinking:                                 # eyelids closed: a line
-            box(4 + dx, 3 + dy, 5 + dx, 3 + dy, b["eye"]); box(8 + dx, 3 + dy, 9 + dx, 3 + dy, b["eye"])
-        elif self.squint:
-            box(4 + dx, 2 + dy, 5 + dx, 2 + dy, b["eye"]); box(8 + dx, 2 + dy, 9 + dx, 2 + dy, b["eye"])
+        ex1, ex2, ey = 5 + dx, 8 + dx, 2 + max(-1, min(dy, 1))  # small eyes: they stay inside the head when he looks
+        if self.blinking or self.squint:                  # eyelids closed or squinting: a single pixel
+            g[ey + 1][ex1] = g[ey + 1][ex2] = b["eye"]
         else:
-            box(4 + dx, 2 + dy, 5 + dx, 3 + dy, b["eye"]); box(8 + dx, 2 + dy, 9 + dx, 3 + dy, b["eye"])
+            box(ex1, ey, ex1, ey + 1, b["eye"]); box(ex2, ey, ex2, ey + 1, b["eye"])
         box(4, 5, 9, 5 + self.chew, b["eye"])             # mouth (open when chewing)
         if not self.chew:
             g[5][5] = g[5][7] = b["body"]                 # teeth
@@ -3991,16 +3990,23 @@ EXPLAIN_RE = re.compile(r"^\W*(?:explique|expliques|parle[- ]moi|dis[- ]moi|appr
 
 
 def _answer_only(task):
-    """A greeting, thanks, a question or « explique-moi … » with nothing to do: an answer in the conversation, like
-    the app's Chat (the Agent would make a file of it: « explique-moi le python » became python_basics.py)."""
+    """Like the app's Chat: by default Naim talks (an answer in the conversation); it works with its tools only when
+    asked to DO something (create, fix, run, install, send…) or when a file or folder is named."""
+    t = GREETING_RE.sub("", task or "")
     try:
         import server
-        if server.trivial_message(task) or server.SOCIAL_RE.match(task) or server.pure_question(task):
+        if server.trivial_message(task) or server.SOCIAL_RE.match(task):
             return True
-        rest = GREETING_RE.sub("", task)
-        return bool(EXPLAIN_RE.match(rest)) and not server.ACTION_RE.search(rest)
-    except Exception:  # noqa: BLE001 — without the classifier, everything goes to the Agent as before
-        return False
+        verbs = [m.group(0).lower() for m in server.ACTION_RE.finditer(t)]
+        if t.rstrip().endswith("?"):  # « tu sais faire quoi ? »: « faire » in a question is not « do it »
+            verbs = [v for v in verbs if not re.fullmatch(r"fai[st]?|faire", v)]
+        act = bool(verbs) or server.MAC_ACTION_RE.search(t)
+    except Exception:  # noqa: BLE001
+        act = re.search(r"\b(cr[ée]e|fai[st]|corrige|lance|installe|ex[ée]cute|envoie|supprime|modifie|[ée]cri[st])\w*", t, re.I)
+    named = re.search(r"[\w./~-]+\.(?:py|js|ts|jsx|tsx|swift|html|css|json|md|txt|pdf|docx|xlsx|sh|java|c|cpp|go|rs)\b|~/|/Users/", t)
+    if EXPLAIN_RE.match(t) and not named:
+        return True  # « explique-moi … », « c'est quoi … » : always an answer
+    return not act and not named
 
 
 def _chat_answer(agent, task):
