@@ -801,6 +801,12 @@ class Agent:
             return (f"refused: {self.rel(p)} has {old_lines} lines and you would replace it with "
                     f"{(content or '').count(chr(10)) + 1} line(s). If you only need a change, use edit_file; "
                     f"otherwise write the complete new content.")
+        if p.exists() and p.read_text(errors="replace").strip() == (content or "").strip():
+            # the same file again, word for word: minutes of writing for nothing — on to what is still missing
+            return (f"unchanged: {self.rel(p)} already has exactly this content. Do not write it again: go on with a "
+                    "file you have not written yet, then build and run the project.")
+        self._rewrites = getattr(self, "_rewrites", {})
+        self._rewrites[str(p)] = self._rewrites.get(str(p), 0) + (1 if p.exists() else 0)
         if p.exists():
             old = p.read_text(errors="replace")
             detail = "".join(difflib.unified_diff(old.splitlines(True), content.splitlines(True),
@@ -828,7 +834,10 @@ class Agent:
         long_note = (f" Note: {lines} lines in one file: next time split it into smaller modules (same content, several files)."
                      if lines > 400 else "")
         return (f"ok: wrote {self.rel(p)} ({lines} lines). This file is done: "
-                f"do not write it again, move on to the next file or step.{long_note}{self._missing_packages(p, content)}")
+                f"do not write it again, move on to the next file or step.{long_note}{self._missing_packages(p, content)}"
+                + (f" NOTE: this is version {self._rewrites[str(p)] + 1} of this file. Stop rewriting the files already "
+                   "done: write the ones still missing (and check that the entry file imports them), then build and run."
+                   if self._rewrites.get(str(p), 0) >= 2 else ""))
 
     NODE_BUILTINS = {"fs", "path", "os", "url", "http", "https", "crypto", "util", "events", "stream", "child_process",
                      "assert", "buffer", "zlib", "net", "readline", "process", "querystring", "worker_threads"}
