@@ -1539,6 +1539,23 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 @keyframes blurin { from { filter: blur(8px); opacity: 0; transform: translateY(-6px); } to { filter: none; opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { #spane h2 .bw { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .acard::before, .dcard::before, .qcard::before { display: none; } }
+
+/* context panel (click on the gauge next to the input) */
+#ctxInfo { cursor: pointer; border-radius: 6px; padding: 2px 4px; }
+#ctxInfo:hover { background: var(--hover); }
+.ctxpop { position: fixed; z-index: 60; width: 340px; max-width: calc(100vw - 16px); background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: var(--shadow); padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; font-size: 13px; }
+.ctxpop .cp-row { display: flex; justify-content: space-between; gap: 10px; }
+.ctxpop .cp-row span { color: var(--muted); } .ctxpop .cp-row b { font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ctxpop .cp-bar { height: 7px; border-radius: 4px; background: var(--hover); display: flex; overflow: hidden; gap: 2px; }
+.ctxpop .cp-bar i { display: block; height: 100%; border-radius: 3px; }
+.ctxpop .cp-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; }
+.ctxpop .cp-leg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.ctxpop .cp-note { color: var(--muted); font-size: 11.5px; }
+.ctxpop hr { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+.ctxpop .cp-grid { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; }
+.ctxpop .cp-grid span { color: var(--muted); } .ctxpop .cp-grid b { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.ctxpop .btn { align-self: flex-start; }
 </style>
 </head>
 <body>
@@ -3304,10 +3321,42 @@ function updateCtx() {
   const col = pct >= 85 ? "var(--danger, #e5735f)" : pct >= 60 ? "#e0a43c" : "var(--muted)";
   el.innerHTML = `<span class="ring" style="--p:${pct};--c:${col}"></span><span class="pl">${kfmt(tokens)} / ${Math.round(ctxSize() / 1024)}k</span>` +
     (pct >= 70 && current?.messages?.length > 5 && !curRun() ? ` <button class="ctxbtn" title="Résumer le début de la conversation (/compact)">Résumer</button>` : "");
-  el.title = `Mémoire de la conversation : ~${tokens.toLocaleString("fr-FR")} jetons sur ~${limit.toLocaleString("fr-FR")} avant résumé automatique`;
+  el.title = "Fenêtre de contexte et utilisation de la conversation (clic)";
   el.style.color = col;
   const b = $(".ctxbtn", el); if (b) b.onclick = compactNow; fitComposer();
 }
+// the context panel (click on the gauge): this conversation's window and its token use — local, free, no quota
+function ctxPanel() {
+  const old = $("#ctxPop"); if (old) { old.remove(); return; }
+  const msgs = current?.messages || [];
+  const convTok = Math.round((current ? histFor(current) : []).reduce((n, m) => n + m.content.length, 0) / 3.5);
+  const inputTok = Math.round(($("#input").value.length + pending.reduce((n, a) => n + (a.kind === "image" ? 3000 : a.content.length), 0)) / 3.5);
+  const lastBot = [...msgs].reverse().find((m) => m.role === "assistant" && m.stats?.prompt);
+  const measured = lastBot ? (lastBot.stats.prompt || 0) + (lastBot.stats.tokens || 0) : 0;
+  const instr = Math.max(0, measured - convTok);  // instructions, tools and memory: what the engine read besides the talk
+  const used = Math.max(measured, convTok) + inputTok, size = ctxSize(), pct = Math.min(100, Math.round(100 * used / size));
+  const st = msgs.filter((m) => m.role === "assistant" && m.stats).map((m) => m.stats);
+  const sum = (k) => st.reduce((n, x) => n + (+x[k] || 0), 0);
+  const tps = st.filter((x) => x.tps).map((x) => x.tps), avg = tps.length ? tps.reduce((a, b) => a + b, 0) / tps.length : 0;
+  const secs = sum("total"), seg = (n, c, t) => n > 0 ? `<i style="width:${Math.max(0.6, 100 * n / size)}%;background:${c}" title="${t} : ${kfmt(n)}"></i>` : "";
+  const pop = document.createElement("div"); pop.id = "ctxPop"; pop.className = "ctxpop";
+  pop.innerHTML = `<div class="cp-row"><span>Fenêtre de contexte</span><b>${kfmt(used)} / ${Math.round(size / 1024)}k (${pct} %)</b></div>
+    <div class="cp-bar">${seg(instr, "var(--muted)", "Instructions et outils")}${seg(convTok, "#5b8def", "Conversation")}${seg(inputTok, "#e0a43c", "Ton message")}</div>
+    <div class="cp-leg"><span><i style="background:#5b8def"></i>Conversation ${kfmt(convTok)}</span>${instr ? `<span><i style="background:var(--muted)"></i>Instructions et outils ${kfmt(instr)}</span>` : ""}${inputTok ? `<span><i style="background:#e0a43c"></i>Ton message ${kfmt(inputTok)}</span>` : ""}</div>
+    <small class="cp-note">Au-delà de ~${kfmt(Math.round(compactLimit()))}, Naim résume le début de la conversation pour continuer.</small>
+    <hr><div class="cp-row"><span>Utilisation de cette conversation</span><b>gratuite · sur ce Mac</b></div>
+    <div class="cp-grid"><span>Réponses</span><b>${st.length}</b><span>Jetons lus</span><b>${kfmt(sum("prompt"))}</b><span>Jetons écrits</span><b>${kfmt(sum("tokens"))}</b>
+      <span>Vitesse moyenne</span><b>${avg ? avg.toFixed(1) + " jetons/s" : "—"}</b><span>Temps de réponse</span><b>${secs ? (secs >= 90 ? Math.round(secs / 60) + " min" : Math.round(secs) + " s") : "—"}</b></div>
+    ${msgs.length > 5 && !curRun() ? `<button class="btn" id="cpCompact">Résumer le début maintenant</button>` : ""}`;
+  document.body.appendChild(pop);
+  const r = $("#ctxInfo").getBoundingClientRect();
+  pop.style.left = `${Math.max(8, Math.min(r.right - pop.offsetWidth, innerWidth - pop.offsetWidth - 8))}px`;
+  pop.style.top = `${Math.max(8, r.top - pop.offsetHeight - 10)}px`;
+  $("#cpCompact", pop) && ($("#cpCompact", pop).onclick = () => { pop.remove(); compactNow(); });
+  setTimeout(() => document.addEventListener("pointerdown", function off(e) { if (!pop.contains(e.target) && !e.target.closest("#ctxInfo")) { pop.remove(); document.removeEventListener("pointerdown", off); } }), 0);
+}
+document.addEventListener("click", (e) => { if (e.target.closest("#ctxInfo") && !e.target.closest(".ctxbtn")) ctxPanel(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#ctxPop")?.remove(); });
 async function send(textArg, attsArg, opts = {}) {
   if (dictation.on) stopDictation();
   const text = (textArg ?? $("#input").value).trim();
