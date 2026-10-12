@@ -60,6 +60,58 @@ for line in sys.stdin:
         print("@@" + json.dumps({"ok": False, "error": str(e)[:200]}), flush=True)
 '''
 
+# Kyutai TTS (open weights, French and English): a very natural voice, loaded once in its own environment
+# (~/.naim/voix/kyutai-venv), 8 bits. Used when the voice in service is a Kyutai one (Admin › Mes voix).
+KY_PYTHON = DIR / "kyutai-venv" / "bin" / "python"
+SERVICE = DIR / "voix-en-service.json"
+KY_WORKER = r'''
+import json, sys, warnings
+warnings.filterwarnings("ignore")
+import numpy as np, mlx.core as mx, mlx.nn as nn, sentencepiece, sphn
+from moshi_mlx import models
+from moshi_mlx.utils.loaders import hf_get
+from moshi_mlx.models.tts import TTSModel, DEFAULT_DSM_TTS_REPO, DEFAULT_DSM_TTS_VOICE_REPO
+repo = DEFAULT_DSM_TTS_REPO
+cfg = json.load(open(hf_get(hf_get("config.json", repo))))
+lm_config = models.LmConfig.from_config_dict(cfg)
+model = models.Lm(lm_config); model.set_dtype(mx.bfloat16)
+model.load_pytorch_weights(str(hf_get(hf_get(cfg.get("moshi_name", "model.safetensors"), repo))), lm_config, strict=True)
+nn.quantize(model.depformer, bits=8)  # 8 bits: about half the memory, same voice
+for layer in model.transformer.layers:
+    nn.quantize(layer.self_attn, bits=8); nn.quantize(layer.gating, bits=8)
+tok = sentencepiece.SentencePieceProcessor(str(hf_get(hf_get(cfg["tokenizer_name"], repo))))
+mimi = models.mimi.Mimi(models.mimi_202407(lm_config.generated_codebooks))
+mimi.load_pytorch_weights(str(hf_get(hf_get(cfg["mimi_name"], repo))), strict=True)
+tts = TTSModel(model, mimi, tok, voice_repo=DEFAULT_DSM_TTS_VOICE_REPO, n_q=32, temp=0.6, cfg_coef=2.0,
+               max_padding=8, initial_padding=2, final_padding=4, padding_bonus=0.0, raw_config=cfg)
+cond = None
+if tts.valid_cfg_conditionings:
+    cond, tts.cfg_coef, no_text, no_prefix = tts.cfg_coef, 1.0, False, False
+else:
+    no_text = no_prefix = True
+print("@@" + json.dumps({"ready": True}), flush=True)
+for line in sys.stdin:
+    job = json.loads(line)
+    try:
+        entries = tts.prepare_script([job["text"]], padding_between=1)
+        voices = [tts.get_voice_path(job["voice"])] if tts.multi_speaker else []
+        attrs = tts.make_condition_attributes(voices, cond)
+        prefixes = None if tts.multi_speaker else [tts.get_prefix(hf_get(job["voice"], DEFAULT_DSM_TTS_VOICE_REPO, check_local_file_exists=True))]
+        res = tts.generate([entries], [attrs], prefixes=prefixes, cfg_is_no_prefix=no_prefix, cfg_is_no_text=no_text)
+        wav = mx.concat([tts.mimi.decode_step(f) for f in res.frames], axis=-1)
+        end = res.end_steps[0]
+        n = wav.shape[-1] if end is None else int(mimi.sample_rate * (end + tts.final_padding) / mimi.frame_rate)
+        wav = wav[0, :, :n]
+        if prefixes is not None:
+            wav = wav[:, int(mimi.sample_rate * prefixes[0].shape[-1] / mimi.frame_rate):]
+        sphn.write_wav(job["out"], np.array(mx.clip(wav, -1, 1)), mimi.sample_rate)
+        if hasattr(tts.mimi, "reset_all"):
+            tts.mimi.reset_all()
+        print("@@" + json.dumps({"ok": True}), flush=True)
+    except Exception as e:
+        print("@@" + json.dumps({"ok": False, "error": str(e)[:300]}), flush=True)
+'''
+_ky, _ky_lock = None, threading.Lock()
 _proc, _lock = None, threading.Lock()
 _nat, _nat_lock = None, threading.Lock()
 _fast, _fast_lock = None, threading.Lock()
@@ -79,7 +131,11 @@ def fast_natural_available():
 
 def reload():
     """Another voice was put in service (naim.onnx replaced): the next sentence loads it."""
-    global _fast
+    global _fast, _ky
+    with _ky_lock:  # a Kyutai voice is chosen per sentence: its worker only goes if Kyutai is no longer used
+        if _ky is not None and _ky.poll() is None and not kyutai_voice():
+            _ky.terminate()
+            _ky = None
     with _fast_lock:
         if _fast is not None and _fast.poll() is None:
             _fast.terminate()
@@ -101,6 +157,28 @@ def _natural_worker():
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
         _reply(_nat)  # « ready »: the model is loaded
     return _nat
+
+
+def _service():
+    try:
+        return json.loads(SERVICE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def kyutai_voice():
+    """The Kyutai voice in service (its reference in Kyutai's voice repository), or None."""
+    sv = _service()
+    return sv.get("ref") if sv.get("moteur") == "kyutai" and KY_PYTHON.exists() else None
+
+
+def _kyutai_worker():
+    global _ky
+    if _ky is None or _ky.poll() is not None:
+        _ky = subprocess.Popen([str(KY_PYTHON), "-c", KY_WORKER], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        _reply(_ky)  # « ready »: the model is loaded (≈ 8 s)
+    return _ky
 
 
 def _reply(p):
@@ -146,7 +224,10 @@ def speak(text, engine="rapide"):
     text = clean(text)[:1500]
     if not text:
         return b""
-    if engine == "naturelle" and fast_natural_available():
+    extra = {}
+    if engine == "naturelle" and (ref := kyutai_voice()):
+        lock, start, extra = _ky_lock, _kyutai_worker, {"voice": ref}
+    elif engine == "naturelle" and fast_natural_available():
         lock, start = _fast_lock, _fast_worker
     elif engine == "naturelle" and natural_available():
         lock, start = _nat_lock, _natural_worker
@@ -156,7 +237,7 @@ def speak(text, engine="rapide"):
         p = start()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             out = f.name
-        p.stdin.write(json.dumps({"text": text, "out": out}) + "\n")
+        p.stdin.write(json.dumps({"text": text, "out": out, **extra}) + "\n")
         p.stdin.flush()
         r = _reply(p)
     data = Path(out).read_bytes() if r.get("ok") else b""
