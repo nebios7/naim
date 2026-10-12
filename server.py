@@ -83,7 +83,7 @@ FILE_CHAT_NOTE = ("\n\nYou CAN create real files in this conversation with the c
 
 
 # a greeting, thanks or a short acknowledgement needs no reasoning: it would take minutes to answer « bonsoir »
-TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\b|(merci|thanks?|thank you)\b|"
+TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\b|(merci|thanks?|thank you)\b|(non|nan)\W+merci\b|"
                         r"(ok|okay|d'accord|dac|super|g[ée]nial|parfait|top|cool|nickel|bien|tr[eè]s bien|bonne nuit|"
                         r"[àa] (demain|plus|bient[oô]t)|bye|ciao)\b)", re.I)
 
@@ -109,7 +109,7 @@ FILE_WORK_RE = re.compile(r"images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fic
                           r"installe|lance|ex[ée]cute|teste|" + MAC_ACTION, re.I)  # a file name alone (« un exemple chronometre.py ») is a question
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
 d'accord dac super génial genial parfait top cool nickel très tres bonne nuit à a demain plus bientôt bientot bye ciao naim
-mohamed et encore c'est cool ça ca marche""".split())
+mohamed et encore c'est cool ça ca marche non nan""".split())
 
 
 # small talk with a question mark: « ça va ? », « Salut Naim, comment vas-tu ? », « tu vas bien ? »
@@ -1551,6 +1551,7 @@ class Handler(BaseHTTPRequestHandler):
         prompt_tokens = 0
         started = time.time()  # files made from now on are this reply's deliverables
         nudges = 1 if body.get("_relaunched") else 0
+        refusals = 0  # tool calls refused because the message only asks for an answer
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
         heard = []  # what the user said while Naim worked
@@ -1653,7 +1654,9 @@ class Handler(BaseHTTPRequestHandler):
                                  "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
                 self.event({"type": "interjection_read", "count": len(notes)})
             last = last or stuck
-            tools = None if last and used_tools else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
+            # after a refused tool call, the next step is the answer itself: without this the model announced « je vais
+            # créer un fichier… », was refused, and started again — six times, five minutes, nothing made
+            tools = None if (last and used_tools) or refusals else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
 
             # « salut », « merci » (plain): no tool_choice "none" — it removes the tools from what the engine reads, so the
             # next real message would find nothing in common and re-read everything (~1 min); a tool call is refused instead
@@ -1775,10 +1778,12 @@ class Handler(BaseHTTPRequestHandler):
                                      "dans ta réponse)."})
                     continue
                 if plain:  # « salut », « merci »: just an answer
+                    refusals += 1
                     messages.append({"role": "tool", "tool_name": name, "content": "refused: this is a simple message, "
                                      "answer it directly in one or two sentences, without any tool."})
                     continue
                 if not files and not file_work and name not in ANSWER_TOOLS and not name.startswith("mcp__"):
+                    refusals += 1
                     # a question or a lesson: the answer goes in the conversation (the tool list stays the same so that
                     # llama.cpp keeps what it already read; only the use is refused). MCP tools always pass: they are
                     # how Naim reads and acts on external services (e.g. the user's Internet box through BOXAI)
