@@ -3272,52 +3272,145 @@ def cli_emit(ev):
         SPIN.say(f"{C['grey']}● Skill {ev.get('name')}{C['reset']}")
     elif t == "answer":
         SPIN.stop()
-        print(f"\n{C['white']}●{C['reset']} " + _md(ev["text"]).lstrip("\n").replace("\n", "\n  ") + "\n")
+        body = _rich_md(ev["text"]) or _md(ev["text"])
+        print(f"\n{C['white']}●{C['reset']} " + body.lstrip("\n").replace("\n", "\n  ") + "\n")
 
 
 # ---------------------------------------------------------------- welcome (the robot of Naim, animated)
-ROBOT = [" ▄████▄ ",
-         "██▄██▄██",
-         " █▀▀▀▀█ "]
-ROBOT_W = 8
+# ---------------------------------------------------------------- Naim's robot, in coloured pixels
+# 16 × 14 pixels; one terminal cell shows two pixels (▀ with a foreground and a background colour), so the
+# robot is 16 columns × 7 lines. Silver head with a light reflection, dark visor, glowing eyes, an antenna light.
+SPRITE = [
+    ".......AA.......",
+    ".......ss.......",
+    "...SSSSSSSSSS...",
+    "..SHHSSSSSSSSS..",
+    "..SSDDDDDDDDSS..",
+    "..SSDEEDDEEDSS..",
+    "..SSDEEDDEEDSS..",
+    "..SSDDDMMDDDSS..",
+    "...SSSSSSSSSS...",
+    ".....ssssss.....",
+    "...aSSSSSSSSa...",
+    "..aaSSSCCSSSaa..",
+    "....SSSSSSSS....",
+    "....ss....ss....",
+]
+PALETTE = {"S": (198, 202, 212), "H": (246, 248, 251), "s": (128, 132, 142), "D": (46, 50, 60), "E": (110, 215, 255),
+           "e": (55, 105, 130), "M": (90, 170, 210), "A": (110, 215, 255), "a": (150, 154, 164), "C": (110, 215, 255),
+           "P": (232, 192, 96)}
 
 
-def _robot(col=None):
-    c = col or C["white"]
-    return [f"{c}{l}{C['reset']}" for l in ROBOT]
+def _rgb256(r, g, b):
+    """The nearest of the terminal's 256 colours (Terminal.app shows those everywhere)."""
+    if max(r, g, b) - min(r, g, b) < 26:  # a grey (silver): the grey ramp, not a tinted colour
+        return 16 if r < 8 else 231 if r > 248 else 232 + round((r - 8) / 247 * 24)
+    q = lambda v: 0 if v < 48 else 1 if v < 115 else (v - 35) // 40  # noqa: E731
+    return 16 + 36 * q(r) + 6 * q(g) + q(b)
+
+
+def _frame(blink=False, wave=False, pen=False, glow=True):
+    rows = [list(r) for r in SPRITE]
+    if blink:
+        for c in range(16):
+            if rows[5][c] == "E":
+                rows[5][c] = "D"
+            if rows[6][c] == "E":
+                rows[6][c] = "e"
+    if not glow:
+        rows[0] = [("e" if ch == "A" else ch) for ch in rows[0]]
+        rows[11] = [("e" if ch == "C" else ch) for ch in rows[11]]
+    if wave:  # the right arm up, waving
+        rows[10][12] = "."; rows[11][12] = "."; rows[11][13] = "."
+        rows[9][13] = "a"; rows[8][14] = "a"; rows[7][14] = "a"
+    if pen:  # a pen held in the right hand
+        rows[10][14] = "P"; rows[11][14] = "P"; rows[12][14] = "P"; rows[13][14] = "P"
+    return rows
+
+
+def _sprite_lines(rows):
+    """The pixels, two per cell: ▀ (upper pixel as text colour, lower as background), ▄ or a space."""
+    out = []
+    for y in range(0, len(rows), 2):
+        line = ""
+        for x in range(len(rows[y])):
+            top, bot = rows[y][x], rows[y + 1][x] if y + 1 < len(rows) else "."
+            if top == "." and bot == ".":
+                line += " "
+            elif bot == ".":
+                line += f"\033[38;5;{_rgb256(*PALETTE[top])}m▀\033[0m"
+            elif top == ".":
+                line += f"\033[38;5;{_rgb256(*PALETTE[bot])}m▄\033[0m"
+            else:
+                line += f"\033[38;5;{_rgb256(*PALETTE[top])};48;5;{_rgb256(*PALETTE[bot])}m▀\033[0m"
+        out.append(line if C["reset"] else re.sub(r"\033\[[0-9;]*m", "", line))
+    return out
+
+
+ROBOT_W = 16
+
+
+def _robot(col=None, **kw):
+    return _sprite_lines(_frame(**kw))
+
+
+# ---------------------------------------------------------------- answers with rich (Markdown, coloured code, tables)
+def _rich_md(text):
+    """The answer rendered by rich (headings, lists, tables, code with a real theme); None if rich is missing."""
+    try:
+        from io import StringIO
+        from rich.console import Console
+        from rich.markdown import Markdown
+        from pygments.styles import get_all_styles
+    except ImportError:
+        return None
+    if not C["reset"]:
+        return None
+    width = max(50, min(shutil.get_terminal_size((100, 24)).columns, 120)) - 2
+    theme = next((t for t in ("github-dark", "one-dark", "monokai") if t in set(get_all_styles())), "monokai")
+    buf = StringIO()
+    Console(file=buf, force_terminal=True, color_system="256", width=width).print(
+        Markdown(text, code_theme=theme, inline_code_lexer="python", inline_code_theme=theme, hyperlinks=False))
+    return buf.getvalue().rstrip("\n")
 
 
 def _intro():
-    """The robot comes, « Naim » is written beside it, then it slides to the right and the panel takes its place."""
+    """The robot wakes up (antenna and eyes light up), waves, « Naim » is written beside it, then it slides to the right
+    and the panel takes its place."""
     if not sys.stdout.isatty() or os.environ.get("NAIM_NO_ANIM"):
         return
     cols = shutil.get_terminal_size((80, 24)).columns
     out = sys.stdout
+    h = len(_robot())
     out.write("\033[?25l")  # cursor hidden during the animation
     try:
-        frames = []
-        for shade in (C["grey"], C["dim"] + C["white"], C["white"]):  # it appears
-            frames.append(([f"  {l}" for l in _robot(shade)], 0.09))
+        frames = [([f"  {l}" for l in _robot(glow=False, blink=True)], 0.25),   # asleep
+                  ([f"  {l}" for l in _robot(glow=True, blink=True)], 0.15),    # the antenna lights up
+                  ([f"  {l}" for l in _robot()], 0.2)]                          # eyes open
+        for w in (True, False, True, False):                                   # it waves
+            frames.append(([f"  {l}" for l in _robot(wave=w)], 0.16))
         word = "Naim"
         for k in range(1, len(word) + 1):  # it writes its name
             txt = f"{C['bold']}{C['white']}{word[:k]}{C['reset']}{C['grey']}{'▌' if k < len(word) else ''}{C['reset']}"
             rows = [f"  {r}" for r in _robot()]
-            rows[1] += f"   {txt}"
+            rows[3] += f"   {txt}"
             frames.append((rows, 0.11))
-        frames.append((frames[-1][0][:1] + [frames[-1][0][1] + f"  {C['grey']}agent de code{C['reset']}"] + frames[-1][0][2:], 0.35))
+        last = list(frames[-1][0])
+        last[4] += f"   {C['grey']}agent de code{C['reset']}"
+        frames.append((last, 0.5))
         rows = _robot()
-        for x in range(2, min(cols - ROBOT_W - 2, 46), 4):  # it slides to the right, the name tidied away
+        for x in range(2, min(cols - ROBOT_W - 2, 50), 4):  # it slides to the right, the name tidied away
             frames.append(([" " * x + l for l in rows], 0.03))
         first = True
         for lines, wait in frames:
             if not first:
-                out.write(f"\033[{len(ROBOT)}A")
+                out.write(f"\033[{h}A")
             first = False
             for l in lines:
                 out.write("\r\033[2K" + l + "\n")
             out.flush()
             time.sleep(wait)
-        out.write(f"\033[{len(ROBOT)}A" + "".join("\r\033[2K\n" for _ in ROBOT) + f"\033[{len(ROBOT)}A")
+        out.write(f"\033[{h}A" + "".join("\r\033[2K\n" for _ in range(h)) + f"\033[{h}A")
     finally:
         out.write("\033[?25h")
         out.flush()
@@ -3424,13 +3517,11 @@ class _Editor:
                 ("/contexte", "la place utilisée dans la mémoire de travail"), ("/exit", "quitter Naim")]
     MODES = [("demander", "Naim demande avant chaque action"), ("accepter les modifications", "fichiers sans demander, commandes avec"),
              ("tout autoriser", "Naim agit sans demander")]
-    BODY = [" ▄████▄ ", "██▄██▄██", " █▀▀▀▀█ "]
-    BLINK = [" ▄████▄ ", "████████", " █▀▀▀▀█ "]
 
     def __init__(self):
         self.history, self.lock = [], threading.Lock()
         self.rx, self.pen, self.marks, self.blink = None, False, 0, False
-        self.drawn, self.alive, self.busy, self.hop, self.click = 0, False, False, False, None
+        self.drawn, self.alive, self.busy, self.hop, self.click, self.glow = 0, False, False, False, None, True
 
     # -- state shown in the status line
     def mode(self):
@@ -3477,15 +3568,13 @@ class _Editor:
         rows, pos = self._wrap(text, inner)
         if self.rx is None:
             self.rx = max(0, cols - 22)
-        self.rx = min(self.rx, cols - 12)
-        body = self.BLINK if self.blink else self.BODY
-        if self.hop:
-            body = body[1:] + ["        "]
+        self.rx = min(self.rx, cols - ROBOT_W - 2)
+        body = _robot(blink=self.blink, wave=self.hop, pen=self.pen, glow=self.glow)
         out = []
         for i, r in enumerate(body):  # the robot on the frame
-            pen = f"{C['grey']}╱{C['reset']}" if self.pen and i == 1 else ""
-            ink = f"{C['grey']}{'╌' * self.marks}{C['reset']}" if i == 2 and self.marks else ""
-            out.append(" " * max(0, self.rx - (self.marks if i == 2 else 0)) + ink + f"{C['white']}{r}{C['reset']}" + pen)
+            last = i == len(body) - 1
+            ink = f"{C['grey']}{'╌' * self.marks}{C['reset']} " if last and self.marks else ""
+            out.append(" " * max(0, self.rx - ((self.marks + 1) if last and self.marks else 0)) + ink + r)
         out.append(f"{C['grey']}╭{'─' * (cols - 2)}╮{C['reset']}")
         for j, r in enumerate(rows):
             lead = f"{C['white']}›{C['reset']} " if j == 0 else "  "
@@ -3514,9 +3603,12 @@ class _Editor:
         """Between two keys he only blinks now and then; he writes when you click on him (see _act)."""
         import random
         while self.alive:
-            time.sleep(4 + random.random() * 4)
+            time.sleep(2.5 + random.random() * 3)
             if self.alive and not self.busy:
-                self.blink = True; redraw(); time.sleep(0.13); self.blink = False; redraw()
+                if random.random() < 0.6:
+                    self.blink = True; redraw(); time.sleep(0.13); self.blink = False; redraw()
+                else:  # the antenna light breathes
+                    self.glow = False; redraw(); time.sleep(0.5); self.glow = True; redraw()
 
     def _act(self, redraw):
         """Clicked: a little hop, the pen out, a few strokes, the pen away."""
@@ -3524,7 +3616,8 @@ class _Editor:
             return
         self.busy = True
         try:
-            self.hop = True; redraw(); time.sleep(0.15); self.hop = False; redraw()
+            for _ in range(2):  # he waves at you
+                self.hop = True; redraw(); time.sleep(0.18); self.hop = False; redraw(); time.sleep(0.12)
             self.pen = True; redraw(); time.sleep(0.35)
             for k in range(1, 5):
                 self.marks = k; redraw(); time.sleep(0.25)
@@ -3581,7 +3674,7 @@ class _Editor:
                             top = int(cp.group(1)) - self.drawn  # first line of the block (the robot's head)
                             x, y = self.click
                             self.click = None
-                            if top <= y <= top + 2 and self.rx < x <= self.rx + 9:
+                            if top <= y <= top + len(_robot()) - 1 and self.rx < x <= self.rx + ROBOT_W:
                                 threading.Thread(target=self._act, args=(redraw,), daemon=True).start()
                             continue
                         if seq in (b"\x1b[A", b"\x1bOA"):  # ↑: menu, else history

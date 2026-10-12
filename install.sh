@@ -127,8 +127,9 @@ if [ ! -x "$dest/venv/bin/python" ]; then
   if command -v uv >/dev/null; then uv venv --python 3.12 -q "$dest/venv"; else python3 -m venv "$dest/venv"; fi
 fi
 python="$dest/venv/bin/python"
-if command -v uv >/dev/null; then uv pip install -q --python "$python" pywebview 2>/dev/null || true
-else "$python" -m pip install -q pywebview 2>/dev/null || true; fi
+# rich: naimtools' terminal display (Markdown, coloured code, tables); without it, a plainer display is used
+if command -v uv >/dev/null; then uv pip install -q --python "$python" pywebview rich 2>/dev/null || true
+else "$python" -m pip install -q pywebview rich 2>/dev/null || true; fi
 ok "Environnement Python"
 
 # terminal commands
