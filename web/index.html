@@ -1535,7 +1535,9 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 .acard::before, .dcard::before, .qcard::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
   background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--text) 9%, transparent), transparent 70%); }
 .acard:hover::before, .dcard:hover::before, .qcard:hover::before { opacity: 1; }
-#spane h2 .bw { display: inline-block; }
+#spane h2 .bw { display: inline-block; animation: blurin .45s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes blurin { from { filter: blur(8px); opacity: 0; transform: translateY(-6px); } to { filter: none; opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #spane h2 .bw { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .acard::before, .dcard::before, .qcard::before { display: none; } }
 </style>
 </head>
@@ -6039,47 +6041,22 @@ async function openDeepLink() {
   fix(document.body);
 })();
 
-// ======================================================================= motion (GSAP, Lenis, React Bits effects)
-// Naim's own animations, with the libraries of « Bibliothèques » (bundled in web/vendor, no internet needed):
-// GSAP for entrances, and two React Bits
-// effects redone without React (SpotlightCard on the cards, BlurText on the settings titles).
-// Never on the conversation being written (nothing moves under the text) and never with « réduire les animations ».
+// ======================================================================= React Bits effects (without React, without GSAP)
+// Two effects of React Bits redone in plain CSS/JS: BlurText on the settings titles, SpotlightCard on the cards.
+// No animation library on Naim itself (they made the navigation heavy); none with « réduire les animations ».
 (() => {
-  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches || S.motion === false;
-  const load = (src) => new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
-  // (no Lenis on Naim itself: on scrolling panels it kept an old scroll length and blocked the navigation;
-  //  the native macOS scrolling is already smooth. Lenis stays offered for the sites Naim builds.)
-  load("/vendor/gsap.min.js").then(() => {
-    const gsap = window.gsap;
-    gsap.ticker.lagSmoothing(0);
-
-    // GSAP: what appears comes in softly (only one new element at a time, not a whole conversation being redrawn)
-    const enter = (els, o = {}) => { if (!calm() && els.length) gsap.from(els, { y: 10, opacity: 0, duration: 0.38, ease: "power2.out", stagger: 0.03, clearProps: "transform,opacity", ...o }); };
-    const thread = document.getElementById("thread");
-    if (thread) new MutationObserver((muts) => {
-      const added = muts.flatMap((m) => [...m.addedNodes]).filter((n) => n.nodeType === 1 && n.classList.contains("turn"));
-      if (added.length === 1 && !added[0].dataset.entered) { added[0].dataset.entered = "1"; enter(added, { y: added[0].classList.contains("user") ? 14 : 6 }); }
-    }).observe(thread, { childList: true });
-
-    // settings: each tab's groups and cards come in one after the other; the title gets a BlurText reveal
-    const spane = document.getElementById("spane");
-    if (spane) new MutationObserver(() => {
-      if (calm()) return;
-      const h = spane.querySelector("h2");
-      if (h && !h.dataset.blur) {
-        h.dataset.blur = "1";
-        h.innerHTML = h.textContent.split(/(\s+)/).map((w) => /\s/.test(w) ? w : `<span class="bw">${esc(w)}</span>`).join("");
-        gsap.from(h.querySelectorAll(".bw"), { filter: "blur(8px)", opacity: 0, y: -6, duration: 0.45, ease: "power2.out", stagger: 0.06, clearProps: "filter,opacity,transform" });
-      }
-      const fresh = [...spane.querySelectorAll(":scope > .sgroup, :scope > p.sub, .agrid > .acard")].filter((e) => !e.dataset.entered).slice(0, 24);
-      fresh.forEach((e) => (e.dataset.entered = "1"));
-      enter(fresh, { stagger: 0.025 });
-    }).observe(spane, { childList: true, subtree: true });
-  }).catch(() => {});  // without the libraries Naim simply has no animation
-
-  // SpotlightCard (React Bits): a soft light follows the mouse on the cards
+  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // BlurText: each word of a settings title comes out of a blur, one after the other
+  const spane = document.getElementById("spane");
+  if (spane) new MutationObserver(() => {
+    const h = spane.querySelector("h2");
+    if (!h || h.dataset.blur || calm()) return;
+    h.dataset.blur = "1";
+    h.innerHTML = h.textContent.split(/(\s+)/).map((w, i) => /\s/.test(w) ? w : `<span class="bw" style="animation-delay:${(i / 2) * 60}ms">${esc(w)}</span>`).join("");
+  }).observe(spane, { childList: true });
+  // SpotlightCard: a soft light follows the mouse on the cards
   document.addEventListener("pointermove", (e) => {
-    const c = e.target.closest?.(".acard, .dcard, .qcard"); if (!c) return;
+    const c = e.target.closest?.(".acard, .dcard"); if (!c) return;
     const r = c.getBoundingClientRect();
     c.style.setProperty("--mx", `${e.clientX - r.left}px`); c.style.setProperty("--my", `${e.clientY - r.top}px`);
   }, { passive: true });
