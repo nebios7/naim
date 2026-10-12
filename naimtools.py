@@ -3214,6 +3214,37 @@ def _recent_conversations(n=3):
     return rows
 
 
+def _usage():
+    """Conversations, messages, tokens, active days, peak hour, favourite model, and the last 28 days."""
+    import collections
+    d = Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "conversations"
+    convs = msgs = tokens = 0
+    days, hours, models, per_day = set(), collections.Counter(), collections.Counter(), collections.Counter()
+    for f in d.glob("*.json"):
+        try:
+            c = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        ms = [m for m in c.get("messages", []) if m.get("time")]
+        convs += bool(ms)
+        for m in ms:
+            msgs += 1
+            lt = time.localtime(m["time"] / 1000)
+            day = time.strftime("%Y-%m-%d", lt)
+            days.add(day); per_day[day] += 1
+            if m.get("role") == "user":
+                hours[lt.tm_hour] += 1
+            else:
+                st = m.get("stats") or {}
+                tokens += int(st.get("prompt") or 0) + int(st.get("tokens") or 0)
+                models[str(m.get("model") or "naim").split(":")[0]] += 1
+    fav = models.most_common(1)[0][0] if models else "—"
+    last = [time.strftime("%Y-%m-%d", time.localtime(time.time() - i * 86400)) for i in range(27, -1, -1)]
+    return {"conversations": convs, "messages": msgs, "tokens": tokens, "days": len(days),
+            "peak": f"{hours.most_common(1)[0][0]} h" if hours else "—", "fav": "Naim" if fav.lower().startswith("naim") else fav,
+            "activity": [per_day.get(x, 0) for x in last]}
+
+
 def _user_name():
     try:
         s = json.loads((Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "settings.json").read_text())
@@ -3223,23 +3254,33 @@ def _user_name():
 
 
 def _welcome(where, engine):
-    """The panel: on the left the greeting and the robot, on the right how to start and the recent activity."""
+    """The panel: on the left « Quoi de prévu », the robot, the engine and the folder; on the right the usage
+    figures (like a desktop assistant's « Aperçu »), the last 28 days and the recent conversations."""
     cols = max(60, min(shutil.get_terminal_size((100, 24)).columns, 110))
-    left_w = 34
+    left_w = 32
     right_w = cols - left_w - 7
     name = _user_name()
-    left = ["", f"{C['bold']}{'Bon retour ' + name + ' !' if name else 'Bienvenue !'}{C['reset']}", ""] + \
+    u = _usage()
+    big = lambda n: f"{n / 1e9:.1f} Md" if n >= 1e9 else f"{n / 1e6:.1f} M" if n >= 1e6 else f"{n / 1e3:.1f} k" if n >= 1e3 else str(n)  # noqa: E731
+    hello = f"Quoi de prévu, {name} ?" if name else "Quoi de prévu ?"
+    left = ["", f"{C['bold']}{C['white']}{hello}{C['reset']}", ""] + \
            [" " * ((left_w - ROBOT_W) // 2) + r for r in _robot()] + \
            ["", f"{C['grey']}{engine}{C['reset']}", f"{C['grey']}{where[-left_w:]}{C['reset']}"]
     left = [(" " * max(0, (left_w - _vlen(l)) // 2) + l) if i in (1, len(left) - 2, len(left) - 1) else l for i, l in enumerate(left)]
-    right = [f"{C['white']}Pour bien démarrer{C['reset']}",
-             f"Décris ce que tu veux en français : Naim lit,",
-             f"écrit, lance les commandes et vérifie.",
-             f"{C['grey']}/help aide · Ctrl+C arrête une tâche{C['reset']}",
-             f"{C['grey']}{'─' * min(right_w, 40)}{C['reset']}",
-             f"{C['white']}Activité récente{C['reset']}"]
-    rec = _recent_conversations()
-    right += [f"{C['grey']}{_pad(t[:right_w - 15], right_w - 13)}{a:>11}{C['reset']}" for t, a in rec] or [f"{C['grey']}Aucune conversation{C['reset']}"]
+    cw = max(12, (right_w - 2) // 3)
+    cells = [("Conversations", str(u["conversations"])), ("Messages", f"{u['messages']:,}".replace(",", " ")), ("Total de jetons", big(u["tokens"])),
+             ("Jours actifs", str(u["days"])), ("Heure de pointe", u["peak"]), ("Modèle favori", u["fav"])]
+    grid = []
+    for row in (cells[:3], cells[3:]):
+        grid.append("".join(_pad(f"{C['grey']}{l}{C['reset']}", cw) for l, _ in row))
+        grid.append("".join(_pad(f"{C['bold']}{C['white']}{v}{C['reset']}", cw) for _, v in row))
+    mx = max(1, *u["activity"])
+    shades = " ░▒▓█"
+    heat = "".join(shades[0 if n == 0 else 1 + min(3, int(3 * n / mx))] for n in u["activity"])
+    right = [f"{C['white']}Aperçu{C['reset']} {C['grey']}· depuis le début{C['reset']}", ""] + grid[:2] + [""] + grid[2:] + \
+            ["", f"{C['grey']}28 derniers jours  {C['reset']}{C['white']}{heat}{C['reset']}", ""]
+    rec = _recent_conversations(2)
+    right += [f"{C['grey']}{_pad(t[:right_w - 15], right_w - 13)}{a:>11}{C['reset']}" for t, a in rec]
     h = max(len(left), len(right))
     left += [""] * (h - len(left))
     right += [""] * (h - len(right))
@@ -3250,19 +3291,79 @@ def _welcome(where, engine):
     print(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
 
 
+class _Perch:
+    """Naim's robot sitting on the input line while you type: he takes out a pen, writes a few strokes, puts it
+    away, blinks, walks along the line. Drawn above the input with the cursor saved and restored, so typing is
+    never disturbed."""
+    BODY = [" ▄████▄ ", "██▄██▄██", " █▀▀▀▀█ "]
+    BLINK = [" ▄████▄ ", "████████", " █▀▀▀▀█ "]
+
+    def __init__(self, cols):
+        self.cols, self.x, self.on, self.lock = cols, max(0, cols - 22), False, threading.Lock()
+        self.pen, self.marks, self.blink, self.flip = False, 0, False, False
+
+    def draw(self):
+        rows = self.BLINK if self.blink else self.BODY
+        if self.flip:
+            rows = [r[::-1].translate(str.maketrans("▄▀", "▄▀")) for r in rows]
+        lines = []
+        for i, r in enumerate(rows):
+            pen = (f"{C['grey']}╱{C['reset']}" if self.pen and i == 1 else " ")
+            ink = (f"{C['grey']}{'╌' * self.marks}{C['reset']}".rjust(0) if i == 2 and self.marks else "")
+            pre = " " * max(0, self.x - (self.marks if i == 2 else 0))
+            lines.append(f"{pre}{ink}{C['white']}{r}{C['reset']}{pen}")
+        with self.lock:
+            if not self.on:
+                return
+            out = "\0337"  # cursor saved: the input line is not disturbed
+            for i, l in enumerate(lines):
+                out += f"\033[{4 - i}A\r\033[2K{l}\0338\0337"
+            sys.stdout.write(out + "\0338")
+            sys.stdout.flush()
+
+    def life(self):
+        import random
+        while self.on:
+            time.sleep(1.4 + random.random() * 1.8)
+            if not self.on:
+                return
+            r = random.random()
+            if r < 0.45:  # pen out, a few strokes, pen away
+                self.pen = True; self.draw(); time.sleep(0.4)
+                for k in range(1, 5):
+                    self.marks = k; self.draw(); time.sleep(0.28)
+                time.sleep(0.5); self.marks = 0; self.draw(); time.sleep(0.2)
+                self.pen = False; self.draw()
+            elif r < 0.8:  # a walk along the line
+                to = random.randint(max(0, self.cols - 60), max(1, self.cols - 12))
+                step = 1 if to > self.x else -1
+                while self.on and self.x != to:
+                    self.x += step; self.draw(); time.sleep(0.07)
+            self.blink = True; self.draw(); time.sleep(0.13); self.blink = False; self.draw()
+
+
 def _ask():
-    """The input, like an assistant's: a rule above and under the line you type on, the shortcuts under it; once
-    sent, the box goes and your message stays as « › message »."""
+    """The input, like an assistant's: Naim's robot on the upper rule, the line you type on, a rule under it and the
+    shortcuts; once sent, all of it goes and your message stays as « › message »."""
     cols = max(40, shutil.get_terminal_size((100, 24)).columns)
     rule = f"{C['grey']}{'─' * cols}{C['reset']}"
     if not sys.stdout.isatty():
         return input("› ")
-    sys.stdout.write(f"{rule}\n\n{rule}\n  {C['grey']}? raccourcis · /help aide · /exit quitter{C['reset']}\033[2A\r")
+    perch = CLI_STATE.get("perch") or _Perch(cols)
+    CLI_STATE["perch"] = perch
+    perch.cols = cols
+    sys.stdout.write("\n\n\n" + f"{rule}\n\n{rule}\n  {C['grey']}? raccourcis · /help aide · /exit quitter{C['reset']}\033[2A\r")
     sys.stdout.flush()
+    perch.on = True
+    perch.draw()
+    if not os.environ.get("NAIM_NO_ANIM"):
+        threading.Thread(target=perch.life, daemon=True).start()
     try:
         task = input(f"{C['white']}›{C['reset']} ")
     finally:
-        sys.stdout.write("\033[2A\r\033[J")  # back to the first rule: the box is replaced by the message
+        with perch.lock:
+            perch.on = False
+        sys.stdout.write("\033[5A\r\033[J")  # back above the robot: the whole box is replaced by the message
     if task.strip():
         print(f"{C['grey']}› {task.strip()}{C['reset']}")
     return task
