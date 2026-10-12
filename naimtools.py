@@ -2957,26 +2957,151 @@ class _Spinner:
 SPIN = _Spinner()
 
 
+def _cw(ch):
+    """Columns a character takes in the terminal (wide characters: 2, combining marks: 0)."""
+    import unicodedata
+    if unicodedata.combining(ch):
+        return 0
+    return 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+
+
+def _vlen(s):
+    return sum(_cw(c) for c in re.sub(r"\033\[[0-9;?]*[A-Za-z]", "", s))
+
+
+def _pad(s, w):
+    return s + " " * max(0, w - _vlen(s))
+
+
+# ---------------------------------------------------------------- code colours (no library: a small highlighter)
+HL = {"kw": "\033[38;5;176m", "str": "\033[38;5;114m", "com": "\033[38;5;244m\033[3m", "num": "\033[38;5;209m",
+      "fn": "\033[38;5;75m", "ty": "\033[38;5;222m", "op": "\033[38;5;110m"}
+KEYWORDS = {
+    "python": "def class return if elif else for while in not and or is import from as with try except finally raise "
+              "pass break continue lambda yield async await None True False global nonlocal del assert match case self",
+    "js": "function return if else for while do in of new const let var class extends import from export default "
+          "try catch finally throw async await typeof instanceof null undefined true false this switch case break "
+          "continue interface type enum implements public private readonly",
+    "swift": "func return if else guard for while in let var struct class enum protocol extension import some any "
+             "private public static self Self true false nil switch case default try catch throw throws async await @State @main",
+    "bash": "if then else elif fi for while do done in case esac function return export local echo cd sudo exit",
+    "css": "", "html": "", "json": "true false null",
+}
+ALIAS = {"py": "python", "python3": "python", "javascript": "js", "jsx": "js", "ts": "js", "typescript": "js",
+         "tsx": "js", "sh": "bash", "zsh": "bash", "shell": "bash", "console": "bash", "swiftui": "swift"}
+
+
+def _hl(code, lang):
+    """One line of code, coloured: comments, strings, numbers, keywords, function calls, types."""
+    lang = ALIAS.get((lang or "").lower(), (lang or "").lower())
+    kws = set(KEYWORDS.get(lang, KEYWORDS["python"] if not lang else "").split())
+    com = r"#.*$" if lang in ("python", "bash", "") else r"//.*$|/\*.*?\*/" if lang in ("js", "swift", "css") else r"<!--.*?-->" if lang == "html" else r"(?!x)x"
+    rx = re.compile(rf"(?P<com>{com})|(?P<str>\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|`[^`]*`)|(?P<num>\b\d+(?:\.\d+)?\b)"
+                    r"|(?P<tag></?[A-Za-z][\w-]*|/?>)|(?P<word>@?[A-Za-z_][\w]*)(?P<call>\s*\()?")
+    out, pos = [], 0
+    for m in rx.finditer(code):
+        out.append(code[pos:m.start()])
+        pos = m.end()
+        t = m.group(0)
+        if m.group("com"):
+            out.append(HL["com"] + t + C["reset"])
+        elif m.group("str"):
+            out.append(HL["str"] + t + C["reset"])
+        elif m.group("num"):
+            out.append(HL["num"] + t + C["reset"])
+        elif m.group("tag"):
+            out.append(HL["kw"] + t + C["reset"])
+        else:
+            w = m.group("word")
+            col = HL["kw"] if w in kws else HL["fn"] if m.group("call") else HL["ty"] if w[:1].isupper() and lang != "bash" else ""
+            out.append((col + w + C["reset"] if col else w) + (m.group("call") or ""))
+    out.append(code[pos:])
+    return "".join(out)
+
+
+def _inline(line):
+    """Bold, inline code (on a soft background), links (underlined), in a line of text."""
+    line = re.sub(r"\*\*(.+?)\*\*", lambda x: f"{C['bold']}{C['white']}{x.group(1)}{C['reset']}", line)
+    line = re.sub(r"(?<![\w*])\*([^*\n]+)\*(?![\w*])", lambda x: f"\033[3m{x.group(1)}{C['reset']}", line)
+    line = re.sub(r"`([^`]+)`", lambda x: f"\033[48;5;236m\033[38;5;180m {x.group(1)} {C['reset']}", line)
+    line = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", lambda x: f"\033[4m{x.group(1)}{C['reset']} {C['grey']}{x.group(2)}{C['reset']}", line)
+    return line
+
+
+def _table(rows, width):
+    """A Markdown table, aligned in a frame."""
+    cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows if not re.match(r"^\s*\|?\s*:?-{2,}", r)]
+    if not cells:
+        return []
+    n = max(len(r) for r in cells)
+    cells = [r + [""] * (n - len(r)) for r in cells]
+    w = [min(max(_vlen(re.sub(r"[*`]", "", r[i])) for r in cells), max(8, (width - 3 * n) // n)) for i in range(n)]
+    g = C["grey"]
+    line = lambda l, m, r: f"  {g}{l}{m.join('─' * (x + 2) for x in w)}{r}{C['reset']}"  # noqa: E731
+    out = [line("┌", "┬", "┐")]
+    for k, r in enumerate(cells):
+        txt = [re.sub(r"[*`]", "", c)[:w[i]] for i, c in enumerate(r)]
+        st = C["bold"] + C["white"] if k == 0 else ""
+        out.append(f"  {g}│{C['reset']}" + f"{g}│{C['reset']}".join(f" {st}{_pad(t, w[i])}{C['reset']} " for i, t in enumerate(txt)) + f"{g}│{C['reset']}")
+        if k == 0:
+            out.append(line("├", "┼", "┤"))
+    out.append(line("└", "┴", "┘"))
+    return out
+
+
 def _md(text):
-    """The answer, formatted for the terminal: titles, bold, inline code, code blocks with a gutter."""
-    out, code = [], False
-    for line in text.splitlines():
+    """The answer for the terminal: titles, lists, quotes, tables, and code blocks on a panel with colours and
+    line numbers."""
+    cols = max(50, min(shutil.get_terminal_size((100, 24)).columns, 120))
+    out, code, lang, num, table = [], False, "", 0, []
+    bg = "\033[48;5;235m"
+
+    def flush_table():
+        if table:
+            out.extend(_table(table, cols - 6))
+            table.clear()
+    for line in (text or "").splitlines():
         if line.strip().startswith("```"):
-            code = not code
-            lang = line.strip()[3:]
-            out.append(f"  {C['grey']}{'╭─ ' + lang if code and lang else ('╭─' if code else '╰─')}{C['reset']}")
+            flush_table()
+            if not code:
+                code, lang, num = True, line.strip()[3:].strip(), 0
+                label = f" {lang} " if lang else ""
+                out.append(f"  {C['grey']}╭─{label}{'─' * max(0, cols - 8 - len(label))}{C['reset']}")
+            else:
+                code = False
+                out.append(f"  {C['grey']}╰{'─' * (cols - 7)}{C['reset']}")
             continue
         if code:
-            out.append(f"  {C['grey']}│{C['reset']} {C['cyan']}{line}{C['reset']}")
+            num += 1
+            body = _hl(line.replace("\t", "    "), lang)
+            room = cols - 12
+            vis = _vlen(body)
+            fill = " " * max(0, room - vis)
+            out.append(f"  {C['grey']}│{C['reset']}{bg}{C['grey']}{num:>3} {C['reset']}{bg}{body.replace(C['reset'], C['reset'] + bg)}{fill} {C['reset']}")
             continue
+        if line.strip().startswith("|") and line.strip().endswith("|"):
+            table.append(line)
+            continue
+        flush_table()
         m = re.match(r"^(#{1,4})\s+(.*)", line)
         if m:
-            out.append(f"{C['bold']}{C['white']}{m.group(2)}{C['reset']}")
+            lvl, t = len(m.group(1)), _inline(m.group(2))
+            out.append("")
+            out.append(f"{C['bold']}{C['white']}{t}{C['reset']}" if lvl > 1 else f"{C['bold']}{C['white']}{t.upper() if len(t) < 40 else t}{C['reset']}")
             continue
-        line = re.sub(r"\*\*(.+?)\*\*", lambda x: f"{C['bold']}{x.group(1)}{C['reset']}", line)
-        line = re.sub(r"`([^`]+)`", lambda x: f"{C['cyan']}{x.group(1)}{C['reset']}", line)
-        line = re.sub(r"^(\s*)[-*] ", r"\1• ", line)
-        out.append(line)
+        m = re.match(r"^(\s*)([-*+]|\d+[.)])\s+(.*)", line)
+        if m:
+            ind, mark, t = m.groups()
+            bullet = f"{C['cyan']}•{C['reset']}" if not mark[0].isdigit() else f"{C['cyan']}{mark}{C['reset']}"
+            out.append(f"{ind}{bullet} {_inline(t)}")
+            continue
+        if line.startswith(">"):
+            out.append(f"{C['grey']}▎{C['reset']} \033[3m{_inline(line.lstrip('> '))}{C['reset']}")
+            continue
+        out.append(_inline(line))
+    flush_table()
+    if code:
+        out.append(f"  {C['grey']}╰{'─' * (cols - 7)}{C['reset']}")
     return "\n".join(out)
 
 
@@ -3147,7 +3272,7 @@ def cli_emit(ev):
         SPIN.say(f"{C['grey']}● Skill {ev.get('name')}{C['reset']}")
     elif t == "answer":
         SPIN.stop()
-        print(f"\n{C['white']}●{C['reset']} " + _md(ev["text"]).replace("\n", "\n  ") + "\n")
+        print(f"\n{C['white']}●{C['reset']} " + _md(ev["text"]).lstrip("\n").replace("\n", "\n  ") + "\n")
 
 
 # ---------------------------------------------------------------- welcome (the robot of Naim, animated)
@@ -3160,14 +3285,6 @@ ROBOT_W = 8
 def _robot(col=None):
     c = col or C["white"]
     return [f"{c}{l}{C['reset']}" for l in ROBOT]
-
-
-def _vlen(s):
-    return len(re.sub(r"\033\[[0-9;]*m", "", s))
-
-
-def _pad(s, w):
-    return s + " " * max(0, w - _vlen(s))
 
 
 def _intro():
@@ -3313,7 +3430,7 @@ class _Editor:
     def __init__(self):
         self.history, self.lock = [], threading.Lock()
         self.rx, self.pen, self.marks, self.blink = None, False, 0, False
-        self.drawn, self.alive = 0, False
+        self.drawn, self.alive, self.busy, self.hop, self.click = 0, False, False, False, None
 
     # -- state shown in the status line
     def mode(self):
@@ -3362,6 +3479,8 @@ class _Editor:
             self.rx = max(0, cols - 22)
         self.rx = min(self.rx, cols - 12)
         body = self.BLINK if self.blink else self.BODY
+        if self.hop:
+            body = body[1:] + ["        "]
         out = []
         for i, r in enumerate(body):  # the robot on the frame
             pen = f"{C['grey']}╱{C['reset']}" if self.pen and i == 1 else ""
@@ -3392,23 +3511,26 @@ class _Editor:
 
     # -- the robot's life, between two keys
     def _life(self, redraw):
+        """Between two keys he only blinks now and then; he writes when you click on him (see _act)."""
         import random
         while self.alive:
-            time.sleep(1.5 + random.random() * 1.8)
-            if not self.alive:
-                return
-            r = random.random()
-            if r < 0.45:
-                self.pen = True; redraw(); time.sleep(0.4)
-                for k in range(1, 5):
-                    self.marks = k; redraw(); time.sleep(0.28)
-                time.sleep(0.5); self.marks = 0; redraw(); time.sleep(0.2); self.pen = False; redraw()
-            elif r < 0.8:
-                cols = shutil.get_terminal_size((100, 24)).columns
-                to = random.randint(max(0, cols - 60), max(1, cols - 12))
-                while self.alive and self.rx != to:
-                    self.rx += 1 if to > self.rx else -1; redraw(); time.sleep(0.07)
-            self.blink = True; redraw(); time.sleep(0.13); self.blink = False; redraw()
+            time.sleep(4 + random.random() * 4)
+            if self.alive and not self.busy:
+                self.blink = True; redraw(); time.sleep(0.13); self.blink = False; redraw()
+
+    def _act(self, redraw):
+        """Clicked: a little hop, the pen out, a few strokes, the pen away."""
+        if self.busy:
+            return
+        self.busy = True
+        try:
+            self.hop = True; redraw(); time.sleep(0.15); self.hop = False; redraw()
+            self.pen = True; redraw(); time.sleep(0.35)
+            for k in range(1, 5):
+                self.marks = k; redraw(); time.sleep(0.25)
+            time.sleep(0.45); self.marks = 0; redraw(); time.sleep(0.2); self.pen = False; redraw()
+        finally:
+            self.busy = False
 
     def ask(self):
         """Edits one message; returns it (Entrée), or raises EOFError (Ctrl+D on an empty line) / KeyboardInterrupt."""
@@ -3428,7 +3550,7 @@ class _Editor:
                 if self.alive:
                     self.render(text, cur, state["menu"], sel)
         self.drawn, self.alive = 0, True
-        sys.stdout.write("\n" * 0 + "\033[?2004h")  # bracketed paste: a pasted text with line breaks stays text
+        sys.stdout.write("\033[?2004h\033[?1000h\033[?1006h")  # bracketed paste; clicks reported (to click the robot)
         redraw()
         if not os.environ.get("NAIM_NO_ANIM"):
             threading.Thread(target=self._life, args=(redraw,), daemon=True).start()
@@ -3446,8 +3568,22 @@ class _Editor:
                         text, cur, buf = text[:cur] + "\n" + text[cur:], cur + 1, buf[1:]; continue
                     k = buf[:1]
                     if k == b"\x1b":
-                        seq = re.match(rb"\x1b(\[[0-9;]*[A-Za-z~]|O[A-Za-z]|.)?", buf).group(0)
+                        seq = re.match(rb"\x1b(\[[<0-9;]*[A-Za-z~]|O[A-Za-z]|.)?", buf).group(0)
                         buf = buf[len(seq):]
+                        mm = re.fullmatch(rb"\x1b\[<(\d+);(\d+);(\d+)([Mm])", seq)
+                        if mm:  # a click: where is the robot? the terminal tells where the cursor is (reply below)
+                            if mm.group(4) == b"M" and mm.group(1) == b"0":
+                                self.click = (int(mm.group(2)), int(mm.group(3)))
+                                sys.stdout.write("\033[6n"); sys.stdout.flush()
+                            continue
+                        cp = re.fullmatch(rb"\x1b\[(\d+);(\d+)R", seq)
+                        if cp and self.click:
+                            top = int(cp.group(1)) - self.drawn  # first line of the block (the robot's head)
+                            x, y = self.click
+                            self.click = None
+                            if top <= y <= top + 2 and self.rx < x <= self.rx + 9:
+                                threading.Thread(target=self._act, args=(redraw,), daemon=True).start()
+                            continue
                         if seq in (b"\x1b[A", b"\x1bOA"):  # ↑: menu, else history
                             if state["menu"]:
                                 sel = (sel - 1) % len(state["menu"])
@@ -3523,11 +3659,12 @@ class _Editor:
                 self.alive = False
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
                 # the box goes: the message stays as « › message »
-                sys.stdout.write("\033[?2004l" + (f"\033[{self.drawn}A" if self.drawn else "") + "\r\033[J")
+                sys.stdout.write("\033[?2004l\033[?1000l\033[?1006l" + (f"\033[{self.drawn}A" if self.drawn else "") + "\r\033[J")
                 sys.stdout.flush()
         if text.strip():
             first, *more = text.strip().split("\n")
-            print(f"{C['grey']}› {first}{C['reset']}" + "".join(f"\n{C['grey']}  {l}{C['reset']}" for l in more))
+            band = "\033[48;5;237m" if C["reset"] else ""
+            print(f"{band}{C['white']} › {first} \033[K{C['reset']}" + "".join(f"\n{band}   {l} \033[K{C['reset']}" for l in more))
             if not self.history or self.history[-1] != text.strip():
                 self.history.append(text.strip())
         return text
