@@ -3850,7 +3850,9 @@ def _engine_options(model):
     try:
         import llamacpp
         if model.split(":")[0] == "naim" and llamacpp.available():
-            return {"backend": "llamacpp"}
+            # the same room as the app (32k per conversation): started here with the default 16k, the engine refused
+            # Naim's own instructions plus a question (HTTP 400), and the app then inherited that small engine
+            return {"backend": "llamacpp", "num_ctx": 32768}
     except Exception:  # noqa: BLE001
         pass
     return {}
@@ -3883,6 +3885,12 @@ def main():
             agent.cancel.set()
             SPIN.stop()
             print(f"\n{C['yellow']}● Arrêté.{C['reset']}")
+        except Exception as e:  # noqa: BLE001 — an engine error is shown, Naim stays open for the next request
+            SPIN.stop()
+            msg = str(e)
+            if isinstance(e, urllib.error.URLError) and "refused" in msg.lower():
+                msg = "le moteur ne répond pas : ouvre l'application Naim ou réessaie dans un instant"
+            print(f"\n{C['red']}● Erreur : {msg[:300]}{C['reset']}\n{C['grey']}  Tu peux réessayer ou reformuler.{C['reset']}")
         finally:
             SPIN.stop()
             agent.cancel.clear()
