@@ -3938,7 +3938,8 @@ class _Editor:
                 if self.alive:
                     self.render(text, cur, state["menu"], sel)
         self.drawn, self.alive = 0, True
-        sys.stdout.write("\033[?2004h\033[?1000h\033[?1006h")  # bracketed paste; clicks reported (to click the robot)
+        # bracketed paste only: no mouse reporting (it took the scroll wheel from the terminal: no way to scroll back)
+        sys.stdout.write("\033[?2004h")
         redraw()
         if not os.environ.get("NAIM_NO_ANIM"):
             threading.Thread(target=self._life, args=(redraw,), daemon=True).start()
@@ -4047,7 +4048,7 @@ class _Editor:
                 self.alive = False
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
                 # the box goes: the message stays as « › message »
-                sys.stdout.write("\033[?2004l\033[?1000l\033[?1006l" + (f"\033[{self.drawn}A" if self.drawn else "") + "\r\033[J")
+                sys.stdout.write("\033[?2004l\033[?1000l\033[?1006l" + (f"\033[{self.drawn}A" if self.drawn else "") + "\r\033[J")  # (mouse off, in case)
                 sys.stdout.flush()
         if text.strip():
             first, *more = text.strip().split("\n")
