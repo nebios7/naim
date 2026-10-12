@@ -511,6 +511,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({**p.info(), "output": p.tail(400)})
         elif path == "/api/mcp":
             self.send_json({"servers": ext.MCP.status(), "path": str(ext.MCP.path), "json": ext.MCP.raw_json()})
+        elif path == "/api/libs":
+            import libs
+            self.send_json({"libs": libs.listing()})
         elif path == "/api/mcp/catalog":
             self.send_json(mcp_catalog.catalog(installed=set(ext.MCP.config())))
         elif path == "/api/share":
@@ -657,11 +660,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"pages": int(n) if n.isdigit() and int(n) > 0 else None})
             except (ValueError, OSError, subprocess.SubprocessError):
                 self.send_json({"pages": None})
-        elif path in ("/api/thumb", "/api/raw") or path == "/vendor/mermaid.min.js":
+        elif path in ("/api/thumb", "/api/raw") or path in ("/vendor/mermaid.min.js", "/vendor/gsap.min.js", "/vendor/lenis.min.js"):
             try:
                 if path == "/vendor/mermaid.min.js":
                     import diagrams
                     f, ctype = diagrams.mermaid_js(), "text/javascript"
+                elif path.startswith("/vendor/"):  # GSAP and Lenis, bundled with Naim (its own animations)
+                    f, ctype = WEB / "vendor" / path.split("/")[-1], "text/javascript"
                 else:
                     _, f = project_path(q.get("root", ""), q.get("path", ""))
                     if path == "/api/thumb":
@@ -1098,6 +1103,22 @@ class Handler(BaseHTTPRequestHandler):
                 return
             threading.Thread(target=scheduler.run_task, args=(task, _settings(), ollama_chat, Agent, CHAT_PROMPT), daemon=True).start()
             self.send_json({"ok": True})
+        elif path in ("/api/libs/add", "/api/libs/toggle", "/api/libs/remove"):
+            import libs
+            b = self.read_json()
+            try:
+                if path.endswith("add"):
+                    self.send_json({"lib": libs.add(b.get("url", ""))})
+                elif path.endswith("toggle"):
+                    libs.toggle(b.get("name", ""), bool(b.get("on")))
+                    self.send_json({"ok": True})
+                else:
+                    libs.remove(b.get("name", ""))
+                    self.send_json({"ok": True})
+            except libs.LibError as e:
+                self.send_json({"error": str(e)}, 400)
+            except Exception as e:
+                self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
         elif path in ("/api/mcp/browse", "/api/mcp/extract-install"):
             import mcp_hub
             b = self.read_json()
@@ -1573,6 +1594,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
                                     f"\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}")
+                import libs
+                if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
+                    messages[-1] = dict(messages[-1], content=messages[-1]["content"] + "\n\n" + lp)
         if any(m.get("role") == "assistant" for m in (body.get("history") or [])) and not body.get("_relaunched"):
             # mid-conversation: no « Salut Mohamed ! » at the start of every answer
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (

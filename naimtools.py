@@ -2464,6 +2464,9 @@ class Agent:
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
             task = f"{task}\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
+            import libs
+            if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
+                task += "\n\n" + lp
         if any(m.get("role") == "assistant" for m in self.messages[1:]) and not self.subagent:
             task += "\n\n(La conversation est déjà en cours : ne me salue pas et ne commence pas par mon prénom.)"
         if not feedback and not getattr(self, "subagent", False):

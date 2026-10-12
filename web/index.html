@@ -1523,6 +1523,20 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 :root[data-theme="dark"] body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: auto; }
 :root[data-theme="dark"] .md { color: #f2f1ec; letter-spacing: .005em; }
 :root[data-theme="dark"] .md strong, :root[data-theme="dark"] .md b, :root[data-theme="dark"] .md h1, :root[data-theme="dark"] .md h2, :root[data-theme="dark"] .md h3 { color: #ffffff; }
+
+/* « Bibliothèques » cards: small line icons in the buttons */
+.libcard .ghost { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; font-size: 12px; color: var(--muted); border-radius: 6px; }
+.libcard .ghost:hover { color: var(--text); background: var(--hover); }
+.libcard svg { width: 14px; height: 14px; flex: none; }
+.libcard .attic svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 5px; }
+
+/* SpotlightCard (React Bits, without React): the light under the mouse on the cards */
+.acard, .dcard, .qcard { position: relative; }
+.acard::before, .dcard::before, .qcard::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--text) 9%, transparent), transparent 70%); }
+.acard:hover::before, .dcard:hover::before, .qcard:hover::before { opacity: 1; }
+#spane h2 .bw { display: inline-block; }
+@media (prefers-reduced-motion: reduce) { .acard::before, .dcard::before, .qcard::before { display: none; } }
 </style>
 </head>
 <body>
@@ -1708,6 +1722,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
           <button data-s="models">Modèles installés</button>
           <button data-s="keys">Raccourcis</button>
           <button data-s="about">À propos</button>
+          <button data-s="libs">Bibliothèques</button>
           <button data-s="owner" id="ownerTab" hidden title="Visible seulement sur ce Mac">Admin</button>
           </div>
         </nav>
@@ -4461,6 +4476,11 @@ const TABS = {
     ["⇧⌘C", "Copier la dernière réponse"], ["⇧⌘A", "Basculer Chat / Agent"], ["⇧⌘R", "Activer / désactiver le raisonnement"],
     ["⌘/", "Raccourcis clavier"], ["Échap", "Arrêter la réponse / fermer"], ["/", "Commandes : " + SLASH.map(([c]) => c).join(" ")], ["Entrée", "Envoyer (réglable)"], ["↑ ↓", "Historique du terminal"],
   ].map(([k, l]) => `<tr><td>${l}</td><td><kbd>${k}</kbd></td></tr>`).join("")}</table></div>`,
+  libs: () => `<h2>Bibliothèques</h2>
+    <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Les bibliothèques extérieures que Naim peut utiliser quand il crée un site ou une application web (animations, défilement, composants, 3D, graphiques…). <b>Activée</b> : Naim la connaît, sait l'installer et s'en sert quand elle sert ta demande.</p>
+    <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter depuis un lien</b><small>Colle le lien GitHub d'une bibliothèque : Naim lit son README (sans rien exécuter) et en tire la commande d'installation, le lien CDN et un exemple.</small></div>
+      <div style="display:flex;gap:8px"><input class="field mono" id="libUrl" placeholder="https://github.com/owner/repo" style="flex:1"><button class="btn primary" id="libAdd">Ajouter</button></div></div></div>
+    <div id="libList" class="agrid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"><div class="srow"><div class="sl">Chargement…</div></div></div>`,
   owner: () => `<h2>Admin</h2>
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Visible seulement sur ce Mac : l'entraînement, tes clés, les accès au modèle et les commandes du projet. Rien de cet onglet n'est publié.</p>
     ${autoTrainHTML()}
@@ -4501,6 +4521,7 @@ function showSettingsTab(t) {
   if (t === "skills") loadSkillsPage();
   if (t === "memory") loadMemory();
   if (t === "learning") loadLearning();
+  if (t === "libs") loadLibs();
   if (t === "owner") { loadAutoTrain(); loadVoiceTrain(); loadOwner(); }
   if (t === "about") api("/api/model/version").then((v) => { const e = $("#modelVer"); if (e) e.textContent = v.name || "v2"; const d = $("#modelVerDetail"); if (d && v.detail) d.textContent = " · " + v.detail; }).catch(() => {});
   if (t === "instr") api("/api/naim-home").then((h) => { $("#globalMd").value = h.instructions || ""; $("#globalMdSave").onclick = async () => { await api("/api/global-instructions", { method: "PUT", body: { content: $("#globalMd").value } }); toast("NAIM.md enregistré"); }; });
@@ -4724,6 +4745,37 @@ async function loadEngine() {
   const cfg = { llama_gpu_layers: S.llama_gpu_layers, llama_threads: S.llama_threads, llama_batch: S.llama_batch, llama_kv_type: S.llama_kv_type, llama_checkpoints: S.llama_checkpoints, llama_parallel: S.llama_parallel };
   $("#llamaRestart").onclick = async (e) => { e.target.textContent = "Démarrage…"; const r = await api("/api/llama/restart", { method: "POST", body: { ...cfg, num_ctx: Math.max(S.num_ctx, 32768) } }); toast(r.error ? "⚠ " + r.error.slice(0, 120) : "Moteur redémarré"); e.target.textContent = "Redémarrer"; loadEngine(); };
   $("#llamaStop").onclick = async () => { await api("/api/llama/stop", { method: "POST", body: {} }); toast("Moteur arrêté"); loadEngine(); };
+}
+// « Bibliothèques »: the external web libraries Naim may use (catalogue + added by GitHub link)
+async function loadLibs() {
+  const box = $("#libList"); if (!box) return;
+  const { libs } = await api("/api/libs");
+  box.innerHTML = "";
+  libs.forEach((l) => {
+    const c = document.createElement("div"); c.className = "acard libcard";
+    c.innerHTML = `<div style="padding:12px;display:flex;flex-direction:column;gap:7px;flex:1">
+      <div style="display:flex;align-items:center;gap:8px"><b style="flex:1"><span class="attic">${svgI("layers")}</span>${esc(l.name)}</b><span class="lang">${esc(l.category)}</span>
+        <label class="switch" title="Naim peut l'utiliser"><input type="checkbox" ${l.enabled ? "checked" : ""}><span></span></label></div>
+      <small style="color:var(--muted)">${esc(l.description)}</small>
+      ${l.install ? `<div class="mono" style="display:flex;align-items:center;gap:6px;font-size:12px;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:6px 8px"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(l.install)}">${esc(l.install)}</span><button class="ghost" data-copy title="Copier la commande">${svgI("copy")}</button></div>` : ""}
+      <div style="display:flex;gap:6px;align-items:center;margin-top:auto"><button class="ghost" data-repo title="Ouvrir le dépôt GitHub">${svgI("ext")} ${esc(l.repo)}</button><div class="spacer"></div>
+        ${l.added ? `<button class="btn danger" data-rm>Retirer</button>` : ""}</div></div>`;
+    $("input", c).onchange = async (e) => { await api("/api/libs/toggle", { method: "POST", body: { name: l.name, on: e.target.checked } }); toast(`${l.name} ${e.target.checked ? "activée" : "désactivée"}`); };
+    $("[data-repo]", c).onclick = () => api("/api/open-url", { method: "POST", body: { url: `https://github.com/${l.repo}` } });
+    $("[data-copy]", c) && ($("[data-copy]", c).onclick = () => { navigator.clipboard.writeText(l.install); toast("Commande copiée"); });
+    $("[data-rm]", c) && ($("[data-rm]", c).onclick = async () => { if (!confirm(`Retirer ${l.name} de la liste ?`)) return; await api("/api/libs/remove", { method: "POST", body: { name: l.name } }); loadLibs(); });
+    box.appendChild(c);
+  });
+  const add = async () => {
+    const url = $("#libUrl").value.trim(); if (!url) return;
+    $("#libAdd").disabled = true; $("#libAdd").textContent = "Lecture…";
+    const r = await api("/api/libs/add", { method: "POST", body: { url } }).catch((e) => ({ error: e.message }));
+    $("#libAdd").disabled = false; $("#libAdd").textContent = "Ajouter";
+    if (r.error) return toast(r.error);
+    $("#libUrl").value = ""; toast(`${r.lib.name} ajoutée et activée`); loadLibs();
+  };
+  $("#libAdd").onclick = add;
+  $("#libUrl").onkeydown = (e) => { if (e.key === "Enter") add(); };
 }
 // « Ajouter depuis un lien »: the servers a GitHub repository documents, or a remote server's address
 function loadMcpHub() {
@@ -5529,6 +5581,7 @@ const RICON = {
   models: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
   skills: '<path d="M9 4h6v4h4v6h-4v6H9v-6H5V8h4z"/>',
   mcp: '<path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 01-10 0zM12 17v4"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
   list: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15"/>',
   activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   term: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/>',
@@ -5614,7 +5667,7 @@ function iconizeMsgActs(root = document) {
 }
 new MutationObserver(() => iconizeMsgActs($("#thread"))).observe(document.getElementById("thread"), { childList: true, subtree: true });
 const STAB_ICONS = { general: "settings", model: "sliders", engine: "models", instr: "script", agent: "agent", mcp: "mcp", skills: "skills",
-  memory: "bulb", learning: "test", models: "models", keys: "term", about: "chat", owner: "term" };
+  memory: "bulb", learning: "test", models: "models", keys: "term", about: "chat", libs: "layers", owner: "term" };
 function polishSettings() {
   $$("#stabs button").forEach((b) => { if (!b.dataset.svg && STAB_ICONS[b.dataset.s]) { b.dataset.svg = 1; b.insertAdjacentHTML("afterbegin", svgI(STAB_ICONS[b.dataset.s])); } });
   const nf = $("#newFolderIcon"); if (nf && !nf.innerHTML) { nf.innerHTML = svgI("folder"); nf.onclick = () => newFolder(); }
@@ -5984,6 +6037,59 @@ async function openDeepLink() {
     if (!raf) raf = requestAnimationFrame(() => { raf = 0; const q = queued; queued = new Set(); q.forEach((el) => el && el.isConnected && fix(el)); });
   }).observe(document.body, { childList: true, subtree: true, characterData: false });
   fix(document.body);
+})();
+
+// ======================================================================= motion (GSAP, Lenis, React Bits effects)
+// Naim's own animations, with the libraries of « Bibliothèques » (bundled in web/vendor, no internet needed):
+// GSAP for entrances, Lenis for smooth scrolling of the pages and the conversation list, and two React Bits
+// effects redone without React (SpotlightCard on the cards, BlurText on the settings titles).
+// Never on the conversation being written (nothing moves under the text) and never with « réduire les animations ».
+(() => {
+  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches || S.motion === false;
+  const load = (src) => new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+  Promise.all([load("/vendor/gsap.min.js"), load("/vendor/lenis.min.js")]).then(() => {
+    const gsap = window.gsap;
+    // Lenis: smooth wheel scrolling of the pages (Personnaliser, Artefacts, Tâches) and of the conversation list
+    const smooth = new Map();
+    const lenisOn = (el) => {
+      if (!el || smooth.has(el) || calm() || !window.Lenis) return;
+      const l = new Lenis({ wrapper: el, content: el, duration: 0.9, smoothWheel: true, wheelMultiplier: 0.9 });
+      gsap.ticker.add((t) => l.raf(t * 1000));
+      smooth.set(el, l);
+    };
+    gsap.ticker.lagSmoothing(0);
+    [...document.querySelectorAll(".view.page"), document.getElementById("convs")].forEach(lenisOn);
+
+    // GSAP: what appears comes in softly (only one new element at a time, not a whole conversation being redrawn)
+    const enter = (els, o = {}) => { if (!calm() && els.length) gsap.from(els, { y: 10, opacity: 0, duration: 0.38, ease: "power2.out", stagger: 0.03, clearProps: "transform,opacity", ...o }); };
+    const thread = document.getElementById("thread");
+    if (thread) new MutationObserver((muts) => {
+      const added = muts.flatMap((m) => [...m.addedNodes]).filter((n) => n.nodeType === 1 && n.classList.contains("turn"));
+      if (added.length === 1 && !added[0].dataset.entered) { added[0].dataset.entered = "1"; enter(added, { y: added[0].classList.contains("user") ? 14 : 6 }); }
+    }).observe(thread, { childList: true });
+
+    // settings: each tab's groups and cards come in one after the other; the title gets a BlurText reveal
+    const spane = document.getElementById("spane");
+    if (spane) new MutationObserver(() => {
+      if (calm()) return;
+      const h = spane.querySelector("h2");
+      if (h && !h.dataset.blur) {
+        h.dataset.blur = "1";
+        h.innerHTML = h.textContent.split(/(\s+)/).map((w) => /\s/.test(w) ? w : `<span class="bw">${esc(w)}</span>`).join("");
+        gsap.from(h.querySelectorAll(".bw"), { filter: "blur(8px)", opacity: 0, y: -6, duration: 0.45, ease: "power2.out", stagger: 0.06, clearProps: "filter,opacity,transform" });
+      }
+      const fresh = [...spane.querySelectorAll(":scope > .sgroup, :scope > p.sub, .agrid > .acard")].filter((e) => !e.dataset.entered).slice(0, 24);
+      fresh.forEach((e) => (e.dataset.entered = "1"));
+      enter(fresh, { stagger: 0.025 });
+    }).observe(spane, { childList: true, subtree: true });
+  }).catch(() => {});  // without the libraries Naim simply has no animation
+
+  // SpotlightCard (React Bits): a soft light follows the mouse on the cards
+  document.addEventListener("pointermove", (e) => {
+    const c = e.target.closest?.(".acard, .dcard, .qcard"); if (!c) return;
+    const r = c.getBoundingClientRect();
+    c.style.setProperty("--mx", `${e.clientX - r.left}px`); c.style.setProperty("--my", `${e.clientY - r.top}px`);
+  }, { passive: true });
 })();
 </script>
 </body>
