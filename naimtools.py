@@ -144,6 +144,14 @@ EXTERNAL_TOOL = {"type": "function", "function": {"name": "confier_tache", "desc
 _EXTERNAL_OK = set()  # conversations where the user already allowed it (asked the first time only)
 
 
+def _short_desc(text, limit=110):
+    """A skill in the list: its first sentence, short (the whole method is read when the skill is loaded). The full
+    descriptions cost ~5k tokens read again before every request."""
+    t = re.sub(r"\s+", " ", str(text or "")).strip()
+    first = re.split(r"(?<=[.!?])\s", t, 1)[0]
+    return first if len(first) <= limit else first[:limit].rsplit(" ", 1)[0] + "…"
+
+
 def _conversations_dir():
     return Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "conversations"
 
@@ -644,7 +652,7 @@ class Agent:
             if skills:
                 parts.append("Available skills (call use_skill to load one before a task it covers; after solving a new "
                              "kind of task, you may save the method with create_skill):\n"
-                             + "\n".join(f"- {s['name']}: {s['description']}" for s in skills))
+                             + "\n".join(f"- {s['name']}: {_short_desc(s['description'])}" for s in skills))
         if self.mcp_lookup:
             servers = sorted({v[0] for v in self.mcp_lookup.values()})
             parts.append("External tools from MCP servers are available (names start with mcp__): " + ", ".join(servers))
