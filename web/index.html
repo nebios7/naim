@@ -4340,6 +4340,9 @@ const TABS = {
     <h2 style="margin-top:22px">Catalogue</h2>
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Installe un serveur en un clic. Ceux qui demandent une clé te la demandent avant l'installation.</p>
     <div id="mcpCatalog" class="agrid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))"></div>
+    <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter depuis un lien</b><small>Colle le lien GitHub d'un serveur MCP (Naim lit sa documentation et en extrait la configuration, sans rien exécuter) ou l'adresse d'un serveur distant (https://…/mcp).</small></div>
+      <div style="display:flex;gap:8px"><input class="field mono" id="mcpHubUrl" placeholder="https://github.com/owner/repo  ou  https://exemple.com/mcp" style="flex:1"><button class="btn primary" id="mcpHubGo">Extraire</button></div></div>
+      <div id="mcpHubList"></div></div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter un serveur</b><small>Commande lancée en local (transport stdio). Exemples rapides :</small></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${Object.keys(MCP_PRESETS).map((k) => `<button class="ghost" data-preset="${k}">＋ ${k}</button>`).join("")}</div>
       <div style="display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;margin-top:6px">
@@ -4493,7 +4496,7 @@ function showSettingsTab(t) {
   $("#spane").dataset.tab = t;
   bindSettings();
   if (t === "models") loadModels();
-  if (t === "mcp") { loadMcp(); loadMcpCatalog(); }
+  if (t === "mcp") { loadMcp(); loadMcpCatalog(); loadMcpHub(); }
   if (t === "engine") loadEngine();
   if (t === "skills") loadSkillsPage();
   if (t === "memory") loadMemory();
@@ -4721,6 +4724,42 @@ async function loadEngine() {
   const cfg = { llama_gpu_layers: S.llama_gpu_layers, llama_threads: S.llama_threads, llama_batch: S.llama_batch, llama_kv_type: S.llama_kv_type, llama_checkpoints: S.llama_checkpoints, llama_parallel: S.llama_parallel };
   $("#llamaRestart").onclick = async (e) => { e.target.textContent = "Démarrage…"; const r = await api("/api/llama/restart", { method: "POST", body: { ...cfg, num_ctx: Math.max(S.num_ctx, 32768) } }); toast(r.error ? "⚠ " + r.error.slice(0, 120) : "Moteur redémarré"); e.target.textContent = "Redémarrer"; loadEngine(); };
   $("#llamaStop").onclick = async () => { await api("/api/llama/stop", { method: "POST", body: {} }); toast("Moteur arrêté"); loadEngine(); };
+}
+// « Ajouter depuis un lien »: the servers a GitHub repository documents, or a remote server's address
+function loadMcpHub() {
+  const go = $("#mcpHubGo"), input = $("#mcpHubUrl"), list = $("#mcpHubList"); if (!go) return;
+  const row = (html) => `<div class="srow"><div class="sl">${html}</div></div>`;
+  const browse = async () => {
+    const url = input.value.trim(); if (!url) return;
+    list.innerHTML = row("<small>Lecture du dépôt…</small>"); go.disabled = true;
+    const r = await api("/api/mcp/browse", { method: "POST", body: { url } }).catch((e) => ({ error: e.message }));
+    go.disabled = false;
+    if (r.error) { list.innerHTML = row(`<small style="color:var(--danger)">${esc(r.error)}</small>`); return; }
+    list.innerHTML = row(`<small>${r.servers.length} serveur${r.servers.length > 1 ? "s" : ""} trouvé${r.servers.length > 1 ? "s" : ""}</small>`);
+    r.servers.forEach((it) => {
+      const el = document.createElement("div"); el.className = "srow col";
+      const what = it.url || [it.command, ...it.args].join(" ");
+      el.innerHTML = `<div class="sl"><b><span class="attic">${svgI("mcp")}</span>${esc(it.name)} <span class="badge2">${it.url ? "distant" : it.docker ? "docker" : "local"}</span></b>
+        <small class="mono" style="display:block;word-break:break-all">${esc(what)}</small><small class="muted" style="display:block">trouvé dans ${esc(it.source)}</small>
+        ${!it.ready ? `<small style="color:var(--warn)">${esc(it.command)} n'est pas installé sur ce Mac</small>` : ""}</div>
+        ${it.env.map((k) => `<input class="field mono" data-k="${esc(k)}" placeholder="${esc(k)} (obligatoire)" style="font-size:12px">`).join("")}
+        ${it.optional.map((k) => `<input class="field mono" data-k="${esc(k)}" placeholder="${esc(k)} (facultatif)" style="font-size:12px">`).join("")}
+        <div style="display:flex;justify-content:flex-end"><button class="btn primary" ${it.ready ? "" : "disabled"}>Installer</button></div>`;
+      const b = $("button", el);
+      b.onclick = async () => {
+        const env = Object.fromEntries($$("[data-k]", el).map((i) => [i.dataset.k, i.value.trim()]));
+        const miss = it.env.filter((k) => !env[k]); if (miss.length) return toast("Renseigne d'abord : " + miss.join(", "));
+        b.disabled = true; b.textContent = "Installation…";
+        const res = await api("/api/mcp/extract-install", { method: "POST", body: { url: input.value.trim(), name: it.name, env, project: S.project } });
+        b.disabled = false; b.textContent = res.error && !res.name ? "Installer" : "Installé ✓";
+        toast(res.error ? `⚠ ${it.name} : ${String(res.error).slice(0, 140)}` : `${it.name} installé ✓`);
+        loadMcp();
+      };
+      list.appendChild(el);
+    });
+  };
+  go.onclick = browse;
+  input.onkeydown = (e) => { if (e.key === "Enter") browse(); };
 }
 async function loadMcpCatalog() {
   const box = $("#mcpCatalog"); if (!box) return;
@@ -4964,6 +5003,7 @@ async function loadVoiceTrain() {
         ${v.final ? `<button class="btn" data-play="final">${svgI("wave")}Voix entraînée</button>` : ""}
         ${v.brut ? `<button class="btn" data-act="clean">${svgI("sliders")}Nettoyer</button>` : ""}
         ${v.entrainee && !v.en_service ? `<button class="btn" data-act="activate">${svgI("check")}Mettre en service</button>` : ""}
+        ${v.en_service ? "" : `<button class="btn danger" data-act="remove" title="Mettre cette voix à la Corbeille">${svgI("trash")}Supprimer</button>`}
         <button class="btn" data-act="train" ${busy ? "disabled title=\"Une voix apprend déjà\"" : ""}>${svgI("play")}${v.entrainee ? "Améliorer encore" : v.recorded ? "Reprendre l'entraînement" : "Entraîner"}</button>
       </div>
       ${v.essai_etat && v.essai_etat.startsWith("échec") ? `<small class="muted">${esc(v.essai_etat)}</small>` : ""}
@@ -4974,6 +5014,10 @@ async function loadVoiceTrain() {
   $$("#voiceLib [data-act]").forEach((b) => (b.onclick = async () => {
     const row = b.closest("[data-v]"), v = row.dataset.v, info = r.voices.find((x) => x.voix === v);
     if (b.dataset.act === "try") { await api("/api/voicetrain/try", { method: "POST", body: { voix: v } }); toast("Essai en cours : la voix va dire une phrase (1 à 3 min)"); loadVoiceTrain(); }
+    if (b.dataset.act === "remove") {
+      if (!confirm(`Supprimer la voix « ${info.nom} » ?\n\nElle va dans la Corbeille du Mac (enregistrement, essais et voix entraînée) : tu peux la remettre depuis le Finder tant que la Corbeille n'est pas vidée.`)) return;
+      const x = await api("/api/voicetrain/remove", { method: "POST", body: { voix: v } }); toast(x.error || `« ${info.nom} » est dans la Corbeille`); loadVoiceTrain();
+    }
     if (b.dataset.act === "activate") { const x = await api("/api/voicetrain/activate", { method: "POST", body: { voix: v } }); toast(x.error || `${info.nom} est maintenant la voix de Naim`); loadVoiceTrain(); }
     if (b.dataset.act === "train") {
       if (!confirm(`Entraîner Naim avec « ${info.nom} » ?\n\nNaim va se fermer : la voix lit environ 900 phrases (plusieurs heures), puis la voix rapide apprend (environ 14 h). La fenêtre « Naim — Voix » suit la progression ; tu peux mettre en pause et reprendre. À la fin, cette voix est mise en service (l'ancienne est gardée).`)) return;

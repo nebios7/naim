@@ -852,6 +852,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(vt.try_voice(v))
             elif path.endswith("/activate"):
                 self.send_json(vt.activate(v))
+            elif path.endswith("/remove"):
+                self.send_json(vt.remove(v))
             else:
                 self.send_json({"error": "inconnu"}, 404)
         elif path == "/api/background/ack":
@@ -1096,6 +1098,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
             threading.Thread(target=scheduler.run_task, args=(task, _settings(), ollama_chat, Agent, CHAT_PROMPT), daemon=True).start()
             self.send_json({"ok": True})
+        elif path in ("/api/mcp/browse", "/api/mcp/extract-install"):
+            import mcp_hub
+            b = self.read_json()
+            try:
+                if path.endswith("browse"):
+                    self.send_json({"servers": mcp_hub.browse(b.get("url", ""))})
+                else:
+                    self.send_json(mcp_hub.install(b.get("url", ""), b.get("name", ""), b.get("env") or {}, b.get("project", "")))
+            except mcp_hub.McpError as e:
+                self.send_json({"error": str(e)}, 400)
+            except Exception as e:
+                self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
         elif path == "/api/mcp/install":
             b = self.read_json()
             name = b.get("name")
