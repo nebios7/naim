@@ -4066,6 +4066,10 @@ def _ask():
 
 
 GREETING_RE = re.compile(r"^\W*(?:salut|bonjour|bonsoir|coucou|hello|hey|yo)\b[\s,!.]*(?:naim\b[\s,!.]*)?", re.I)
+# asking Naim to go and look, check, read or fetch something: that needs its tools (web search, files, the Mac)
+LOOKUP_RE = re.compile(r"\b(?:re)?cherch\w*|\btrouv\w*|\bregarde\w*|\bv[ée]rifi\w*|\bouvr\w*|\bouvre\b|\blis\b|\blire\b|"
+                       r"\banalys\w*|\bcompar\w*|\bt[ée]l[ée]charg\w*|\br[ée]sum\w*|\btradui\w*|\bcalcul\w*|\bm[ée]t[ée]o\b|"
+                       r"\bsur (?:le |l')?(?:net|web|internet)\b|\bgoogle\b|https?://|\bwww\.", re.I)
 EXPLAIN_RE = re.compile(r"^\W*(?:explique|expliques|parle[- ]moi|dis[- ]moi|apprends[- ]moi|c'est quoi|qu'est[- ]ce|pourquoi|comment)\b", re.I)
 
 
@@ -4084,9 +4088,9 @@ def _answer_only(task):
     except Exception:  # noqa: BLE001
         act = re.search(r"\b(cr[ée]e|fai[st]|corrige|lance|installe|ex[ée]cute|envoie|supprime|modifie|[ée]cri[st])\w*", t, re.I)
     named = re.search(r"[\w./~-]+\.(?:py|js|ts|jsx|tsx|swift|html|css|json|md|txt|pdf|docx|xlsx|sh|java|c|cpp|go|rs)\b|~/|/Users/", t)
-    if EXPLAIN_RE.match(t) and not named:
+    if EXPLAIN_RE.match(t) and not named and not LOOKUP_RE.search(t):
         return True  # « explique-moi … », « c'est quoi … » : always an answer
-    return not act and not named
+    return not act and not named and not LOOKUP_RE.search(t)
 
 
 def _chat_answer(agent, task):
