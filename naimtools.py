@@ -2258,6 +2258,10 @@ class Agent:
                     "that change things and write your numbered implementation plan now as your final answer.")
         if fn is None or name not in allowed:
             return f"error: unknown or unavailable tool {name}"
+        if isinstance(args, dict) and "_unreadable" in args:
+            return (f"error: your {name} call could not be read ({args['_unreadable']}): its arguments were not valid "
+                    "JSON (often a quote or backslash not escaped, or the call was cut off). Call it again with valid "
+                    "arguments; for a long file, write a first part with write_file, then add the rest with edit_file.")
         try:
             return fn(**args)
         except TypeError as e:

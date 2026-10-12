@@ -329,13 +329,22 @@ Une application qui a l'air d'un vrai produit, qui marche quand il clique partou
 - `npm create vite@latest <nom> -- --template react` puis `cd <nom> && npm install` (le nom en minuscules, sans espace).
 - Ne rien installer d'autre sans raison (pas de Tailwind, pas de routeur pour une seule page).
 
-## 2. Organiser
+## 2. Planifier AVANT d'écrire (une fois, dans update_todos), puis écrire chaque fichier une seule fois
+- La liste des fichiers et, pour chaque composant, ses props exactes (ex. `Card({ card, onDelete, onDragStart })`) et
+  la forme des données (ex. `{ boards: [{ id, name, columns: [{ id, title, cardIds }] }], cards: { [id]: {...} } }`).
+- Toutes les bibliothèques en une seule commande au début (`npm install uuid` …) ; le glisser-déposer se fait sans
+  bibliothèque (attributs `draggable`, `onDragStart`, `onDragOver`, `onDrop`).
+- Ordre d'écriture : `src/data.js`, puis les petits composants, puis `src/App.jsx` (À CET EMPLACEMENT : `main.jsx`
+  importe `./App.jsx`), puis `src/App.css`. Remplace le contenu d'exemple de Vite (`App.jsx`, `App.css`, `index.css`).
+- Un fichier écrit ne se réécrit pas : si une prop change, corrige-la avec edit_file.
+
+## 3. Organiser
 - `src/data.js` : les données (pour une boutique : 8 à 12 produits avec nom, prix, catégorie, description courte,
   note, stock, et une couleur ou un dégradé par produit).
-- `src/components/` : un composant par fichier, court (Header, ProductCard, ProductGrid, Cart, Filters, Toast…).
+- `src/components/` : un composant par fichier, complet (Header, ProductCard, ProductGrid, Cart, Filters, Toast…).
 - État avec `useState` ; ce qui doit survivre au rechargement (le panier) dans `localStorage` via `useEffect`.
 
-## 3. Le design (c'est ce qui se voit en premier)
+## 4. Le design (c'est ce qui se voit en premier)
 - `src/index.css` : variables CSS (`--bg`, `--text`, `--accent`, `--radius`…), une police système propre, des espaces
   généreux, des ombres douces, `:hover` et transitions sur tout ce qui se clique, mise en page `grid` qui passe en
   une colonne sur téléphone (`@media (max-width: 700px)`).
@@ -346,19 +355,19 @@ Une application qui a l'air d'un vrai produit, qui marche quand il clique partou
   React Bits (`npx shadcn@latest add @react-bits/BlurText-TS-TW`…) ; recettes et règles dans
   `~/.naim/skills/animations-web/SKILL.md` (lis-le avec read_file avant d'animer).
 
-## 4. Les fonctions qu'une boutique doit avoir
+## 5. Les fonctions qu'une boutique doit avoir
 Recherche, filtre par catégorie, tri par prix ; ajout au panier avec un petit message de confirmation ; panier
 (quantités + / −, retirer, total) ; « Commander » ouvre un récapitulatif avec un formulaire (nom, adresse) et une
 confirmation de commande. Tout en français, prix au format `12,90 €` (`toLocaleString("fr-FR", {style:"currency", currency:"EUR"})`).
 
-## 5. Vérifier puis lancer et ouvrir
+## 6. Vérifier puis lancer et ouvrir
 1. `npm run build` doit passer sans erreur ni avertissement de React ; corriger sinon.
 2. Lancer avec start_process (keep=true) : `npm run dev -- --port 5173`, attendre que l'adresse réponde.
 3. Ouvrir l'application dans le navigateur (outil browser) : vérifier qu'elle s'affiche, ajouter un produit au
    panier, regarder la capture. Si quelque chose est cassé ou moche, corriger avant de répondre.
 L'application reste lancée : l'utilisateur la voit s'ouvrir dans l'Aperçu de Naim.
 
-## 6. Répondre
+## 7. Répondre
 Court : ce que fait l'application (3 ou 4 lignes), le dossier, l'adresse http://localhost:5173. Ne PAS écrire
 « pour la lancer, tapez… » : elle est déjà lancée et ouverte.
 """),

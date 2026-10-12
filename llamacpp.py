@@ -27,6 +27,17 @@ URL = f"http://127.0.0.1:{PORT}"
 LOG = HOME / "llama-server.log"
 
 
+
+def _args(raw):
+    """A tool call's arguments. A raw line break or tab inside a string (frequent in code) is accepted; arguments
+    that still cannot be read are reported instead of becoming an empty call that fails without saying why."""
+    if not isinstance(raw, str):
+        return raw or {}
+    try:
+        return json.loads(raw or "{}", strict=False)
+    except json.JSONDecodeError as e:
+        return {"_unreadable": f"{e.msg} at character {e.pos} of {len(raw)}"}
+
 def model_files():
     gguf = Path(os.environ.get("NAIM_GGUF", MODELS / "naim-Q4_K_M.gguf"))
     mmproj = Path(os.environ.get("NAIM_MMPROJ", MODELS / "naim-mmproj-f16.gguf"))
@@ -369,10 +380,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         calls = []
         for c in m.get("tool_calls") or []:
             args = c["function"].get("arguments") or "{}"
-            try:
-                args = json.loads(args) if isinstance(args, str) else args
-            except json.JSONDecodeError:
-                args = {}
+            args = _args(args)
             calls.append({"function": {"name": c["function"]["name"], "arguments": args}})
         out = {"role": "assistant", "content": m.get("content") or ""}
         if m.get("reasoning_content"):
@@ -422,10 +430,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         if calls:
             out = []
             for _, c in sorted(calls.items()):
-                try:
-                    args = json.loads(c["args"] or "{}")
-                except json.JSONDecodeError:
-                    args = {}
+                args = _args(c["args"])
                 out.append({"function": {"name": c["name"], "arguments": args}})
             yield {"message": {"tool_calls": out}, "done": False}
     return chunks()
