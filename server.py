@@ -372,7 +372,7 @@ def agent_settings(body):
     s = body.get("settings") or {}
     out = {"auto_writes": bool(s.get("auto_writes")), "auto_commands": bool(s.get("auto_commands")),
            "blocked": [b for b in str(s.get("blocked_commands") or "").splitlines() if b.strip()]}
-    if isinstance(s.get("max_steps"), int) and 1 <= s["max_steps"] <= 200:
+    if isinstance(s.get("max_steps"), int) and 1 <= s["max_steps"] <= 1000:  # 1000 = « sans limite » in the settings
         out["max_steps"] = s["max_steps"]
     out["features"] = {k: s.get(f"enable_{k}", True) is not False for k in ("web", "memory", "skills", "mcp", "subagents", "computer", "simulator")}
     out["disabled_skills"] = s.get("disabled_skills") or []

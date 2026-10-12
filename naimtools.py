@@ -1633,9 +1633,22 @@ class Agent:
 
     def computer(self, action, text=None, index=None, x=None, y=None, x2=None, y2=None, keys=None, amount=-5, app=None,
                  full=False, near=None, look=False, sensitive=False, reason=None):
+        if getattr(self, "_no_screen", None):
+            # macOS refused the screen once in this task: asking again only repeats the same error (90 times seen)
+            return ("refused: the screen is not accessible to Naim (macOS permission). Do NOT use the computer tool "
+                    "again in this task: do it with commands, files or the simulator, and tell the user, once, to enable "
+                    f"Naim in System Settings › Privacy & Security › {self._no_screen}, then restart Naim.")
         if self._computer is None:
             self._computer = cu.Computer()
         c = self._computer
+        try:
+            return self._computer_do(c, action, text, index, x, y, x2, y2, keys, amount, app, full, near, look, sensitive, reason)
+        except cu.ComputerError as e:
+            if "pas d'accès" in str(e):
+                self._no_screen = "Enregistrement de l'écran" if "écran" in str(e) else "Accessibilité"
+            raise
+
+    def _computer_do(self, c, action, text, index, x, y, x2, y2, keys, amount, app, full, near, look, sensitive, reason):
         if action == "screenshot":
             return self._shot(c.screenshot(full), "Écran", look=look)
         shown = f"•••••• ({len(text or '')} caractères)" if sensitive and action == "type" else text
@@ -2833,7 +2846,8 @@ class Agent:
             self._attach_images()
             if any(c["function"]["name"] not in READ_ONLY for c in calls):
                 self._notebook(getattr(self, "_task_words", ""))
-        text = f"Arrêt : {self.max_steps} étapes atteintes."
+        text = (f"Pause : {self.max_steps} étapes atteintes. Écris « continue » pour que je reprenne là où j'en suis "
+                "(ou augmente le nombre d'étapes dans Personnaliser › Agent).")
         self.emit({"type": "answer", "text": text})
         self._outcome = "max_steps"
         return text

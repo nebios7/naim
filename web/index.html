@@ -3428,7 +3428,7 @@ async function regenerate() {
 function settingsPayload() {
   return { temperature: S.temperature, top_p: S.top_p, top_k: S.top_k, repeat_penalty: S.repeat_penalty, num_ctx: S.num_ctx,
     num_predict: S.num_predict, seed: S.seed, keep_alive: S.keep_alive, vision_model: S.vision_model, system_prompt: S.system_prompt, user_name: S.user_name,
-    auto_writes: S.auto_writes, auto_commands: S.auto_commands, max_steps: S.max_steps, blocked_commands: S.blocked_commands,
+    auto_writes: S.auto_writes, auto_commands: S.auto_commands, max_steps: (+S.max_steps >= 310 ? 1000 : S.max_steps), blocked_commands: S.blocked_commands,
     enable_web: S.enable_web, chat_tools: S.chat_tools, enable_memory: S.enable_memory, enable_skills: S.enable_skills, enable_mcp: S.enable_mcp,
     enable_subagents: S.enable_subagents, enable_computer: S.enable_computer, enable_simulator: S.enable_simulator, auto_computer: S.auto_computer, computer_power: S.computer_power, screen_images: S.screen_images, enable_email: S.enable_email, enable_learning: S.enable_learning, enable_review: S.enable_review, memory_auto: S.memory_auto, memory_limit: S.memory_limit, email_allowed: S.email_allowed, auto_mcp: S.auto_mcp, disabled_skills: S.disabled_skills, naim_backend: S.naim_backend,
     llama_gpu_layers: S.llama_gpu_layers, llama_threads: S.llama_threads, llama_batch: S.llama_batch, llama_kv_type: S.llama_kv_type, llama_checkpoints: S.llama_checkpoints, llama_parallel: S.llama_parallel, max_subagents: S.max_subagents,
@@ -4326,7 +4326,7 @@ document.addEventListener("change", (e) => {
 function row(title, sub, control) { return `<div class="srow"><div class="sl"><b>${title}</b>${sub ? `<small>${sub}</small>` : ""}</div><div class="sc">${control}</div></div>`; }
 function range(key, min, max, step, fmt = (v) => v) { return `<input type="range" data-k="${key}" data-num min="${min}" max="${max}" step="${step}" value="${S[key]}"><span class="val" data-v="${key}">${fmt(S[key])}</span>`; }
 function sel(key, opts) { return `<select data-k="${key}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(S[key]) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`; }
-const FMT = { external_timeout: (v) => `${Math.round(v / 60)} min`, zoom: (v) => `${Math.round(v * 100)} %`, font_size: (v) => `${v} px`, temperature: (v) => (+v).toFixed(2), top_p: (v) => (+v).toFixed(2), repeat_penalty: (v) => (+v).toFixed(2) };
+const FMT = { max_steps: (v) => (+v >= 310 ? "sans limite" : `${v}`), external_timeout: (v) => `${Math.round(v / 60)} min`, zoom: (v) => `${Math.round(v * 100)} %`, font_size: (v) => `${v} px`, temperature: (v) => (+v).toFixed(2), top_p: (v) => (+v).toFixed(2), repeat_penalty: (v) => (+v).toFixed(2) };
 const autoTrainHTML = () => `<div class="sgroup" id="autoTrain" hidden>
       <div class="srow col"><div class="sl"><b>Apprentissage automatique</b><small>La nuit (1 h – 6 h), sur secteur et quand Naim ne travaille pas : il rassemble ses tâches réussies et celles de la communauté, entraîne une nouvelle version, <b>l'examine</b> (code + outils, le même test que le README) et l'installe <b>seulement si elle fait au moins aussi bien</b>. L'ancienne version est gardée : tu peux y revenir en un clic.</small></div></div>
       ${row("Activer l'apprentissage automatique", "Désactivé par défaut. Un entraînement dure environ 1 h 30 (examen compris) ; Naim est indisponible pendant ce temps.", sw("auto_train"))}
@@ -4476,7 +4476,7 @@ const TABS = {
     <div class="profiles">${Object.entries(PROFILES).map(([k, [t, d]]) => `<button class="profile${currentProfile() === k ? " on" : ""}" data-profile="${k}"><b>${t}</b><small>${d}</small></button>`).join("")}</div>
     <div class="sgroup">
       ${row("Dossier de projet par défaut", "", `<input class="field mono" type="text" data-k="project" value="${esc(S.project)}" style="width:260px"><button class="ghost" id="sPick">Choisir…</button>`)}
-      ${row("Nombre max d'étapes par tâche", "L'agent s'arrête après ce nombre d'actions.", range("max_steps", 5, 100, 1))}
+      ${row("Nombre max d'étapes par tâche", "L'agent s'arrête après ce nombre d'actions (tout à droite : sans limite). Pour une grande application : 200 ou plus.", range("max_steps", 10, 310, 10, FMT.max_steps))}
     </div>
     <div class="sgroup">
       ${row("Autoriser automatiquement les écritures de fichiers", "Création et modification sans confirmation.", sw("auto_writes"))}
