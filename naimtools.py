@@ -72,7 +72,7 @@ def command_writes(command):
             return True
     return False
 
-VERSION = "1.0"
+VERSION = "3.0"  # the version shown (the same as the app)
 MAX_STEPS = 30
 MAX_OUTPUT = 12000  # characters of tool output sent back to the model
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
@@ -3070,6 +3070,126 @@ def cli_emit(ev):
         print(f"\n{C['white']}●{C['reset']} " + _md(ev["text"]).replace("\n", "\n  ") + "\n")
 
 
+# ---------------------------------------------------------------- welcome (the robot of Naim, animated)
+ROBOT = ["  ▄▀▀▀▄  ",
+         " █ ● ● █ ",
+         " █ ▀▀▀ █ ",
+         "  ▀█▀█▀  "]
+ROBOT_W = 9
+
+
+def _robot(col=None):
+    c = col or C["white"]
+    return [f"{c}{l}{C['reset']}" for l in ROBOT]
+
+
+def _vlen(s):
+    return len(re.sub(r"\033\[[0-9;]*m", "", s))
+
+
+def _pad(s, w):
+    return s + " " * max(0, w - _vlen(s))
+
+
+def _intro():
+    """The robot comes, « Naim » is written beside it, then it slides to the right and the panel takes its place."""
+    if not sys.stdout.isatty() or os.environ.get("NAIM_NO_ANIM"):
+        return
+    cols = shutil.get_terminal_size((80, 24)).columns
+    out = sys.stdout
+    out.write("\033[?25l")  # cursor hidden during the animation
+    try:
+        frames = []
+        for shade in (C["grey"], C["dim"] + C["white"], C["white"]):  # it appears
+            frames.append(([f"  {l}" for l in _robot(shade)], 0.09))
+        word = "Naim"
+        for k in range(1, len(word) + 1):  # it writes its name
+            txt = f"{C['bold']}{C['white']}{word[:k]}{C['reset']}{C['grey']}{'▌' if k < len(word) else ''}{C['reset']}"
+            rows = _robot()
+            frames.append(([f"  {rows[0]}", f"  {rows[1]}   {txt}", f"  {rows[2]}", f"  {rows[3]}"], 0.11))
+        frames.append((frames[-1][0][:1] + [frames[-1][0][1] + f"  {C['grey']}agent de code{C['reset']}"] + frames[-1][0][2:], 0.35))
+        rows = _robot()
+        for x in range(2, min(cols - ROBOT_W - 2, 46), 4):  # it slides to the right, the name tidied away
+            frames.append(([" " * x + l for l in rows], 0.03))
+        first = True
+        for lines, wait in frames:
+            if not first:
+                out.write(f"\033[{len(ROBOT)}A")
+            first = False
+            for l in lines:
+                out.write("\r\033[2K" + l + "\n")
+            out.flush()
+            time.sleep(wait)
+        out.write(f"\033[{len(ROBOT)}A" + "".join("\r\033[2K\n" for _ in ROBOT) + f"\033[{len(ROBOT)}A")
+    finally:
+        out.write("\033[?25h")
+        out.flush()
+
+
+def _recent_conversations(n=3):
+    d = Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "conversations"
+    rows = []
+    for f in sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:12]:
+        try:
+            t = json.loads(f.read_text()).get("title") or ""
+        except (OSError, ValueError):
+            continue
+        if t:
+            age = int((time.time() - f.stat().st_mtime) // 86400)
+            rows.append((t, "aujourd'hui" if age == 0 else "hier" if age == 1 else f"il y a {age} j"))
+        if len(rows) >= n:
+            break
+    return rows
+
+
+def _user_name():
+    try:
+        s = json.loads((Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "settings.json").read_text())
+        return str(s.get("user_name") or "").strip()
+    except (OSError, ValueError):
+        return ""
+
+
+def _welcome(where, engine):
+    """The panel: on the left the greeting and the robot, on the right how to start and the recent activity."""
+    cols = max(60, min(shutil.get_terminal_size((100, 24)).columns, 110))
+    left_w = 34
+    right_w = cols - left_w - 7
+    name = _user_name()
+    left = ["", f"{C['bold']}{'Bon retour ' + name + ' !' if name else 'Bienvenue !'}{C['reset']}", ""] + \
+           [" " * ((left_w - ROBOT_W) // 2) + r for r in _robot()] + \
+           ["", f"{C['grey']}{engine}{C['reset']}", f"{C['grey']}{where[-left_w:]}{C['reset']}"]
+    left = [(" " * max(0, (left_w - _vlen(l)) // 2) + l) if i in (1, len(left) - 2, len(left) - 1) else l for i, l in enumerate(left)]
+    right = [f"{C['white']}Pour bien démarrer{C['reset']}",
+             f"Décris ce que tu veux en français : Naim lit,",
+             f"écrit, lance les commandes et vérifie.",
+             f"{C['grey']}/help aide · Ctrl+C arrête une tâche{C['reset']}",
+             f"{C['grey']}{'─' * min(right_w, 40)}{C['reset']}",
+             f"{C['white']}Activité récente{C['reset']}"]
+    rec = _recent_conversations()
+    right += [f"{C['grey']}{_pad(t[:right_w - 15], right_w - 13)}{a:>11}{C['reset']}" for t, a in rec] or [f"{C['grey']}Aucune conversation{C['reset']}"]
+    h = max(len(left), len(right))
+    left += [""] * (h - len(left))
+    right += [""] * (h - len(right))
+    title = f" Naim {VERSION} "
+    print(f"{C['grey']}╭───{C['reset']}{C['white']}{title}{C['reset']}{C['grey']}{'─' * (cols - len(title) - 5)}╮{C['reset']}")
+    for l, r in zip(left, right):
+        print(f"{C['grey']}│{C['reset']} {_pad(l, left_w)} {C['grey']}│{C['reset']} {_pad(r, right_w)}{C['grey']}│{C['reset']}")
+    print(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
+
+
+def _ask():
+    """The input box: a frame around what you type, the shortcuts under it."""
+    cols = max(40, min(shutil.get_terminal_size((100, 24)).columns, 110))
+    print(f"{C['grey']}╭{'─' * (cols - 2)}╮{C['reset']}")
+    try:
+        task = input(f"{C['grey']}│{C['reset']} {C['white']}›{C['reset']} ")
+    finally:
+        print(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
+    print(f"  {C['grey']}/help aide · /reset oublier · /exit quitter{C['reset']}")
+    return task
+
+
 def _engine_options(model):
     """Naim's own engine (llama.cpp, started on demand) for the model « naim »; Ollama only for other models."""
     try:
@@ -3095,12 +3215,8 @@ def main():
     CLI_STATE["agent"] = agent
     where = str(agent.root).replace(str(Path.home()), "~")
     engine = "llama.cpp, sur ce Mac" if opts.get("backend") == "llamacpp" else f"Ollama · {args.model}"
-    w = max(46, len(where) + 14)
-    print(f"{C['grey']}╭{'─' * w}╮{C['reset']}")
-    for txt, st in ((f"◆ Naim · agent de code {VERSION}", C["bold"]), ("", ""), (f"  dossier : {where}", C["grey"]),
-                    (f"  moteur  : {engine}", C["grey"]), ("  /help aide · /reset oublier · /exit quitter", C["grey"])):
-        print(f"{C['grey']}│{C['reset']} {st}{txt}{C['reset']}{' ' * (w - len(txt) - 1)}{C['grey']}│{C['reset']}")
-    print(f"{C['grey']}╰{'─' * w}╯{C['reset']}")
+    _intro()
+    _welcome(where, engine)
 
     def run(task):
         SPIN.start()
@@ -3123,7 +3239,7 @@ def main():
             return
         while True:
             try:
-                task = input(f"{C['white']}›{C['reset']} ").strip()
+                task = _ask().strip()
             except EOFError:
                 break
             if task in ("/exit", "/quit", "exit"):
