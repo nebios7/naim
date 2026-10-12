@@ -2937,8 +2937,11 @@ class _Spinner:
                 if self.on:
                     s = int(time.time() - self.t0)
                     t = f"{s // 60} min {s % 60:02d} s" if s >= 60 else f"{s} s"
-                    sys.stdout.write(f"{C['clear']}{C['white']}{self.FRAMES[i % 10]} {self.text}{C['reset']} "
-                                     f"{C['grey']}({t} · Ctrl+C pour arrêter){C['reset']}")
+                    full = (f"{C['white']}{self.FRAMES[i % 10]} {self.text}{C['reset']} "
+                            f"{C['grey']}({t} · Ctrl+C pour arrêter){C['reset']}")
+                    if _vlen(full) > _cols() - 1:
+                        full = f"{C['white']}{self.FRAMES[i % 10]} {self.text}{C['reset']} {C['grey']}{t}{C['reset']}"
+                    sys.stdout.write(C["clear"] + _fit(full, _cols() - 1))
                     sys.stdout.flush()
             i += 1
 
@@ -2955,6 +2958,34 @@ class _Spinner:
 
 
 SPIN = _Spinner()
+
+
+def _cols(default=100):
+    """The terminal's real width (asked to the terminal; the COLUMNS variable can be wrong), at least 30."""
+    for fd in (1, 2, 0):
+        try:
+            return max(30, os.get_terminal_size(fd).columns)
+        except OSError:
+            continue
+    return default
+
+
+def _fit(s, w):
+    """A line cut to w visible columns (colour codes kept): a line wider than the terminal wraps and breaks the
+    redrawing (robots stacked, « réfléchit… » repeated)."""
+    if _vlen(s) <= w:
+        return s
+    out, n = [], 0
+    for tok in re.split(r"(\033\[[0-9;?]*[A-Za-z])", s):
+        if tok.startswith("\033["):
+            out.append(tok)
+            continue
+        for ch in tok:
+            if n + _cw(ch) > w - 1:
+                return "".join(out) + "…" + "\033[0m"
+            out.append(ch)
+            n += _cw(ch)
+    return "".join(out)
 
 
 def _cw(ch):
@@ -3052,7 +3083,7 @@ def _table(rows, width):
 def _md(text):
     """The answer for the terminal: titles, lists, quotes, tables, and code blocks on a panel with colours and
     line numbers."""
-    cols = max(50, min(shutil.get_terminal_size((100, 24)).columns, 120))
+    cols = min(_cols(), 120)
     out, code, lang, num, table = [], False, "", 0, []
     bg = "\033[48;5;235m"
 
@@ -3194,7 +3225,7 @@ def _choose(options):
 def cli_approver(action, detail):
     """The permission panel: what is asked, the file or the change it makes, then « Oui / Oui, toujours / Non »."""
     SPIN.stop()
-    cols = max(50, min(shutil.get_terminal_size((100, 24)).columns, 110))
+    cols = min(_cols(), 110)
     inner = cols - 6
     print(f"\n  {C['grey']}╭{'─' * (cols - 4)}╮{C['reset']}")
     print(f"  {C['grey']}│{C['reset']} {C['bold']}{_pad(action, inner)}{C['reset']} {C['grey']}│{C['reset']}")
@@ -3366,7 +3397,7 @@ def _rich_md(text):
         return None
     if not C["reset"]:
         return None
-    width = max(50, min(shutil.get_terminal_size((100, 24)).columns, 120)) - 2
+    width = min(_cols(), 120) - 2
     theme = next((t for t in ("github-dark", "one-dark", "monokai") if t in set(get_all_styles())), "monokai")
     buf = StringIO()
     Console(file=buf, force_terminal=True, color_system="256", width=width).print(
@@ -3379,7 +3410,7 @@ def _intro():
     and the panel takes its place."""
     if not sys.stdout.isatty() or os.environ.get("NAIM_NO_ANIM"):
         return
-    cols = shutil.get_terminal_size((80, 24)).columns
+    cols = _cols(80)
     out = sys.stdout
     h = len(_robot())
     out.write("\033[?25l")  # cursor hidden during the animation
@@ -3473,40 +3504,60 @@ def _user_name():
 
 def _welcome(where, engine):
     """The panel: on the left « Quoi de prévu », the robot, the engine and the folder; on the right the usage
-    figures (like a desktop assistant's « Aperçu »), the last 28 days and the recent conversations."""
-    cols = max(60, min(shutil.get_terminal_size((100, 24)).columns, 110))
-    left_w = 32
-    right_w = cols - left_w - 7
+    figures (like a desktop assistant's « Aperçu »), the last 28 days and the recent conversations. In a narrow
+    terminal, all of it in one column."""
+    cols = min(_cols(), 110)
     name = _user_name()
     u = _usage()
     big = lambda n: f"{n / 1e9:.1f} Md" if n >= 1e9 else f"{n / 1e6:.1f} M" if n >= 1e6 else f"{n / 1e3:.1f} k" if n >= 1e3 else str(n)  # noqa: E731
     hello = f"Quoi de prévu, {name} ?" if name else "Quoi de prévu ?"
+    cells = [("Conversations", str(u["conversations"])), ("Messages", f"{u['messages']:,}".replace(",", " ")), ("Jetons", big(u["tokens"])),
+             ("Jours actifs", str(u["days"])), ("Heure de pointe", u["peak"]), ("Modèle favori", u["fav"])]
+    mx = max(1, *u["activity"])
+    heat = "".join(" ░▒▓█"[0 if n == 0 else 1 + min(3, int(3 * n / mx))] for n in u["activity"])
+
+    def grid(width):
+        cw = max(len(l) for l, _ in cells) + 1
+        per = max(1, min(3, width // cw))
+        rows = []
+        for k in range(0, len(cells), per):
+            row = cells[k:k + per]
+            rows.append("".join(_pad(f"{C['grey']}{l}{C['reset']}", cw) for l, _ in row))
+            rows.append("".join(_pad(f"{C['bold']}{C['white']}{v}{C['reset']}", cw) for _, v in row))
+            rows.append("")
+        return rows[:-1]
+    title = f" Naim {VERSION} "
+    top = f"{C['grey']}╭───{C['reset']}{C['white']}{title}{C['reset']}{C['grey']}{'─' * max(0, cols - len(title) - 5)}╮{C['reset']}"
+    bottom = f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}"
+    side = lambda txt, w: f"{C['grey']}│{C['reset']} {_pad(_fit(txt, w), w)} {C['grey']}│{C['reset']}"  # noqa: E731
+    centre = lambda txt, w: " " * max(0, (w - _vlen(txt)) // 2) + txt  # noqa: E731
+    if cols < 76:  # narrow: one column
+        w = cols - 4
+        lines = ["", centre(f"{C['bold']}{C['white']}{hello}{C['reset']}", w), ""] + [centre(r, w) for r in _robot()] + \
+                ["", centre(f"{C['grey']}{engine}{C['reset']}", w), ""] + grid(w) + \
+                ["", f"{C['grey']}28 j {C['reset']}{C['white']}{heat[-max(5, w - 6):]}{C['reset']}"]
+        print(top)
+        for l in lines:
+            print(side(l, w))
+        print(bottom)
+        return
+    left_w = 32
+    right_w = cols - left_w - 7
     left = ["", f"{C['bold']}{C['white']}{hello}{C['reset']}", ""] + \
            [" " * ((left_w - ROBOT_W) // 2) + r for r in _robot()] + \
            ["", f"{C['grey']}{engine}{C['reset']}", f"{C['grey']}{where[-left_w:]}{C['reset']}"]
-    left = [(" " * max(0, (left_w - _vlen(l)) // 2) + l) if i in (1, len(left) - 2, len(left) - 1) else l for i, l in enumerate(left)]
-    cw = max(12, (right_w - 2) // 3)
-    cells = [("Conversations", str(u["conversations"])), ("Messages", f"{u['messages']:,}".replace(",", " ")), ("Total de jetons", big(u["tokens"])),
-             ("Jours actifs", str(u["days"])), ("Heure de pointe", u["peak"]), ("Modèle favori", u["fav"])]
-    grid = []
-    for row in (cells[:3], cells[3:]):
-        grid.append("".join(_pad(f"{C['grey']}{l}{C['reset']}", cw) for l, _ in row))
-        grid.append("".join(_pad(f"{C['bold']}{C['white']}{v}{C['reset']}", cw) for _, v in row))
-    mx = max(1, *u["activity"])
-    shades = " ░▒▓█"
-    heat = "".join(shades[0 if n == 0 else 1 + min(3, int(3 * n / mx))] for n in u["activity"])
-    right = [f"{C['white']}Aperçu{C['reset']} {C['grey']}· depuis le début{C['reset']}", ""] + grid[:2] + [""] + grid[2:] + \
-            ["", f"{C['grey']}28 derniers jours  {C['reset']}{C['white']}{heat}{C['reset']}", ""]
-    rec = _recent_conversations(2)
-    right += [f"{C['grey']}{_pad(t[:right_w - 15], right_w - 13)}{a:>11}{C['reset']}" for t, a in rec]
+    left = [centre(l, left_w) if i in (1, len(left) - 2, len(left) - 1) else l for i, l in enumerate(left)]
+    right = [f"{C['white']}Aperçu{C['reset']} {C['grey']}· depuis le début{C['reset']}", ""] + grid(right_w) + \
+            ["", f"{C['grey']}28 derniers jours  {C['reset']}{C['white']}{heat[-max(5, right_w - 20):]}{C['reset']}", ""]
+    for t, a in _recent_conversations(2):
+        right.append(f"{C['grey']}{_pad(t[:right_w - 15], right_w - 13)}{a:>11}{C['reset']}")
     h = max(len(left), len(right))
     left += [""] * (h - len(left))
     right += [""] * (h - len(right))
-    title = f" Naim {VERSION} "
-    print(f"{C['grey']}╭───{C['reset']}{C['white']}{title}{C['reset']}{C['grey']}{'─' * (cols - len(title) - 5)}╮{C['reset']}")
+    print(top)
     for l, r in zip(left, right):
-        print(f"{C['grey']}│{C['reset']} {_pad(l, left_w)} {C['grey']}│{C['reset']} {_pad(r, right_w)}{C['grey']}│{C['reset']}")
-    print(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
+        print(f"{C['grey']}│{C['reset']} {_pad(_fit(l, left_w), left_w)} {C['grey']}│{C['reset']} {_pad(_fit(r, right_w), right_w)}{C['grey']}│{C['reset']}")
+    print(bottom)
 
 
 class _Editor:
@@ -3563,7 +3614,7 @@ class _Editor:
         return rows, pos
 
     def render(self, text, cur, menu, sel):
-        cols = max(40, shutil.get_terminal_size((100, 24)).columns)
+        cols = _cols() - 1  # one column spare: drawing on the last one makes some terminals wrap
         inner = cols - 6
         rows, pos = self._wrap(text, inner)
         if self.rx is None:
@@ -3583,12 +3634,16 @@ class _Editor:
         out.append(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
         m = self.mode()
         mode_txt = (f"{C['yellow']}⏵⏵ {self.MODES[m][0]}{C['reset']}" if m else f"{C['grey']}⏵ {self.MODES[m][0]}{C['reset']}")
-        left = f"  {mode_txt}{C['grey']} (maj+tab) · {CLI_STATE.get('engine', '')} · {self.context()}{C['reset']}"
-        right = f"{C['grey']}? raccourcis{C['reset']}  "
+        if cols >= 76:
+            left = f"  {mode_txt}{C['grey']} (maj+tab) · {CLI_STATE.get('engine', '')} · {self.context()}{C['reset']}"
+            right = f"{C['grey']}? raccourcis{C['reset']}  "
+        else:  # narrow terminal: the essentials only
+            left, right = f"  {mode_txt}{C['grey']} · {self.context()}{C['reset']}", ""
         out.append(left + " " * max(1, cols - _vlen(left) - _vlen(right)) + right)
         for k, (name, desc) in enumerate(menu[:6]):  # the « / » menu
             on = k == sel
             out.append(f"  {C['white'] + '❯' if on else ' '} {C['bold'] if on else ''}{name:<12}{C['reset']}{C['grey']}{desc}{C['reset']}")
+        out = [_fit(l, cols) for l in out]  # never wider than the terminal: a wrapped line breaks the redrawing
         # redraw in place: back to the top of what was drawn, clear, draw, put the cursor where the text is
         s = ("\033[{}A".format(self.drawn) if self.drawn else "") + "\r\033[J" + "\r\n".join(out)  # raw mode: \r too
         cr, cc = pos[min(cur, len(pos) - 1)]
