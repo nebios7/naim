@@ -3588,12 +3588,11 @@ class _Bot:
         R(4, 5, 6, 2 if opened else 1, RC["dark"])          # mouth
         if not opened:
             R(5, 5, 1, 1, RC["body"]); R(8, 5, 1, 1, RC["body"])
-        sq = self.squint or self.blink
-        for ex in (4, 8):                                  # eyes
-            if sq:
-                R(ex + self.lookX, 3 + self.lookY, 2, 1, RC["dark"])
-            else:
-                R(ex + self.lookX, 2 + self.lookY, 2, 2, RC["dark"])
+        # eyes: one pixel each (small, like a mascot's), always inside the head whichever way he looks
+        lx_, ly_ = max(-1, min(1, self.lookX)), max(-1, min(1, self.lookY))
+        if not self.blink:                                 # a blink: the eyes vanish for an instant
+            for ex in (5, 8):
+                R(ex + lx_, (3 if self.squint else 2) + ly_, 1, 1, RC["dark"])
         if self.nbOn:                                      # notebook
             ny = round(self.nbY)
             R(4, 7 + ny, 7, 4, RC["page"])
