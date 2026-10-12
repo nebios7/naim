@@ -129,6 +129,7 @@ def clean(text):
     t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.M)
     t = re.sub(r"[*_~>#|]+", " ", t)
     t = re.sub(r"[\U0001F000-\U0001FAFF☀-➿]", "", t)
+    t = re.sub(r"\bna[iï]m\b", "Naïm", t, flags=re.I)  # « Naim » is read « nain » in French: « Naïm » is na-im
     return re.sub(r"\s+", " ", t).strip()
 
 
