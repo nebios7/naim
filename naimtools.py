@@ -3311,25 +3311,31 @@ def cli_emit(ev):
 # ---------------------------------------------------------------- Naim's robot, in coloured pixels
 # 16 × 14 pixels; one terminal cell shows two pixels (▀ with a foreground and a background colour), so the
 # robot is 16 columns × 7 lines. Silver head with a light reflection, dark visor, glowing eyes, an antenna light.
-SPRITE = [
-    ".......AA.......",
-    ".......ss.......",
-    "...SSSSSSSSSS...",
-    "..SHHSSSSSSSSS..",
-    "..SSDDDDDDDDSS..",
-    "..SSDEEDDEEDSS..",
-    "..SSDEEDDEEDSS..",
-    "..SSDDDMMDDDSS..",
-    "...SSSSSSSSSS...",
-    ".....ssssss.....",
-    "...aSSSSSSSSa...",
-    "..aaSSSCCSSSaa..",
-    "....SSSSSSSS....",
-    "....ss....ss....",
+SPRITE = [  # head: green half / white half, like the flag of Algeria; red emblem; black visor, white eyes, red smile
+    "...SSSSSSSS...",
+    "..SSSSSRRSSS..",
+    ".SSDDDDDDDDSS.",
+    ".SSDEEDDEEDSS.",
+    ".SSDEEDDEEDSS.",
+    ".SSDDDMMDDDSS.",
+    "..SSSSSSSSSS..",
+    "...ss....ss...",
 ]
-PALETTE = {"S": (198, 202, 212), "H": (246, 248, 251), "s": (128, 132, 142), "D": (46, 50, 60), "E": (110, 215, 255),
-           "e": (55, 105, 130), "M": (90, 170, 210), "A": (110, 215, 255), "a": (150, 154, 164), "C": (110, 215, 255),
-           "P": (232, 192, 96)}
+GREEN, WHITE, RED = (0, 98, 51), (250, 250, 250), (210, 16, 52)
+PALETTE = {"G": GREEN, "W": WHITE, "H": WHITE, "D": (20, 20, 22), "E": (250, 250, 250), "e": (120, 120, 124), "M": RED, "R": RED,
+           "s": (70, 70, 76), "P": (232, 192, 96)}
+
+
+# the flag's colours as the terminal's 256 colours draw them best (a computed nearest made a bluish green, a pink red)
+FIXED256 = {(0, 98, 51): 28, (210, 16, 52): 160}
+TRUECOLOR = os.environ.get("COLORTERM", "").lower() in ("truecolor", "24bit")
+
+
+def _col(rgb, bg=False):
+    """The escape code of a colour: exact (24 bits) when the terminal says it can, else one of the 256."""
+    if TRUECOLOR:
+        return f"{48 if bg else 38};2;{rgb[0]};{rgb[1]};{rgb[2]}"
+    return f"{48 if bg else 38};5;{FIXED256.get(tuple(rgb)) or _rgb256(*rgb)}"
 
 
 def _rgb256(r, g, b):
@@ -3341,21 +3347,19 @@ def _rgb256(r, g, b):
 
 
 def _frame(blink=False, wave=False, pen=False, glow=True):
-    rows = [list(r) for r in SPRITE]
-    if blink:
-        for c in range(16):
-            if rows[5][c] == "E":
-                rows[5][c] = "D"
-            if rows[6][c] == "E":
-                rows[6][c] = "e"
-    if not glow:
-        rows[0] = [("e" if ch == "A" else ch) for ch in rows[0]]
-        rows[11] = [("e" if ch == "C" else ch) for ch in rows[11]]
-    if wave:  # the right arm up, waving
-        rows[10][12] = "."; rows[11][12] = "."; rows[11][13] = "."
-        rows[9][13] = "a"; rows[8][14] = "a"; rows[7][14] = "a"
-    if pen:  # a pen held in the right hand
-        rows[10][14] = "P"; rows[11][14] = "P"; rows[12][14] = "P"; rows[13][14] = "P"
+    """The robot's pixels: « S » is green on the left half and white on the right half (the flag)."""
+    rows = [[(("G" if x < 7 else "W") if ch == "S" else ch) for x, ch in enumerate(r)] for r in SPRITE]
+    for y, r in enumerate(rows):
+        for x, ch in enumerate(r):
+            if ch == "E" and blink:
+                r[x] = "D" if y == 3 else "e"  # eyelids closed: a thin line
+            elif ch == "E" and not glow:
+                r[x] = "e"  # the eyes' light breathes
+    if pen:  # a golden pen beside him
+        for y in (2, 3, 4, 5):
+            rows[y][13] = "P"
+    if wave:  # a little hop: one pixel up
+        rows = rows[1:] + [["."] * len(rows[0])]
     return rows
 
 
@@ -3369,16 +3373,16 @@ def _sprite_lines(rows):
             if top == "." and bot == ".":
                 line += " "
             elif bot == ".":
-                line += f"\033[38;5;{_rgb256(*PALETTE[top])}m▀\033[0m"
+                line += f"\033[{_col(PALETTE[top])}m▀\033[0m"
             elif top == ".":
-                line += f"\033[38;5;{_rgb256(*PALETTE[bot])}m▄\033[0m"
+                line += f"\033[{_col(PALETTE[bot])}m▄\033[0m"
             else:
-                line += f"\033[38;5;{_rgb256(*PALETTE[top])};48;5;{_rgb256(*PALETTE[bot])}m▀\033[0m"
+                line += f"\033[{_col(PALETTE[top])};{_col(PALETTE[bot], True)}m▀\033[0m"
         out.append(line if C["reset"] else re.sub(r"\033\[[0-9;]*m", "", line))
     return out
 
 
-ROBOT_W = 16
+ROBOT_W = 14
 
 
 def _robot(col=None, **kw):
@@ -3424,10 +3428,10 @@ def _intro():
         for k in range(1, len(word) + 1):  # it writes its name
             txt = f"{C['bold']}{C['white']}{word[:k]}{C['reset']}{C['grey']}{'▌' if k < len(word) else ''}{C['reset']}"
             rows = [f"  {r}" for r in _robot()]
-            rows[3] += f"   {txt}"
+            rows[1] += f"   {txt}"
             frames.append((rows, 0.11))
         last = list(frames[-1][0])
-        last[4] += f"   {C['grey']}agent de code{C['reset']}"
+        last[2] += f"   {C['grey']}agent de code{C['reset']}"
         frames.append((last, 0.5))
         rows = _robot()
         for x in range(2, min(cols - ROBOT_W - 2, 50), 4):  # it slides to the right, the name tidied away
