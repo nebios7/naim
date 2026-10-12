@@ -3629,7 +3629,8 @@ class _Editor:
         out.append(f"{C['grey']}╭{'─' * (cols - 2)}╮{C['reset']}")
         for j, r in enumerate(rows):
             lead = f"{C['white']}›{C['reset']} " if j == 0 else "  "
-            body_txt = r if (text or j) else f"{C['grey']}Écris ta demande… (/ pour les commandes){C['reset']}"
+            hint = "Écris ta demande… (/ pour les commandes)" if inner >= 46 else "Écris ta demande…"
+            body_txt = r if (text or j) else f"{C['grey']}{hint}{C['reset']}"
             out.append(f"{C['grey']}│{C['reset']} {lead}{_pad(body_txt, inner)} {C['grey']}│{C['reset']}")
         out.append(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
         m = self.mode()
