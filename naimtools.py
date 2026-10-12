@@ -3291,82 +3291,245 @@ def _welcome(where, engine):
     print(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
 
 
-class _Perch:
-    """Naim's robot sitting on the input line while you type: he takes out a pen, writes a few strokes, puts it
-    away, blinks, walks along the line. Drawn above the input with the cursor saved and restored, so typing is
-    never disturbed."""
+class _Editor:
+    """The input of naimtools, drawn and edited like an assistant's: a framed box that grows with the text,
+    Naim's robot sitting on it, a menu of commands under « / », the history on ↑ ↓, the permission mode on
+    Maj+Tab and a status line. Raw keyboard, everything redrawn in place (no full-screen takeover)."""
+    COMMANDS = [("/help", "aide et raccourcis"), ("/reset", "oublier la conversation"), ("/mode", "changer le mode d'autorisation"),
+                ("/contexte", "la place utilisée dans la mémoire de travail"), ("/exit", "quitter Naim")]
+    MODES = [("demander", "Naim demande avant chaque action"), ("accepter les modifications", "fichiers sans demander, commandes avec"),
+             ("tout autoriser", "Naim agit sans demander")]
     BODY = [" ▄████▄ ", "██▄██▄██", " █▀▀▀▀█ "]
     BLINK = [" ▄████▄ ", "████████", " █▀▀▀▀█ "]
 
-    def __init__(self, cols):
-        self.cols, self.x, self.on, self.lock = cols, max(0, cols - 22), False, threading.Lock()
-        self.pen, self.marks, self.blink, self.flip = False, 0, False, False
+    def __init__(self):
+        self.history, self.lock = [], threading.Lock()
+        self.rx, self.pen, self.marks, self.blink = None, False, 0, False
+        self.drawn, self.alive = 0, False
 
-    def draw(self):
-        rows = self.BLINK if self.blink else self.BODY
-        if self.flip:
-            rows = [r[::-1].translate(str.maketrans("▄▀", "▄▀")) for r in rows]
-        lines = []
-        for i, r in enumerate(rows):
-            pen = (f"{C['grey']}╱{C['reset']}" if self.pen and i == 1 else " ")
-            ink = (f"{C['grey']}{'╌' * self.marks}{C['reset']}".rjust(0) if i == 2 and self.marks else "")
-            pre = " " * max(0, self.x - (self.marks if i == 2 else 0))
-            lines.append(f"{pre}{ink}{C['white']}{r}{C['reset']}{pen}")
-        with self.lock:
-            if not self.on:
-                return
-            out = "\0337"  # cursor saved: the input line is not disturbed
-            for i, l in enumerate(lines):
-                out += f"\033[{4 - i}A\r\033[2K{l}\0338\0337"
-            sys.stdout.write(out + "\0338")
-            sys.stdout.flush()
+    # -- state shown in the status line
+    def mode(self):
+        a = CLI_STATE.get("agent")
+        if a is None:
+            return 0
+        return 2 if a.auto_yes else 1 if a.auto_writes else 0
 
-    def life(self):
+    def set_mode(self, k):
+        a = CLI_STATE["agent"]
+        a.auto_yes, a.auto_writes, a.auto_commands = k == 2, k >= 1, k == 2
+
+    def context(self):
+        a = CLI_STATE.get("agent")
+        if a is None:
+            return ""
+        used = sum(len(str(m.get("content") or "")) for m in a.messages) // 3.5
+        try:
+            import llamacpp
+            room = llamacpp.slot_ctx() or 32768
+        except Exception:  # noqa: BLE001
+            room = 32768
+        return f"contexte {min(100, int(100 * used / room))} %"
+
+    # -- drawing
+    def _wrap(self, text, width):
+        """Lines of the box and, for each character index, its (row, col): the text wraps inside the frame."""
+        rows, pos, r, c = [""], [], 0, 0
+        for ch in text:
+            pos.append((r, c))
+            if ch == "\n" or c >= width:
+                rows.append(""); r += 1; c = 0
+                if ch == "\n":
+                    continue
+            rows[r] += ch; c += 1
+        pos.append((r, c))
+        if c >= width:
+            rows.append(""); pos[-1] = (r + 1, 0)
+        return rows, pos
+
+    def render(self, text, cur, menu, sel):
+        cols = max(40, shutil.get_terminal_size((100, 24)).columns)
+        inner = cols - 6
+        rows, pos = self._wrap(text, inner)
+        if self.rx is None:
+            self.rx = max(0, cols - 22)
+        self.rx = min(self.rx, cols - 12)
+        body = self.BLINK if self.blink else self.BODY
+        out = []
+        for i, r in enumerate(body):  # the robot on the frame
+            pen = f"{C['grey']}╱{C['reset']}" if self.pen and i == 1 else ""
+            ink = f"{C['grey']}{'╌' * self.marks}{C['reset']}" if i == 2 and self.marks else ""
+            out.append(" " * max(0, self.rx - (self.marks if i == 2 else 0)) + ink + f"{C['white']}{r}{C['reset']}" + pen)
+        out.append(f"{C['grey']}╭{'─' * (cols - 2)}╮{C['reset']}")
+        for j, r in enumerate(rows):
+            lead = f"{C['white']}›{C['reset']} " if j == 0 else "  "
+            body_txt = r if (text or j) else f"{C['grey']}Écris ta demande… (/ pour les commandes){C['reset']}"
+            out.append(f"{C['grey']}│{C['reset']} {lead}{_pad(body_txt, inner)} {C['grey']}│{C['reset']}")
+        out.append(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
+        m = self.mode()
+        mode_txt = (f"{C['yellow']}⏵⏵ {self.MODES[m][0]}{C['reset']}" if m else f"{C['grey']}⏵ {self.MODES[m][0]}{C['reset']}")
+        left = f"  {mode_txt}{C['grey']} (maj+tab) · {CLI_STATE.get('engine', '')} · {self.context()}{C['reset']}"
+        right = f"{C['grey']}? raccourcis{C['reset']}  "
+        out.append(left + " " * max(1, cols - _vlen(left) - _vlen(right)) + right)
+        for k, (name, desc) in enumerate(menu[:6]):  # the « / » menu
+            on = k == sel
+            out.append(f"  {C['white'] + '❯' if on else ' '} {C['bold'] if on else ''}{name:<12}{C['reset']}{C['grey']}{desc}{C['reset']}")
+        # redraw in place: back to the top of what was drawn, clear, draw, put the cursor where the text is
+        s = ("\033[{}A".format(self.drawn) if self.drawn else "") + "\r\033[J" + "\r\n".join(out)  # raw mode: \r too
+        cr, cc = pos[min(cur, len(pos) - 1)]
+        up = len(out) - 1 - (len(body) + 1 + cr)
+        s += (f"\033[{up}A" if up else "") + f"\r\033[{4 + cc}C"
+        sys.stdout.write("\033[?25l" + s + "\033[?25h")
+        sys.stdout.flush()
+        self.drawn = len(body) + 1 + cr  # lines from the top of the block to the cursor
+
+    # -- the robot's life, between two keys
+    def _life(self, redraw):
         import random
-        while self.on:
-            time.sleep(1.4 + random.random() * 1.8)
-            if not self.on:
+        while self.alive:
+            time.sleep(1.5 + random.random() * 1.8)
+            if not self.alive:
                 return
             r = random.random()
-            if r < 0.45:  # pen out, a few strokes, pen away
-                self.pen = True; self.draw(); time.sleep(0.4)
+            if r < 0.45:
+                self.pen = True; redraw(); time.sleep(0.4)
                 for k in range(1, 5):
-                    self.marks = k; self.draw(); time.sleep(0.28)
-                time.sleep(0.5); self.marks = 0; self.draw(); time.sleep(0.2)
-                self.pen = False; self.draw()
-            elif r < 0.8:  # a walk along the line
-                to = random.randint(max(0, self.cols - 60), max(1, self.cols - 12))
-                step = 1 if to > self.x else -1
-                while self.on and self.x != to:
-                    self.x += step; self.draw(); time.sleep(0.07)
-            self.blink = True; self.draw(); time.sleep(0.13); self.blink = False; self.draw()
+                    self.marks = k; redraw(); time.sleep(0.28)
+                time.sleep(0.5); self.marks = 0; redraw(); time.sleep(0.2); self.pen = False; redraw()
+            elif r < 0.8:
+                cols = shutil.get_terminal_size((100, 24)).columns
+                to = random.randint(max(0, cols - 60), max(1, cols - 12))
+                while self.alive and self.rx != to:
+                    self.rx += 1 if to > self.rx else -1; redraw(); time.sleep(0.07)
+            self.blink = True; redraw(); time.sleep(0.13); self.blink = False; redraw()
+
+    def ask(self):
+        """Edits one message; returns it (Entrée), or raises EOFError (Ctrl+D on an empty line) / KeyboardInterrupt."""
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            return input("› ")
+        import termios, tty
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        text, cur, hist_i, sel, draft = "", 0, len(self.history), 0, ""
+        state = {"menu": []}
+
+        def menu_for(t):
+            return [c for c in self.COMMANDS if t.startswith("/") and "\n" not in t and c[0].startswith(t.split(" ")[0])] if t.startswith("/") else []
+
+        def redraw():
+            with self.lock:
+                if self.alive:
+                    self.render(text, cur, state["menu"], sel)
+        self.drawn, self.alive = 0, True
+        sys.stdout.write("\n" * 0 + "\033[?2004h")  # bracketed paste: a pasted text with line breaks stays text
+        redraw()
+        if not os.environ.get("NAIM_NO_ANIM"):
+            threading.Thread(target=self._life, args=(redraw,), daemon=True).start()
+        try:
+            tty.setraw(fd)
+            buf, pasting = b"", False
+            while True:
+                buf += os.read(fd, 1024)
+                while buf:
+                    if buf.startswith(b"\x1b[200~"):
+                        pasting, buf = True, buf[6:]; continue
+                    if buf.startswith(b"\x1b[201~"):
+                        pasting, buf = False, buf[6:]; continue
+                    if pasting and buf[:1] in (b"\r", b"\n"):
+                        text, cur, buf = text[:cur] + "\n" + text[cur:], cur + 1, buf[1:]; continue
+                    k = buf[:1]
+                    if k == b"\x1b":
+                        seq = re.match(rb"\x1b(\[[0-9;]*[A-Za-z~]|O[A-Za-z]|.)?", buf).group(0)
+                        buf = buf[len(seq):]
+                        if seq in (b"\x1b[A", b"\x1bOA"):  # ↑: menu, else history
+                            if state["menu"]:
+                                sel = (sel - 1) % len(state["menu"])
+                            elif hist_i > 0 and "\n" not in text:
+                                if hist_i == len(self.history):
+                                    draft = text
+                                hist_i -= 1; text = self.history[hist_i]; cur = len(text)
+                        elif seq in (b"\x1b[B", b"\x1bOB"):
+                            if state["menu"]:
+                                sel = (sel + 1) % len(state["menu"])
+                            elif hist_i < len(self.history) and "\n" not in text:
+                                hist_i += 1; text = self.history[hist_i] if hist_i < len(self.history) else draft; cur = len(text)
+                        elif seq in (b"\x1b[C", b"\x1bOC"):
+                            cur = min(len(text), cur + 1)
+                        elif seq in (b"\x1b[D", b"\x1bOD"):
+                            cur = max(0, cur - 1)
+                        elif seq == b"\x1b[Z":  # Maj+Tab: the permission mode
+                            self.set_mode((self.mode() + 1) % 3)
+                        elif seq in (b"\x1b[H", b"\x1b[1~"):
+                            cur = 0
+                        elif seq in (b"\x1b[F", b"\x1b[4~"):
+                            cur = len(text)
+                        elif seq == b"\x1b[3~":
+                            text = text[:cur] + text[cur + 1:]
+                        elif seq == b"\x1b":  # Échap: closes the menu, else clears
+                            if state["menu"]:
+                                text, cur = "", 0
+                        continue
+                    buf = buf[1:]
+                    if k in (b"\r", b"\n"):
+                        if state["menu"] and text.strip() != state["menu"][sel][0]:
+                            text = state["menu"][sel][0]; cur = len(text)
+                        if text.endswith("\\"):  # « \ » then Entrée: a new line
+                            text, cur = text[:-1] + "\n", len(text)
+                        else:
+                            raise StopIteration
+                    elif k == b"\t":
+                        if state["menu"]:
+                            text = state["menu"][sel][0] + " "; cur = len(text)
+                    elif k in (b"\x7f", b"\x08"):
+                        if cur:
+                            text, cur = text[:cur - 1] + text[cur:], cur - 1
+                    elif k == b"\x03":  # Ctrl+C: clears, or leaves on an empty line
+                        if text:
+                            text, cur = "", 0
+                        else:
+                            raise KeyboardInterrupt
+                    elif k == b"\x04" and not text:
+                        raise EOFError
+                    elif k == b"\x01":
+                        cur = 0
+                    elif k == b"\x05":
+                        cur = len(text)
+                    elif k == b"\x15":
+                        text, cur = text[cur:], 0
+                    elif k == b"\x17":  # Ctrl+W: the word before
+                        j = len(text[:cur].rstrip().rsplit(" ", 1)[0]) if " " in text[:cur].rstrip() else 0
+                        text, cur = text[:j] + text[cur:], j
+                    elif k[0] >= 0x20:
+                        n = 1 if k[0] < 0x80 else 2 if k[0] < 0xE0 else 3 if k[0] < 0xF0 else 4
+                        while len(buf) < n - 1:
+                            buf += os.read(fd, 8)
+                        ch = (k + buf[:n - 1]).decode("utf-8", "replace")
+                        buf = buf[n - 1:]
+                        text, cur = text[:cur] + ch + text[cur:], cur + len(ch)
+                state["menu"] = menu_for(text)
+                sel = min(sel, max(0, len(state["menu"]) - 1))
+                redraw()
+        except StopIteration:
+            pass
+        finally:
+            with self.lock:
+                self.alive = False
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+                # the box goes: the message stays as « › message »
+                sys.stdout.write("\033[?2004l" + (f"\033[{self.drawn}A" if self.drawn else "") + "\r\033[J")
+                sys.stdout.flush()
+        if text.strip():
+            first, *more = text.strip().split("\n")
+            print(f"{C['grey']}› {first}{C['reset']}" + "".join(f"\n{C['grey']}  {l}{C['reset']}" for l in more))
+            if not self.history or self.history[-1] != text.strip():
+                self.history.append(text.strip())
+        return text
+
+
+EDITOR = _Editor()
 
 
 def _ask():
-    """The input, like an assistant's: Naim's robot on the upper rule, the line you type on, a rule under it and the
-    shortcuts; once sent, all of it goes and your message stays as « › message »."""
-    cols = max(40, shutil.get_terminal_size((100, 24)).columns)
-    rule = f"{C['grey']}{'─' * cols}{C['reset']}"
-    if not sys.stdout.isatty():
-        return input("› ")
-    perch = CLI_STATE.get("perch") or _Perch(cols)
-    CLI_STATE["perch"] = perch
-    perch.cols = cols
-    sys.stdout.write("\n\n\n" + f"{rule}\n\n{rule}\n  {C['grey']}? raccourcis · /help aide · /exit quitter{C['reset']}\033[2A\r")
-    sys.stdout.flush()
-    perch.on = True
-    perch.draw()
-    if not os.environ.get("NAIM_NO_ANIM"):
-        threading.Thread(target=perch.life, daemon=True).start()
-    try:
-        task = input(f"{C['white']}›{C['reset']} ")
-    finally:
-        with perch.lock:
-            perch.on = False
-        sys.stdout.write("\033[5A\r\033[J")  # back above the robot: the whole box is replaced by the message
-    if task.strip():
-        print(f"{C['grey']}› {task.strip()}{C['reset']}")
-    return task
+    return EDITOR.ask()
 
 
 def _engine_options(model):
@@ -3394,6 +3557,7 @@ def main():
     CLI_STATE["agent"] = agent
     where = str(agent.root).replace(str(Path.home()), "~")
     engine = "llama.cpp, sur ce Mac" if opts.get("backend") == "llamacpp" else f"Ollama · {args.model}"
+    CLI_STATE["engine"] = "naim · llama.cpp" if opts.get("backend") == "llamacpp" else f"{args.model} · Ollama"
     _intro()
     _welcome(where, engine)
 
@@ -3427,9 +3591,18 @@ def main():
                 agent.messages = agent.messages[:1]
                 print(f"{C['grey']}Conversation oubliée.{C['reset']}")
                 continue
+            if task == "/mode":
+                EDITOR.set_mode((EDITOR.mode() + 1) % 3)
+                print(f"{C['grey']}Mode : {EDITOR.MODES[EDITOR.mode()][0]} — {EDITOR.MODES[EDITOR.mode()][1]}{C['reset']}")
+                continue
+            if task == "/contexte":
+                print(f"{C['grey']}{EDITOR.context()} de la mémoire de travail de cette conversation.{C['reset']}")
+                continue
             if task in ("?", "/help"):
-                print(f"{C['grey']}Décris ce que tu veux faire, en français. Naim lit, écrit, lance des commandes et vérifie.\n"
-                      f"Ctrl+C arrête la tâche en cours. /reset oublie la conversation, /exit quitte.{C['reset']}")
+                print(f"{C['grey']}Décris ce que tu veux faire, en français : Naim lit, écrit, lance les commandes et vérifie.\n"
+                      "  Entrée envoyer · \\ puis Entrée nouvelle ligne · ↑ ↓ historique · / commandes (Tab complète)\n"
+                      "  Maj+Tab mode d'autorisation · Ctrl+A / Ctrl+E début / fin · Ctrl+U effacer · Ctrl+C arrêter ou quitter"
+                      f"{C['reset']}")
                 continue
             if task:
                 run(task)
