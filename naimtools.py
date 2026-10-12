@@ -2661,7 +2661,22 @@ class Agent:
         self._task_idx = len(self.messages) - 1
         self._stall_pushbacks = 0
         self._reviewed = False
-        for _ in range(self.max_steps):
+        # a budget of progress, not a fixed count: while files are written, steps ticked off and commands pass, it
+        # goes on (the setting is a checkpoint: +50 each time it is still advancing, 1000 at most); it stops when
+        # nothing has moved for STALL_STEPS steps — a large application needs 150 to 300 steps
+        self._step, self._last_progress, budget, stop_reason = 0, 0, max(5, self.max_steps), "budget"
+        self._done_seen = sum(1 for t in (self.todos or []) if t.get("status") == "done")
+        while True:
+            if self._step >= budget:
+                if self._step - self._last_progress < self.STALL_STEPS and budget < 1000:
+                    budget = min(1000, budget + 50)
+                    self.emit({"type": "note", "text": f"Naim avance encore : il continue ({self._step} étapes)."})
+                else:
+                    break
+            if self._step - self._last_progress >= self.STALL_STEPS:
+                stop_reason = "stalled"
+                break
+            self._step += 1
             if self.cancel.is_set():
                 self.emit({"type": "answer", "text": "⏹ Arrêté."})
                 self._outcome = "stopped"
@@ -2842,15 +2857,36 @@ class Agent:
                         self._todo_reminded = True  # nudge once: a written plan keeps small models on track
                         result += ("\n\n(Reminder: for a multi-step task, call update_todos now with your list of "
                                    "steps, then follow it one step at a time.)")
+                self._note_progress(name, result)
                 self.messages.append({"role": "tool", "tool_name": name, "content": result})
             self._attach_images()
             if any(c["function"]["name"] not in READ_ONLY for c in calls):
                 self._notebook(getattr(self, "_task_words", ""))
-        text = (f"Pause : {self.max_steps} étapes atteintes. Écris « continue » pour que je reprenne là où j'en suis "
-                "(ou augmente le nombre d'étapes dans Personnaliser › Agent).")
+        if stop_reason == "stalled":
+            text = (f"Je n'avance plus depuis {self.STALL_STEPS} étapes (aucun fichier, aucune case cochée, aucune "
+                    "commande réussie) : je m'arrête plutôt que de tourner en rond. Dis-moi comment débloquer, ou écris "
+                    "« continue » pour que j'essaie autrement.")
+        else:
+            text = (f"Pause : {self._step} étapes. Écris « continue » pour que je reprenne là où j'en suis "
+                    "(ou augmente le nombre d'étapes dans Personnaliser › Agent).")
         self.emit({"type": "answer", "text": text})
-        self._outcome = "max_steps"
+        self._outcome = "max_steps" if stop_reason == "budget" else "stalled"
         return text
+
+    STALL_STEPS = 25
+    PROGRESS_TOOLS = {"write_file", "edit_file", "multi_edit", "delete_file", "notebook_edit", "start_process",
+                      "confier_tache", "convert_document", "make_diagram", "send_email", "simulator"}
+
+    def _note_progress(self, name, result):
+        """Something moved: a file written or changed, a step ticked off, a command that worked, an app launched."""
+        r = str(result or "").lstrip()
+        if r.startswith(("error", "refused", "denied", "blocked", "not allowed", "unchanged", "Error")):
+            return
+        done = sum(1 for t in (self.todos or []) if t.get("status") == "done")
+        ticked = name == "update_todos" and done > getattr(self, "_done_seen", 0)
+        self._done_seen = max(done, getattr(self, "_done_seen", 0))
+        if ticked or name in self.PROGRESS_TOOLS or (name == "run_command" and r.startswith("exit code 0")):
+            self._last_progress = self._step
 
 
 # ---------------------------------------------------------------------- terminal UI
