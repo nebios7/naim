@@ -3377,183 +3377,255 @@ SHAPE = ["..XXXXXXXXXXXX..",
          "...XX......XX..."]
 
 
-# ---------------------------------------------------------------- Naim's robot (pixel art, a life of its own)
-# A turquoise robot, 14 × 14 pixels (two pixels per character: ▀ with a text and a background colour): it looks
-# around, blinks, thinks, takes out a notebook and a pen (a different colour each time), writes lines, chews its
-# pen or nibbles its notebook (crumbs falling) — in a random order, with random durations.
-BOT = {"body": (63, 167, 160), "dark": (46, 143, 137), "eye": (28, 28, 26), "light": (216, 242, 238),
-       "paper": (239, 230, 200), "spine": (46, 125, 120), "rule": (207, 198, 166), "ink": (43, 43, 43),
-       "crumb": (217, 207, 174)}
-PENS = [(228, 87, 46), (242, 177, 52), (108, 92, 231), (232, 67, 147), (45, 52, 54), (41, 128, 185)]
+# ---------------------------------------------------------------- Naim's robot (from naim_robot.cjs, the same in Python)
+# Pixel art for the terminal: 1 pixel = 1 column × ½ line (▀ with a text and a background colour), whole positions
+# only (no blur). Truecolor when the terminal can, else the 256 colours (Terminal.app). An animation driven by
+# tick(dt): smooth moves of the arms and the notebook, a random routine (looking around, writing, chewing the pen,
+# nibbling the notebook, thinking), blinks and crumbs.
+RW, RH = 14, 14
+RC = {"body": "#5BA8A0", "arm": "#3E8A84", "light": "#D8F2EE", "dark": "#1C1C1A", "page": "#EDE4C8",
+      "pageEdge": "#CFC6A6", "spine": "#2E7D78", "ink": "#2B2B2B", "tip": "#D6D6D6", "crumb": "#D9CFAE"}
+RPENS = ["#E4572E", "#F2B134", "#6C5CE7", "#E84393", "#4C9BE8"]
+_LV = [0, 95, 135, 175, 215, 255]
+
+
+def _hex(h):
+    return [int(h[i:i + 2], 16) for i in (1, 3, 5)]
+
+
+def _to256(rgb):
+    r, g, b = rgb
+    q = lambda v: min(range(6), key=lambda i: abs(_LV[i] - v))  # noqa: E731
+    ri_, gi_, bi_ = q(r), q(g), q(b)
+    dc = (r - _LV[ri_]) ** 2 + (g - _LV[gi_]) ** 2 + (b - _LV[bi_]) ** 2
+    gl = max(0, min(23, round(((r + g + b) / 3 - 8) / 10)))
+    gv = 8 + gl * 10
+    dg = (r - gv) ** 2 + (g - gv) ** 2 + (b - gv) ** 2
+    return 232 + gl if dg < dc else 16 + 36 * ri_ + 6 * gi_ + bi_
+
+
+def _truecolor():
+    forced = os.environ.get("NAIM_COLOR")
+    if forced in ("256", "truecolor"):
+        return forced == "truecolor"
+    if os.environ.get("TERM_PROGRAM") == "Apple_Terminal":
+        return False
+    return bool(re.search(r"truecolor|24bit", os.environ.get("COLORTERM", ""), re.I))
+
+
+_RCODES = {}
+
+
+def _rcode(c, bg):
+    key = (c, bg)
+    if key not in _RCODES:
+        base = 48 if bg else 38
+        _RCODES[key] = f"{base};2;{';'.join(map(str, _hex(c)))}" if _truecolor() else f"{base};5;{_to256(_hex(c))}"
+    return _RCODES[key]
+
+
+def _robot_lines(buf):
+    if not C["reset"]:  # no colours (output piped): the shape only
+        return ["".join("▀" if buf[y][x] or (y + 1 < RH and buf[y + 1][x]) else " " for x in range(RW)) for y in range(0, RH, 2)]
+    out = []
+    for y in range(0, RH, 2):
+        s = ""
+        for x in range(RW):
+            t, u = buf[y][x], buf[y + 1][x] if y + 1 < RH else None
+            if not t and not u:
+                s += "\033[0m "
+            elif t and not u:
+                s += f"\033[0;{_rcode(t, 0)}m▀"
+            elif u and not t:
+                s += f"\033[0;{_rcode(u, 0)}m▄"
+            else:
+                s += f"\033[0;{_rcode(t, 0)};{_rcode(u, 1)}m▀"
+        out.append(s + "\033[0m")
+    return out
+
+
+def _ease(k):
+    return 2 * k * k if k < 0.5 else 1 - (-2 * k + 2) ** 2 / 2
 
 
 class _Bot:
-    W, H = 14, 14
-
     def __init__(self):
-        self.look = (0, 0)          # where the eyes look (columns, rows)
-        self.squint = self.blinking = False
-        self.book = False           # the notebook in front of him
-        self.ink = [0, 0, 0]        # how much of each of the 3 lines is written (0..5)
-        self.hand = None            # the right hand on the page: (column, row), else at rest
-        self.pen, self.pen_col = False, PENS[0]
-        self.chew = 0               # the mouth: 0 shut, 1 open (chewing)
-        self.mouth_hand = False     # the pen held at the mouth
-        self.crumbs = []            # (column, row) of crumbs falling
-        self.book_up = False        # the notebook held at the mouth
+        import random
+        self.R = random
+        self.t = 0
+        self.lx = self.ly = self.rx = self.ry = 0.0
+        self.nbY, self.nbOn = 5.0, False
+        self.penOn, self.penRot, self.penColor = False, 0, RPENS[0]
+        self.lookX = self.lookY = 0
+        self.squint = self.blink = self.chewing = self.crumbsOn = False
+        self.ink0 = self.ink1 = 0.0
+        self.slot = 0
+        self.crumbs, self.nextBlink, self.blinkEnd, self.nextCrumb = [], 2000, 0, 0
+        self.g = self.routine()
+        next(self.g)  # primed: each tick sends the time that passed
 
-    def grid(self):
-        g = [[None] * self.W for _ in range(self.H)]
+    # -- the animation engine: generators, no timer
+    def wait(self, ms):
+        t = 0
+        while t < ms:
+            t += yield
 
-        def box(c0, r0, c1, r1, col):
-            for r in range(max(0, r0), min(self.H, r1 + 1)):
-                for c in range(max(0, c0), min(self.W, c1 + 1)):
-                    g[r][c] = col
-        b = BOT
-        box(2, 0, 11, 6, b["body"])                       # head
-        box(3, 7, 10, 9, b["body"])                       # body
-        box(6, 8, 7, 8, b["light"])                       # chest light
-        box(3, 10, 4, 11, b["body"]); box(9, 10, 10, 11, b["body"])   # legs
-        box(2, 12, 5, 12, b["body"]); box(8, 12, 11, 12, b["body"])   # feet
-        dx, dy = self.look
-        ex1, ex2, ey = 5 + dx, 8 + dx, 2 + max(-1, min(dy, 1))  # small eyes: they stay inside the head when he looks
-        if self.blinking or self.squint:                  # eyelids closed or squinting: a single pixel
-            g[ey + 1][ex1] = g[ey + 1][ex2] = b["eye"]
-        else:
-            box(ex1, ey, ex1, ey + 1, b["eye"]); box(ex2, ey, ex2, ey + 1, b["eye"])
-        box(4, 5, 9, 5 + self.chew, b["eye"])             # mouth (open when chewing)
-        if not self.chew:
-            g[5][5] = g[5][7] = b["body"]                 # teeth
-        top = 3 if self.book_up else 7                    # the notebook (raised to the mouth to nibble it)
-        if self.book:
-            box(3, top, 10, top + 4, b["paper"])
-            box(3, top, 3, top + 4, b["spine"])
-            for k in range(2):  # two lines, one row apart (three would merge into a block)
-                r = top + 1 + 2 * k
-                box(5, r, 9, r, b["rule"])
-                if self.ink[k]:
-                    box(5, r, 4 + self.ink[k], r, b["ink"])
-        if self.book:                                     # hands holding the notebook
-            box(1, top + 2, 2, top + 3, b["dark"])
-        else:
-            box(0, 7, 1, 8, b["dark"])
-        if self.mouth_hand:                               # the pen at the mouth
-            box(10, 4, 11, 5, b["dark"])
-            if self.pen:
-                box(8, 5, 9, 5, self.pen_col)
-        elif self.hand:
-            c, r = self.hand
-            box(c, r, c + 1, r + 1, b["dark"])
-            if self.pen:
-                g[max(0, r - 1)][c] = self.pen_col
-        else:
-            box(12, 7, 13, 8, b["dark"])
-            if self.pen:
-                box(13, 5, 13, 8, self.pen_col)
-        for c, r in self.crumbs:                          # crumbs
-            if 0 <= r < self.H and 0 <= c < self.W:
-                g[r][c] = b["crumb"]
-        return g
+    def tween(self, props, ms, ease=_ease):
+        start = {k: getattr(self, k) for k in props}
+        t = 0
+        while t < ms:
+            t += yield
+            e = ease(min(1, t / ms))
+            for k, v in props.items():
+                setattr(self, k, start[k] + (v - start[k]) * e)
+        for k, v in props.items():
+            setattr(self, k, v)
+
+    # -- the random routine
+    def routine(self):
+        R = self.R
+        yield
+        while True:
+            yield from self.look_around(R.uniform(1200, 3200))
+            self.penColor = R.choice(RPENS)
+            self.ink0 = self.ink1 = 0; self.slot = 0
+            self.nbOn, self.nbY = True, 5.0
+            yield from self.tween({"nbY": 0, "lx": 1, "ly": 2, "rx": -1, "ry": 2}, 900)
+            self.penOn, self.lookY = True, 1
+            yield from self.wait(400)
+            yield from self.write()
+            last = self.write
+            for _ in range(R.randint(2, 5)):
+                a = R.choice([f for f in (self.write, self.write, self.chew_pen, self.chew_book, self.think) if f != last])
+                yield from a()
+                last = a
+            self.penOn, self.lookY = False, 0
+            yield from self.tween({"nbY": 5, "lx": 0, "ly": 0, "rx": 0, "ry": 0}, 800)
+            self.nbOn = False
+
+    def look_around(self, ms):
+        t = 0
+        while t < ms:
+            self.lookX, self.lookY = self.R.choice([-1, 0, 1]), self.R.choice([-1, 0, 0, 0])
+            d = self.R.uniform(500, 1200)
+            yield from self.wait(d)
+            t += d
+        self.lookX = self.lookY = 0
+
+    def write(self):
+        R = self.R
+        self.lookX, self.lookY = 0, 1
+        for _ in range(R.randint(1, 2)):
+            if self.slot >= 2:
+                yield from self.wait(250)
+                self.ink0 = self.ink1 = 0; self.slot = 0
+                yield from self.wait(300)
+            s, ln, key = self.slot, R.randint(2, 5), "ink" + str(self.slot)
+            yield from self.tween({"rx": 5 - 12, "ry": 1 if s else -1}, 350)
+            setattr(self, key, 0)
+            yield from self.tween({"rx": 5 + ln - 12, key: ln}, R.uniform(500, 1100) * ln / 3, lambda k: k)
+            self.slot += 1
+            yield from self.wait(R.uniform(100, 350))
+        yield from self.tween({"rx": -1, "ry": 2}, 400)
+
+    def chew_pen(self):
+        self.lookY = 0
+        yield from self.tween({"rx": -2, "ry": -2}, 600)
+        self.penRot, self.chewing, self.squint = 1, True, True
+        yield from self.wait(self.R.uniform(1800, 3800))
+        self.chewing = self.squint = False; self.penRot = 0; self.lookY = 1
+        yield from self.tween({"rx": -1, "ry": 2}, 600)
+
+    def chew_book(self):
+        self.lookY, self.penOn = 0, False
+        yield from self.tween({"nbY": -1, "lx": 1, "ly": 1, "rx": -1, "ry": 1}, 600)
+        self.chewing = self.squint = self.crumbsOn = True
+        for _ in range(self.R.randint(5, 10)):
+            yield from self.tween({"nbY": -2, "ly": 0, "ry": 0}, 170)
+            yield from self.tween({"nbY": -1, "ly": 1, "ry": 1}, 170)
+        self.chewing = self.squint = self.crumbsOn = False; self.lookY = 1
+        yield from self.tween({"nbY": 0, "ly": 2, "ry": 2}, 600)
+        self.penOn = True
+
+    def think(self):
+        self.lookX, self.lookY = self.R.choice([-1, 1]), -1
+        yield from self.wait(self.R.uniform(1200, 2600))
+        self.lookX, self.lookY = 0, 1
+        yield from self.wait(300)
+
+    # -- the clock
+    def tick(self, dt):
+        R = self.R
+        self.t += dt
+        if not self.blink and self.t >= self.nextBlink:
+            self.blink, self.blinkEnd = True, self.t + 130
+        if self.blink and self.t >= self.blinkEnd:
+            self.blink, self.nextBlink = False, self.t + R.uniform(1500, 4500)
+        if self.crumbsOn and self.t >= self.nextCrumb:
+            self.crumbs.append({"x": R.randint(5, 9), "y0": 12 + round(self.nbY), "born": self.t})
+            self.nextCrumb = self.t + R.uniform(180, 320)
+        self.crumbs = [c for c in self.crumbs if self.t - c["born"] < 650]
+        self.g.send(dt)
+
+    def beat(self):
+        return int(self.t // 350) % 2 == 1
+
+    # -- the drawing
+    def frame(self):
+        b = [[None] * RW for _ in range(RH)]
+
+        def R(x, y, w, h, c):
+            for j in range(int(y), int(y + h)):
+                for i in range(int(x), int(x + w)):
+                    if 0 <= j < RH and 0 <= i < RW:
+                        b[j][i] = c
+        R(2, 0, 10, 7, RC["body"])                         # head
+        R(3, 7, 8, 3, RC["body"])                          # body
+        R(3, 10, 2, 2, RC["body"]); R(9, 10, 2, 2, RC["body"])   # legs
+        R(2, 12, 4, 1, RC["body"]); R(8, 12, 4, 1, RC["body"])   # feet
+        R(6, 8, 2, 1, RC["light"])                         # light
+        opened = self.chewing and self.beat()
+        R(4, 5, 6, 2 if opened else 1, RC["dark"])          # mouth
+        if not opened:
+            R(5, 5, 1, 1, RC["body"]); R(8, 5, 1, 1, RC["body"])
+        sq = self.squint or self.blink
+        for ex in (4, 8):                                  # eyes
+            if sq:
+                R(ex + self.lookX, 3 + self.lookY, 2, 1, RC["dark"])
+            else:
+                R(ex + self.lookX, 2 + self.lookY, 2, 2, RC["dark"])
+        if self.nbOn:                                      # notebook
+            ny = round(self.nbY)
+            R(4, 7 + ny, 7, 4, RC["page"])
+            R(3, 7 + ny, 1, 5, RC["spine"])
+            R(4, 11 + ny, 7, 1, RC["pageEdge"])
+            R(5, 8 + ny, int(self.ink0 + 1e-6), 1, RC["ink"])
+            R(5, 10 + ny, int(self.ink1 + 1e-6), 1, RC["ink"])
+        lx, ly = round(self.lx), 7 + round(self.ly)
+        rx, ry = 12 + round(self.rx), 7 + round(self.ry)
+        R(lx, ly, 2, 2, RC["arm"]); R(rx, ry, 2, 2, RC["arm"])   # arms
+        if self.penOn:                                     # pen
+            if self.penRot:
+                py = ry + (1 if self.chewing and self.beat() else 0)
+                R(rx - 2, py, 1, 1, RC["tip"]); R(rx - 1, py, 2, 1, self.penColor)
+            else:
+                R(rx, ry, 1, 2, self.penColor); R(rx, ry + 2, 1, 1, RC["tip"])
+        for c in self.crumbs:                              # crumbs
+            R(c["x"], c["y0"] + (self.t - c["born"]) // 150, 1, 1, RC["crumb"])
+        return b
 
     def lines(self):
-        """The robot as text lines: each character shows two pixels (upper as text colour, lower as background)."""
-        g, out = self.grid(), []
-        for y in range(0, self.H, 2):
-            s = ""
-            for x in range(self.W):
-                top, bot = g[y][x], g[y + 1][x]
-                if top is None and bot is None:
-                    s += " "
-                elif bot is None:
-                    s += f"\033[{_col(top)}m▀\033[0m"
-                elif top is None:
-                    s += f"\033[{_col(bot)}m▄\033[0m"
-                else:
-                    s += f"\033[{_col(top)};{_col(bot, True)}m▀\033[0m"
-            out.append(s if C["reset"] else re.sub(r"\033\[[0-9;]*m", "", s))
-        return out
-
-    # -- a life of its own: random gestures, random durations (redraw() after each change)
-    def life(self, redraw, alive, busy=lambda: False):
-        import random
-        sleep = time.sleep
-
-        def look_around(t):
-            end = time.time() + t
-            while alive() and time.time() < end:
-                self.look = (random.choice((-1, 0, 0, 1)), random.choice((0, 0, 1))); redraw(); sleep(random.uniform(0.5, 1.2))
-            self.look = (0, 0); redraw()
-
-        def take_out():
-            self.pen_col, self.ink = random.choice(PENS), [0, 0, 0]
-            self.book = True; redraw(); sleep(0.5)
-            self.pen = True; self.hand = (10, 9); self.look = (0, 1); redraw(); sleep(0.4)
-
-        def put_away():
-            self.pen = False; self.hand = None; self.look = (0, 0); redraw(); sleep(0.3)
-            self.book = False; self.ink = [0, 0, 0]; redraw(); sleep(0.4)
-
-        def write():
-            self.look = (0, 1)
-            for _ in range(random.randint(1, 3)):
-                k = next((i for i in range(2) if self.ink[i] < 5), None)
-                if k is None:
-                    sleep(0.2); self.ink = [0, 0, 0]; redraw(); sleep(0.3); k = 0
-                target = random.randint(2, 5)
-                while alive() and self.ink[k] < target:
-                    self.ink[k] += 1; self.hand = (min(11, 5 + self.ink[k]), 8 + 2 * k); redraw(); sleep(random.uniform(0.15, 0.35))
-                self.ink[k] = 5 if target == 5 else self.ink[k]
-                sleep(random.uniform(0.1, 0.4))
-            self.hand = (10, 9); redraw()
-
-        def chew_pen():
-            self.look, self.hand, self.mouth_hand, self.squint = (0, 0), None, True, True; redraw()
-            end = time.time() + random.uniform(1.8, 3.8)
-            while alive() and time.time() < end:
-                self.chew = 1 - self.chew; redraw(); sleep(0.35)
-            self.chew, self.mouth_hand, self.squint, self.hand = 0, False, False, (10, 9); redraw()
-
-        def chew_book():
-            self.pen, self.hand, self.book_up, self.squint = False, None, True, True; redraw()
-            end = time.time() + random.uniform(2.2, 4.8)
-            while alive() and time.time() < end:
-                self.chew = 1 - self.chew
-                self.crumbs = [(c, r + 1) for c, r in self.crumbs if r < 13] + ([(random.randint(4, 9), 7)] if random.random() < 0.6 else [])
-                redraw(); sleep(0.3)
-            self.chew, self.book_up, self.squint, self.crumbs = 0, False, False, []
-            self.pen, self.hand = True, (10, 9); redraw()
-
-        def think():
-            self.look = (random.choice((-1, 1)), -1); redraw(); sleep(random.uniform(1.2, 2.6))
-            self.look = (0, 1); redraw(); sleep(0.3)
-
-        def blinker():
-            while alive():
-                sleep(random.uniform(1.5, 4.5))
-                if alive() and not self.squint:
-                    self.blinking = True; redraw(); sleep(0.12); self.blinking = False; redraw()
-        threading.Thread(target=blinker, daemon=True).start()
-        while alive():
-            look_around(random.uniform(1.2, 3.2))
-            if not alive():
-                return
-            take_out(); last = write; write()
-            for _ in range(random.randint(2, 5)):
-                if not alive():
-                    return
-                act = random.choice([a for a in (write, write, chew_pen, chew_book, think) if a is not last])
-                act(); last = act
-            put_away()
+        return _robot_lines(self.frame())
 
 
 def _robot(col=None, **kw):
     """The robot at rest (welcome, intro); a blink when asked."""
     bt = _Bot()
-    bt.blinking = bool(kw.get("blink"))
+    bt.blink = bool(kw.get("blink"))
     return bt.lines()
 
 
-ROBOT_W = 14
+ROBOT_W = RW
 
 
 # ---------------------------------------------------------------- answers with rich (Markdown, coloured code, tables)
@@ -3824,9 +3896,17 @@ class _Editor:
 
     # -- the robot's life, between two keys
     def _life(self, redraw):
-        """His own life while you type: looking around, the notebook, writing, chewing the pen… at random."""
-        self.bot = _Bot()
-        self.bot.life(redraw, lambda: self.alive)
+        """His own life while you type (naim_robot.cjs): a tick every 66 ms, redrawn only when he changed."""
+        self.bot, last, prev = _Bot(), time.time(), None
+        while self.alive:
+            time.sleep(0.066)
+            now = time.time()
+            self.bot.tick(min(100, (now - last) * 1000))
+            last = now
+            cur = self.bot.lines()
+            if cur != prev and not self.busy:
+                prev = cur
+                redraw()
 
     def _act(self, redraw):
         """Clicked: he looks at you and blinks twice."""
@@ -3834,9 +3914,9 @@ class _Editor:
             return
         self.busy = True
         try:
-            self.bot.look = (0, 0)
+            self.bot.lookX = self.bot.lookY = 0
             for _ in range(2):
-                self.bot.blinking = True; redraw(); time.sleep(0.12); self.bot.blinking = False; redraw(); time.sleep(0.15)
+                self.bot.blink = True; redraw(); time.sleep(0.12); self.bot.blink = False; redraw(); time.sleep(0.15)
         finally:
             self.busy = False
 
