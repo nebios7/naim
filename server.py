@@ -1089,6 +1089,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
         elif path == "/api/skills/popular":
             self.send_json({"sources": skill_hub.POPULAR})
+        elif path in ("/api/sim/relaunch", "/api/sim/save"):
+            udid = str(self.read_json().get("udid") or "")
+            if not re.fullmatch(r"[0-9A-Fa-f-]{36}", udid):
+                self.send_json({"error": "appareil inconnu"}, 400)
+            else:
+                self.send_json(cu.sim_relaunch(udid) if path.endswith("relaunch") else cu.sim_save(udid))
         elif path == "/api/computer/permissions":
             try:
                 cu.permissions(request=True)

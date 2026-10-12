@@ -390,7 +390,24 @@ def sim_status():
     booted = [{"udid": d["udid"], "name": d["name"], "os": d["os"]} for d in devices()
               if d["state"] == "Booted" and d["name"].startswith(("iPhone", "iPad"))]
     cur = SIM_LAST["udid"] if any(b["udid"] == SIM_LAST["udid"] for b in booted) else (booted[0]["udid"] if booted else None)
-    return {"booted": booted, "current": cur}
+    return {"booted": booted, "current": cur, "apps": SIM_LAST.get("apps", {})}
+
+
+def sim_relaunch(udid):
+    """« Relancer l'app » in the panel: the last app Naim launched on that device, started again."""
+    bundle = SIM_LAST.get("apps", {}).get(udid)
+    if not bundle:
+        return {"error": "aucune app lancée par Naim sur cet appareil"}
+    simctl("terminate", udid, bundle)
+    code, text = simctl("launch", udid, bundle)
+    return {"ok": True, "bundle": bundle} if code == 0 else {"error": text[-300:]}
+
+
+def sim_save(udid):
+    """« Capture »: the device's screen as a PNG in Downloads."""
+    out = Path.home() / "Downloads" / f"Simulateur {time.strftime('%Y-%m-%d %H.%M.%S')}.png"
+    code, text = simctl("io", udid, "screenshot", "--type=png", str(out), timeout=20)
+    return {"ok": True, "path": str(out)} if code == 0 and out.exists() else {"error": text[-200:]}
 
 
 def sim_frame(udid=None):
@@ -540,6 +557,8 @@ class Simulator:
         d = self._booted(device)
         simctl("terminate", d["udid"], bundle)
         code, text = simctl("launch", d["udid"], bundle)
+        if code == 0:
+            SIM_LAST["apps"] = {**SIM_LAST.get("apps", {}), d["udid"]: bundle}  # « Relancer l'app » in the panel
         time.sleep(2)
         return f"ok: {bundle} lancé ({text})" if code == 0 else f"error: {text[-500:]}"
 

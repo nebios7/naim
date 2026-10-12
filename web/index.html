@@ -1557,14 +1557,29 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 .ctxpop .cp-grid span { color: var(--muted); } .ctxpop .cp-grid b { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
 .ctxpop .btn { align-self: flex-start; }
 
-/* « Simulateur » panel: the iPhone screen, live */
-#pSim { display: flex; flex-direction: column; gap: 8px; }
+/* « Simulateur » panel: the iPhone screen, live, in a phone frame */
+#pSim { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; }
 #pSim[hidden] { display: none; }
-#pSim .simbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-#pSim .simbar select { font: inherit; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
-#pSim .simstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px; }
-#pSim #simImg { max-width: 100%; max-height: calc(100vh - 170px); border-radius: 28px; border: 6px solid #1c1c1e; box-shadow: 0 6px 24px rgb(0 0 0 / .35); background: #000; }
-#pSim .simempty { color: var(--muted); text-align: center; font-size: 13px; }
+#pSim .simbar { display: flex; align-items: center; gap: 9px; }
+#pSim .simdot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+#pSim .simdot.on { background: #34c759; box-shadow: 0 0 0 0 rgb(52 199 89 / .5); animation: simpulse 2s infinite; }
+@keyframes simpulse { 0% { box-shadow: 0 0 0 0 rgb(52 199 89 / .45); } 70% { box-shadow: 0 0 0 7px rgb(52 199 89 / 0); } 100% { box-shadow: 0 0 0 0 rgb(52 199 89 / 0); } }
+#pSim .simid { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+#pSim .simid b { font-size: 13px; font-weight: 600; } #pSim .simid small { font-size: 11.5px; color: var(--muted); }
+#pSim .sp { flex: 1; }
+#pSim select { font: inherit; font-size: 12px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; max-width: 150px; }
+#pSim .simbtn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+#pSim .simbtn:hover { background: var(--hover); } #pSim .simbtn[hidden] { display: none; }
+#pSim .simbtn svg { width: 14px; height: 14px; }
+#pSim .simstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 6px 0 12px; }
+#pSim .phone { position: relative; height: min(calc(100vh - 190px), 760px); aspect-ratio: 1206 / 2622; padding: 11px; border-radius: 54px;
+  background: linear-gradient(145deg, #2c2c2e, #0d0d0f); box-shadow: 0 0 0 1.5px #48484a inset, 0 20px 50px rgb(0 0 0 / .45), 0 2px 6px rgb(0 0 0 / .3); }
+#pSim .phone[hidden] { display: none; }
+#pSim .phone img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 44px; background: #000; }
+#pSim .phone .island { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); width: 30%; height: 3.4%; border-radius: 20px; background: #000; z-index: 1; }
+#pSim .simempty { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); text-align: center; font-size: 13px; max-width: 260px; }
+#pSim .simempty b { color: var(--text); font-weight: 500; }
+#pSim .simic svg { width: 34px; height: 34px; opacity: .6; }
 </style>
 </head>
 <body>
@@ -1673,7 +1688,12 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
         <div class="pvbar" id="pvBar"><div class="pvsizes"><button data-pv="100%" class="on" title="Pleine largeur">Ordinateur</button><button data-pv="820px" title="768 px">Tablette</button><button data-pv="390px" title="390 px">Téléphone</button></div><span style="flex:1"></span><button class="icon" id="pvRedo" title="Recharger l'aperçu">↻</button><button class="icon" id="pvBig" title="Agrandir / réduire l'aperçu">⤢</button></div>
         <div class="pvstage" id="pvStage"><iframe id="preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"></iframe></div></div>
       <div class="pbody" id="pChanges" hidden></div>
-      <div class="pbody" id="pSim" hidden><div class="simbar"><select id="simDev"></select><span id="simState"></span></div><div class="simstage"><img id="simImg" alt=""><div class="simempty" id="simEmpty">Aucun iPhone virtuel démarré.<br><small>Demande à Naim de créer ou lancer une app iOS : elle s'affichera ici.</small></div></div></div>
+      <div class="pbody" id="pSim" hidden>
+        <div class="simbar"><span class="simdot" id="simDot"></span><div class="simid"><b id="simName">Simulateur</b><small id="simState">aucun appareil</small></div><select id="simDev" title="Appareil affiché"></select><span class="sp"></span>
+          <button class="simbtn" id="simRelaunch" title="Relancer l'app" hidden></button><button class="simbtn" id="simShot" title="Capture (dans Téléchargements)"></button><button class="simbtn" id="simBig" title="Agrandir / réduire le panneau"></button></div>
+        <div class="simstage"><div class="phone" id="simPhone" hidden><div class="island"></div><img id="simImg" alt=""></div>
+          <div class="simempty" id="simEmpty"><span class="simic"></span><b>Aucun iPhone virtuel démarré</b><small>Demande à Naim de créer ou lancer une app iOS : elle s'affichera ici, en direct.</small></div></div>
+      </div>
       <div class="pbody" id="pGit" hidden>
         <div class="gsec" id="gitHead"></div>
         <div id="gitFiles"></div>
@@ -4070,30 +4090,49 @@ $("#termClear").onclick = () => ($("#termOut").textContent = "");
 
 // ======================================================================= right panel: files + preview
 // « Simulateur »: the iPhone screen, live (about one image a second), while the tab is shown
-let simTimer = null, simUdid = null;
+let simTimer = null, simUdid = null, simApps = {}, simFails = 0;
 async function simLive() {
   clearTimeout(simTimer);
   if ($("#pSim").hidden || !$("#panel").classList.contains("show")) return;
+  $("#simRelaunch").innerHTML = svgI("refresh") + "<span>Relancer</span>"; $("#simShot").innerHTML = svgI("download") + "<span>Capture</span>";
+  $("#simBig").innerHTML = svgI("ext"); $("#pSim .simic").innerHTML = svgI("phone");
   const st = await api("/api/sim/status").catch(() => ({ booted: [] }));
+  simApps = st.apps || {};
   const sel = $("#simDev");
   sel.innerHTML = st.booted.map((d) => `<option value="${d.udid}">${esc(d.name)} · ${esc(d.os)}</option>`).join("");
   sel.hidden = st.booted.length < 2;
   if (!st.booted.some((d) => d.udid === simUdid)) simUdid = st.current;
   sel.value = simUdid || "";
-  sel.onchange = () => { simUdid = sel.value; simFrame(); };
-  $("#simEmpty").hidden = !!simUdid; $("#simImg").hidden = !simUdid;
-  $("#simState").textContent = simUdid ? (st.booted.find((d) => d.udid === simUdid)?.name || "") + " · en direct" : "";
+  sel.onchange = () => { simUdid = sel.value; simInfo(st); simFrame(); };
+  simInfo(st);
   if (simUdid) simFrame();
+}
+function simInfo(st) {
+  const d = (st.booted || []).find((x) => x.udid === simUdid);
+  $("#simEmpty").hidden = !!d; $("#simPhone").hidden = !d;
+  $("#simName").textContent = d ? d.name : "Simulateur";
+  $("#simState").textContent = d ? `${d.os} · en direct` : "aucun appareil";
+  $("#simDot").classList.toggle("on", !!d);
+  $("#simRelaunch").hidden = !(d && simApps[d.udid]);
+  $("#simShot").hidden = !d;
 }
 async function simFrame() {
   clearTimeout(simTimer);
   if ($("#pSim").hidden || !$("#panel").classList.contains("show") || !simUdid) return;
   try {
     const r = await fetch(`/api/sim/frame?udid=${simUdid}&t=${Date.now()}`);
-    if (r.ok) { const url = URL.createObjectURL(await r.blob()), img = $("#simImg"), old = img.src; img.src = url; if (old.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(old), 2000); }
+    if (r.ok) {
+      const url = URL.createObjectURL(await r.blob());
+      await new Promise((ok) => { const pre = new Image(); pre.onload = pre.onerror = ok; pre.src = url; });  // decoded first: no flicker
+      const img = $("#simImg"), old = img.src; img.src = url; simFails = 0;
+      if (old.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(old), 2000);
+    } else if (++simFails > 2) return simLive();  // the device was shut down: back to the list
   } catch {}
-  simTimer = setTimeout(simFrame, document.hidden ? 4000 : 700);
+  simTimer = setTimeout(simFrame, document.hidden ? 4000 : 650);
 }
+$("#simRelaunch").onclick = async () => { const r = await api("/api/sim/relaunch", { method: "POST", body: { udid: simUdid } }); toast(r.error || "App relancée"); };
+$("#simShot").onclick = async () => { const r = await api("/api/sim/save", { method: "POST", body: { udid: simUdid } }); toast(r.error || `Capture enregistrée : ${r.path.split("/").pop()}`); };
+$("#simBig").onclick = () => $("#panel").classList.toggle("pvwide");
 function showPanel(tab) {
   $("#panel").classList.add("show");
   $$(".ptab").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
