@@ -6041,24 +6041,17 @@ async function openDeepLink() {
 
 // ======================================================================= motion (GSAP, Lenis, React Bits effects)
 // Naim's own animations, with the libraries of « Bibliothèques » (bundled in web/vendor, no internet needed):
-// GSAP for entrances, Lenis for smooth scrolling of the pages and the conversation list, and two React Bits
+// GSAP for entrances, and two React Bits
 // effects redone without React (SpotlightCard on the cards, BlurText on the settings titles).
 // Never on the conversation being written (nothing moves under the text) and never with « réduire les animations ».
 (() => {
   const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches || S.motion === false;
   const load = (src) => new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
-  Promise.all([load("/vendor/gsap.min.js"), load("/vendor/lenis.min.js")]).then(() => {
+  // (no Lenis on Naim itself: on scrolling panels it kept an old scroll length and blocked the navigation;
+  //  the native macOS scrolling is already smooth. Lenis stays offered for the sites Naim builds.)
+  load("/vendor/gsap.min.js").then(() => {
     const gsap = window.gsap;
-    // Lenis: smooth wheel scrolling of the pages (Personnaliser, Artefacts, Tâches) and of the conversation list
-    const smooth = new Map();
-    const lenisOn = (el) => {
-      if (!el || smooth.has(el) || calm() || !window.Lenis) return;
-      const l = new Lenis({ wrapper: el, content: el, duration: 0.9, smoothWheel: true, wheelMultiplier: 0.9 });
-      gsap.ticker.add((t) => l.raf(t * 1000));
-      smooth.set(el, l);
-    };
     gsap.ticker.lagSmoothing(0);
-    [...document.querySelectorAll(".view.page"), document.getElementById("convs")].forEach(lenisOn);
 
     // GSAP: what appears comes in softly (only one new element at a time, not a whole conversation being redrawn)
     const enter = (els, o = {}) => { if (!calm() && els.length) gsap.from(els, { y: 10, opacity: 0, duration: 0.38, ease: "power2.out", stagger: 0.03, clearProps: "transform,opacity", ...o }); };
