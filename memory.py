@@ -212,11 +212,18 @@ Extrait (messages de l'utilisateur) :
 
 HINT_RE = re.compile(r"\b(je suis|je m'appelle|appelle[- ]moi|mon nom|je travaille|mon (projet|app|site|entreprise|métier|travail)|"
                      r"ma (société|boîte|préférence)|je préfère|j'aime|j'utilise|je développe|toujours|jamais|"
-                     r"n'oublie pas|souviens|retiens|mes (projets|clients|outils)|je veux que tu)\b", re.I)
+                     r"n'oublie pas|souviens|retiens|mes (projets|clients|outils)|je veux que tu|"
+                     r"j'habite|je vis|chez moi|j'ai (un|une|des)|"
+                     r"(mon|ma|mes) (cv|box|imprimantes?|mac|iphone|t[ée]l[ée]phone|adresse|e-?mail|ville|maison|appartement|"
+                     r"voiture|famille|femme|mari|fils|filles?|enfants?|entreprise|site|applis?|applications?|serveurs?|"
+                     r"r[ée]seau|wifi|bureau|dossiers?|logiciels?|mod[eè]les?|voix))\b", re.I)
 SECRET_RE = re.compile(r"(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12,}|mot de passe\s*[:=])", re.I)
 
 
-def worth_extracting(messages):
+def worth_extracting(messages, user_turns=0):
+    """A message that says something about the user, or every 6th message of a conversation (a look back at it)."""
+    if user_turns and user_turns % 6 == 0:
+        return True
     return any(m.get("role") == "user" and HINT_RE.search(str(m.get("content") or "")) for m in messages)
 
 

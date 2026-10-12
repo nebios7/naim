@@ -89,7 +89,7 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
 
 
 # tools kept for a plain question or a lesson in Chat: look things up, never change files
-ANSWER_TOOLS = {"read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
+ANSWER_TOOLS = {"chercher_conversations", "read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
                 "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
 # actions on the Mac itself (printer, apps, settings, music…): Naim does them with its tools, asking when it is sensitive
@@ -1346,7 +1346,7 @@ class Handler(BaseHTTPRequestHandler):
         if s.get("enable_memory", True) is False or s.get("memory_auto", True) is False:
             return
         msgs = list(body.get("history") or []) + [{"role": "user", "content": body.get("message", "")}]
-        if not memory.worth_extracting(msgs[-6:]):
+        if not memory.worth_extracting(msgs[-6:], sum(m.get("role") == "user" for m in msgs)):
             return
         chat = self._memory_chat(body)
         job = lambda: memory.extract_from_messages(msgs[-6:], chat, "conversation")  # noqa: E731

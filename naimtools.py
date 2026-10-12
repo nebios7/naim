@@ -122,6 +122,20 @@ USE_MCP_TOOL = {"type": "function", "function": {"name": "use_mcp", "description
         "arguments": {"type": "object", "description": "the tool's arguments"}}, "required": ["server"]}}}
 
 
+# the user's past conversations with Naim (like « souviens-toi, on l'a déjà fait »): search them, then read one
+CONVERSATIONS_TOOL = {"type": "function", "function": {"name": "chercher_conversations", "description": (
+    "Search the user's PAST conversations with you (when they say « souviens-toi », « la dernière fois », « on en a "
+    "déjà parlé », or ask about something done before). 1) chercher_conversations(requete) → matching conversations "
+    "with an excerpt. 2) chercher_conversations(conversation=id) → that conversation's messages."),
+    "parameters": {"type": "object", "properties": {
+        "requete": {"type": "string", "description": "words to look for (a name, a project, a subject)"},
+        "conversation": {"type": "string", "description": "id of one conversation to read"}}}}}
+
+
+def _conversations_dir():
+    return Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "conversations"
+
+
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 
@@ -515,6 +529,7 @@ class Agent:
             tools.append(ASK_TOOL)
         if not self.subagent and not self.scheduled:
             tools.append(SCHEDULE_TOOL)
+            tools.append(CONVERSATIONS_TOOL)
         if self.features["simulator"] and not self.subagent:
             tools.append(SIMULATOR_TOOL)
         if self.features["email"] and not self.subagent:
@@ -1712,6 +1727,47 @@ class Agent:
                  "interval": f"toutes les {sc.get('every_minutes')} min"}).get(k, "?")
         return when
 
+    def chercher_conversations(self, requete="", conversation=None):
+        """Past conversations: the ones whose messages contain the words (newest first), or the text of one of them."""
+        d = _conversations_dir()
+        if conversation:
+            f = d / f"{re.sub(r'[^A-Za-z0-9_-]', '', str(conversation))}.json"
+            try:
+                c = json.loads(f.read_text())
+            except (OSError, ValueError):
+                return f"error: conversation {conversation} introuvable"
+            lines = [f"Conversation « {c.get('title', '')} » ({time.strftime('%Y-%m-%d %H:%M', time.localtime(f.stat().st_mtime))}) :"]
+            for m in c.get("messages", [])[-30:]:
+                if m.get("content"):
+                    lines.append(f"{'Utilisateur' if m.get('role') == 'user' else 'Toi'} : {str(m['content'])[:700]}")
+            return "\n".join(lines)[:9000]
+        words = [w for w in re.findall(r"\w{3,}", (requete or "").lower()) if w not in ("les", "des", "une", "pour", "dans", "avec", "que", "qui")]
+        if not words:
+            return "error: donne des mots à chercher (un nom, un projet, un sujet)"
+        found = []
+        for f in sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:400]:
+            if f.stem == getattr(self, "conv_id", None):
+                continue  # the conversation under way is already known
+            try:
+                c = json.loads(f.read_text())
+            except (OSError, ValueError):
+                continue
+            msgs = [str(m.get("content") or "") for m in c.get("messages", [])]
+            text = (c.get("title", "") + "\n" + "\n".join(msgs)).lower()
+            stems = [w[:6] if len(w) > 6 else w.rstrip("s") for w in words]  # « photos » finds « photo »
+            present = [w for w in stems if w in text]
+            score = sum(text.count(w) for w in present)
+            if score and len(present) * 2 >= len(stems):
+                hit = max(msgs, key=lambda m: sum(w in m.lower() for w in present), default="")
+                i = max(0, hit.lower().find(present[0]) - 120)
+                found.append((score, f.stem, c.get("title", ""), time.strftime("%Y-%m-%d", time.localtime(f.stat().st_mtime)),
+                              re.sub(r"\s+", " ", hit[i:i + 300])))
+        if not found:
+            return f"aucune conversation passée ne parle de : {requete}"
+        found.sort(key=lambda x: -x[0])
+        return "Conversations passées (lis-en une avec chercher_conversations(conversation=id)) :\n" + "\n".join(
+            f"- id={cid} · {day} · « {title[:70]} » : …{ex}…" for _, cid, title, day, ex in found[:6])
+
     def planifier(self, action, id=None, name=None, prompt=None, frequency=None, time=None, days=None, date=None,
                   every_minutes=None, mode=None, enabled=None):
         import scheduler
@@ -2032,7 +2088,7 @@ class Agent:
               "send_email": self.send_email, "chercher_contact": self.chercher_contact, "mail_inbox": self.mail_inbox, "mail_draft_reply": self.mail_draft_reply,
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
-              "ask_user": self.ask_user, "planifier": self.planifier,
+              "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
               "wait": self.wait}.get(name)
         rule = self._rule_for(name, args) if self.rules else None
         if rule == "deny":
