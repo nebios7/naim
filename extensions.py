@@ -956,6 +956,8 @@ SKILL_TRIGGERS = {
     "refactoring": r"\b(refacto\w*|nettoie[rz]? le code|restructur\w*)\b",
     "doc-api": r"\b(document\w* (l')?api|openapi|swagger)\b",
     # the look of an interface (a site, an app, a screen), not of a text document
+    # animations: the libraries named, or scroll effects (« crée un site animé » keeps the site's method, which points here)
+    "animations-web": r"\b(gsap|scroll ?trigger|lenis|react[- ]?bits|smooth[- ]?scroll|d[ée]filement (fluide|doux)|parallax\w*|animations? (au|de|sur le|pendant le) (scroll|d[ée]filement))\b",
     "frontend-design": r"\b(design|interface|landing|ui|ux|maquette)\b|\b(belle|beau|joli\w*|esth[ée]tique|couleurs?|th[èe]mes?|look|style|moche)\b[^.?!]{0,40}\b(site|page web|appli\w*|app|interface|[ée]cran)\b|"
                        r"\b(site|page web|appli\w*|app|interface|[ée]cran)\b[^.?!]{0,40}\b(belle|beau|joli\w*|esth[ée]tique|couleurs?|th[èe]mes?|look|style|moche)\b",
     "veille-email": r"(nouvelles|nouveaut|actualit|veille|newsletter).*\b(e-?mail|mail)\b|\b(e-?mail|mail)\b.*(nouvelles|nouveaut|actualit|veille)",
@@ -1006,7 +1008,7 @@ def match_skill(task, root=None, disabled=()):
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
-    first = ("plan-maison", "app-macos", "recherche-produits", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
+    first = ("plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     ordered = list(first) + [n for n in SKILL_TRIGGERS if n not in generic and n not in first] + list(generic)
     for name in ordered:
         if name in by_name and re.search(SKILL_TRIGGERS[name], text):

@@ -342,6 +342,9 @@ Une application qui a l'air d'un vrai produit, qui marche quand il clique partou
 - JAMAIS de carrés gris « image » : chaque produit a un visuel — un dégradé de couleur + une icône SVG en ligne
   (t-shirt, chaussure, sac…) ou ses initiales en grand ; pas d'image venue d'internet.
 - En-tête avec le nom de la boutique et le panier (pastille avec le nombre d'articles).
+- Animations (si l'utilisateur veut un site vivant, animé) : `npm install gsap lenis` et les composants
+  React Bits (`npx shadcn@latest add @react-bits/BlurText-TS-TW`…) ; recettes et règles dans
+  `~/.naim/skills/animations-web/SKILL.md` (lis-le avec read_file avant d'animer).
 
 ## 4. Les fonctions qu'une boutique doit avoir
 Recherche, filtre par catégorie, tri par prix ; ajout au panier avec un petit message de confirmation ; panier
