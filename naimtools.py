@@ -2840,42 +2840,195 @@ class Agent:
 
 
 # ---------------------------------------------------------------------- terminal UI
-C = {"dim": "\033[2m", "bold": "\033[1m", "cyan": "\033[36m", "green": "\033[32m",
-     "yellow": "\033[33m", "red": "\033[31m", "reset": "\033[0m"}
+C = {"dim": "\033[2m", "bold": "\033[1m", "cyan": "\033[36m", "green": "\033[32m", "yellow": "\033[33m",
+     "red": "\033[31m", "white": "\033[97m", "grey": "\033[90m", "reset": "\033[0m", "clear": "\r\033[2K"}
 if not sys.stdout.isatty():
     C = {k: "" for k in C}
 
+# ---------------------------------------------------------------- terminal display (the CLI of Naim)
+# The same reading as the window: an animated line while Naim works, each action « ● Écrire(fichier) » with its
+# result under « ⎿ », the changes in green/red, the task list with its boxes, and the answer formatted.
+TOOL_LABELS = {"write_file": "Écrire", "edit_file": "Modifier", "multi_edit": "Modifier", "read_file": "Lire",
+               "list_files": "Lister", "find_files": "Chercher", "search": "Rechercher", "run_command": "Commande",
+               "start_process": "Lancer", "web_search": "Recherche web", "web_fetch": "Lire la page", "browser": "Navigateur",
+               "delete_file": "Supprimer", "look_at": "Regarder", "computer": "Écran", "delegate": "Sous-agent",
+               "confier_tache": "Confier", "chercher_conversations": "Souvenirs", "use_skill": "Skill", "use_mcp": "MCP",
+               "send_email": "E-mail", "planifier": "Planifier", "update_todos": "Tâches"}
+MAIN_ARG = ("path", "command", "query", "url", "requete", "pattern", "name", "server", "tache", "dossier")
+
+
+class _Spinner:
+    """The working line: « ⠋ Naim réfléchit… 12 s · Ctrl+C pour arrêter », redrawn ten times a second."""
+    FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self):
+        self.text, self.t0, self.on, self.lock = "Naim réfléchit…", time.time(), False, threading.Lock()
+        self.thread = None
+
+    def start(self):
+        self.t0, self.on, self.text = time.time(), True, "Naim réfléchit…"
+        if sys.stdout.isatty() and not self.thread:
+            self.thread = threading.Thread(target=self._loop, daemon=True)
+            self.thread.start()
+
+    def _loop(self):
+        i = 0
+        while True:
+            time.sleep(0.1)
+            with self.lock:
+                if self.on:
+                    s = int(time.time() - self.t0)
+                    t = f"{s // 60} min {s % 60:02d} s" if s >= 60 else f"{s} s"
+                    sys.stdout.write(f"{C['clear']}{C['white']}{self.FRAMES[i % 10]}{C['reset']} {self.text} "
+                                     f"{C['grey']}({t} · Ctrl+C pour arrêter){C['reset']}")
+                    sys.stdout.flush()
+            i += 1
+
+    def say(self, text):  # a line printed above the working line
+        with self.lock:
+            sys.stdout.write(C["clear"] + text + "\n")
+            sys.stdout.flush()
+
+    def stop(self):
+        with self.lock:
+            self.on = False
+            sys.stdout.write(C["clear"])
+            sys.stdout.flush()
+
+
+SPIN = _Spinner()
+
+
+def _md(text):
+    """The answer, formatted for the terminal: titles, bold, inline code, code blocks with a gutter."""
+    out, code = [], False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            code = not code
+            lang = line.strip()[3:]
+            out.append(f"  {C['grey']}{'╭─ ' + lang if code and lang else ('╭─' if code else '╰─')}{C['reset']}")
+            continue
+        if code:
+            out.append(f"  {C['grey']}│{C['reset']} {C['cyan']}{line}{C['reset']}")
+            continue
+        m = re.match(r"^(#{1,4})\s+(.*)", line)
+        if m:
+            out.append(f"{C['bold']}{C['white']}{m.group(2)}{C['reset']}")
+            continue
+        line = re.sub(r"\*\*(.+?)\*\*", lambda x: f"{C['bold']}{x.group(1)}{C['reset']}", line)
+        line = re.sub(r"`([^`]+)`", lambda x: f"{C['cyan']}{x.group(1)}{C['reset']}", line)
+        line = re.sub(r"^(\s*)[-*] ", r"\1• ", line)
+        out.append(line)
+    return "\n".join(out)
+
+
+def _diff_lines(old, new, limit=14):
+    rows = [l for l in difflib.unified_diff((old or "").splitlines(), (new or "").splitlines(), lineterm="", n=0)
+            if not l.startswith(("---", "+++", "@@"))]
+    shown = [f"{C['green'] if l.startswith('+') else C['red']}{l}{C['reset']}" for l in rows[:limit]]
+    if len(rows) > limit:
+        shown.append(f"{C['grey']}… +{len(rows) - limit} lignes{C['reset']}")
+    return shown
+
+
+def _result_summary(name, result):
+    r = str(result or "").strip()
+    if r.startswith(("error", "refused", "denied", "blocked", "not allowed")):
+        return [f"{C['red']}{r.splitlines()[0][:200]}{C['reset']}"]
+    m = re.match(r"ok: wrote .*?\((\d+) lines\)", r)
+    if m:
+        return [f"{m.group(1)} lignes écrites"] + [f"{C['yellow']}{w}{C['reset']}" for w in re.findall(r"WARNING: [^\n]*", r)]
+    if name in ("run_command", "start_process"):
+        lines = [l for l in r.splitlines() if l.strip()]
+        head = lines[:4]
+        return [f"{C['grey']}{l[:160]}{C['reset']}" for l in head] + ([f"{C['grey']}… +{len(lines) - 4} lignes{C['reset']}"] if len(lines) > 4 else [])
+    if name in ("read_file",):
+        return [f"{C['grey']}{r.count(chr(10)) + 1} lignes lues{C['reset']}"]
+    first = r.splitlines()[0] if r else ""
+    return [f"{C['grey']}{first[:160]}{C['reset']}"] if first else []
+
 
 def cli_approver(action, detail):
-    shown = detail if len(detail) < 1500 else detail[:1500] + f"\n... ({len(detail)} caractères)"
-    print(f"\n{C['yellow']}● {action}{C['reset']}\n{C['dim']}{shown}{C['reset']}")
+    SPIN.stop()
+    print(f"\n{C['yellow']}● Autoriser : {action}{C['reset']}")
+    lines = (detail or "").splitlines()
+    for l in lines[:30]:
+        col = C["green"] if l.startswith("+") and not l.startswith("+++") else C["red"] if l.startswith("-") and not l.startswith("---") else C["grey"]
+        print(f"  {col}{l[:200]}{C['reset']}")
+    if len(lines) > 30:
+        print(f"  {C['grey']}… +{len(lines) - 30} lignes{C['reset']}")
     try:
-        ans = input(f"{C['bold']}Autoriser ? [o/N/q] {C['reset']}").strip().lower()
+        ans = input(f"  {C['bold']}o{C['reset']} oui · {C['bold']}t{C['reset']} oui, toujours pour cette session · "
+                    f"{C['bold']}n{C['reset']} non  › ").strip().lower()
     except EOFError:
         return False
-    if ans == "q":
+    finally:
+        SPIN.on = True
+    if ans in ("q", "quit"):
         raise KeyboardInterrupt
+    if ans in ("t", "toujours", "a", "always"):
+        CLI_STATE["agent"].auto_yes = True
+        return True
     return ans in ("o", "oui", "y", "yes")
+
+
+CLI_STATE = {"agent": None}
 
 
 def cli_emit(ev):
     t = ev["type"]
     if t == "status":
-        print(f"{C['dim']}{ev['text']}{C['reset']}", end="\r", flush=True)
-        return
-    print(" " * 30, end="\r")
-    if t in ("thinking", "note"):
-        print(f"{C['dim']}{ev['text']}{C['reset']}")
+        SPIN.text = ev["text"].rstrip(".…") + "…"
+    elif t == "note":
+        SPIN.say(f"{C['white']}●{C['reset']} {ev['text']}")
+    elif t == "thinking":
+        SPIN.say(f"{C['grey']}✻ {ev['text'][:400]}{C['reset']}")
     elif t == "tool":
-        shown = ", ".join(f"{k}={str(v)[:60]!r}" for k, v in ev["args"].items() if k not in ("content", "new_text", "old_text"))
-        print(f"{C['cyan']}→ {ev['name']}({shown}){C['reset']}")
+        name, a = ev["name"], ev.get("args") or {}
+        if name == "update_todos":
+            return
+        arg = next((str(a[k]) for k in MAIN_ARG if a.get(k)), "")
+        SPIN.say(f"{C['green']}●{C['reset']} {C['bold']}{TOOL_LABELS.get(name, name)}{C['reset']}({arg[:90]})")
+        if name in ("edit_file",) and (a.get("old_text") or a.get("new_text")):
+            for l in _diff_lines(a.get("old_text"), a.get("new_text")):
+                SPIN.say(f"    {l}")
+        elif name == "multi_edit":
+            for e in (a.get("edits") or [])[:3]:
+                for l in _diff_lines(e.get("old_text"), e.get("new_text"), 6):
+                    SPIN.say(f"    {l}")
+    elif t == "tool_result":
+        if ev.get("name") == "update_todos":
+            return
+        for i, l in enumerate(_result_summary(ev.get("name"), ev.get("result"))):
+            SPIN.say(f"  {C['grey']}{'⎿' if i == 0 else ' '}{C['reset']}  {l}")
+    elif t == "todos":
+        SPIN.say(f"{C['green']}●{C['reset']} {C['bold']}Tâches{C['reset']}")
+        for i, td in enumerate(ev.get("todos") or []):
+            st = td.get("status")
+            box = "☒" if st == "done" else "◼" if st == "in_progress" else "☐"
+            txt = td.get("text") or td.get("content") or ""
+            style = C["grey"] if st == "done" else C["bold"] if st == "in_progress" else ""
+            SPIN.say(f"  {C['grey']}{'⎿' if i == 0 else ' '}{C['reset']}  {style}{box} {txt}{C['reset']}")
     elif t == "process":
         pr = ev["process"]
-        print(f"{C['green']}⧗ {pr['name']} lancé en arrière-plan ({pr['id']}){C['reset']}")
-    elif t == "output":
-        print(f"{C['dim']}{ev['text']}{C['reset']}", end="")
+        SPIN.say(f"{C['green']}●{C['reset']} {C['bold']}{pr['name']}{C['reset']} lancé en arrière-plan "
+                 f"{C['grey']}({pr['id']}{' · ' + pr['url'] if pr.get('url') else ''}){C['reset']}")
+    elif t == "skill":
+        SPIN.say(f"{C['grey']}● Skill {ev.get('name')}{C['reset']}")
     elif t == "answer":
-        print(f"\n{C['bold']}Naim{C['reset']} {ev['text']}\n")
+        SPIN.stop()
+        print(f"\n{C['white']}●{C['reset']} " + _md(ev["text"]).replace("\n", "\n  ") + "\n")
+
+
+def _engine_options(model):
+    """Naim's own engine (llama.cpp, started on demand) for the model « naim »; Ollama only for other models."""
+    try:
+        import llamacpp
+        if model.split(":")[0] == "naim" and llamacpp.available():
+            return {"backend": "llamacpp"}
+    except Exception:  # noqa: BLE001
+        pass
+    return {}
 
 
 def main():
@@ -2887,31 +3040,60 @@ def main():
     ap.add_argument("--dir", default=".", help="dossier du projet (défaut : dossier courant)")
     args = ap.parse_args()
 
-    agent = Agent(args.dir, args.model, args.think, args.yes, approver=cli_approver, emit=cli_emit)
-    print(f"{C['bold']}NaimTools {VERSION}{C['reset']} · modèle {args.model} · projet {agent.root}")
+    opts = _engine_options(args.model)
+    agent = Agent(args.dir, args.model, args.think, args.yes, approver=cli_approver, emit=cli_emit, options=opts)
+    CLI_STATE["agent"] = agent
+    where = str(agent.root).replace(str(Path.home()), "~")
+    engine = "llama.cpp, sur ce Mac" if opts.get("backend") == "llamacpp" else f"Ollama · {args.model}"
+    w = max(46, len(where) + 14)
+    print(f"{C['grey']}╭{'─' * w}╮{C['reset']}")
+    for txt, st in ((f"◆ Naim · agent de code {VERSION}", C["bold"]), ("", ""), (f"  dossier : {where}", C["grey"]),
+                    (f"  moteur  : {engine}", C["grey"]), ("  /help aide · /reset oublier · /exit quitter", C["grey"])):
+        print(f"{C['grey']}│{C['reset']} {st}{txt}{C['reset']}{' ' * (w - len(txt) - 1)}{C['grey']}│{C['reset']}")
+    print(f"{C['grey']}╰{'─' * w}╯{C['reset']}")
+
+    def run(task):
+        SPIN.start()
+        t0 = time.time()
+        try:
+            agent.run(task)
+        except KeyboardInterrupt:  # Ctrl+C: the task stops, Naim stays open
+            agent.cancel.set()
+            SPIN.stop()
+            print(f"\n{C['yellow']}● Arrêté.{C['reset']}")
+        finally:
+            SPIN.stop()
+            agent.cancel.clear()
+        s = int(time.time() - t0)
+        print(f"{C['grey']}  {s // 60} min {s % 60:02d} s · {where}{C['reset']}\n" if s >= 60 else f"{C['grey']}  {s} s · {where}{C['reset']}\n")
+
     try:
         if args.task:
-            agent.run(" ".join(args.task))
+            run(" ".join(args.task))
             return
-        print(f"{C['dim']}Décris une tâche. /reset pour oublier la conversation, /exit pour quitter.{C['reset']}")
         while True:
             try:
-                task = input(f"{C['green']}›{C['reset']} ").strip()
+                task = input(f"{C['white']}›{C['reset']} ").strip()
             except EOFError:
                 break
             if task in ("/exit", "/quit", "exit"):
                 break
             if task == "/reset":
                 agent.messages = agent.messages[:1]
-                print("Conversation réinitialisée.")
+                print(f"{C['grey']}Conversation oubliée.{C['reset']}")
+                continue
+            if task == "/help":
+                print(f"{C['grey']}Décris ce que tu veux faire, en français. Naim lit, écrit, lance des commandes et vérifie.\n"
+                      f"Ctrl+C arrête la tâche en cours. /reset oublie la conversation, /exit quitte.{C['reset']}")
                 continue
             if task:
-                agent.run(task)
+                run(task)
     except KeyboardInterrupt:
-        print("\nInterrompu.")
+        print(f"\n{C['grey']}À bientôt.{C['reset']}")
     except urllib.error.URLError as e:
-        sys.exit(f"Impossible de joindre Ollama ({OLLAMA_HOST}) : {e}. Lance `ollama serve`.")
+        sys.exit(f"Le moteur de Naim ne répond pas ({e}). Ouvre l'application Naim, ou réessaie dans un instant.")
     finally:
+        SPIN.stop()
         PROCESSES.stop_all()
 
 
