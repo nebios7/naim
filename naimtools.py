@@ -824,10 +824,40 @@ class Agent:
                     f"{p.suffix[1:].upper()} file: do not write it again.")
         p.write_text(content)
         lines = content.count(chr(10)) + 1
-        long_note = (f" Note: {lines} lines is long for a first version; keep the next files short (under ~120 lines)."
-                     if lines > 180 else "")
+        # a complete file is the goal (a complex app needs real components): only a huge one gets advice, to split it
+        long_note = (f" Note: {lines} lines in one file: next time split it into smaller modules (same content, several files)."
+                     if lines > 400 else "")
         return (f"ok: wrote {self.rel(p)} ({lines} lines). This file is done: "
-                f"do not write it again, move on to the next file or step.{long_note}")
+                f"do not write it again, move on to the next file or step.{long_note}{self._missing_packages(p, content)}")
+
+    NODE_BUILTINS = {"fs", "path", "os", "url", "http", "https", "crypto", "util", "events", "stream", "child_process",
+                     "assert", "buffer", "zlib", "net", "readline", "process", "querystring", "worker_threads"}
+
+    def _missing_packages(self, p, content):
+        """A JS/TS file importing a library the project does not have: say it now, with the command (else the app
+        only breaks at launch: « Failed to resolve import "uuid" »)."""
+        if p.suffix.lower() not in (".js", ".jsx", ".ts", ".tsx", ".mjs", ".vue", ".svelte"):
+            return ""
+        pkg = next((d / "package.json" for d in [p.parent, *p.parents] if (d / "package.json").is_file()), None)
+        if not pkg or self.root not in [pkg.parent, *pkg.parent.parents]:
+            return ""
+        try:
+            j = json.loads(pkg.read_text())
+        except (OSError, ValueError):
+            return ""
+        have = set(j.get("dependencies", {})) | set(j.get("devDependencies", {})) | set(j.get("peerDependencies", {}))
+        names = set()
+        for spec in re.findall(r"""(?:\bfrom\s+|\bimport\s+|require\()\s*['"]([^'"./][^'"]*)['"]""", content):
+            if spec.startswith(("node:", "virtual:", "~", "@/")):
+                continue
+            parts = spec.split("/")
+            names.add("/".join(parts[:2]) if spec.startswith("@") else parts[0])
+        missing = sorted(n for n in names - have if n not in self.NODE_BUILTINS)
+        if not missing:
+            return ""
+        rel = os.path.relpath(pkg.parent, self.root)
+        return (f" WARNING: {', '.join(missing)} not installed in this project: run `"
+                + (f"cd {rel} && " if rel != "." else "") + f"npm install {' '.join(missing)}` now, before going on.")
 
     def edit_file(self, path, old_text, new_text):
         p = self.resolve(path)
