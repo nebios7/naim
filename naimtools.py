@@ -2909,7 +2909,7 @@ MAIN_ARG = ("path", "command", "query", "url", "requete", "pattern", "name", "se
 
 class _Spinner:
     """The working line: « ⠋ Naim réfléchit… 12 s · Ctrl+C pour arrêter », redrawn ten times a second."""
-    FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    FRAMES = "·✢✳✶✻✽✻✶✳✢"
 
     def __init__(self):
         self.text, self.t0, self.on, self.lock = "Naim réfléchit…", time.time(), False, threading.Lock()
@@ -2929,7 +2929,7 @@ class _Spinner:
                 if self.on:
                     s = int(time.time() - self.t0)
                     t = f"{s // 60} min {s % 60:02d} s" if s >= 60 else f"{s} s"
-                    sys.stdout.write(f"{C['clear']}{C['white']}{self.FRAMES[i % 10]}{C['reset']} {self.text} "
+                    sys.stdout.write(f"{C['clear']}{C['white']}{self.FRAMES[i % 10]} {self.text}{C['reset']} "
                                      f"{C['grey']}({t} · Ctrl+C pour arrêter){C['reset']}")
                     sys.stdout.flush()
             i += 1
@@ -2985,11 +2985,24 @@ def _result_summary(name, result):
     r = str(result or "").strip()
     if r.startswith(("error", "refused", "denied", "blocked", "not allowed")):
         return [f"{C['red']}{r.splitlines()[0][:200]}{C['reset']}"]
-    m = re.match(r"ok: wrote .*?\((\d+) lines\)", r)
+    m = re.match(r"ok: wrote (.*?) \((\d+) lines?\)", r)
     if m:
-        return [f"{m.group(1)} lignes écrites"] + [f"{C['yellow']}{w}{C['reset']}" for w in re.findall(r"WARNING: [^\n]*", r)]
+        content = CLI_STATE.get("last_content") or ""
+        n = len(content.splitlines()) or int(m.group(2))
+        rows = [f"{n} ligne{'s' if n > 1 else ''} écrite{'s' if n > 1 else ''} dans {C['bold']}{m.group(1)}{C['reset']}"]
+        content = CLI_STATE.get("last_content") or ""
+        lines = content.splitlines()
+        rows += [f"{C['grey']}{i + 1:>4}{C['reset']} {l[:150]}" for i, l in enumerate(lines[:6])]
+        if len(lines) > 6:
+            rows.append(f"{C['grey']}     … +{len(lines) - 6} lignes dans le fichier{C['reset']}")
+        return rows + [f"{C['yellow']}{w}{C['reset']}" for w in re.findall(r"WARNING: [^\n]*", r)]
     if name in ("run_command", "start_process"):
         lines = [l for l in r.splitlines() if l.strip()]
+        code = re.match(r"exit code (\d+)", lines[0]) if lines else None
+        if code:  # « exit code 0 » says nothing: the output does; a failure says it in red
+            lines = lines[1:] or ["(aucune sortie)"]
+            if code.group(1) != "0":
+                lines.insert(0, f"{C['red']}échec (code {code.group(1)}){C['reset']}")
         head = lines[:4]
         return [f"{C['grey']}{l[:160]}{C['reset']}" for l in head] + ([f"{C['grey']}… +{len(lines) - 4} lignes{C['reset']}"] if len(lines) > 4 else [])
     if name in ("read_file",):
@@ -2998,28 +3011,86 @@ def _result_summary(name, result):
     return [f"{C['grey']}{first[:160]}{C['reset']}"] if first else []
 
 
-def cli_approver(action, detail):
-    SPIN.stop()
-    print(f"\n{C['yellow']}● Autoriser : {action}{C['reset']}")
-    lines = (detail or "").splitlines()
-    for l in lines[:30]:
-        col = C["green"] if l.startswith("+") and not l.startswith("+++") else C["red"] if l.startswith("-") and not l.startswith("---") else C["grey"]
-        print(f"  {col}{l[:200]}{C['reset']}")
-    if len(lines) > 30:
-        print(f"  {C['grey']}… +{len(lines) - 30} lignes{C['reset']}")
+def _choose(options):
+    """A choice picked with the arrows (or its number) and Enter, like an assistant's menu. Returns its index."""
+    if not sys.stdin.isatty():
+        ans = input("  › ").strip()
+        return int(ans) - 1 if ans.isdigit() and 0 < int(ans) <= len(options) else len(options) - 1
+    import termios, tty
+    sel, fd = 0, sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+
+    def draw(first=False):
+        if not first:
+            sys.stdout.write(f"\033[{len(options)}A")
+        for i, o in enumerate(options):
+            mark = f"{C['white']}❯{C['reset']}" if i == sel else " "
+            txt = f"{C['bold']}{C['white']}{i + 1}. {o}{C['reset']}" if i == sel else f"{C['grey']}{i + 1}. {o}{C['reset']}"
+            w = CLI_STATE.get("box_inner", 0)
+            right = f" {C['grey']}│{C['reset']}" if w else ""
+            sys.stdout.write(f"\r\033[2K  {C['grey']}│{C['reset']} {_pad(mark + ' ' + txt, w) if w else mark + ' ' + txt}{right}\n")
+        sys.stdout.flush()
+    sys.stdout.write("\033[?25l")
+    draw(True)
     try:
-        ans = input(f"  {C['bold']}o{C['reset']} oui · {C['bold']}t{C['reset']} oui, toujours pour cette session · "
-                    f"{C['bold']}n{C['reset']} non  › ").strip().lower()
-    except EOFError:
-        return False
+        tty.setraw(fd)
+        while True:
+            ch = os.read(fd, 3)
+            if ch in (b"\r", b"\n"):
+                break
+            if ch in (b"\x1b[A", b"k"):
+                sel = (sel - 1) % len(options)
+            elif ch in (b"\x1b[B", b"j", b"\t"):
+                sel = (sel + 1) % len(options)
+            elif ch.isdigit() and 0 < int(ch) <= len(options):
+                sel = int(ch) - 1
+                termios.tcsetattr(fd, termios.TCSADRAIN, old); draw()
+                break
+            elif ch in (b"\x03", b"\x1b"):  # Ctrl+C / Échap: no
+                sel = len(options) - 1
+                termios.tcsetattr(fd, termios.TCSADRAIN, old); draw()
+                break
+            termios.tcsetattr(fd, termios.TCSADRAIN, old); draw(); tty.setraw(fd)
     finally:
-        SPIN.on = True
-    if ans in ("q", "quit"):
-        raise KeyboardInterrupt
-    if ans in ("t", "toujours", "a", "always"):
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write("\033[?25h")
+        sys.stdout.flush()
+    return sel
+
+
+def cli_approver(action, detail):
+    """The permission panel: what is asked, the file or the change it makes, then « Oui / Oui, toujours / Non »."""
+    SPIN.stop()
+    cols = max(50, min(shutil.get_terminal_size((100, 24)).columns, 110))
+    inner = cols - 6
+    print(f"\n  {C['grey']}╭{'─' * (cols - 4)}╮{C['reset']}")
+    print(f"  {C['grey']}│{C['reset']} {C['bold']}{_pad(action, inner)}{C['reset']} {C['grey']}│{C['reset']}")
+    lines = [l for l in (detail or "").splitlines() if not l.startswith(("---", "+++"))]
+    is_diff = any(l.startswith(("@@", "+", "-")) for l in lines[:5])
+    shown = lines[:16]
+    if shown:
+        print(f"  {C['grey']}│ ╭{'─' * (inner - 2)}╮ │{C['reset']}")
+        for i, l in enumerate(shown):
+            if is_diff:
+                col = C["green"] if l.startswith("+") else C["red"] if l.startswith("-") else C["grey"]
+                body = f"{col}{l[:inner - 6]}{C['reset']}"
+            else:
+                body = f"{C['grey']}{i + 1:>3}{C['reset']} {l[:inner - 10]}"
+            print(f"  {C['grey']}│ │{C['reset']} {_pad(body, inner - 4)} {C['grey']}│ │{C['reset']}")
+        if len(lines) > 16:
+            print(f"  {C['grey']}│ │{C['reset']} {_pad(C['grey'] + f'… +{len(lines) - 16} lignes' + C['reset'], inner - 4)} {C['grey']}│ │{C['reset']}")
+        print(f"  {C['grey']}│ ╰{'─' * (inner - 2)}╯ │{C['reset']}")
+    print(f"  {C['grey']}│{C['reset']} {_pad('Tu autorises ?', inner)} {C['grey']}│{C['reset']}")
+    CLI_STATE["box_inner"] = inner
+    try:
+        pick = _choose(["Oui", "Oui, et ne plus demander pendant cette session", "Non, et dire à Naim quoi faire autrement"])
+    except (EOFError, KeyboardInterrupt):
+        pick = 2
+    print(f"  {C['grey']}╰{'─' * (cols - 4)}╯{C['reset']}")
+    SPIN.on = True
+    if pick == 1:
         CLI_STATE["agent"].auto_yes = True
-        return True
-    return ans in ("o", "oui", "y", "yes")
+    return pick in (0, 1)
 
 
 CLI_STATE = {"agent": None}
@@ -3030,7 +3101,7 @@ def cli_emit(ev):
     if t == "status":
         SPIN.text = ev["text"].rstrip(".…") + "…"
     elif t == "note":
-        SPIN.say(f"{C['white']}●{C['reset']} {ev['text']}")
+        SPIN.say(f"\n{C['white']}●{C['reset']} {ev['text']}")
     elif t == "thinking":
         SPIN.say(f"{C['grey']}✻ {ev['text'][:400]}{C['reset']}")
     elif t == "tool":
@@ -3038,7 +3109,8 @@ def cli_emit(ev):
         if name == "update_todos":
             return
         arg = next((str(a[k]) for k in MAIN_ARG if a.get(k)), "")
-        SPIN.say(f"{C['green']}●{C['reset']} {C['bold']}{TOOL_LABELS.get(name, name)}{C['reset']}({arg[:90]})")
+        CLI_STATE["last_content"] = a.get("content") if name == "write_file" else ""
+        SPIN.say(f"\n{C['green']}●{C['reset']} {C['bold']}{TOOL_LABELS.get(name, name)}{C['reset']}({arg[:90]})")
         if name in ("edit_file",) and (a.get("old_text") or a.get("new_text")):
             for l in _diff_lines(a.get("old_text"), a.get("new_text")):
                 SPIN.say(f"    {l}")
@@ -3071,11 +3143,10 @@ def cli_emit(ev):
 
 
 # ---------------------------------------------------------------- welcome (the robot of Naim, animated)
-ROBOT = ["  ▄▀▀▀▄  ",
-         " █ ● ● █ ",
-         " █ ▀▀▀ █ ",
-         "  ▀█▀█▀  "]
-ROBOT_W = 9
+ROBOT = [" ▄████▄ ",
+         "██▄██▄██",
+         " █▀▀▀▀█ "]
+ROBOT_W = 8
 
 
 def _robot(col=None):
@@ -3105,8 +3176,9 @@ def _intro():
         word = "Naim"
         for k in range(1, len(word) + 1):  # it writes its name
             txt = f"{C['bold']}{C['white']}{word[:k]}{C['reset']}{C['grey']}{'▌' if k < len(word) else ''}{C['reset']}"
-            rows = _robot()
-            frames.append(([f"  {rows[0]}", f"  {rows[1]}   {txt}", f"  {rows[2]}", f"  {rows[3]}"], 0.11))
+            rows = [f"  {r}" for r in _robot()]
+            rows[1] += f"   {txt}"
+            frames.append((rows, 0.11))
         frames.append((frames[-1][0][:1] + [frames[-1][0][1] + f"  {C['grey']}agent de code{C['reset']}"] + frames[-1][0][2:], 0.35))
         rows = _robot()
         for x in range(2, min(cols - ROBOT_W - 2, 46), 4):  # it slides to the right, the name tidied away
@@ -3179,14 +3251,20 @@ def _welcome(where, engine):
 
 
 def _ask():
-    """The input box: a frame around what you type, the shortcuts under it."""
-    cols = max(40, min(shutil.get_terminal_size((100, 24)).columns, 110))
-    print(f"{C['grey']}╭{'─' * (cols - 2)}╮{C['reset']}")
+    """The input, like an assistant's: a rule above and under the line you type on, the shortcuts under it; once
+    sent, the box goes and your message stays as « › message »."""
+    cols = max(40, shutil.get_terminal_size((100, 24)).columns)
+    rule = f"{C['grey']}{'─' * cols}{C['reset']}"
+    if not sys.stdout.isatty():
+        return input("› ")
+    sys.stdout.write(f"{rule}\n\n{rule}\n  {C['grey']}? raccourcis · /help aide · /exit quitter{C['reset']}\033[2A\r")
+    sys.stdout.flush()
     try:
-        task = input(f"{C['grey']}│{C['reset']} {C['white']}›{C['reset']} ")
+        task = input(f"{C['white']}›{C['reset']} ")
     finally:
-        print(f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}")
-    print(f"  {C['grey']}/help aide · /reset oublier · /exit quitter{C['reset']}")
+        sys.stdout.write("\033[2A\r\033[J")  # back to the first rule: the box is replaced by the message
+    if task.strip():
+        print(f"{C['grey']}› {task.strip()}{C['reset']}")
     return task
 
 
@@ -3248,7 +3326,7 @@ def main():
                 agent.messages = agent.messages[:1]
                 print(f"{C['grey']}Conversation oubliée.{C['reset']}")
                 continue
-            if task == "/help":
+            if task in ("?", "/help"):
                 print(f"{C['grey']}Décris ce que tu veux faire, en français. Naim lit, écrit, lance des commandes et vérifie.\n"
                       f"Ctrl+C arrête la tâche en cours. /reset oublie la conversation, /exit quitte.{C['reset']}")
                 continue
