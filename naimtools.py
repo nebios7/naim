@@ -3363,30 +3363,45 @@ def _frame(blink=False, wave=False, pen=False, glow=True):
     return rows
 
 
-def _sprite_lines(rows):
-    """The pixels, two per cell: ▀ (upper pixel as text colour, lower as background), ▄ or a space."""
-    out = []
-    for y in range(0, len(rows), 2):
+QUAD = {"0000": " ", "1000": "▘", "0100": "▝", "0010": "▖", "0001": "▗", "1100": "▀", "0011": "▄", "1010": "▌",
+        "0101": "▐", "1001": "▚", "0110": "▞", "1110": "▛", "1101": "▜", "1011": "▙", "0111": "▟", "1111": "█"}
+# Naim's robot as a flat silhouette (one colour per character, square eyes cut out): each character shows 2 × 2
+# pixels with the quarter-block characters, which keeps clean edges in any terminal
+SHAPE = ["..XXXXXXXXXXXX..",
+         ".XXXXXXXXXXXXXX.",
+         ".XXX..XXXX..XXX.",
+         "XXXX..XXXX..XXXX",
+         ".XXXXXXXXXXXXXX.",
+         ".XXXXXXXXXXXXXX.",
+         "..XXXXXXXXXXXX..",
+         "...XX......XX..."]
+
+
+def _robot(col=None, blink=False, wave=False, pen=False, glow=True):
+    """The robot: left half green, right half white (the flag), a red band on the forehead; eyes cut out (closed when
+    it blinks); one pixel higher when it hops; a golden pen beside it when it writes."""
+    g = [list(r) for r in SHAPE]
+    if blink:
+        for y in (2, 3):
+            for x in (4, 5, 10, 11):
+                g[y][x] = "X"
+    if wave:
+        g = g[1:] + [["."] * 16]
+    lines = []
+    for y in range(0, len(g), 2):
         line = ""
-        for x in range(len(rows[y])):
-            top, bot = rows[y][x], rows[y + 1][x] if y + 1 < len(rows) else "."
-            if top == "." and bot == ".":
-                line += " "
-            elif bot == ".":
-                line += f"\033[{_col(PALETTE[top])}m▀\033[0m"
-            elif top == ".":
-                line += f"\033[{_col(PALETTE[bot])}m▄\033[0m"
-            else:
-                line += f"\033[{_col(PALETTE[top])};{_col(PALETTE[bot], True)}m▀\033[0m"
-        out.append(line if C["reset"] else re.sub(r"\033\[[0-9;]*m", "", line))
-    return out
+        for x in range(0, 16, 2):
+            k = "".join("1" if g[y + dy][x + dx] != "." else "0" for dy, dx in ((0, 0), (0, 1), (1, 0), (1, 1)))
+            ch = QUAD[k]
+            rgb = RED if (y == 0 and x in (6, 8) and not wave) else GREEN if x < 8 else WHITE
+            line += f"\033[{_col(rgb)}m{ch}\033[0m" if ch != " " else " "
+        if pen and y == 2:
+            line += f"\033[{_col((232, 192, 96))}m╱\033[0m"
+        lines.append(line if C["reset"] else re.sub(r"\033\[[0-9;]*m", "", line))
+    return lines
 
 
-ROBOT_W = 14
-
-
-def _robot(col=None, **kw):
-    return _sprite_lines(_frame(**kw))
+ROBOT_W = 9
 
 
 # ---------------------------------------------------------------- answers with rich (Markdown, coloured code, tables)
