@@ -132,6 +132,18 @@ CONVERSATIONS_TOOL = {"type": "function", "function": {"name": "chercher_convers
         "conversation": {"type": "string", "description": "id of one conversation to read"}}}}}
 
 
+# another model (Personnaliser › Agent › « Autre modèle ») for a task too big to do alone: a command-line coding
+# assistant installed on this Mac, or a model online (OpenAI-compatible API). Off by default; never needed by Naim.
+EXTERNAL_TOOL = {"type": "function", "function": {"name": "confier_tache", "description": (
+    "Hand a LARGE or complex task (a whole complex application, a hard bug, a big refactor) to a stronger model the user "
+    "connected, then check its work and continue. Describe the task completely: goal, folder, files, expected result, "
+    "how to run it. The answer is its report; the files it changed are in the folder."),
+    "parameters": {"type": "object", "properties": {
+        "tache": {"type": "string", "description": "the complete task, self-contained"},
+        "dossier": {"type": "string", "description": "folder to work in (default: the project folder)"}}, "required": ["tache"]}}}
+_EXTERNAL_OK = set()  # conversations where the user already allowed it (asked the first time only)
+
+
 def _conversations_dir():
     return Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "conversations"
 
@@ -469,7 +481,8 @@ class Agent:
                  auto_mcp=False, stop_temp_processes=True, keep_final_app=True, permissions="", hooks="",
                  auto_verify=True, auto_skill=True, minimal_mode=True, command_timeout=120, loop_limit=4,
                  auto_computer=False, screen_images=False, email_allowed=(), email=True, scheduled=False,
-                 learning=True, max_subagents=6, asker=None, review=True, power=False):
+                 learning=True, max_subagents=6, asker=None, review=True, power=False, external=None):
+        self.external = external or {}
         self.root = Path(root).expanduser().resolve()
         if not self.root.is_dir():
             raise ValueError(f"project directory not found: {self.root}")
@@ -530,6 +543,8 @@ class Agent:
         if not self.subagent and not self.scheduled:
             tools.append(SCHEDULE_TOOL)
             tools.append(CONVERSATIONS_TOOL)
+            if self.external.get("on"):
+                tools.append(EXTERNAL_TOOL)
         if self.features["simulator"] and not self.subagent:
             tools.append(SIMULATOR_TOOL)
         if self.features["email"] and not self.subagent:
@@ -1727,6 +1742,59 @@ class Agent:
                  "interval": f"toutes les {sc.get('every_minutes')} min"}).get(k, "?")
         return when
 
+    def confier_tache(self, tache, dossier=None):
+        """The task goes to the connected model; Naim gets its report back (and checks the files itself)."""
+        cfg = self.external
+        if not cfg.get("on"):
+            return "error: aucun autre modèle n'est activé (Personnaliser › Agent › Autre modèle)"
+        api = cfg.get("provider") == "api"
+        label = (cfg.get("model") or "modèle en ligne") if api else "l'assistant en ligne de commande"
+        where = Path(dossier).expanduser() if dossier else self.root
+        if not where.is_dir():
+            where = self.root
+        key = getattr(self, "conv_id", None) or self.run_id
+        if key not in _EXTERNAL_OK:  # the first time in this conversation: the user says yes (the task leaves Naim)
+            if not self.approver(f"Confier cette tâche à {label}", f"Dossier : {where}\n\n{tache[:4000]}"):
+                return "denied: l'utilisateur ne veut pas confier cette tâche à un autre modèle ; fais-la toi-même."
+            _EXTERNAL_OK.add(key)
+        self.emit({"type": "note", "text": f"Tâche confiée à {label}…"})
+        brief = ("Tu es appelé par Naim, l'assistant local de l'utilisateur, pour une tâche trop lourde pour lui. "
+                 f"Travaille dans le dossier {where}. Fais la tâche complètement (crée et modifie les fichiers, compile, "
+                 "vérifie que ça marche), puis termine par un compte rendu court en français : ce qui est fait, les "
+                 "fichiers, comment lancer ou utiliser le résultat, ce qui reste éventuellement.\n\nTâche :\n" + tache)
+        timeout = max(60, min(int(cfg.get("timeout") or 900), 3600))
+        try:
+            if api:
+                url = str(cfg.get("url") or "").rstrip("/")
+                if not url or not cfg.get("model"):
+                    return "error: adresse ou nom du modèle en ligne manquant (Personnaliser › Agent › Autre modèle)"
+                req = urllib.request.Request(url + "/chat/completions", method="POST", data=json.dumps({
+                    "model": cfg["model"], "messages": [{"role": "user", "content": brief}]}).encode(),
+                    headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {cfg['key']}"} if cfg.get("key") else {})})
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    out = json.loads(r.read())["choices"][0]["message"]["content"]
+            else:
+                import shlex
+                cmd = shlex.split(str(cfg.get("cli") or ""))
+                if not cmd or not shutil.which(cmd[0]):
+                    return f"error: commande introuvable : {cmd[0] if cmd else '(vide)'} (Personnaliser › Agent › Autre modèle)"
+                p = subprocess.Popen(cmd, cwd=str(where), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, text=True)
+                p.stdin.write(brief); p.stdin.close()
+                start = time.time()
+                while p.poll() is None:  # the Stop button and the time limit stop it too
+                    if self.cancel.is_set() or time.time() - start > timeout:
+                        p.kill()
+                        return "error: tâche confiée arrêtée (" + ("bouton Stop" if self.cancel.is_set() else f"plus de {timeout} s") + ")"
+                    time.sleep(1)
+                out = p.stdout.read()
+                if p.returncode:
+                    return f"error: l'autre modèle a échoué (code {p.returncode}) : {out[-1500:]}"
+        except Exception as e:  # noqa: BLE001 — never a blocking dependency: Naim goes on alone
+            return f"error: l'autre modèle ne répond pas ({type(e).__name__}: {str(e)[:200]}). Continue la tâche toi-même."
+        return (f"Compte rendu de {label} :\n{str(out).strip()[-12000:]}\n\n(Vérifie toi-même le résultat — fichiers, "
+                "compilation, application lancée — puis continue ou réponds à l'utilisateur.)")
+
     def chercher_conversations(self, requete="", conversation=None):
         """Past conversations: the ones whose messages contain the words (newest first), or the text of one of them."""
         d = _conversations_dir()
@@ -2089,6 +2157,7 @@ class Agent:
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
               "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
+              "confier_tache": self.confier_tache,
               "wait": self.wait}.get(name)
         rule = self._rule_for(name, args) if self.rules else None
         if rule == "deny":

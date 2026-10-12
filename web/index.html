@@ -1768,6 +1768,7 @@ const DEFAULTS = {
   voice_auto: false,
   mode: "chat", model: "naim", think: false, project: "", autoYes: false,
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
+  external_on: false, external_provider: "cli", external_cli: "", external_url: "", external_model: "", external_key: "", external_timeout: 900,
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
   notify: true, sound: false, mic_sounds: true, self_check: true, show_stats: true, show_time: false, wrap_code: false,
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
@@ -3383,7 +3384,9 @@ function settingsPayload() {
     enable_subagents: S.enable_subagents, enable_computer: S.enable_computer, enable_simulator: S.enable_simulator, auto_computer: S.auto_computer, computer_power: S.computer_power, screen_images: S.screen_images, enable_email: S.enable_email, enable_learning: S.enable_learning, enable_review: S.enable_review, memory_auto: S.memory_auto, memory_limit: S.memory_limit, email_allowed: S.email_allowed, auto_mcp: S.auto_mcp, disabled_skills: S.disabled_skills, naim_backend: S.naim_backend,
     llama_gpu_layers: S.llama_gpu_layers, llama_threads: S.llama_threads, llama_batch: S.llama_batch, llama_kv_type: S.llama_kv_type, llama_checkpoints: S.llama_checkpoints, llama_parallel: S.llama_parallel, max_subagents: S.max_subagents,
     auto_verify: S.auto_verify, auto_skill: S.auto_skill, minimal_mode: S.minimal_mode, command_timeout: S.command_timeout, loop_limit: S.loop_limit,
-    permissions: S.permissions, hooks: S.hooks, stop_temp_processes: S.stop_temp_processes, keep_final_app: S.keep_final_app };
+    permissions: S.permissions, hooks: S.hooks, stop_temp_processes: S.stop_temp_processes, keep_final_app: S.keep_final_app,
+    external_on: S.external_on, external_provider: S.external_provider, external_cli: S.external_cli, external_url: S.external_url,
+    external_model: S.external_model, external_key: S.external_key, external_timeout: S.external_timeout };
 }
 async function stream(reply, v, message, hist, extra = {}) {
   const runId = Math.random().toString(36).slice(2);
@@ -4274,7 +4277,7 @@ document.addEventListener("change", (e) => {
 function row(title, sub, control) { return `<div class="srow"><div class="sl"><b>${title}</b>${sub ? `<small>${sub}</small>` : ""}</div><div class="sc">${control}</div></div>`; }
 function range(key, min, max, step, fmt = (v) => v) { return `<input type="range" data-k="${key}" data-num min="${min}" max="${max}" step="${step}" value="${S[key]}"><span class="val" data-v="${key}">${fmt(S[key])}</span>`; }
 function sel(key, opts) { return `<select data-k="${key}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(S[key]) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`; }
-const FMT = { zoom: (v) => `${Math.round(v * 100)} %`, font_size: (v) => `${v} px`, temperature: (v) => (+v).toFixed(2), top_p: (v) => (+v).toFixed(2), repeat_penalty: (v) => (+v).toFixed(2) };
+const FMT = { external_timeout: (v) => `${Math.round(v / 60)} min`, zoom: (v) => `${Math.round(v * 100)} %`, font_size: (v) => `${v} px`, temperature: (v) => (+v).toFixed(2), top_p: (v) => (+v).toFixed(2), repeat_penalty: (v) => (+v).toFixed(2) };
 const autoTrainHTML = () => `<div class="sgroup" id="autoTrain" hidden>
       <div class="srow col"><div class="sl"><b>Apprentissage automatique</b><small>La nuit (1 h – 6 h), sur secteur et quand Naim ne travaille pas : il rassemble ses tâches réussies et celles de la communauté, entraîne une nouvelle version, <b>l'examine</b> (code + outils, le même test que le README) et l'installe <b>seulement si elle fait au moins aussi bien</b>. L'ancienne version est gardée : tu peux y revenir en un clic.</small></div></div>
       ${row("Activer l'apprentissage automatique", "Désactivé par défaut. Un entraînement dure environ 1 h 30 (examen compris) ; Naim est indisponible pendant ce temps.", sw("auto_train"))}
@@ -4466,7 +4469,16 @@ const TABS = {
       <textarea data-k="hooks" class="mono" style="min-height:80px" placeholder="*.py: .venv/bin/black {file}&#10;*.js: npx prettier --write {file}">${esc(S.hooks)}</textarea>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${["*.py: python3 -m py_compile {file}", "*.py: .venv/bin/black -q {file}", "*.js: npx prettier --write {file}", "*.php: php -l {file}", "*.swift: swiftc -parse {file}"].map((t) => `<button class="ghost" data-hook="${esc(t)}">＋ ${esc(t)}</button>`).join("")}</div></div></div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Hooks</b><small>Des commandes à toi, lancées toutes seules : <b>avant</b> un outil (pour le bloquer), <b>après</b> un outil, <b>à l'envoi</b> d'un message (pour ajouter du contexte) et <b>à la fin</b> du travail (pour renvoyer Naim au travail). Une commande qui sort avec le code 2 bloque, et son message est donné à Naim. Fichiers : <span class="mono">~/.naim/hooks.json</span> (tous les projets) ou <span class="mono">.naim/hooks.json</span> dans un projet, au même format que les autres agents de code.</small></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-hookfile="user">Ouvrir mes hooks</button><button class="btn" data-hookfile="project">Hooks de ce projet</button></div></div></div>`,
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-hookfile="user">Ouvrir mes hooks</button><button class="btn" data-hookfile="project">Hooks de ce projet</button></div></div></div>
+    <div class="sgroup" id="extGroup"><div class="srow col"><div class="sl"><b>Autre modèle</b><small>Pour une tâche trop grosse (application complexe, gros bug…), Naim peut la confier à un modèle plus fort, puis vérifier le résultat et continuer. Désactivé : Naim ne dépend de rien. Il te demande la permission la première fois dans chaque conversation.</small></div></div>
+      ${row("Confier les grosses tâches à un autre modèle", "", sw("external_on"))}
+      ${row("Type", "", `<select data-k="external_provider"><option value="cli" ${S.external_provider !== "api" ? "selected" : ""}>Assistant en ligne de commande (sur ce Mac)</option><option value="api" ${S.external_provider === "api" ? "selected" : ""}>Modèle en ligne (API)</option></select>`)}
+      ${row("Commande", "Ligne de commande de l'assistant installé sur ce Mac : la tâche lui est donnée sur son entrée.", `<input class="field mono" type="text" data-k="external_cli" value="${esc(S.external_cli || "")}" placeholder="commande et options" style="width:320px">`)}
+      ${row("Adresse de l'API", "Compatible OpenAI (OpenAI, Mistral, OpenRouter, Anthropic…).", `<input class="field mono" type="text" data-k="external_url" value="${esc(S.external_url || "")}" placeholder="https://api.exemple.com/v1" style="width:320px">`)}
+      ${row("Modèle", "", `<input class="field mono" type="text" data-k="external_model" value="${esc(S.external_model || "")}" placeholder="nom du modèle" style="width:220px">`)}
+      ${row("Clé", "Reste sur ce Mac.", `<input class="field mono" type="password" data-k="external_key" value="${esc(S.external_key || "")}" placeholder="clé de l'API" style="width:220px">`)}
+      ${row("Temps maximum", "Au-delà, la tâche confiée s'arrête et Naim continue seul.", range("external_timeout", 120, 3600, 60, FMT.external_timeout))}
+    </div>`,
   models: () => `<h2>Modèles installés</h2>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Télécharger un modèle</b><small>Le modèle Naim s'installe depuis l'écran de bienvenue. Ici, d'autres modèles Ollama ou Hugging Face si tu en veux.</small></div>
       <div style="display:flex;gap:8px"><input class="field mono" id="pullName" placeholder="nom du modèle" style="flex:1"><button class="btn primary" id="pullBtn">Télécharger</button></div>
@@ -4562,7 +4574,7 @@ function bindSettings() {
     const ev = el.type === "range" ? "input" : el.tagName === "TEXTAREA" || el.type === "text" ? "input" : "change";
     el.addEventListener(ev, () => {
       let v = el.type === "checkbox" ? el.checked : el.value;
-      if (el.hasAttribute("data-num") || /^(num_ctx|max_steps|top_k|font_size|loop_limit|llama_gpu_layers|llama_threads|llama_batch|llama_checkpoints|max_subagents|memory_limit|command_timeout)$/.test(k)) v = +v;
+      if (el.hasAttribute("data-num") || /^(num_ctx|max_steps|top_k|font_size|loop_limit|llama_gpu_layers|llama_threads|llama_batch|llama_checkpoints|max_subagents|memory_limit|command_timeout|external_timeout)$/.test(k)) v = +v;
       if (k === "keep_alive") v = String(v);
       S[k] = v;
       const out = $(`[data-v="${k}"]`); if (out) out.textContent = (FMT[k] || ((x) => x))(v);

@@ -89,7 +89,7 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
 
 
 # tools kept for a plain question or a lesson in Chat: look things up, never change files
-ANSWER_TOOLS = {"chercher_conversations", "read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
+ANSWER_TOOLS = {"confier_tache", "chercher_conversations", "read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
                 "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
 # actions on the Mac itself (printer, apps, settings, music…): Naim does them with its tools, asking when it is sensitive
@@ -392,6 +392,10 @@ def agent_settings(body):
     out["keep_final_app"] = s.get("keep_final_app", True) is not False
     out["permissions"] = str(s.get("permissions") or "")
     out["hooks"] = str(s.get("hooks") or "")
+    if s.get("external_on"):  # « Autre modèle »: only when switched on
+        out["external"] = {"on": True, "provider": s.get("external_provider") or "cli", "cli": s.get("external_cli") or "",
+                           "url": s.get("external_url") or "", "model": s.get("external_model") or "",
+                           "key": s.get("external_key") or "", "timeout": s.get("external_timeout") or 900}
     for k in ("auto_verify", "auto_skill", "minimal_mode"):
         out[k] = s.get(k, True) is not False
     for k, lo, hi in (("command_timeout", 10, 1800), ("loop_limit", 2, 20)):
