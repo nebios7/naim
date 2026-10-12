@@ -542,6 +542,23 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({**model_download.STATE, "missing": [f for f, _ in model_download.missing()]})
         elif path == "/api/computer":
             self.send_json(cu.status())
+        elif path == "/api/sim/status":  # the « Simulateur » panel: the booted devices
+            try:
+                self.send_json(cu.sim_status())
+            except Exception as e:  # noqa: BLE001 — no Xcode: an empty panel, not an error page
+                self.send_json({"booted": [], "current": None, "error": str(e)[:200]})
+        elif path == "/api/sim/frame":  # one live image of the device's screen
+            try:
+                data = cu.sim_frame(q.get("udid") or None)
+            except Exception as e:  # noqa: BLE001
+                self.send_json({"error": str(e)[:200]}, 404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
         elif path == "/api/img":
             # a photo from the web shown in an answer: fetched by Naim (shops refuse images shown from elsewhere),
             # kept in a small cache, served to the page

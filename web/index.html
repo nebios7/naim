@@ -1556,6 +1556,15 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 .ctxpop .cp-grid { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; }
 .ctxpop .cp-grid span { color: var(--muted); } .ctxpop .cp-grid b { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
 .ctxpop .btn { align-self: flex-start; }
+
+/* « Simulateur » panel: the iPhone screen, live */
+#pSim { display: flex; flex-direction: column; gap: 8px; }
+#pSim[hidden] { display: none; }
+#pSim .simbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+#pSim .simbar select { font: inherit; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+#pSim .simstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px; }
+#pSim #simImg { max-width: 100%; max-height: calc(100vh - 170px); border-radius: 28px; border: 6px solid #1c1c1e; box-shadow: 0 6px 24px rgb(0 0 0 / .35); background: #000; }
+#pSim .simempty { color: var(--muted); text-align: center; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -1648,6 +1657,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
       <div class="ptabs">
         <button class="ptab on" data-tab="files">Fichiers</button>
         <button class="ptab" data-tab="preview">Aperçu</button>
+        <button class="ptab" data-tab="sim" title="L'écran de l'iPhone virtuel, en direct">Simulateur</button>
         <button class="ptab" data-tab="procs">Processus</button>
         <button class="ptab" data-tab="git">Git</button>
         <button class="ptab" data-tab="changes" title="Fichiers modifiés par Naim dans cette conversation">Modifs</button>
@@ -1663,6 +1673,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
         <div class="pvbar" id="pvBar"><div class="pvsizes"><button data-pv="100%" class="on" title="Pleine largeur">Ordinateur</button><button data-pv="820px" title="768 px">Tablette</button><button data-pv="390px" title="390 px">Téléphone</button></div><span style="flex:1"></span><button class="icon" id="pvRedo" title="Recharger l'aperçu">↻</button><button class="icon" id="pvBig" title="Agrandir / réduire l'aperçu">⤢</button></div>
         <div class="pvstage" id="pvStage"><iframe id="preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"></iframe></div></div>
       <div class="pbody" id="pChanges" hidden></div>
+      <div class="pbody" id="pSim" hidden><div class="simbar"><select id="simDev"></select><span id="simState"></span></div><div class="simstage"><img id="simImg" alt=""><div class="simempty" id="simEmpty">Aucun iPhone virtuel démarré.<br><small>Demande à Naim de créer ou lancer une app iOS : elle s'affichera ici.</small></div></div></div>
       <div class="pbody" id="pGit" hidden>
         <div class="gsec" id="gitHead"></div>
         <div id="gitFiles"></div>
@@ -3520,7 +3531,8 @@ async function stream(reply, v, message, hist, extra = {}) {
             if (S.auto_preview !== false && ev.process.url && ev.process.keep && current === conv) setTimeout(() => showPreviewUrl(ev.process.url), 1200);
             break;
           case "output": if (lastTool) lastTool.output = (lastTool.output + ev.text).slice(-8000); v.output(ev.text); break;
-          case "tool_result": if (ev.name === "update_todos") break; if (!ev.sub) v.typing(currentTodo(reply.todos)); if (lastTool) lastTool.result = ev.result.slice(-3000); v.stepResult(ev.name, ev.result); break;
+          case "tool_result": if (ev.name === "simulator" && /lancé/.test(ev.result || "") && !/^error/.test(ev.result || "")) setTimeout(() => showPanel("sim"), 400);
+            if (ev.name === "update_todos") break; if (!ev.sub) v.typing(currentTodo(reply.todos)); if (lastTool) lastTool.result = ev.result.slice(-3000); v.stepResult(ev.name, ev.result); break;
           case "email": reply.steps.push({ type: "event", icon: "✉️", text: `Email envoyé à ${ev.to.join(", ")} : ${ev.subject}` }); v.event("✉️", `Email envoyé à ${ev.to.join(", ")} : ${ev.subject}`); break;
           case "screenshot": if (lastTool && ev.image) { lastTool.image = ev.image; v.shot(ev.image, ev.label); } break;
           case "deliverable_look": if (lastTool && ev.image) { lastTool.image = ev.image; v.shot(ev.image, `Aperçu de ${ev.path}`); } break;
@@ -4057,9 +4069,35 @@ $("#termStop").onclick = () => termRunId && api("/api/stop", { method: "POST", b
 $("#termClear").onclick = () => ($("#termOut").textContent = "");
 
 // ======================================================================= right panel: files + preview
+// « Simulateur »: the iPhone screen, live (about one image a second), while the tab is shown
+let simTimer = null, simUdid = null;
+async function simLive() {
+  clearTimeout(simTimer);
+  if ($("#pSim").hidden || !$("#panel").classList.contains("show")) return;
+  const st = await api("/api/sim/status").catch(() => ({ booted: [] }));
+  const sel = $("#simDev");
+  sel.innerHTML = st.booted.map((d) => `<option value="${d.udid}">${esc(d.name)} · ${esc(d.os)}</option>`).join("");
+  sel.hidden = st.booted.length < 2;
+  if (!st.booted.some((d) => d.udid === simUdid)) simUdid = st.current;
+  sel.value = simUdid || "";
+  sel.onchange = () => { simUdid = sel.value; simFrame(); };
+  $("#simEmpty").hidden = !!simUdid; $("#simImg").hidden = !simUdid;
+  $("#simState").textContent = simUdid ? (st.booted.find((d) => d.udid === simUdid)?.name || "") + " · en direct" : "";
+  if (simUdid) simFrame();
+}
+async function simFrame() {
+  clearTimeout(simTimer);
+  if ($("#pSim").hidden || !$("#panel").classList.contains("show") || !simUdid) return;
+  try {
+    const r = await fetch(`/api/sim/frame?udid=${simUdid}&t=${Date.now()}`);
+    if (r.ok) { const url = URL.createObjectURL(await r.blob()), img = $("#simImg"), old = img.src; img.src = url; if (old.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(old), 2000); }
+  } catch {}
+  simTimer = setTimeout(simFrame, document.hidden ? 4000 : 700);
+}
 function showPanel(tab) {
   $("#panel").classList.add("show");
   $$(".ptab").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  $("#pSim").hidden = tab !== "sim"; if (tab === "sim") simLive();
   $("#pFiles").hidden = tab !== "files"; $("#pPreview").hidden = tab !== "preview"; $("#pProcs").hidden = tab !== "procs"; $("#pGit").hidden = tab !== "git"; $("#pChanges").hidden = tab !== "changes";
   $("#refreshTree").hidden = tab !== "files";
   $("#filesBtn").classList.toggle("on", tab === "files");

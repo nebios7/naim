@@ -382,6 +382,30 @@ def simctl(*args, timeout=120):
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
+SIM_LAST = {"udid": None}  # the device Naim used last: the one shown live in the window's « Simulateur » panel
+
+
+def sim_status():
+    """The booted iPhones/iPads, and the one to show (the last one Naim used, else the first)."""
+    booted = [{"udid": d["udid"], "name": d["name"], "os": d["os"]} for d in devices()
+              if d["state"] == "Booted" and d["name"].startswith(("iPhone", "iPad"))]
+    cur = SIM_LAST["udid"] if any(b["udid"] == SIM_LAST["udid"] for b in booted) else (booted[0]["udid"] if booted else None)
+    return {"booted": booted, "current": cur}
+
+
+def sim_frame(udid=None):
+    """One image of the simulator's screen (JPEG), straight from the device: no window needed (Xcode 27 has none)."""
+    udid = udid or sim_status()["current"]
+    if not udid or not re.fullmatch(r"[0-9A-Fa-f-]{36}", udid):
+        raise ComputerError("aucun simulateur démarré")
+    path = SHOTS / f"live-{udid[:8]}.jpg"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    code, text = simctl("io", udid, "screenshot", "--type=jpeg", str(path), timeout=20)
+    if code != 0 or not path.exists():
+        raise ComputerError("capture impossible : " + text[-200:])
+    return path.read_bytes()
+
+
 def devices():
     code, text = simctl("list", "devices", "available", "-j")
     if code != 0:
@@ -487,7 +511,7 @@ class Simulator:
                 return f"error: démarrage impossible : {text[-300:]}"
         subprocess.run(["open", "-a", "Simulator", "--args", "-CurrentDeviceUDID", d["udid"]], capture_output=True)
         simctl("bootstatus", d["udid"], "-b", timeout=240)
-        self.udid = d["udid"]
+        self.udid = SIM_LAST["udid"] = d["udid"]
         time.sleep(1.5)
         return f"ok: {d['name']} ({d['os']}) démarré et affiché"
 
@@ -500,7 +524,7 @@ class Simulator:
         d = self._device(device)
         if d["state"] != "Booted":
             self.boot(d["udid"])
-        self.udid = d["udid"]
+        self.udid = SIM_LAST["udid"] = d["udid"]
         return d
 
     def install(self, app_path, device=None):
