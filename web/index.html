@@ -1461,21 +1461,32 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 /* the voice conversation's light: a sunrise from the bottom of the composer, alive with who speaks and how loud */
 .composer { isolation: isolate; }
 #talkGlow { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: -1;
-  opacity: 0; transition: opacity .6s ease; --e: 0; --c1: 255 196 140; --c2: 217 119 87; }
+  opacity: 0; transition: opacity .6s ease; --e: 0; --k: .5; --c1: 255 196 140; --c2: 217 119 87; }  /* --k: overall strength */
 body:has(#talkBtn.on) #talkGlow { opacity: 1; }
 #talkGlow::before, #talkGlow::after { content: ""; position: absolute; border-radius: 50%;
   transform-origin: 50% 100%; will-change: transform, opacity; }
 #talkGlow::before {  /* the halo */
   left: -15%; right: -15%; height: 260%; bottom: -95%;  /* % of the composer's height: the sun stays below the edge */
   background: radial-gradient(closest-side, rgb(var(--c2) / .85), rgb(var(--c2) / .38) 55%, transparent 100%);
-  transform: scale(calc(.55 + var(--e) * .55), calc(.3 + var(--e) * .8)); opacity: calc(.3 + var(--e) * .7); filter: blur(10px); }
+  transform: scale(calc(.55 + var(--e) * .5), calc(.3 + var(--e) * .6)); opacity: calc((.3 + var(--e) * .7) * var(--k)); filter: blur(12px); }
 #talkGlow::after {  /* the sun's rim, brighter, closer to the edge */
   left: 18%; right: 18%; height: 150%; bottom: -80%;
   background: radial-gradient(closest-side, rgb(var(--c1) / .8), rgb(var(--c1) / .32) 60%, transparent 100%);
-  transform: scale(calc(.5 + var(--e) * .7), calc(.25 + var(--e) * .9)); opacity: calc(.15 + var(--e) * .85); filter: blur(6px); }
+  transform: scale(calc(.5 + var(--e) * .6), calc(.25 + var(--e) * .65)); opacity: calc((.15 + var(--e) * .85) * var(--k)); filter: blur(8px); }
 #talkGlow[data-s=listen] { --c1: 255 238 220; --c2: 236 170 128; }
 #talkGlow[data-s=think], #talkGlow[data-s=prep] { --c1: 255 214 150; --c2: 214 160 70; }
 #talkGlow[data-s=speak] { --c1: 255 200 150; --c2: 217 119 87; }
+/* day (light theme): a soft peach tint that blends into the light background instead of glaring */
+:root[data-theme="light"] #talkGlow { --k: .42; mix-blend-mode: multiply; }
+:root[data-theme="light"] #talkGlow[data-s=listen] { --c1: 250 214 190; --c2: 240 170 130; }
+:root[data-theme="light"] #talkGlow[data-s=think], :root[data-theme="light"] #talkGlow[data-s=prep] { --c1: 250 222 170; --c2: 235 190 110; }
+:root[data-theme="light"] #talkGlow[data-s=speak] { --c1: 250 200 170; --c2: 235 150 110; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) #talkGlow { --k: .42; mix-blend-mode: multiply; }
+  :root:not([data-theme="dark"]) #talkGlow[data-s=listen] { --c1: 250 214 190; --c2: 240 170 130; }
+  :root:not([data-theme="dark"]) #talkGlow[data-s=think], :root:not([data-theme="dark"]) #talkGlow[data-s=prep] { --c1: 250 222 170; --c2: 235 190 110; }
+  :root:not([data-theme="dark"]) #talkGlow[data-s=speak] { --c1: 250 200 170; --c2: 235 150 110; }
+}
 @media (prefers-reduced-motion: reduce) { #talkGlow { --e: .35 !important; } }
 #talkBtn.on { color: var(--bg); background: var(--text); border-radius: 999px; }
 /* Admin › Voix de Naim */
