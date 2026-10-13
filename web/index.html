@@ -1466,13 +1466,13 @@ body:has(#talkBtn.on) #talkGlow { opacity: 1; }
 #talkGlow::before, #talkGlow::after { content: ""; position: absolute; border-radius: 50%;
   transform-origin: 50% 100%; will-change: transform, opacity; }
 #talkGlow::before {  /* the halo */
-  left: -15%; right: -15%; height: 260%; bottom: -125%;  /* % of the composer's height: the sun stays below the edge */
+  left: -15%; right: -15%; height: 260%; bottom: -95%;  /* % of the composer's height: the sun stays below the edge */
   background: radial-gradient(closest-side, rgb(var(--c2) / .85), rgb(var(--c2) / .38) 55%, transparent 100%);
-  transform: scale(calc(.55 + var(--e) * .55), calc(.25 + var(--e) * .85)); opacity: calc(.25 + var(--e) * .75); filter: blur(10px); }
+  transform: scale(calc(.55 + var(--e) * .55), calc(.3 + var(--e) * .8)); opacity: calc(.3 + var(--e) * .7); filter: blur(10px); }
 #talkGlow::after {  /* the sun's rim, brighter, closer to the edge */
-  left: 18%; right: 18%; height: 150%; bottom: -88%;
-  background: radial-gradient(closest-side, rgb(var(--c1) / .95), rgb(var(--c1) / .4) 60%, transparent 100%);
-  transform: scale(calc(.5 + var(--e) * .7), calc(.2 + var(--e) * 1)); opacity: calc(.15 + var(--e) * .85); filter: blur(6px); }
+  left: 18%; right: 18%; height: 150%; bottom: -80%;
+  background: radial-gradient(closest-side, rgb(var(--c1) / .8), rgb(var(--c1) / .32) 60%, transparent 100%);
+  transform: scale(calc(.5 + var(--e) * .7), calc(.25 + var(--e) * .9)); opacity: calc(.15 + var(--e) * .85); filter: blur(6px); }
 #talkGlow[data-s=listen] { --c1: 255 238 220; --c2: 236 170 128; }
 #talkGlow[data-s=think], #talkGlow[data-s=prep] { --c1: 255 214 150; --c2: 214 160 70; }
 #talkGlow[data-s=speak] { --c1: 255 200 150; --c2: 217 119 87; }
@@ -2698,7 +2698,7 @@ function glowLoop() {
     const lv = glowLevel();
     target = lv == null ? .45 + .22 * Math.abs(Math.sin(t / 170) * Math.sin(t / 410)) : .3 + .7 * lv;  // simulated rhythm if no analyser
   } else if (st === "think" || st === "prep") target = .32 + .12 * Math.sin(t / 650);
-  else target = .2 + .06 * Math.sin(t / 1700) + glow.kick;  // silence: an ember that breathes
+  else target = .26 + .06 * Math.sin(t / 1700) + glow.kick;  // silence: an ember that breathes
   glow.kick *= .93;
   glow.e += (target - glow.e) * (target > glow.e ? .22 : .08);  // rises fast, falls slowly, like light
   el.style.setProperty("--e", glow.e.toFixed(3));
