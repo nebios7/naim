@@ -3410,11 +3410,25 @@ function ctxPanel() {
       <span>Vitesse moyenne</span><b>${avg ? avg.toFixed(1) + " jetons/s" : "—"}</b><span>Temps de réponse</span><b>${secs ? (secs >= 90 ? Math.round(secs / 60) + " min" : Math.round(secs) + " s") : "—"}</b></div>
     ${msgs.length > 5 && !curRun() ? `<button class="btn" id="cpCompact">Résumer le début maintenant</button>` : ""}`;
   document.body.appendChild(pop);
-  const r = $("#ctxInfo").getBoundingClientRect();
-  pop.style.left = `${Math.max(8, Math.min(r.right - pop.offsetWidth, innerWidth - pop.offsetWidth - 8))}px`;
-  pop.style.top = `${Math.max(8, r.top - pop.offsetHeight - 10)}px`;
-  $("#cpCompact", pop) && ($("#cpCompact", pop).onclick = () => { pop.remove(); compactNow(); });
-  setTimeout(() => document.addEventListener("pointerdown", function off(e) { if (!pop.contains(e.target) && !e.target.closest("#ctxInfo")) { pop.remove(); document.removeEventListener("pointerdown", off); } }), 0);
+  // placed above the gauge whatever the zoom (⌘+ / ⌘−): the page is zoomed with CSS zoom, so the measures are brought
+  // back to the page's own units (rect ÷ its scale, the window ÷ the zoom), and placed again when the zoom or the size changes
+  let mo;
+  const place = () => {
+    const el = $("#ctxInfo");
+    if (!el || !pop.isConnected) { removeEventListener("resize", place); mo?.disconnect(); return; }  // closed (Échap, a click)
+    const r = el.getBoundingClientRect(), k = el.offsetWidth ? r.width / el.offsetWidth : 1;
+    const z = parseFloat(document.documentElement.style.zoom) || S.zoom || 1, vw = innerWidth / z;
+    const right = r.right / k, top = r.top / k;
+    pop.style.left = `${Math.max(8, Math.min(right - pop.offsetWidth, vw - pop.offsetWidth - 8))}px`;
+    pop.style.top = `${Math.max(8, top - pop.offsetHeight - 10)}px`;
+  };
+  place();
+  const close = () => { pop.remove(); place(); };
+  addEventListener("resize", place);
+  mo = new MutationObserver(() => requestAnimationFrame(place));
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  $("#cpCompact", pop) && ($("#cpCompact", pop).onclick = () => { close(); compactNow(); });
+  setTimeout(() => document.addEventListener("pointerdown", function off(e) { if (!pop.contains(e.target) && !e.target.closest("#ctxInfo")) { close(); document.removeEventListener("pointerdown", off); } }), 0);
 }
 document.addEventListener("click", (e) => { if (e.target.closest("#ctxInfo") && !e.target.closest(".ctxbtn")) ctxPanel(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#ctxPop")?.remove(); });
