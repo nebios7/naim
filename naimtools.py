@@ -691,10 +691,43 @@ class Agent:
         return "\n\n".join(parts)
 
     # ------------------------------------------------------------------ helpers
+    # macOS shows these folders in French but they are named in English on the disk (« Téléchargements » = Downloads)
+    LOCAL_NAMES = {"téléchargements": "Downloads", "telechargements": "Downloads", "bureau": "Desktop", "images": "Pictures",
+                   "musique": "Music", "vidéos": "Movies", "videos": "Movies", "films": "Movies", "documents": "Documents",
+                   "applications": "Applications", "corbeille": ".Trash", "public": "Public", "séquences": "Movies"}
+    # never read, even read-only: secrets and system data of the user
+    PRIVATE_HOME = (".ssh", ".gnupg", ".aws", ".config/gh", "Library/Keychains", "Library/Cookies", "Library/Messages",
+                    "Library/Mail", "Library/Safari", "Library/Application Support/Google/Chrome", ".naim/admin")
+
+    def _localized(self, path):
+        """« ~/Téléchargements/x » → ~/Downloads/x (only right under the home folder, when the French name does not exist)."""
+        home = Path.home()
+        try:
+            rel = Path(path).relative_to(home) if Path(path).is_absolute() else None
+        except ValueError:
+            return path
+        if rel is None or not rel.parts:
+            return path
+        real = self.LOCAL_NAMES.get(rel.parts[0].lower())
+        if real and not (home / rel.parts[0]).exists():
+            return str(home / real / Path(*rel.parts[1:]))
+        return path
+
+    def _readable_home(self, p):
+        """Reading anywhere in the user's home folder (list, read, search), like a person at their Mac: except secrets."""
+        home = Path.home().resolve()
+        if p != home and home not in p.parents:
+            return False
+        rel = str(p.relative_to(home)) if p != home else ""
+        return not any(rel == x or rel.startswith(x + "/") for x in self.PRIVATE_HOME)
+
     def resolve(self, path, read=False):
         path = self._undouble(os.path.expanduser(str(path or ".")))  # « ~/… » is the user's home, as in the Terminal
+        path = self._localized(path)
         p = (self.root / path).resolve()
         if p != self.root and self.root not in p.parents:
+            if read and self._readable_home(p):  # read-only outside the project: writing stays in the project
+                return p
             skills = (ext.HOME / "skills").resolve()
             if read and (p == skills or skills in p.parents):  # its skills' files (examples, templates): readable
                 return p
@@ -779,6 +812,23 @@ class Agent:
         base = self.resolve(path, read=True)
         if not base.is_dir():
             return f"error: not a directory: {path}"
+        if base != self.root and self.root not in base.parents:
+            # a folder of the user (Téléchargements, Bureau…): its own content, newest first, with date and size
+            items = []
+            for f in base.iterdir():
+                if f.name.startswith("."):
+                    continue
+                try:
+                    st = f.stat()
+                except OSError:
+                    continue
+                items.append((st.st_mtime, f, st))
+            items.sort(key=lambda x: x[0], reverse=True)
+            size = lambda n: f"{n / 1048576:.1f} Mo" if n >= 1048576 else f"{max(1, n // 1024)} Ko"  # noqa: E731
+            out = [f"{self.rel(f)}{'/' if f.is_dir() else ''} · {time.strftime('%d/%m/%Y %H:%M', time.localtime(m))}"
+                   + ("" if f.is_dir() else f" · {size(st.st_size)}") for m, f, st in items[:100]]
+            more = f"\n... ({len(items) - 100} autres)" if len(items) > 100 else ""
+            return (f"{len(items)} éléments dans {self.rel(base)} (le plus récent d'abord) :\n" + "\n".join(out) + more) if out else "(empty directory)"
         out = []
         for dirpath, dirnames, filenames in os.walk(base):
             dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
