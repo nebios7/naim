@@ -632,6 +632,22 @@ class Agent:
             if g in (getattr(self, "_tool_groups", None) or {}) and re.search(rx, text or "", re.I):
                 self.tools += self._tool_groups.pop(g)
 
+    def set_conversation(self, conv_id):
+        """The conversation this run belongs to: its background jobs report there, and it gets its own draft folder
+        (Fichiers/Joints/<id>): trials, conversions and intermediate files go there, never cluttering the project."""
+        self.conv_id = conv_id
+        if conv_id and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", str(conv_id)):
+            self.scratch = JOINTS / str(conv_id)
+            if self.messages and self.messages[0].get("role") == "system":
+                self.messages[0]["content"] += "\n" + self.scratch_note()
+        return self
+
+    def scratch_note(self):
+        s = getattr(self, "scratch", None)
+        return (f"Your draft folder for this conversation: {s} (read and write freely, it is yours; mkdir -p it before a command writes there: trials, conversions, "
+                "downloads to inspect, intermediate files). Only the final result goes in the project or where the user "
+                "asked.") if s else ""
+
     def _system_prompt(self):
         # the project folder comes after the fixed text: llama.cpp then reuses what it already read from one project to another
         base = AGENT_PROMPT + "\n\n" + today_line() + f"\nProject directory: {self.root}"

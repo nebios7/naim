@@ -1586,7 +1586,7 @@ class Handler(BaseHTTPRequestHandler):
         helper = Agent(str(folder), body.get("model", "naim"), auto_yes=bool(body.get("auto_yes")), emit=self.event,
                        approver=approver, options=options, **agent_settings(body))
         run_id = body.get("run_id") or helper.run_id
-        helper.conv_id = body.get("conv_id")  # its background jobs report back to this conversation
+        helper.set_conversation(body.get("conv_id"))  # its background jobs report there; its own draft folder
         helper._bg_intent = bool(Agent.BG_INTENT_RE.search(body.get("message") or ""))
         with _lock:
             _agents[run_id] = helper  # « écris pour guider Naim » reaches this reply too
@@ -1599,6 +1599,7 @@ class Handler(BaseHTTPRequestHandler):
             f"\nYou are working in the folder {folder} (relative paths are inside it). Before asking the user where a "
             "file is, look for it yourself (list_files, find_files)."
             + f" Files you create (creer_fichier) go in this folder; older ones may be in {chatfiles.OUT}. Attach them with their full path."
+            + (f"\n{helper.scratch_note()}" if helper.scratch_note() else "")
             + (f"\nFiles in this folder:\n{helper.list_files('.')[:2500]}" if named else "")
             + (f" Other folders with the same name: {', '.join(map(str, others))}." if named and others else "")) + (f"\nThe user's own email address (« moi »): {me}" if me else "")
         if getattr(helper, "_tool_groups", None):
@@ -2116,7 +2117,7 @@ class Handler(BaseHTTPRequestHandler):
                       options=options, extra_system=extra, run_id=body.get("run_id"), plan=bool(body.get("plan")),
                       **agent_settings(body))
         agent.cancel = stop  # the Stop button cancels the agent and any running command
-        agent.conv_id = body.get("conv_id")  # its background jobs report back to this conversation
+        agent.set_conversation(body.get("conv_id"))  # its background jobs report there; its own draft folder
         with _lock:
             _agents[body.get("run_id") or agent.run_id] = agent
 

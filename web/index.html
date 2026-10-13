@@ -5544,7 +5544,7 @@ async function loadStorage() {
       `<button class="btn danger" data-clear="conversations" ${c.count ? "" : "disabled"}>Tout mettre à la Corbeille</button>`) +
     line("fichiers", `Fichiers créés en mode Chat : ${st.fichiers.count}`, `${kb(st.fichiers.size)} · PDF, Word, ZIP… (ce sont tes fichiers : Naim ne les supprime pas)`,
       `<button class="btn" data-open="${esc(st.fichiers.path)}">Ouvrir le dossier</button>`) +
-    line("joints", `Pièces jointes enregistrées : ${st.joints.count}`, `${kb(st.joints.size)} · fichiers joints et travail de Naim dessus, un dossier par conversation (Fichiers/Joints)`,
+    line("joints", `Pièces jointes et brouillons : ${st.joints.count}`, `${kb(st.joints.size)} · fichiers joints et brouillon de travail de Naim, un dossier par conversation (Fichiers/Joints)`,
       `<button class="btn" data-open="${esc(st.joints.path)}" ${st.joints.count ? "" : "disabled"}>Ouvrir</button> <button class="btn" data-clear="joints" ${st.joints.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
     line("apercus", "Aperçus en cache", `${kb(st.apercus.size)} · miniatures des PDF et images (refaites au besoin)`, `<button class="btn" data-clear="apercus" ${st.apercus.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
     line("captures", "Captures d'écran", `${kb(st.captures.size)} · prises par Naim quand il contrôle l'écran`, `<button class="btn" data-clear="captures" ${st.captures.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
