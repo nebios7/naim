@@ -95,7 +95,7 @@ ANSWER_TOOLS = {"confier_tache", "chercher_conversations", "read_file", "list_fi
 # actions on the Mac itself (printer, apps, settings, music…): Naim does them with its tools, asking when it is sensitive
 MAC_ACTION = (r"appelle|appeler|passe un appel|t[ée]l[ée]phone (à|a)\b|\bsms\b|texto|imessage|envoie (un |le |ce )?message|"
               r"imprim|impression|imprimante|\bscanne|ouvre|ferme|quitte|r[eè]gle|active|d[ée]sactive|[ée]teins|allume|"
-              r"monte le son|baisse le son|volume|luminosit|wi-?fi|bluetooth|mets? en veille|red[ée]marre|joue|musique")
+              r"(augment|mont|baiss|diminu|coup|remet|met|r[èe]gl|monter|baisser)\w* (un peu |encore )?(le |la |du )?(son|volume|luminosit[ée])|\bson (du|de mon|de l'|sur le) (mac|ordi\w*)|\ben muet\b|\bmute\b|luminosit[ée]|monte le son|baisse le son|volume|luminosit|wi-?fi|bluetooth|mets? en veille|red[ée]marre|joue|musique")
 MAC_ACTION_RE = re.compile(MAC_ACTION, re.I)
 # « n'imprime pas », « ne lance pas encore », « attends mon signal »: the user does NOT want the action now
 NOT_NOW_RE = re.compile(r"\bn['’e]\s*(?:\w+\s+){0,2}?(?:pas|rien|plus|jamais)\b|\bpas encore\b|\battends?\b|\bstop\b|"

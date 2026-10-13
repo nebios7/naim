@@ -303,7 +303,9 @@ osascript -e 'tell application "Notes" to make new note in folder "Notes" with p
 
 ## Musique, son, écran
 - Musique : `osascript -e 'tell application "Music" to play'` · `pause` · `next track` · `play playlist "Nom"`.
-- Volume : `osascript -e 'set volume output volume 40'` (0 à 100) · couper : `osascript -e 'set volume with output muted'`.
+- Volume : `osascript -e 'set volume output volume 40'` (0 à 100) · couper : `osascript -e 'set volume with output muted'` · remettre : `osascript -e 'set volume without output muted'`.
+- « Augmente / baisse le son » : lis d'abord le volume actuel `osascript -e 'output volume of (get volume settings)'`, puis règle-le 15 plus haut ou plus bas (entre 0 et 100), et dis le nouveau niveau. Aucune autorisation macOS n'est nécessaire : ne réponds jamais que tu ne peux pas le faire.
+- Luminosité de l'écran : plus forte `osascript -e 'tell application "System Events" to key code 144'`, plus faible `key code 145` (répète 2 ou 3 fois ; il faut l'autorisation Accessibilité de Naim).
 - Notification : `osascript -e 'display notification "Texte" with title "Naim"'`.
 - Capture d'écran : `screencapture -x ~/Desktop/capture.png` puis look_at pour la regarder.
 

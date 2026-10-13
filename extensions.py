@@ -991,6 +991,7 @@ SKILL_TRIGGERS = {
     # acting on the Mac itself (last of the specialised ones: « crée une application de rappels » is an app)
     "mac": r"\b(sms|texto|imessage|envoie[rz]? (un |le |ce )?(message|texto)|appell?e[rz]?|t[ée]l[ée]phone[rz]? (à|a)|facetime|"
            r"agenda|calendrier|rendez-vous|rdv|rappelle-moi|(un |des |mes )rappels?|ajoute (une |la )?note|dans (mes )?notes|"
+           r"(augment|mont|baiss|diminu|coup|remet|met|r[èe]gl|monter|baisser)\w* (un peu |encore )?(le |la |du )?(son|volume|luminosit[ée])|\bson (du|de mon|de l'|sur le) (mac|ordi\w*)|\ben muet\b|\bmute\b|luminosit[ée]|"
            r"musique|mets? (de la |la )?musique|volume|wi-?fi|bluetooth|mets? (le mac |l'[ée]cran )?en veille|batterie|notification|imprim\w*)\b",
     # « ci » alone is French (« celle-ci », « ci-dessous »): only the real terms
     "ci-cd": r"\b(ci ?/ ?cd|ci-cd|cicd|int[ée]gration continue|d[ée]ploiement continu|github actions?|gitlab[- ]ci|jenkins|"
