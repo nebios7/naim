@@ -195,8 +195,11 @@ class Server:
                    "-b", str(cfg["batch"]), "-np", str(slots), "--no-webui"]
             if int(cfg.get("threads") or 0) > 0:
                 cmd += ["-t", str(cfg["threads"])]
+            # flash attention: measured on an M4 with Naim's Agent prompt, a new conversation reads its instructions
+            # 1.7× faster (85 s instead of 144 s) and writes 1.5× faster (8.8 instead of 5.9 tokens/s), same memory
+            cmd += ["-fa", "on"]
             if cfg.get("kv_type") in ("q8_0", "q4_0"):
-                cmd += ["-ctk", cfg["kv_type"], "-ctv", cfg["kv_type"], "-fa", "on"]
+                cmd += ["-ctk", cfg["kv_type"], "-ctv", cfg["kv_type"]]
             if mmproj:
                 cmd += ["--mmproj", str(mmproj)]
             HOME.mkdir(parents=True, exist_ok=True)

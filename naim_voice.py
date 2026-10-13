@@ -112,6 +112,23 @@ for line in sys.stdin:
         print("@@" + json.dumps({"ok": False, "error": str(e)[:300]}), flush=True)
 '''
 _ky, _ky_lock = None, threading.Lock()
+KY_IDLE = 300  # seconds: the natural voice (several GB) leaves memory after 5 min of silence, back in ~1 s when needed
+_ky_used = 0.0
+
+
+def _ky_reaper():
+    """Unloads the Kyutai worker when it has not spoken for KY_IDLE seconds (memory for Naim's own model)."""
+    import time
+    global _ky
+    while True:
+        time.sleep(30)
+        with _ky_lock:
+            if _ky is not None and _ky.poll() is None and time.time() - _ky_used > KY_IDLE:
+                _ky.terminate()
+                _ky = None
+
+
+threading.Thread(target=_ky_reaper, daemon=True, name="kyutai-reaper").start()
 _proc, _lock = None, threading.Lock()
 _nat, _nat_lock = None, threading.Lock()
 _fast, _fast_lock = None, threading.Lock()
@@ -226,6 +243,9 @@ def say_to_file(text, out, onnx=None, kyutai_ref=None):
     for the voices that came ready-made (they have no recording to imitate)."""
     text = clean(text)
     if kyutai_ref:
+        global _ky_used
+        import time
+        _ky_used = time.time()
         with _ky_lock:
             p = _kyutai_worker()
             p.stdin.write(json.dumps({"text": text, "out": str(out), "voice": kyutai_ref}) + "\n")
@@ -251,6 +271,9 @@ def speak(text, engine="rapide"):
         return b""
     extra = {}
     if engine == "naturelle" and (ref := kyutai_voice()):
+        global _ky_used
+        import time
+        _ky_used = time.time()
         lock, start, extra = _ky_lock, _kyutai_worker, {"voice": ref}
     elif engine == "naturelle" and fast_natural_available():
         lock, start = _fast_lock, _fast_worker
