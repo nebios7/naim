@@ -175,8 +175,10 @@ def kyutai_voice():
 def _kyutai_worker():
     global _ky
     if _ky is None or _ky.poll() is not None:
+        import os
         _ky = subprocess.Popen([str(KY_PYTHON), "-c", KY_WORKER], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.DEVNULL, text=True, bufsize=1)
+                               stderr=subprocess.DEVNULL, text=True, bufsize=1,
+                               env={**os.environ, "HF_HUB_OFFLINE": "1"})  # all is on disk: no Internet check per sentence
         _reply(_ky)  # « ready »: the model is loaded (≈ 8 s)
     return _ky
 
@@ -217,6 +219,29 @@ def _worker():
         _proc = subprocess.Popen([str(PYTHON), "-c", WORKER, str(MODEL), str(SPEAKER)], stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
     return _proc
+
+
+def say_to_file(text, out, onnx=None, kyutai_ref=None):
+    """A sentence said by a given voice (a Piper model, or a Kyutai voice) into a WAV: the try of Admin › Mes voix
+    for the voices that came ready-made (they have no recording to imitate)."""
+    text = clean(text)
+    if kyutai_ref:
+        with _ky_lock:
+            p = _kyutai_worker()
+            p.stdin.write(json.dumps({"text": text, "out": str(out), "voice": kyutai_ref}) + "\n")
+            p.stdin.flush()
+            r = _reply(p)
+    else:
+        p = subprocess.Popen([str(PYTHON), "-c", WORKER, str(onnx), "-"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        try:
+            p.stdin.write(json.dumps({"text": text, "out": str(out)}) + "\n")
+            p.stdin.flush()
+            r = _reply(p)
+        finally:
+            p.terminate()
+    if not r.get("ok"):
+        raise RuntimeError(r.get("error") or "voix indisponible")
 
 
 def speak(text, engine="rapide"):
