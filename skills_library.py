@@ -250,13 +250,24 @@ Objectif : une réponse fiable et sourcée, pas un résumé de la première page
 - Tester d'abord sur une seule page, afficher 3 résultats, puis généraliser.
 """),
     # ------------------------------------------------------------------ apps & stacks
-    "mac": ("Agir sur le Mac de l'utilisateur : SMS et iMessage, appels, Calendrier, Rappels, Notes, Musique, volume, Wi-Fi, notifications, applications.", """# Agir sur le Mac (messages, appels, agenda, applications)
+    "mac": ("Piloter le Mac : SMS, appels, agenda, son, écran, Bluetooth, fichiers, réglages, applications (Safari, Mail, Finder…).", r"""# Piloter le Mac (messages, appels, agenda, système, fichiers, applications)
 
 ## Principe
 L'utilisateur te demande de FAIRE quelque chose sur son Mac : fais-le toi-même avec run_command, n'explique pas
 comment le faire. Les actions sensibles (message, appel, impression) lui sont demandées avant, par Naim : c'est
 normal, ne demande pas une deuxième fois en texte. Après, dis en une phrase ce qui a été fait ; si la commande a
-échoué, dis exactement pourquoi (jamais « c'est fait » sur un échec).
+échoué, dis exactement pourquoi (jamais « c'est fait » sur un échec). Ne réponds jamais « je ne peux pas » pour une
+action du Mac : cherche la commande ici ou dans les deux fichiers de détail, sinon utilise la skill controle-ecran.
+
+Détails (lis-les avec read_file quand la demande n'est pas dans ce fichier) :
+- `~/.naim/skills/mac/systeme.md` : réglages, réseau, énergie, Bluetooth, sortie son, informations, fichiers, images,
+  PDF, presse-papiers, raccourcis, minuteur, verrouiller, redémarrer.
+- `~/.naim/skills/mac/applications.md` : Safari, Chrome, Mail, Finder, Photos, Musique, Plans, Contacts, WhatsApp,
+  Pages / Numbers / Keynote, Word / Excel, Terminal, VS Code, Xcode, Zoom / Teams.
+
+Demande TOUJOURS une confirmation avant (même en Contrôle étendu) : éteindre, redémarrer, verrouiller, forcer la
+fermeture d'une application, mettre à la Corbeille, couper le Wi-Fi ou le Bluetooth (le clavier ou Internet peuvent
+se couper), envoyer, appeler. Jamais : vider la Corbeille, effacer un disque, `rm -rf`, `sudo`.
 
 ## Contacts (toujours avant un message ou un appel)
 - chercher_contact avec le nom. Plusieurs personnes ou plusieurs numéros : demande lequel et ATTENDS la réponse.
@@ -280,13 +291,13 @@ open "facetime-audio://+33612345678"
 Voir les agendas : `osascript -e 'tell application "Calendar" to get name of every calendar'`
 Créer un rendez-vous (la date se construit par morceaux : jamais une date en texte, elle dépend de la langue) :
 ```bash
-osascript -e 'set d to current date' -e 'set day of d to 1' -e 'set year of d to 2026' -e 'set month of d to 10' \\
-  -e 'set day of d to 10' -e 'set hours of d to 14' -e 'set minutes of d to 0' -e 'set seconds of d to 0' \\
+osascript -e 'set d to current date' -e 'set day of d to 1' -e 'set year of d to 2026' -e 'set month of d to 10' \
+  -e 'set day of d to 10' -e 'set hours of d to 14' -e 'set minutes of d to 0' -e 'set seconds of d to 0' \
   -e 'tell application "Calendar" to tell calendar "Domicile" to make new event with properties {summary:"Dentiste", start date:d, end date:(d + 3600)}'
 ```
 Rendez-vous du jour :
 ```bash
-osascript -e 'set a to current date' -e 'set hours of a to 0' -e 'set minutes of a to 0' -e 'set seconds of a to 0' \\
+osascript -e 'set a to current date' -e 'set hours of a to 0' -e 'set minutes of a to 0' -e 'set seconds of a to 0' \
   -e 'tell application "Calendar" to get {summary, start date} of (every event of every calendar whose start date ≥ a and start date < (a + 86400))'
 ```
 
@@ -309,17 +320,29 @@ osascript -e 'tell application "Notes" to make new note in folder "Notes" with p
 - Notification : `osascript -e 'display notification "Texte" with title "Naim"'`.
 - Capture d'écran : `screencapture -x ~/Desktop/capture.png` puis look_at pour la regarder.
 
-## Applications et système
+## Applications et système (l'essentiel ; le reste dans systeme.md et applications.md)
 - Ouvrir : `open -a "Safari"` · un site : `open "https://…"` · un fichier avec son application : `open "chemin"`.
-- Quitter : `osascript -e 'quit app "Safari"'`.
+- Quitter : `osascript -e 'quit app "Safari"'` · applications ouvertes :
+  `osascript -e 'tell application "System Events" to get name of every application process whose background only is false'`.
+- Nom exact d'une application installée : `ls /Applications | grep -i nom`.
 - Wi-Fi : `networksetup -setairportpower en0 off` (ou `on`) · batterie : `pmset -g batt`.
 - Mettre l'écran en veille : `pmset displaysleepnow` · le Mac en veille : `pmset sleepnow`.
+- Mode sombre ↔ clair : `osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to not dark mode'`.
+- Bluetooth : `blueutil -p 1` (ou `0`) · sortie son : `SwitchAudioSource -a -t output` puis `SwitchAudioSource -t output -s "Nom"`.
+- Espace disque : `df -h /` · mémoire : `memory_pressure -Q` · ce qui charge le Mac : `ps -Ao pid,%cpu,%mem,comm -r | head -8`.
+- Chercher un fichier dans tout le Mac : `mdfind -name "mot" 2>/dev/null | head -20` · le montrer : `open -R "chemin"`.
+- Presse-papiers : lire `pbpaste` · copier `printf %s "texte" | pbcopy`.
+- Raccourcis de l'utilisateur : `shortcuts list` puis `shortcuts run "Nom"`.
 - Imprimer : `lpstat -p -d` puis `lp -d <imprimante> "<fichier>"` (« inactive » veut dire prête).
 
 ## Si ça échoue
 - `-1743` ou « pas autorisé » : macOS doit autoriser Naim à piloter cette application (Réglages Système ›
   Confidentialité et sécurité › Automatisation › Naim). Dis-le simplement.
 - `-600` : l'application n'est pas ouverte → `open -a "Nom"`, attends 2 s, recommence une fois.
+- `-1728` / « Can't get » : le nom (application, agenda, liste, appareil) n'existe pas : liste les vrais noms d'abord.
+- « not allowed assistive access » : il faut l'autorisation Accessibilité de Naim (Réglages Système ›
+  Confidentialité et sécurité › Accessibilité). Bluetooth : macOS demande une fois l'accès, l'utilisateur accepte.
+- Rien ne marche en ligne de commande : skill controle-ecran (regarder l'écran, cliquer, taper).
 """),
     "react-app": ("Créer une application React (Vite) soignée et complète, la lancer et l'ouvrir : boutique, tableau de bord, outil…", """# Application React (Vite) — un livrable fini, beau et lancé
 

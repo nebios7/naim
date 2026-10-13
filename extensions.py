@@ -527,6 +527,10 @@ def ensure_builtin_skills():
             record[name], changed = new_hash, True
         elif f.is_file() and record.get(name) != new_hash:
             cur = hashlib.md5(f.read_bytes()).hexdigest()
+            if cur == new_hash:  # already this version (written by hand at the same time): remembered as built-in
+                record[name], changed = new_hash, True
+                seeded.add(name)
+                continue
             untouched = cur == record.get(name)
             if untouched or (name not in record and name in UPGRADED):
                 if not untouched:  # first upgrade of an old built-in copy: keep it just in case
@@ -536,6 +540,18 @@ def ensure_builtin_skills():
                 f.write_text(content)
                 record[name], changed = new_hash, True
         seeded.add(name)
+    # their extra files (skills_extra/<skill>/<file>: details read on demand), updated while the user has not edited them
+    for f in sorted((Path(__file__).parent / "skills_extra").glob("*/*")):
+        d, key = base / f.parent.name, f"{f.parent.name}/{f.name}"
+        if not d.is_dir():
+            continue  # the skill was deleted by the user
+        content, target = f.read_bytes(), d / f.name
+        new_hash = hashlib.md5(content).hexdigest()
+        if record.get(key) == new_hash and target.exists():
+            continue
+        if not target.exists() or hashlib.md5(target.read_bytes()).hexdigest() in (record.get(key), new_hash):
+            target.write_bytes(content)
+            record[key], changed = new_hash, True
     marker.write_text("\n".join(sorted(seeded)))
     if changed or not record_f.exists():
         record_f.write_text(json.dumps(record, indent=1))
@@ -992,6 +1008,7 @@ SKILL_TRIGGERS = {
     "mac": r"\b(sms|texto|imessage|envoie[rz]? (un |le |ce )?(message|texto)|appell?e[rz]?|t[ée]l[ée]phone[rz]? (à|a)|facetime|"
            r"agenda|calendrier|rendez-vous|rdv|rappelle-moi|(un |des |mes )rappels?|ajoute (une |la )?note|dans (mes )?notes|"
            r"(augment|mont|baiss|diminu|coup|remet|met|r[èe]gl|monter|baisser)\w* (un peu |encore )?(le |la |du )?(son|volume|luminosit[ée])|\bson (du|de mon|de l'|sur le) (mac|ordi\w*)|\ben muet\b|\bmute\b|luminosit[ée]|"
+           r"mode (sombre|clair|nuit)|th[èe]me (sombre|clair)|airpods|[ée]couteurs|casque (audio|bluetooth)|sortie (audio|son)|verrouill\w* (l'[ée]cran|le mac|mon mac)|([ée]tein[st]|red[ée]marre)\w* (le |mon )?(mac|ordi\w*)|espace (disque|libre)|stockage (du|de mon) mac|m[ée]moire (du|de mon) mac|adresse ip|test de (d[ée]bit|vitesse)|vitesse (de )?(la |ma )?connexion|presse-papiers?|ce que j'ai copi[ée]|app(lication)? raccourcis|lance (le |mon )?raccourci|fond d'[ée]cran|(mets|lance|r[èe]gle|programme)\w* (un |le )?minuteur|minuteur de \d|time machine|[ée]jecte\w*|dans le finder|(cherche|trouve)\w* [^.?!]{0,40}\b(sur|dans) (le |mon )?mac\b|onglets? (de |dans |ouverts? )?(safari|chrome)|safari|whatsapp|itin[ée]raire|comment aller [àa]|ne pas d[ée]ranger|mode concentration|r[ée]glages? syst[èe]me|pr[ée]f[ée]rences syst[èe]me|ajoute (un |ce |le )?contact|fais parler (le )?mac|garde (le mac|l'[ée]cran) allum[ée]|emp[êe]che la veille|"
            r"musique|mets? (de la |la )?musique|volume|wi-?fi|bluetooth|mets? (le mac |l'[ée]cran )?en veille|batterie|notification|imprim\w*)\b",
     # « ci » alone is French (« celle-ci », « ci-dessous »): only the real terms
     "ci-cd": r"\b(ci ?/ ?cd|ci-cd|cicd|int[ée]gration continue|d[ée]ploiement continu|github actions?|gitlab[- ]ci|jenkins|"
@@ -1011,6 +1028,10 @@ def match_skill(task, root=None, disabled=()):
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
     first = ("plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     ordered = list(first) + [n for n in SKILL_TRIGGERS if n not in generic and n not in first] + list(generic)
+    # the Mac's own words (« verrouille l'écran », « test de débit ») before the screen and the tests skills
+    if "mac" in ordered:
+        ordered.remove("mac")
+        ordered.insert(min(ordered.index(n) for n in ("controle-ecran", "tests-unitaires") if n in ordered), "mac")
     for name in ordered:
         if name in by_name and re.search(SKILL_TRIGGERS[name], text):
             return by_name[name]
