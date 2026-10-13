@@ -787,6 +787,12 @@ class Agent:
             if b"\0" in f.read(8192):
                 return (f"error: {path} is a binary file ({p.stat().st_size} bytes), not text. Use a tool or a "
                         f"Python script suited to this format (run_command).")
+        size = p.stat().st_size
+        if size > 1024 * 1024:  # a big file (log, CSV, dump…): its beginning, then read the rest by pieces
+            with open(p, errors="replace") as f:
+                head = f.read(60000)
+            return (head + f"\n\n[… {self.rel(p)} fait {size / 1048576:.1f} Mo : seul le début est montré. Pour le reste, "
+                    f"run_command avec grep -n, sed -n 'A,Bp', tail, wc -l, ou un script Python qui le lit par morceaux.]")
         return p.read_text(errors="replace")
 
     PLACEHOLDER_RE = re.compile(r"^\s*<(already written|\d+ lignes écrites)|\(ancien résultat raccourci\)|Résumé de mes étapes précédentes")

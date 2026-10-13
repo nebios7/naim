@@ -3287,7 +3287,7 @@ function addBot(m, idx) {
 function composeContent(text, atts) {
   atts = (atts || []).filter((a) => a.kind !== "image");
   if (!atts.length) return text;
-  const files = atts.map((a) => a.kind === "doc" ? `Document joint « ${a.name} » :\n${a.content}` : `Fichier joint « ${a.name} » :\n\`\`\`${(a.name.split(".").pop() || "").toLowerCase()}\n${a.content}\n\`\`\``).join("\n\n");
+  const files = atts.map((a) => a.kind === "big" ? `Fichier joint « ${a.name} » :\n${a.content}` : a.kind === "doc" ? `Document joint « ${a.name} » :\n${a.content}` : `Fichier joint « ${a.name} » :\n\`\`\`${(a.name.split(".").pop() || "").toLowerCase()}\n${a.content}\n\`\`\``).join("\n\n");
   return `${files}\n\n${text}`;
 }
 function historyFor(msgs) {
@@ -3990,20 +3990,40 @@ async function updateNaimMd() {
 }
 
 // ======================================================================= attachments
-const MAX_FILE = 300 * 1024;
+const MAX_FILE = 300 * 1024, MAX_UPLOAD = 1024 ** 3;  // inline up to 300 Ko, else saved to disk (up to 1 Go)
 const IMG_RE = /^image\/(png|jpe?g|gif|webp)$/;
 const DOC_RE = /\.(pdf|docx?|xlsx|xlsm|pptx|rtf|odt|pages)$/i;
 const readDataURL = (f) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+// a big file: sent as it is (no base64) to the server, which saves it; Naim gets its path and reads it with its tools
+async function uploadBig(f) {
+  if (f.size > MAX_UPLOAD) { toast(`${f.name} est trop gros (max 1 Go)`); return; }
+  const chip = { name: f.name, size: f.size, kind: "big", loading: true, content: "" };
+  pending.push(chip); renderPending();
+  try {
+    const proj = S.mode === "agent" && S.project ? S.project : "";
+    const res = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}&project=${encodeURIComponent(proj)}`, { method: "POST", headers: { "X-Naim": "1" }, body: f });
+    const r = await res.json();
+    if (r.error) throw new Error(r.error);
+    let head = "";
+    if (!IMG_RE.test(f.type) && !DOC_RE.test(f.name)) {
+      const t = await f.slice(0, 6000).text();
+      if (!/[\u0000-\u0008\u000e-\u001f]/.test(t.slice(0, 2000))) head = `\n\nDébut du fichier :\n\`\`\`\n${t}\n\`\`\``;
+    }
+    chip.loading = false; chip.path = r.path;
+    chip.content = `[Fichier joint volumineux (${fmtSize(f.size)}), enregistré ici : ${r.path}. Il n'est pas collé dans ce message : lis-le avec tes outils, par morceaux (read_file, ou run_command avec grep -n, sed -n, tail, wc -l, ou un script Python).]${head}`;
+  } catch (e) { pending.splice(pending.indexOf(chip), 1); toast(`${f.name} : ${e.message}`); }
+  renderPending(); updateCtx();
+}
 async function addFiles(files) {
   for (const f of files) {
     if (IMG_RE.test(f.type)) {
-      if (f.size > 6 * 1024 * 1024) { toast(`${f.name} est trop grande (max 6 Mo)`); continue; }
+      if (f.size > 6 * 1024 * 1024) { await uploadBig(f); continue; }
       const url = await readDataURL(f);
       pending.push({ kind: "image", name: f.name || "image.png", size: f.size, mime: f.type, data: url.split(",")[1], content: "" });
       continue;
     }
     if (DOC_RE.test(f.name)) {
-      if (f.size > 40 * 1024 * 1024) { toast(`${f.name} est trop gros (max 40 Mo)`); continue; }
+      if (f.size > 40 * 1024 * 1024) { await uploadBig(f); continue; }
       const chip = { name: f.name, size: f.size, kind: "doc", loading: true, content: "" };
       pending.push(chip); renderPending();
       try {
@@ -4016,10 +4036,10 @@ async function addFiles(files) {
       renderPending(); updateCtx();
       continue;
     }
-    if (f.size > MAX_FILE) { toast(`${f.name} est trop gros (max 300 Ko)`); continue; }
+    if (f.size > MAX_FILE) { await uploadBig(f); continue; }
     const text = await f.text();
     const head = text.slice(0, 4000), bad = (head.match(/[\u0000-\u0008\u000e-\u001f\ufffd]/g) || []).length;
-    if (bad > head.length * 0.02 || /^%PDF|^PK\u0003\u0004/.test(head)) { toast(`${f.name} : format non pris en charge (fichier binaire)`); continue; }
+    if (bad > head.length * 0.02 || /^%PDF|^PK\u0003\u0004/.test(head)) { await uploadBig(f); continue; }  // binary: saved, Naim opens it with a tool
     pending.push({ name: f.name, size: f.size, content: text });
   }
   renderPending(); updateCtx();

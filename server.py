@@ -432,6 +432,35 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    UPLOAD_MAX = 1024 ** 3  # 1 Go
+
+    def _upload(self):
+        """A big attached file, streamed as it is to disk (the project, else ~/Documents/Naim/Fichiers/Joints):
+        Naim then reads it with its tools, piece by piece, instead of it being pasted whole into the message."""
+        import chatfiles
+        _, q = self.route()
+        n = int(self.headers.get("Content-Length") or 0)
+        if n > self.UPLOAD_MAX:
+            return {"error": "fichier trop gros (max 1 Go)"}
+        name = re.sub(r"[/\\:\0]", "_", Path(q.get("name") or "fichier").name).strip(". ") or "fichier"
+        proj = Path(q.get("project") or "").expanduser()
+        folder = proj if q.get("project") and proj.is_dir() else chatfiles.OUT / "Joints"
+        folder.mkdir(parents=True, exist_ok=True)
+        dst, k = folder / name, 1
+        while dst.exists():
+            dst, k = folder / f"{Path(name).stem} ({k}){Path(name).suffix}", k + 1
+        left = n
+        with open(dst, "wb") as f:
+            while left > 0:
+                chunk = self.rfile.read(min(left, 1 << 20))
+                if not chunk:
+                    break
+                f.write(chunk); left -= len(chunk)
+        if left:
+            dst.unlink(missing_ok=True)
+            return {"error": "envoi interrompu"}
+        return {"path": str(dst), "size": n}
+
     def read_json(self):
         n = int(self.headers.get("Content-Length") or 0)
         return json.loads(self.rfile.read(n) or b"{}")
@@ -1064,6 +1093,8 @@ class Handler(BaseHTTPRequestHandler):
             text = str(self.read_json().get("text", ""))
             r = subprocess.run(["pbcopy"], input=text.encode("utf-8"), timeout=10, env={**os.environ, "LANG": "en_US.UTF-8"})
             self.send_json({"ok": r.returncode == 0})
+        elif path == "/api/upload":
+            self.send_json(self._upload())
         elif path == "/api/extract":
             b = self.read_json()
             try:
