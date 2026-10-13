@@ -1147,6 +1147,13 @@ body.busyrun #thread .turn.bot:last-child .msgacts { visibility: hidden; }
 
 /* composer fitting measured in the real layout (zoom included, WebKit too): labels give way, then temperature + gauge */
 .composer.compact .ctools .pl { display: none !important; }
+/* the folder: its icon only (the full path in its tooltip), then Effort and the model: their icon, before any second line */
+.composer.compact #folderPill .fpn, .composer.compact #folderPill svg.fpc { display: none; }
+.composer.compact #folderPill { padding: 0 9px; }
+#effortPill svg { display: none; width: 15px; height: 15px; }
+.composer.tiny #effortPill svg { display: inline; }
+.composer.tiny #effortPill .efl { display: none; }
+.composer.tiny #modelPick #mpName { display: none; }
 .composer.compact .ctools .pill, .composer.compact .ctools .chk { padding: 0 8px; }
 .composer.compact .ctools { gap: 2px; }
 .composer.tiny #tempPill { display: none !important; }  /* the gauge ring always stays */
@@ -3416,7 +3423,13 @@ function effortLevel() {  // the level the current settings match (or the neares
   const steps = +S.max_steps || 30;
   return S.think ? (steps >= 310 ? 4 : steps >= 300 ? 3 : 2) : steps <= 30 ? 0 : 1;
 }
-function updateEffortPill() { const b = $("#effortPill"); if (b) b.textContent = EFFORTS[effortLevel()].label; }
+function updateEffortPill() {
+  const b = $("#effortPill"); if (!b) return;
+  const label = EFFORTS[effortLevel()].label;
+  let icon = ""; try { icon = svgI("sliders"); } catch {}  // icons are defined further down: the text alone until then
+  b.innerHTML = `${icon}<span class="efl">${label}</span>`; b.title = `Effort : ${label} (plus rapide ↔ plus intelligent)`;
+  if (typeof fitComposer === "function") fitComposer();
+}
 function setEffort(i) {
   i = Math.max(0, Math.min(EFFORTS.length - 1, i));
   Object.assign(S, EFFORTS[i].set); saveSettings(); applySettings(); updateEffortPill();
