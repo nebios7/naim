@@ -1546,6 +1546,18 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 .ctxpop { position: fixed; z-index: 60; width: 340px; max-width: calc(100vw - 16px); background: var(--panel); color: var(--text); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: var(--shadow); padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; font-size: 13px; }
 .ctxpop .cp-row { display: flex; justify-content: space-between; gap: 10px; }
+#effortPill { color: var(--text); font-variant-numeric: tabular-nums; }
+.effpop { width: 330px; }
+.effpop .ef-head { display: flex; align-items: baseline; gap: 10px; font-size: 15px; }
+.effpop .ef-head span { color: var(--muted); } .effpop .ef-head b { font-weight: 500; }
+.effpop .ef-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 12.5px; }
+.effpop .ef-track { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; height: 30px;
+  background: var(--hover); border-radius: 9px; cursor: pointer; touch-action: none; }
+.effpop .ef-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 9px; background: color-mix(in srgb, var(--text) 32%, var(--hover)); pointer-events: none; transition: width .15s; }
+.effpop .ef-track i { justify-self: center; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: .7; pointer-events: none; z-index: 1; }
+.effpop .ef-knob { position: absolute; top: 3px; bottom: 3px; width: 24px; margin-left: -12px; border-radius: 7px; background: var(--text); pointer-events: none; transition: left .15s; z-index: 2; }
+.effpop .ef-rec { color: var(--muted); font-size: 12.5px; min-height: 16px; }
+.effpop .ef-what { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .ctxpop .cp-row span { color: var(--muted); } .ctxpop .cp-row b { font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ctxpop .cp-bar { height: 7px; border-radius: 4px; background: var(--hover); display: flex; overflow: hidden; gap: 2px; }
 .ctxpop .cp-bar i { display: block; height: 100%; border-radius: 3px; }
@@ -1649,6 +1661,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
             <button class="pill" id="permPill" title="Mode d'autorisation de l'agent (⇧⇥ pour passer au suivant)" hidden></button>
             <button class="pill" id="tempPill" title="Température">🌡 0.60</button>
             <div class="spacer"></div>
+            <button class="pill" id="effortPill" title="Effort : plus rapide ou plus intelligent"></button>
             <span class="ctx" id="ctxInfo"></span>
             <button id="send" title="Envoyer">↑</button>
           </div>
@@ -3387,6 +3400,77 @@ function updateCtx() {
   const b = $(".ctxbtn", el); if (b) b.onclick = compactNow; fitComposer();
 }
 // the context panel (click on the gauge): this conversation's window and its token use — local, free, no quota
+// ======================================================================= Effort (like a slider « plus rapide ↔ plus intelligent »)
+// one choice that sets the options going together: reasoning, steps, minimal version, command time
+const EFFORTS = [
+  { id: "bas", label: "Bas", what: "Réponses directes, sans réflexion. 30 étapes au plus.", set: { think: false, minimal_mode: true, max_steps: 30, command_timeout: 120 } },
+  { id: "moyen", label: "Moyen", what: "L'usage de tous les jours : sans réflexion, 50 étapes, commandes jusqu'à 3 min.", set: { think: false, minimal_mode: true, max_steps: 50, command_timeout: 180 } },
+  { id: "eleve", label: "Élevé", what: "Naim réfléchit avant d'agir. 100 étapes, travail complet (pas de version minimale).", set: { think: true, minimal_mode: false, max_steps: 100, command_timeout: 300 } },
+  { id: "tres", label: "Très élevé", what: "Réflexion et tâches longues : 300 étapes, travail complet.", set: { think: true, minimal_mode: false, max_steps: 300, command_timeout: 300 } },
+  { id: "max", label: "Max", what: "Réflexion, sans limite d'étapes, commandes jusqu'à 10 min. Le plus lent.", set: { think: true, minimal_mode: false, max_steps: 310, command_timeout: 600 } },
+];
+const EFFORT_REC = 1;
+function effortLevel() {  // the level the current settings match (or the nearest one: changed by hand in Personnaliser)
+  const exact = EFFORTS.findIndex((e) => Object.entries(e.set).every(([k, v]) => S[k] === v));
+  if (exact >= 0) return exact;
+  const steps = +S.max_steps || 30;
+  return S.think ? (steps >= 310 ? 4 : steps >= 300 ? 3 : 2) : steps <= 30 ? 0 : 1;
+}
+function updateEffortPill() { const b = $("#effortPill"); if (b) b.textContent = EFFORTS[effortLevel()].label; }
+function setEffort(i) {
+  i = Math.max(0, Math.min(EFFORTS.length - 1, i));
+  Object.assign(S, EFFORTS[i].set); saveSettings(); applySettings(); updateEffortPill();
+  return i;
+}
+function effortPanel() {
+  const old = $("#effPop"); if (old) { old.remove(); return; }
+  const pop = document.createElement("div"); pop.id = "effPop"; pop.className = "ctxpop effpop";
+  pop.innerHTML = `<div class="ef-head"><span>Effort</span><b class="ef-name"></b></div>
+    <div class="ef-ends"><span>Plus rapide</span><span>Plus intelligent</span></div>
+    <div class="ef-track" role="slider" tabindex="0" aria-label="Effort" aria-valuemin="0" aria-valuemax="${EFFORTS.length - 1}">
+      <div class="ef-fill"></div>${"<i></i>".repeat(EFFORTS.length)}<div class="ef-knob"></div></div>
+    <div class="ef-rec"></div><div class="ef-what"></div>`;
+  document.body.appendChild(pop);
+  const track = $(".ef-track", pop);
+  const show = (i) => {
+    const pct = (100 * (i + 0.5)) / EFFORTS.length;
+    $(".ef-name", pop).textContent = EFFORTS[i].label;
+    $(".ef-knob", pop).style.left = pct + "%"; $(".ef-fill", pop).style.width = `calc(${pct}% + 12px)`;
+    $(".ef-rec", pop).textContent = i === EFFORT_REC ? "Recommandé" : "";
+    $(".ef-rec", pop).style.paddingLeft = `calc(${pct}% - 30px)`;
+    $(".ef-what", pop).textContent = EFFORTS[i].what;
+    track.setAttribute("aria-valuenow", i); track.setAttribute("aria-valuetext", EFFORTS[i].label);
+  };
+  show(effortLevel());
+  const at = (e) => { const r = track.getBoundingClientRect(); return Math.floor(((e.clientX - r.left) / r.width) * EFFORTS.length); };
+  let drag = false;
+  track.onpointerdown = (e) => { drag = true; track.setPointerCapture(e.pointerId); show(setEffort(at(e))); };
+  track.onpointermove = (e) => { if (drag) { const i = Math.max(0, Math.min(EFFORTS.length - 1, at(e))); if (i !== effortLevel()) show(setEffort(i)); } };
+  track.onpointerup = () => { drag = false; };
+  track.onkeydown = (e) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); show(setEffort(effortLevel() + 1)); }
+    if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); show(setEffort(effortLevel() - 1)); }
+  };
+  // placed above its button whatever the zoom (same way as the context window)
+  let mo;
+  const place = () => {
+    const el = $("#effortPill");
+    if (!el || !pop.isConnected) { removeEventListener("resize", place); mo?.disconnect(); return; }
+    const r = el.getBoundingClientRect(), k = el.offsetWidth ? r.width / el.offsetWidth : 1;
+    const z = parseFloat(document.documentElement.style.zoom) || S.zoom || 1, vw = innerWidth / z;
+    pop.style.left = `${Math.max(8, Math.min(r.right / k - pop.offsetWidth, vw - pop.offsetWidth - 8))}px`;
+    pop.style.top = `${Math.max(8, r.top / k - pop.offsetHeight - 10)}px`;
+  };
+  place(); addEventListener("resize", place);
+  mo = new MutationObserver(() => requestAnimationFrame(place)); mo.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  track.focus();
+  setTimeout(() => document.addEventListener("pointerdown", function off(e) {
+    if (!pop.contains(e.target) && !e.target.closest("#effortPill")) { pop.remove(); place(); document.removeEventListener("pointerdown", off); } }), 0);
+}
+$("#effortPill").onclick = effortPanel;
+updateEffortPill();
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#effPop")?.remove(); });
+
 function ctxPanel() {
   const old = $("#ctxPop"); if (old) { old.remove(); return; }
   const msgs = current?.messages || [];
@@ -5509,6 +5593,7 @@ document.addEventListener("click", (e) => {
   $$("[data-accent]").forEach((x) => x.classList.toggle("on", x === b));
 });
 function applySettings() {
+  try { updateEffortPill(); } catch {}  // (called once before the Effort code is read: then it comes with the first change)
   applyAccent();
   if (S.theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = S.theme;
   document.documentElement.style.zoom = S.zoom || 1; fitViewport();
