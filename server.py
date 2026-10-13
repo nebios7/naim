@@ -135,9 +135,17 @@ def pure_question(text):
     return bool(t) and len(t) < 400 and bool(QUESTION_RE.search(t)) and not ACTION_RE.search(t) and not MAC_ACTION_RE.search(t)
 
 
+# a short « no » / « that's all » answering Naim's own offer (« Tu veux autre chose ? »): nothing to do, never a task
+SHORT_NO_RE = re.compile(r"^\W*(non|nan|nope|no|rien|non rien|rien du tout|non c'est (tout|bon)|c'est tout|c'est bon|"
+                         r"pas (maintenant|pour (l'instant|le moment))|non pas (maintenant|pour (l'instant|le moment))|plus tard|"
+                         r"non (ça|ca) (va|ira)|(ça|ca) (va|ira)|pas besoin|non pas besoin|non (naim|na[iï]m))\W*$", re.I)
+
+
 def trivial_message(text):
-    """Only polite words (a greeting, thanks, « ok super »): no request inside."""
+    """Only polite words (a greeting, thanks, « ok super »), or a short « non » / « c'est tout »: no request inside."""
     t = (text or "").strip().lower()
+    if SHORT_NO_RE.match(t):
+        return True
     if not t or "?" in t or "`" in t or len(t.split()) > 6 or not TRIVIAL_RE.match(t):
         return False
     words = [w for w in re.findall(r"[\w'àâçéèêëîïôûùüÿœ]+", t)]
