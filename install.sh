@@ -102,6 +102,7 @@ cp "$here"/*.py "$here"/*.swift "$here/NAIM.default.md" "$dest/app/"
 [ -f "$here/naim_prompts.json" ] && cp "$here/naim_prompts.json" "$dest/app/"  # owner's checkout; otherwise fetched from Naim's server
 rm -rf "$dest/app/web" && cp -R "$here/web" "$dest/app/web"
 rm -rf "$dest/app/skills_extra" && cp -R "$here/skills_extra" "$dest/app/skills_extra"  # extra files of built-in skills
+rm -rf "$dest/app/plugins_builtin" && cp -R "$here/plugins_builtin" "$dest/app/plugins_builtin"  # plugins shipped with Naim
 mkdir -p "$dest/app/tools/benchmark" && cp "$here/tools/curate_feedback.py" "$dest/app/tools/" && cp "$here/tools/benchmark/bench.py" "$here/tools/benchmark/results.json" "$dest/app/tools/benchmark/"
 # native helper for screen reading, clicks and PDF reading (rebuilt only when its source changes)
 h="$(shasum "$here/naim_input.swift" | cut -c1-16)"

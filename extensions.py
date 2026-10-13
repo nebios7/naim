@@ -246,8 +246,14 @@ class MCPManager:
         except (OSError, ValueError):
             return {}
         servers = raw.get("mcpServers", raw.get("servers", {}))
-        return {k: {**v, "enabled": not v.get("disabled", False) and v.get("enabled", True) is not False}
-                for k, v in servers.items() if isinstance(v, dict)}
+        out = {k: {**v, "enabled": not v.get("disabled", False) and v.get("enabled", True) is not False}
+               for k, v in servers.items() if isinstance(v, dict)}
+        try:  # the MCP servers of the plugins that are on (never written to mcp.json)
+            import plugins
+            out.update({k: {**v, "enabled": True} for k, v in plugins.mcp_servers().items() if k not in out})
+        except Exception:  # noqa: BLE001
+            pass
+        return out
 
     def raw_json(self):
         try:
@@ -259,6 +265,8 @@ class MCPManager:
         HOME.mkdir(parents=True, exist_ok=True)
         clean = {}
         for k, v in servers.items():
+            if v.get("plugin"):  # a plugin's server: it comes with its plugin, not saved here
+                continue
             c = {x: v[x] for x in ("type", "url", "headers", "command", "args", "env", "cwd", "always") if v.get(x) not in (None, "", [], {}, False)}
             if v.get("enabled") is False or v.get("disabled"):
                 c["disabled"] = True
@@ -495,6 +503,11 @@ def skill_dirs(root=None):
     dirs = [("utilisateur", HOME / "skills")]
     if root:
         dirs.append(("projet", Path(root) / ".naim" / "skills"))
+    try:  # the skills of the plugins that are on
+        import plugins
+        dirs += plugins.skill_dirs()
+    except Exception:  # noqa: BLE001 — a broken plugin never stops Naim's own skills
+        pass
     return dirs
 
 
@@ -1008,7 +1021,7 @@ SKILL_TRIGGERS = {
     "mac": r"\b(sms|texto|imessage|envoie[rz]? (un |le |ce )?(message|texto)|appell?e[rz]?|t[ée]l[ée]phone[rz]? (à|a)|facetime|"
            r"agenda|calendrier|rendez-vous|rdv|rappelle-moi|(un |des |mes )rappels?|ajoute (une |la )?note|dans (mes )?notes|"
            r"(augment|mont|baiss|diminu|coup|remet|met|r[èe]gl|monter|baisser)\w* (un peu |encore )?(le |la |du )?(son|volume|luminosit[ée])|\bson (du|de mon|de l'|sur le) (mac|ordi\w*)|\ben muet\b|\bmute\b|luminosit[ée]|"
-           r"mode (sombre|clair|nuit)|th[èe]me (sombre|clair)|airpods|[ée]couteurs|casque (audio|bluetooth)|sortie (audio|son)|verrouill\w* (l'[ée]cran|le mac|mon mac)|([ée]tein[st]|red[ée]marre)\w* (le |mon )?(mac|ordi\w*)|espace (disque|libre)|stockage (du|de mon) mac|m[ée]moire (du|de mon) mac|adresse ip|test de (d[ée]bit|vitesse)|vitesse (de )?(la |ma )?connexion|presse-papiers?|ce que j'ai copi[ée]|app(lication)? raccourcis|lance (le |mon )?raccourci|fond d'[ée]cran|(mets|lance|r[èe]gle|programme)\w* (un |le )?minuteur|minuteur de \d|time machine|[ée]jecte\w*|dans le finder|(cherche|trouve)\w* [^.?!]{0,40}\b(sur|dans) (le |mon )?mac\b|onglets? (de |dans |ouverts? )?(safari|chrome)|safari|whatsapp|itin[ée]raire|comment aller [àa]|ne pas d[ée]ranger|mode concentration|r[ée]glages? syst[èe]me|pr[ée]f[ée]rences syst[èe]me|ajoute (un |ce |le )?contact|fais parler (le )?mac|garde (le mac|l'[ée]cran) allum[ée]|emp[êe]che la veille|"
+           r"mode (sombre|clair|nuit)|th[èe]me (sombre|clair)|airpods|[ée]couteurs|casque (audio|bluetooth)|sortie (audio|son)|verrouill\w* (l'[ée]cran|le mac|mon mac)|([ée]tein[st]|red[ée]marre)\w* (le |mon )?(mac|ordi\w*)|espace (disque|libre)|stockage (du|de mon) mac|m[ée]moire (du|de mon) mac|adresse ip|test de (d[ée]bit|vitesse)|vitesse (de )?(la |ma )?connexion|presse-papiers?|ce que j'ai copi[ée]|app(lication)? raccourcis|lance (le |mon )?raccourci|fond d'[ée]cran|(mets|lance|r[èe]gle|programme)\w* (un |le )?minuteur|minuteur de \d|time machine|[ée]jecte\w*|dans le finder|(cherche|trouve)\w* [^.?!]{0,40}\b(sur|dans) (le |mon )?mac\b|onglets? (de |dans |ouverts? )?(safari|chrome)|safari|whatsapp|itin[ée]raire|comment aller [àa]|ne pas d[ée]ranger|mode concentration|r[ée]glages? syst[èe]me|pr[ée]f[ée]rences syst[èe]me|ajoute (un |ce |le )?contact|fais parler (le )?mac|garde (le mac|l'[ée]cran) allum[ée]|emp[êe]che la veille|(monte|d[ée]monte|montage|d[ée]montage|[ée]jecte)\w* (le |la |du |de la |ma |mon )?(disque|cl[ée]|volume|partition|carte sd)|diskutil|image disque|dmg|"
            r"musique|mets? (de la |la )?musique|volume|wi-?fi|bluetooth|mets? (le mac |l'[ée]cran )?en veille|batterie|notification|imprim\w*)\b",
     # « ci » alone is French (« celle-ci », « ci-dessous »): only the real terms
     "ci-cd": r"\b(ci ?/ ?cd|ci-cd|cicd|int[ée]gration continue|d[ée]ploiement continu|github actions?|gitlab[- ]ci|jenkins|"
@@ -1027,7 +1040,13 @@ def match_skill(task, root=None, disabled=()):
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
     first = ("plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
-    ordered = list(first) + [n for n in SKILL_TRIGGERS if n not in generic and n not in first] + list(generic)
+    triggers = dict(SKILL_TRIGGERS)
+    try:  # words that pick a plugin's skill (« arduino », « cobol »…), checked before the broad generic skills
+        import plugins
+        triggers.update({k: v for k, v in plugins.triggers().items() if k not in SKILL_TRIGGERS})
+    except Exception:  # noqa: BLE001
+        pass
+    ordered = list(first) + [n for n in triggers if n not in generic and n not in first] + list(generic)
     # a phone number, SMS, iMessage, WhatsApp, a call: sending or calling on the Mac, whatever else the message names
     # (« envoie le PDF à 06 52 90 96 62 » is a message to send, not a PDF to make)
     if "mac" in by_name and re.search(r"(?<!\d)(?:0[1-9](?:[\s.-]?\d{2}){4}|\+\d{2}[\s.]?\d(?:[\s.-]?\d{2}){4})(?!\d)|\b(sms|texto|imessage|whatsapp|facetime)\b", text):
@@ -1037,12 +1056,12 @@ def match_skill(task, root=None, disabled=()):
         ordered.remove("mac")
         ordered.insert(min(ordered.index(n) for n in ("controle-ecran", "tests-unitaires") if n in ordered), "mac")
     for name in ordered:
-        if name in by_name and re.search(SKILL_TRIGGERS[name], text):
+        if name in by_name and re.search(triggers[name], text):
             return by_name[name]
     words = {w for w in re.findall(r"[a-zà-ÿ]{5,}", text)}
     best, score = None, 1
     for s in skills:
-        if s["name"] in SKILL_TRIGGERS:
+        if s["name"] in triggers:
             continue
         overlap = len(words & set(re.findall(r"[a-zà-ÿ]{5,}", (s["description"] + " " + s["name"]).lower())))
         if overlap > score:

@@ -1,0 +1,13 @@
+{
+  "name": "algorithmique",
+  "version": "1.0",
+  "description": "Pseudo-code aux conventions françaises (Algorithme, Si … FinSi, Pour … FinPour), tableaux de trace, passage en Python.",
+  "skills": "skills",
+  "triggers": {
+    "pseudo-code": "\\b(pseudo[- ]?code|algorithme|algorithmique|organigramme|tableau de trace|finsi|finpour|fintantque|structogramme|lexique des variables)\\b"
+  },
+  "commands": [
+    {"cmd": "/algo", "arg": "<le problème>", "description": "Écrire l'algorithme en pseudo-code, avec sa trace",
+     "prompt": "Écris l'algorithme de ce problème en pseudo-code (skill pseudo-code), puis son tableau de trace sur un petit exemple, puis la version Python :"}
+  ]
+}

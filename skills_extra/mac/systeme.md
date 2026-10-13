@@ -48,6 +48,16 @@ Tu ouvres la page ; c'est l'utilisateur qui change les autorisations de sécurit
 - Time Machine : `tmutil latestbackup` (« Failed to mount » = disque de sauvegarde absent) · lancer : `tmutil startbackup`
 - Disques externes : `diskutil list external` · éjecter : `diskutil eject "/Volumes/Nom"`
 
+## Disques, clés USB, partitions, images disque
+- Tout voir : `diskutil list` · les disques branchés : `diskutil list external physical` · un volume : `diskutil info disk4s1`
+- Monter une partition : `diskutil mount disk4s1` · tout un disque : `diskutil mountDisk disk4`
+- Démonter (sans éjecter) : `diskutil unmount "/Volumes/Nom"` · tout le disque : `diskutil unmountDisk disk4`
+- Éjecter avant de débrancher : `diskutil eject disk4` (« busy » : une application l'utilise, `lsof +D "/Volumes/Nom" | head`)
+- Image disque : `hdiutil attach "fichier.dmg"` (ou .iso) · la retirer : `hdiutil detach "/Volumes/Nom"`
+- Espace d'un volume : `df -h "/Volumes/Nom"`
+Démonter et éjecter : confirmation de l'utilisateur. Formater, effacer, partitionner : JAMAIS (Naim les bloque) ;
+l'utilisateur le fait lui-même dans Utilitaire de disque.
+
 ## Fichiers
 - Chercher partout : `mdfind -name "mot" 2>/dev/null | head -20` · par contenu : `mdfind "phrase exacte" 2>/dev/null | head -20`
 - Montrer dans le Finder : `open -R "chemin"` · ouvrir un dossier : `open ~/Documents`

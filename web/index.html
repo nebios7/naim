@@ -1822,6 +1822,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
           <button data-s="models">Modèles installés</button>
           <button data-s="keys">Raccourcis</button>
           <button data-s="about">À propos</button>
+          <button data-s="plugins">Plugins</button>
           <button data-s="libs">Bibliothèques</button>
           <button data-s="owner" id="ownerTab" hidden title="Visible seulement sur ce Mac">Admin</button>
           </div>
@@ -4874,6 +4875,11 @@ const TABS = {
     ["⇧⌘C", "Copier la dernière réponse"], ["⇧⌘A", "Basculer Chat / Agent"], ["⇧⌘R", "Activer / désactiver le raisonnement"],
     ["⌘/", "Raccourcis clavier"], ["Échap", "Arrêter la réponse / fermer"], ["/", "Commandes : " + SLASH.map(([c]) => c).join(" ")], ["Entrée", "Envoyer (réglable)"], ["↑ ↓", "Historique du terminal"],
   ].map(([k, l]) => `<tr><td>${l}</td><td><kbd>${k}</kbd></td></tr>`).join("")}</table></div>`,
+  plugins: () => `<h2>Plugins</h2>
+    <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Un plugin apporte d'un coup des skills, des serveurs MCP, des commandes <b>/</b> et la liste des outils dont ils ont besoin (Arduino, COBOL…). <b>Activé</b> : Naim s'en sert quand ta demande en a besoin. <b>Désactivé</b> : il est gardé mais ignoré.</p>
+    <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter un plugin</b><small>Le lien GitHub d'un plugin (un dépôt avec un plugin.json), ou le chemin d'un dossier sur ce Mac. Rien n'est exécuté à l'ajout.</small></div>
+      <div style="display:flex;gap:8px"><input class="field mono" id="plgSrc" placeholder="https://github.com/owner/plugin  ou  ~/Documents/mon-plugin" style="flex:1"><button class="btn primary" id="plgAdd">Ajouter</button></div></div></div>
+    <div id="plgList" class="agrid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))"><div class="srow"><div class="sl">Chargement…</div></div></div>`,
   libs: () => `<h2>Bibliothèques</h2>
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Les bibliothèques extérieures que Naim peut utiliser quand il crée un site ou une application web (animations, défilement, composants, 3D, graphiques…). <b>Activée</b> : Naim la connaît, sait l'installer et s'en sert quand elle sert ta demande.</p>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter depuis un lien</b><small>Colle le lien GitHub d'une bibliothèque : Naim lit son README (sans rien exécuter) et en tire la commande d'installation, le lien CDN et un exemple.</small></div>
@@ -4920,6 +4926,7 @@ function showSettingsTab(t) {
   if (t === "memory") loadMemory();
   if (t === "learning") loadLearning();
   if (t === "libs") loadLibs();
+  if (t === "plugins") loadPlugins();
   if (t === "owner") { loadAutoTrain(); loadVoiceTrain(); loadOwner(); }
   if (t === "about") api("/api/model/version").then((v) => { const e = $("#modelVer"); if (e) e.textContent = v.name || "v2"; const d = $("#modelVerDetail"); if (d && v.detail) d.textContent = " · " + v.detail; }).catch(() => {});
   if (t === "instr") api("/api/naim-home").then((h) => { $("#globalMd").value = h.instructions || ""; $("#globalMdSave").onclick = async () => { await api("/api/global-instructions", { method: "PUT", body: { content: $("#globalMd").value } }); toast("NAIM.md enregistré"); }; });
@@ -5145,6 +5152,63 @@ async function loadEngine() {
   $("#llamaStop").onclick = async () => { await api("/api/llama/stop", { method: "POST", body: {} }); toast("Moteur arrêté"); loadEngine(); };
 }
 // « Bibliothèques »: the external web libraries Naim may use (catalogue + added by GitHub link)
+async function loadPlugins() {
+  const box = $("#plgList"); if (!box) return;
+  const { plugins } = await api("/api/plugins").catch(() => ({ plugins: [] }));
+  box.innerHTML = plugins.length ? "" : `<div class="srow"><div class="sl"><small>Aucun plugin pour l'instant.</small></div></div>`;
+  plugins.forEach((p) => {
+    const missing = p.tools.filter((t) => !t.ok);
+    const c = document.createElement("div"); c.className = "acard libcard";
+    const chips = (label, items) => items.length ? `<small style="color:var(--muted)"><b style="font-weight:500;color:var(--text)">${label}</b> ${items.map(esc).join(" · ")}</small>` : "";
+    c.innerHTML = `<div style="padding:12px;display:flex;flex-direction:column;gap:7px;flex:1">
+      <div style="display:flex;align-items:center;gap:8px"><b style="flex:1"><span class="attic">${svgI("layers")}</span>${esc(p.name)}</b>${p.version ? `<span class="lang">v${esc(p.version)}</span>` : ""}
+        <label class="switch" title="Naim peut s'en servir"><input type="checkbox" ${p.enabled ? "checked" : ""}><span></span></label></div>
+      <small style="color:var(--muted)">${esc(p.description)}</small>
+      ${chips("Skills", p.skills)}${chips("MCP", p.mcp)}${chips("Commandes", p.commands.map((x) => x.cmd))}${chips("Hooks", p.hooks || [])}
+      ${p.tools.length ? `<small style="color:var(--muted)"><b style="font-weight:500;color:var(--text)">Outils</b> ${p.tools.map((t) => `<span title="${esc(t.why || "")}" style="color:${t.ok ? "var(--ok, #5cb85c)" : "var(--warn, #e0a43c)"}">${t.ok ? "✓" : "✗"} ${esc(t.cmd)}</span>`).join(" · ")}</small>` : ""}
+      <div style="display:flex;gap:6px;align-items:center;margin-top:auto"><div class="spacer"></div>
+        ${missing.length ? `<button class="btn primary" data-tools>Installer les outils (${missing.length})</button>` : ""}
+        <button class="btn" data-open>Ouvrir</button><button class="btn danger" data-rm>Retirer</button></div></div>`;
+    $("input", c).onchange = async (e) => { await api("/api/plugins/toggle", { method: "POST", body: { name: p.name, on: e.target.checked } }); toast(`${p.name} ${e.target.checked ? "activé" : "désactivé"}`); loadPluginCommands(); };
+    $("[data-open]", c).onclick = () => api("/api/reveal", { method: "POST", body: { path: p.path } });
+    $("[data-rm]", c).onclick = async () => {
+      if (!confirm(`Retirer le plugin « ${p.name} » ?\n\nIl va à la Corbeille (on peut le remettre). Ses outils installés restent sur le Mac.`)) return;
+      const r = await api("/api/plugins/remove", { method: "POST", body: { name: p.name } }); toast(r.error || `${p.name} est dans la Corbeille`); loadPlugins(); loadPluginCommands();
+    };
+    $("[data-tools]", c) && ($("[data-tools]", c).onclick = async (e) => {
+      const list = missing.map((t) => `· ${t.brew || t.cmd}${t.why ? " — " + t.why : ""}`).join("\n");
+      if (!confirm(`Installer avec Homebrew :\n${list}\n\nCela peut prendre quelques minutes.`)) return;
+      e.target.disabled = true; e.target.textContent = "Installation…";
+      const r = await api("/api/plugins/tools", { method: "POST", body: { name: p.name } }).catch((x) => ({ error: x.message }));
+      toast(r.error || (r.ok ? `Outils installés : ${r.installed.join(", ") || "rien à faire"}` : "L'installation a échoué (détails dans la console)"));
+      if (r.log && !r.ok) console.warn(r.log);
+      loadPlugins();
+    });
+    box.appendChild(c);
+  });
+  const add = async () => {
+    const source = $("#plgSrc").value.trim(); if (!source) return;
+    $("#plgAdd").disabled = true; $("#plgAdd").textContent = "Ajout…";
+    const r = await api("/api/plugins/add", { method: "POST", body: { source } }).catch((e) => ({ error: e.message }));
+    $("#plgAdd").disabled = false; $("#plgAdd").textContent = "Ajouter";
+    if (r.error) return toast(r.error);
+    $("#plgSrc").value = ""; toast(`Plugin « ${r.plugin.name} » ajouté et activé`); loadPlugins(); loadPluginCommands();
+  };
+  $("#plgAdd").onclick = add;
+  $("#plgSrc").onkeydown = (e) => { if (e.key === "Enter") add(); };
+}
+// the « / » commands brought by the plugins that are on: each sends its prompt (plus what follows the command)
+async function loadPluginCommands() {
+  const { commands } = await api("/api/plugins").catch(() => ({ commands: [] }));
+  for (let i = SLASH.length - 1; i >= 0; i--) if (SLASH[i].plugin) SLASH.splice(i, 1);
+  for (const c of commands || []) {
+    if (SLASH.some((x) => x[0] === c.cmd)) continue;
+    const entry = [c.cmd, c.arg || "", `${c.description || ""} (plugin ${c.plugin})`, (a) => { if (c.mode === "agent") setMode("agent"); send(c.prompt + (a ? "\n\n" + a : "")); }];
+    entry.plugin = c.plugin; SLASH.push(entry);
+  }
+}
+setTimeout(() => loadPluginCommands(), 1500);
+
 async function loadLibs() {
   const box = $("#libList"); if (!box) return;
   const { libs } = await api("/api/libs");

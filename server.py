@@ -548,6 +548,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({**p.info(), "output": p.tail(400)})
         elif path == "/api/mcp":
             self.send_json({"servers": ext.MCP.status(), "path": str(ext.MCP.path), "json": ext.MCP.raw_json()})
+        elif path == "/api/plugins":
+            import plugins
+            self.send_json({"plugins": plugins.all_plugins(), "commands": plugins.commands()})
         elif path == "/api/libs":
             import libs
             self.send_json({"libs": libs.listing()})
@@ -1168,6 +1171,23 @@ class Handler(BaseHTTPRequestHandler):
                 return
             threading.Thread(target=scheduler.run_task, args=(task, _settings(), ollama_chat, Agent, CHAT_PROMPT), daemon=True).start()
             self.send_json({"ok": True})
+        elif path in ("/api/plugins/toggle", "/api/plugins/tools", "/api/plugins/add", "/api/plugins/remove"):
+            import plugins
+            b = self.read_json()
+            try:
+                if path.endswith("toggle"):
+                    plugins.set_enabled(b.get("name", ""), bool(b.get("on")))
+                    self.send_json({"ok": True})
+                elif path.endswith("tools"):
+                    self.send_json(plugins.install_tools(b.get("name", "")))
+                elif path.endswith("add"):
+                    self.send_json({"plugin": plugins.add(b.get("source", ""))})
+                else:
+                    self.send_json(plugins.remove(b.get("name", "")))
+            except plugins.PluginError as e:
+                self.send_json({"error": str(e)}, 400)
+            except Exception as e:  # noqa: BLE001
+                self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
         elif path in ("/api/libs/add", "/api/libs/toggle", "/api/libs/remove"):
             import libs
             b = self.read_json()

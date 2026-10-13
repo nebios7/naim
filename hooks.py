@@ -41,11 +41,18 @@ def files(root):
 def load(root):
     """{event: [{matcher, command, timeout, source}]} from the user's and the project's hooks files."""
     out = {}
+    sources = []
     for f in files(root):
         try:
-            data = json.loads(f.read_text())
+            sources.append((str(f), json.loads(f.read_text())))
         except (OSError, ValueError):
             continue
+    try:  # the hooks of the plugins that are on
+        import plugins
+        sources += plugins.hook_sets()
+    except Exception:  # noqa: BLE001 — a broken plugin never stops the user's own hooks
+        pass
+    for f, data in sources:
         for event, groups in (data.get("hooks") or {}).items():
             if event not in EVENTS or not isinstance(groups, list):
                 continue

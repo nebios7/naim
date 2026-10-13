@@ -1,0 +1,19 @@
+{
+  "name": "electronique",
+  "version": "1.0",
+  "description": "Arduino (écrire, compiler, téléverser sur la carte en USB, lire le moniteur série) et Raspberry Pi (SSH, GPIO, services au démarrage).",
+  "skills": "skills",
+  "triggers": {
+    "arduino": "\\b(arduino|esp32|esp8266|\\.ino\\b|t[ée]l[ée]vers\\w*|moniteur s[ée]rie|microcontr[ôo]leur|uno r[34]|nano every|capteur dht|servomoteur|breadboard)\\b",
+    "raspberry-pi": "\\b(raspberry|raspi|rpi\\b|pi [345]\\b|pi zero|gpio|gpiozero|raspberrypi\\.local|raspbian|pi os)\\b"
+  },
+  "commands": [
+    {"cmd": "/cartes", "description": "Voir les cartes Arduino branchées en USB", "mode": "agent",
+     "prompt": "Liste les cartes Arduino branchées sur ce Mac (skill arduino : arduino-cli board list) et dis-moi leur port et leur modèle."},
+    {"cmd": "/televerser", "arg": "<dossier du croquis>", "description": "Compiler et envoyer un croquis sur la carte", "mode": "agent",
+     "prompt": "Compile puis téléverse le croquis Arduino sur la carte branchée (skill arduino). Vérifie d'abord le port et le modèle de la carte. Montre-moi le résultat du moniteur série."}
+  ],
+  "tools": [
+    {"cmd": "arduino-cli", "brew": "arduino-cli", "why": "compiler et téléverser les croquis Arduino"}
+  ]
+}

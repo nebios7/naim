@@ -1,0 +1,26 @@
+{
+  "name": "mainframe",
+  "version": "1.0",
+  "description": "COBOL (compilé et testé sur le Mac avec GnuCOBOL), JCL, DB2, REXX (exécuté avec Regina), PL/I. Vérifie chaque fichier COBOL écrit.",
+  "skills": "skills",
+  "triggers": {
+    "cobol": "\\b(cobol|gnucobol|cobc|\\.cbl\\b|\\.cob\\b|\\.cpy\\b|copybook|working-storage|procedure division|picture clause)\\b",
+    "jcl": "\\b(jcl|\\.jcl\\b|//\\w+ +job\\b|exec pgm|dd dsn|iefbr14|sort fields|idcams|iebgener|sysout|jes2?)\\b",
+    "db2": "\\b(db2|spufi|dsntep2|exec sql|sqlcode|bind plan|dclgen)\\b",
+    "rexx": "\\b(rexx|\\.rex\\b|regina|ispf edit macro|address tso)\\b",
+    "pli": "\\b(pl/?i|pl1|\\.pli\\b|dcl \\w+ (fixed|char)|procedure options ?\\(main\\))\\b"
+  },
+  "commands": [
+    {"cmd": "/cobol", "arg": "<fichier.cbl>", "description": "Compiler et exécuter un programme COBOL", "mode": "agent",
+     "prompt": "Compile ce programme COBOL avec GnuCOBOL puis exécute-le (skill cobol). Corrige les erreurs de compilation et montre-moi le résultat."}
+  ],
+  "tools": [
+    {"cmd": "cobc", "brew": "gnucobol", "why": "compiler et exécuter le COBOL sur le Mac"},
+    {"cmd": "rexx", "brew": "regina-rexx", "why": "exécuter les scripts REXX sur le Mac"}
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {"matcher": "write_file|edit_file|multi_edit", "hooks": [{"type": "command", "command": "bash \"${PLUGIN_DIR}/verifier-cobol.sh\"", "timeout": 60}]}
+    ]
+  }
+}
