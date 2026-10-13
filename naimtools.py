@@ -123,6 +123,16 @@ USE_MCP_TOOL = {"type": "function", "function": {"name": "use_mcp", "description
 
 
 # the user's past conversations with Naim (like « souviens-toi, on l'a déjà fait »): search them, then read one
+MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
+    "Find the USER'S OWN files anywhere on their Mac (Bureau, Documents, Téléchargements, iCloud…), like the Finder: "
+    "by words in the file NAME and in the CONTENT of documents (PDF, Word, Pages…). Use it whenever the user asks where "
+    "a file of theirs is (« ma convention de stage », « mon CV », « la facture EDF », « le contrat »), before saying "
+    "it does not exist. Programs' code (venv, node_modules, libraries) is left out. Newest first."),
+    "parameters": {"type": "object", "properties": {
+        "requete": {"type": "string", "description": "the words of the file, e.g. « convention de stage », « facture EDF 2025 »"},
+        "type": {"type": "string", "description": "optional: pdf, word, image, tableur, presentation, texte"}},
+        "required": ["requete"]}}}
+
 CONVERSATIONS_TOOL = {"type": "function", "function": {"name": "chercher_conversations", "description": (
     "Search the user's PAST conversations with you (when they say « souviens-toi », « la dernière fois », « on en a "
     "déjà parlé », or ask about something done before). 1) chercher_conversations(requete) → matching conversations "
@@ -196,7 +206,7 @@ TOOL_GROUPS = {
     "api": (("http_request",), "envoyer des requêtes HTTP pour tester une API", r"\bapi\b|endpoint|requ[eê]te|\bpost\b|\bcurl\b|rest\b|json"),
 }
 
-READ_ONLY = {"look_at", "list_files", "find_files", "find_symbol", "find_references", "check_code", "read_file", "search", "process_output", "list_processes", "web_search", "web_fetch", "use_skill", "update_todos",
+READ_ONLY = {"look_at", "list_files", "find_files", "chercher_sur_mac", "find_symbol", "find_references", "check_code", "read_file", "search", "process_output", "list_processes", "web_search", "web_fetch", "use_skill", "update_todos",
              "mail_inbox"}
 
 PORT_RE = re.compile(r"\b(?:port|listening on|écoute sur)\s*[:=]?\s*(\d{4,5})\b", re.I)
@@ -553,6 +563,7 @@ class Agent:
         if not self.subagent and not self.scheduled:
             tools.append(SCHEDULE_TOOL)
             tools.append(CONVERSATIONS_TOOL)
+            tools.append(MAC_SEARCH_TOOL)
             if self.external.get("on"):
                 tools.append(EXTERNAL_TOOL)
         if self.features["simulator"] and not self.subagent:
@@ -970,6 +981,69 @@ class Agent:
             except OSError:
                 pass
         return [x for _, x in sorted(files, reverse=True)[:limit]]
+
+    MAC_SEARCH_STOP = set("""de du des la le les l d un une mon ma mes ton ta tes son sa ses mon notre votre leur et ou en
+        au aux pour par sur dans avec fichier fichiers document documents dossier mac the of a""".split())
+    MAC_SEARCH_TYPES = {"pdf": {".pdf"}, "word": {".doc", ".docx", ".pages", ".odt", ".rtf"},
+                        "image": {".jpg", ".jpeg", ".png", ".heic", ".gif", ".webp", ".tiff"},
+                        "tableur": {".xls", ".xlsx", ".numbers", ".csv", ".ods"},
+                        "presentation": {".ppt", ".pptx", ".key", ".odp"}, "texte": {".txt", ".md"}}
+    MAC_SEARCH_JUNK = re.compile(r"/(?:Library|\.[^/]+|node_modules|site-packages|dist-packages|__pycache__|[^/]*venv[^/]*|"
+                                 r"[^/]+\.app|[^/]+\.framework|DerivedData|Caches?|build|dist|_skbuild|\.Trash)/", re.I)
+
+    def chercher_sur_mac(self, requete, type=None):
+        """The user's own files anywhere in their home folder: name and content (Spotlight), documents first."""
+        import unicodedata
+        words = [w for w in re.findall(r"[\w'-]+", str(requete or "").lower()) if len(w) > 1 and w not in self.MAC_SEARCH_STOP]
+        if not words:
+            return "error: give the words of the file (e.g. « convention de stage »)"
+        plain = lambda s: unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode().lower()  # noqa: E731
+        exts = self.MAC_SEARCH_TYPES.get(plain(type or "").strip())
+        doc_exts = set().union(*self.MAC_SEARCH_TYPES.values())
+
+        def spot(query):
+            try:
+                r = subprocess.run(["mdfind", "-onlyin", str(Path.home()), query], capture_output=True, text=True, timeout=20)
+                return r.stdout.splitlines()
+            except (OSError, subprocess.TimeoutExpired):
+                return []
+        q = lambda attr, w: f'{attr} == "*{w}*"cdw'  # noqa: E731  (any case, any accent, inside a word)
+        found = {}
+        # 1. every word in the name · 2. every word in the content · 3. the longest word in the name
+        long_words = [w for w in words if len(w) >= 4]  # « cv » in the text of every document: slow and useless
+        for rank, query in ((0, " && ".join(q("kMDItemFSName", w) for w in words)),
+                            (1, " && ".join(q("kMDItemTextContent", w) for w in long_words) if long_words else ""),
+                            (2, q("kMDItemFSName", max(words, key=len)))):
+            for line in spot(query) if query else []:
+                if line not in found:
+                    found[line] = rank
+        hits = []
+        for line, rank in found.items():
+            f = Path(line)
+            if self.MAC_SEARCH_JUNK.search(line.replace(str(Path.home()), "", 1) + "/") or not f.is_file():
+                continue
+            ext = f.suffix.lower()
+            if exts and ext not in exts:
+                continue
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            # the words found in its name, the long (precise) ones weighing more: « Convention.pdf » before « Lettre_Stage »
+            in_name = sum(len(w) for w in words if plain(w) in plain(f.name))
+            hits.append(((rank == 0 and 0 or 1, -in_name, rank, 0 if ext in doc_exts else 1, -st.st_mtime), f, st, rank))
+        if not hits:
+            return (f"(rien trouvé sur le Mac pour « {requete} » : ni dans les noms ni dans le contenu des documents. "
+                    "Essaie d'autres mots, ou demande à l'utilisateur comment le fichier s'appelle.)")
+        hits.sort(key=lambda h: h[0])
+        size = lambda n: f"{n / 1048576:.1f} Mo" if n >= 1048576 else f"{max(1, n // 1024)} Ko"  # noqa: E731
+        why = {0: "nom", 1: "contenu", 2: "nom (en partie)"}
+        out = [f"{str(f).replace(str(Path.home()), '~', 1)} · {size(st.st_size)} · {time.strftime('%d/%m/%Y', time.localtime(st.st_mtime))} · {why[r]}"
+               for _, f, st, r in hits[:25]]
+        more = f"\n… et {len(hits) - 25} autres" if len(hits) > 25 else ""
+        return (f"{len(hits)} fichier(s) pour « {requete} » (le plus pertinent d'abord ; « nom » = les mots sont dans le nom, "
+                "« contenu » = dans le texte du document). Montre-les à l'utilisateur avec leur chemin ; s'il y en a plusieurs, "
+                "demande lequel avant d'agir dessus.\n" + "\n".join(out) + more)
 
     def multi_edit(self, path, edits):
         p = self.resolve(path)
@@ -2274,6 +2348,7 @@ class Agent:
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
               "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
+              "chercher_sur_mac": self.chercher_sur_mac,
               "confier_tache": self.confier_tache,
               "wait": self.wait}.get(name)
         rule = self._rule_for(name, args) if self.rules else None
@@ -2967,7 +3042,7 @@ TOOL_LABELS = {"write_file": "Écrire", "edit_file": "Modifier", "multi_edit": "
                "list_files": "Lister", "find_files": "Chercher", "search": "Rechercher", "run_command": "Commande",
                "start_process": "Lancer", "web_search": "Recherche web", "web_fetch": "Lire la page", "browser": "Navigateur",
                "delete_file": "Supprimer", "look_at": "Regarder", "computer": "Écran", "delegate": "Sous-agent",
-               "confier_tache": "Confier", "chercher_conversations": "Souvenirs", "use_skill": "Skill", "use_mcp": "MCP",
+               "confier_tache": "Confier", "chercher_conversations": "Souvenirs", "chercher_sur_mac": "Chercher sur le Mac", "use_skill": "Skill", "use_mcp": "MCP",
                "send_email": "E-mail", "planifier": "Planifier", "update_todos": "Tâches"}
 MAIN_ARG = ("path", "command", "query", "url", "requete", "pattern", "name", "server", "tache", "dossier")
 

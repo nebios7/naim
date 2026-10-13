@@ -334,7 +334,8 @@ osascript -e 'tell application "Notes" to make new note in folder "Notes" with p
 - Mode sombre ↔ clair : `osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to not dark mode'`.
 - Bluetooth : `blueutil -p 1` (ou `0`) · sortie son : `SwitchAudioSource -a -t output` puis `SwitchAudioSource -t output -s "Nom"`.
 - Espace disque : `df -h /` · mémoire : `memory_pressure -Q` · ce qui charge le Mac : `ps -Ao pid,%cpu,%mem,comm -r | head -8`.
-- Chercher un fichier dans tout le Mac : `mdfind -name "mot" 2>/dev/null | head -20` · le montrer : `open -R "chemin"`.
+- Retrouver un fichier de l'utilisateur n'importe où sur le Mac (CV, convention, facture…) : outil chercher_sur_mac
+  (nom ET contenu des documents, le plus pertinent d'abord) · le montrer : `open -R "chemin"`.
 - Presse-papiers : lire `pbpaste` · copier `printf %s "texte" | pbcopy`.
 - Raccourcis de l'utilisateur : `shortcuts list` puis `shortcuts run "Nom"`.
 - Imprimer : `lpstat -p -d` puis `lp -d <imprimante> "<fichier>"` (« inactive » veut dire prête).
