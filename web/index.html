@@ -2671,8 +2671,7 @@ function talkSend() {
     // make it start its answer over again and again
     $("#input").value = ""; setTimeout(talkListen, 300); return;
   }
-  if (pendingApproval && /^\s*(oui|ok|d'accord|vas[- ]y|autorise|go|c'est bon|bien sûr|ouais)\b/i.test(said)) { $("#input").value = ""; pendingApproval(true); setTimeout(talkListen, 300); return; }
-  if (pendingApproval && /^\s*(non|refuse|annule|pas question|surtout pas)\b/i.test(said)) { $("#input").value = ""; pendingApproval(false); setTimeout(talkListen, 300); return; }
+  if (approvalAnswer(said)) { setTimeout(talkListen, 300); return; }
   stopDictation(true); window.webkit?.messageHandlers?.naimDictation?.postMessage({ action: "stop" }); dictation.rec?.stop();
   const working = !!curRun();
   if (working && S.mode !== "agent" && $("#input").value.trim()) {  // Chat: you take the floor, like in a real conversation:
@@ -2783,6 +2782,19 @@ function errPlain(res) {
   return "Cette étape n'a pas marché.";
 }
 let pendingApproval = null;
+// an answer to « Je peux ? », said or typed: anywhere in a short sentence (« euh oui », « Naïm, autorisé », « oui vas-y »)
+const APPROVE_ALL_RE = /\b(autorise[rz]? tout|tout autoris\w*|autorise[rz]? toujours|plus besoin de demander|ne me demande plus)\b/i;
+const APPROVE_YES_RE = /\b(oui|ouais|ok|okay|d'accord|vas[- ]y|go|c'est bon|bien s[uû]r|autoris\w*|accept\w*|valid\w*|confirm\w*|fais[- ]le|envoie[- ]le|carr[ée]ment|yes)\b/i;
+const APPROVE_NO_RE = /\b(non|refus\w*|annul\w*|pas question|surtout pas|n'autorise pas|ne fais pas|laisse tomber|no)\b/i;
+function approvalAnswer(said) {  // true when the words answered the pending approval
+  const t = String(said || "").trim();
+  if (!pendingApproval || !t || t.split(/\s+/).length > 8) return false;
+  const all = APPROVE_ALL_RE.test(t), no = !all && APPROVE_NO_RE.test(t), yes = all || (!no && APPROVE_YES_RE.test(t));
+  if (!yes && !no) return false;
+  const answer = pendingApproval; voiceStop(); answer(yes, all);
+  $("#input").value = ""; autoGrow?.(); updateSendBtn?.();
+  return true;
+}
 // an action asked for approval, said in plain French (the command itself stays under « Détails »)
 function approvalPlain(action, detail) {
   const cmd = String(detail || "").replace(/^\$\s*/, "").split("\n")[0];
@@ -3241,8 +3253,9 @@ function addBot(m, idx) {
         await api("/api/approve", { method: "POST", body: { id: ev.id, allow } });
       };
       yes.onclick = () => answer(true); no.onclick = () => answer(false); all.onclick = () => answer(true, true);
-      pendingApproval = (allow) => { pendingApproval = null; answer(allow); };
-      if (talk.on) voiceSay(`J'ai besoin de ton accord : ${String(ev.action).replace(/^⚠\s*/, "")}. Tu dis oui ou non ?`);
+      pendingApproval = (allow, always) => { pendingApproval = null; answer(allow, always && !String(ev.action).startsWith("⚠")); };
+      // the question said without « oui » or « non »: those words would be taken for its own voice (echo) when you answer
+      if (talk.on) voiceSay(`Je dois te demander : ${String(ev.action).replace(/^⚠\s*/, "")}. Je peux ?`);
       block(a); scrollDown(true);
       if (document.hidden || !document.hasFocus()) notify("Naim attend ton autorisation", ev.action);
     },
@@ -3410,6 +3423,7 @@ async function send(textArg, attsArg, opts = {}) {
   const text = (textArg ?? $("#input").value).trim();
   const atts = attsArg ?? pending;
   if (textArg === undefined && text.startsWith("/") && runSlash(text)) return;
+  if (textArg === undefined && approvalAnswer(text)) return;
   const live = curRun();
   if (live && text && textArg === undefined) {  // Naim is working: guide it without stopping it
     $("#input").value = ""; autoGrow(); updateSendBtn();
