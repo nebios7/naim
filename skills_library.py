@@ -278,6 +278,10 @@ se couper), envoyer, appeler. Jamais : vider la Corbeille, effacer un disque, `r
 osascript -e 'tell application "Messages" to send "TEXTE" to participant "+33612345678"'
 ```
 - Un guillemet dans le texte : remplace-le par ’ (apostrophe typographique). Pas de retour à la ligne dans le texte.
+- Envoyer un FICHIER (PDF, photo, document) : le fichier EXISTANT que l'utilisateur a désigné, avec son chemin complet
+  (trouvé par find_files ou donné par lui) ; n'en crée jamais un nouveau :
+  `osascript -e 'tell application "Messages" to send (POSIX file "/Users/…/CV.pdf") to participant "+33612345678"'`
+  Un texte avec : envoie d'abord le texte, puis le fichier (deux commandes).
 - iMessage si la personne en a, sinon SMS via l'iPhone (le Mac le choisit seul).
 
 ## Appel téléphonique / FaceTime

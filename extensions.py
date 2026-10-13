@@ -1028,6 +1028,10 @@ def match_skill(task, root=None, disabled=()):
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
     first = ("plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     ordered = list(first) + [n for n in SKILL_TRIGGERS if n not in generic and n not in first] + list(generic)
+    # a phone number, SMS, iMessage, WhatsApp, a call: sending or calling on the Mac, whatever else the message names
+    # (« envoie le PDF à 06 52 90 96 62 » is a message to send, not a PDF to make)
+    if "mac" in by_name and re.search(r"(?<!\d)(?:0[1-9](?:[\s.-]?\d{2}){4}|\+\d{2}[\s.]?\d(?:[\s.-]?\d{2}){4})(?!\d)|\b(sms|texto|imessage|whatsapp|facetime)\b", text):
+        return by_name["mac"]
     # the Mac's own words (« verrouille l'écran », « test de débit ») before the screen and the tests skills
     if "mac" in ordered:
         ordered.remove("mac")

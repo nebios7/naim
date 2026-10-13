@@ -30,7 +30,10 @@ FILE_TOOL = {"type": "function", "function": {
         "HTML page, Markdown, text, JSON, code in any language… NEVER write Python or shell code to make the file: call "
         "this tool. The extension of `nom` decides the format. For .pdf/.docx/.odt/.rtf/.html give `contenu` in Markdown "
         "(titles #, lists, **bold**, tables) or HTML; for .png give HTML or SVG; for .xlsx give CSV; for .zip give "
-        "`fichiers` (each {nom, contenu}). Write the COMPLETE content, never a summary or a placeholder."),
+        "`fichiers` (each {nom, contenu}). Write the COMPLETE content, never a summary or a placeholder. "
+        "NEVER use it to send, share, print or open a file that ALREADY exists (« envoie mon CV », « celui-là », a file "
+        "found by find_files): use that existing file with its full path (SMS: skill mac; email: send_email). Making a "
+        "new version of the user's CV, letter or document they did not ask to rewrite is a serious mistake."),
     "parameters": {"type": "object", "properties": {
         "nom": {"type": "string", "description": "File name with its extension, e.g. rapport.pdf, cv.docx, ventes.xlsx, projet.zip"},
         "contenu": {"type": "string", "description": "Complete content (Markdown/HTML for documents, CSV for .xlsx, text or code otherwise)"},
