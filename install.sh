@@ -56,6 +56,18 @@ else
   warn "llama.cpp absent : Naim utilisera Ollama s'il est installé (brew install llama.cpp pour le moteur rapide)."
 fi
 command -v xcodegen >/dev/null || [ -z "$brew_bin" ] || warn "xcodegen absent : utile pour les apps iOS (brew install xcodegen)."
+# small tools Naim uses: fast search (ripgrep, fd), Bluetooth and sound output (skill mac)
+missing=""
+for t in rg:ripgrep fd:fd blueutil:blueutil SwitchAudioSource:switchaudio-osx; do
+  command -v "${t%%:*}" >/dev/null || missing="$missing ${t##*:}"
+done
+if [ -z "$missing" ]; then
+  ok "outils de recherche rapide, Bluetooth et sortie son"
+elif [ -n "$brew_bin" ] && ask "Installer les petits outils de Naim ($missing ) avec Homebrew ?"; then
+  brew install $missing && ok "outils installés :$missing"
+else
+  warn "outils absents :$missing (Naim reste utilisable, la recherche est plus lente)"
+fi
 
 # ------------------------------------------------------------------ model
 say "Modèle"

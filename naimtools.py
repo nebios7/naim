@@ -909,6 +909,23 @@ class Agent:
 
     # ------------------------------------------------------------------ precise tools (find, multi-edit, move, delete,
     # HTTP, notebooks): what a good coding agent uses every few steps
+    @staticmethod
+    def _fd(pat, base):
+        """fd: the files named like pat in all of base (fast, skips ignored folders); None if fd is missing."""
+        fd = shutil.which("fd") or ("/opt/homebrew/bin/fd" if Path("/opt/homebrew/bin/fd").exists() else None)
+        if not fd:
+            return None
+        cmd = [fd, "--glob", "--type", "f", "--hidden", "--no-ignore", "--absolute-path", "--max-results", "2000"]
+        for d in SKIP_DIRS:
+            cmd += ["--exclude", d]
+        try:
+            r = subprocess.run(cmd + ["--", pat, str(base)], capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if r.returncode:
+            return None
+        return [Path(x) for x in r.stdout.splitlines() if x]
+
     def find_files(self, pattern, path="."):
         base = self.resolve(path)
         if not base.is_dir():
@@ -916,7 +933,9 @@ class Agent:
         pat = pattern.strip().lstrip("./") or "*"
         hits = [f for f in base.glob(pat) if f.is_file() and not any(part in SKIP_DIRS for part in f.relative_to(base).parts)]
         if not hits and "/" not in pat and not pat.startswith("**"):
-            hits = [f for f in base.glob("**/" + pat) if f.is_file() and not any(part in SKIP_DIRS for part in f.relative_to(base).parts)]
+            hits = self._fd(pat, base)
+            if hits is None:
+                hits = [f for f in base.glob("**/" + pat) if f.is_file() and not any(part in SKIP_DIRS for part in f.relative_to(base).parts)]
         hits.sort(key=lambda f: f.stat().st_mtime, reverse=True)
         out = [self.rel(f) for f in hits[:200]]
         if not out and (found := self._spotlight(pat)):
@@ -1230,12 +1249,39 @@ class Agent:
         return (f"{checked} file(s) checked: no error found" if not problems
                 else f"{checked} file(s) checked, {len(problems)} problem(s):\n\n" + "\n\n".join(problems))
 
+    def _rg(self, pattern, base):
+        """ripgrep (much faster: parallel, skips binary and ignored files); None if it is missing or refuses."""
+        rg = shutil.which("rg") or ("/opt/homebrew/bin/rg" if Path("/opt/homebrew/bin/rg").exists() else None)
+        if not rg:
+            return None
+        cmd = [rg, "-n", "--no-heading", "--color", "never", "--hidden", "--no-ignore", "-M", "400"]  # every file, like before
+        for d in SKIP_DIRS:
+            cmd += ["--glob", f"!{d}/"]
+        cmd += ["-e", pattern, "--", str(base)]
+        hits = []
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors="replace")
+            for line in p.stdout:
+                f, _, rest = line.rstrip("\n").partition(":")
+                num, _, text = rest.partition(":")
+                hits.append(f"{self.rel(Path(f))}:{num}: {text.strip()[:200]}")
+                if len(hits) >= 100:
+                    p.kill()
+                    return "\n".join(hits) + "\n... (truncated)"
+            if p.wait() > 1:  # 1 = no match; 2 = an error (a pattern ripgrep reads differently): the Python search
+                return None
+        except OSError:
+            return None
+        return "\n".join(hits) or "no match"
+
     def search(self, pattern, path="."):
         try:
             rx = re.compile(pattern)
         except re.error as e:
             return f"error: invalid regex: {e}"
         base = self.resolve(path)
+        if (fast := self._rg(pattern, base)) is not None:
+            return fast
         hits = []
         for dirpath, dirnames, filenames in os.walk(base):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
