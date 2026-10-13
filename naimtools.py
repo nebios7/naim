@@ -2675,6 +2675,46 @@ class Agent:
                 pass
         return room
 
+    SUMMARY_PROMPT = (
+        "Voici les étapes d'une tâche en cours (les plus anciennes, qui vont être retirées de ta mémoire de travail). "
+        "Écris le résumé qui te permettra de continuer sans rien perdre d'important, en 12 lignes au plus, des puces :\n"
+        "- Décisions prises et pourquoi (choix techniques, structure, ce que l'utilisateur a demandé en route)\n"
+        "- Erreurs rencontrées et comment elles ont été corrigées (pour ne pas les refaire)\n"
+        "- État actuel : ce qui est fait et marche, ce qui est à moitié fait\n"
+        "- Ce qui reste à faire\n"
+        "Faits précis seulement (noms de fichiers, commandes, messages d'erreur), rien d'inventé, pas de phrase d'introduction.\n\n"
+        "Demande de l'utilisateur : {task}\n\nÉtapes :\n{steps}")
+
+    def _written_summary(self, old):
+        """A written summary of the old steps by the model itself; None if it fails (the list of actions is then kept)."""
+        lines = []
+        for m in old:
+            role, text = m.get("role"), str(m.get("content") or "")
+            if role == "assistant" and text.strip() and not self.PLACEHOLDER_RE.search(text):
+                lines.append(f"Moi : {text.strip()[:600]}")
+            for c in m.get("tool_calls") or []:
+                a = self._args_of(c)
+                what = a.get("path") or a.get("command") or a.get("pattern") or a.get("query") or a.get("url") or ""
+                lines.append(f"Action : {c['function'].get('name')} {str(what)[:160]}")
+            if role == "tool":
+                r = text.strip()
+                bad = re.search(r"error|erreur|exit code [1-9]|failed|échec|traceback|refus", r[:400], re.I)
+                lines.append(f"Résultat : {r[:500 if bad else 160]}")
+            if role == "user" and text.strip() and not text.startswith("(Rappel)"):
+                lines.append(f"Utilisateur : {text.strip()[:400]}")
+        steps = "\n".join(lines)[-9000:]
+        if len(steps) < 200:
+            return None
+        self.emit({"type": "status", "text": "Naim résume ses étapes précédentes…"})
+        try:
+            msg = ollama_chat(self.model, [{"role": "user", "content": self.SUMMARY_PROMPT.format(
+                task=str(getattr(self, "_task_words", "") or "")[:1500], steps=steps)}],
+                think=False, options={**self.options, "temperature": 0.2, "num_predict": 500})
+        except Exception:  # noqa: BLE001 — a failed summary never blocks the work
+            return None
+        out = re.sub(r"<think>.*?</think>", "", msg.get("content") or "", flags=re.S).strip()
+        return out[:2500] if len(out) > 40 else None
+
     def _compact_history(self, force=False):
         """When the conversation nears the context size, shorten old tool results and arguments.
         The system prompt, the user's task and the recent steps are kept intact, so the model never loses the task.
@@ -2705,9 +2745,12 @@ class Agent:
                     facts.append(f"exécuté `{str(a.get('command', ''))[:60]}`")
                 elif n != "update_todos":
                     facts.append(n)
+        done = ("J'ai " + ", ".join(dict.fromkeys(facts)) + "." if facts else "J'ai commencé la tâche.")
+        written = self._written_summary(old)  # decisions, errors fixed, state, what remains: not only the actions
+        if written:
+            self._summaries = (getattr(self, "_summaries", []) + [written])[-3:]
         summary = {"role": "assistant", "content": "(Résumé de mes étapes précédentes, les fichiers sont sur le disque ; "
-                   "carnet complet dans .naim/tache.md) "
-                   + ("J'ai " + ", ".join(dict.fromkeys(facts)) + "." if facts else "J'ai commencé la tâche.")}
+                   "carnet complet dans .naim/tache.md)\n" + (f"{written}\n\nActions : {done[:1500]}" if written else done)}
         self.messages = self.messages[:task_idx + 1] + [summary] + self.messages[keep_from:]
         if force:  # the engine refused: the big outputs kept (a whole file read) are cut too, the files stay on disk
             for m in self.messages[task_idx + 2:]:
@@ -2807,7 +2850,9 @@ class Agent:
                 f"Commencée : {self._started_at} · mise à jour : {time.strftime('%Y-%m-%d %H:%M')}\nÉtat : {state}\n\n"
                 f"## Plan\n{todo}\n\n## Fichiers créés ou modifiés\n"
                 + ("\n".join(f"- {f}" for f in dict.fromkeys(files)) or "(aucun)")
-                + "\n\n## Dernières actions\n" + ("\n".join(f"- {a}" for a in actions[-15:]) or "(aucune)") + "\n")
+                + "\n\n## Dernières actions\n" + ("\n".join(f"- {a}" for a in actions[-15:]) or "(aucune)") + "\n"
+                + ("\n## Résumé de ce qui précède (décisions, erreurs corrigées, état, reste à faire)\n"
+                   + "\n\n".join(getattr(self, "_summaries", [])) + "\n" if getattr(self, "_summaries", None) else ""))
         try:
             f = self.root / self.NOTEBOOK
             f.parent.mkdir(parents=True, exist_ok=True)
