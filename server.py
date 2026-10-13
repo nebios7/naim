@@ -859,8 +859,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         cid = path.rsplit("/", 1)[1]
         if path.startswith("/api/conversations/") and ID_RE.match(cid):
+            moved = to_trash(conversation_joints(cid), "pièces jointes") if q.get("joints") == "1" else 0
             (CONVS / f"{cid}.json").unlink(missing_ok=True)
-            self.send_json({"ok": True})
+            self.send_json({"ok": True, "joints": moved})
         else:
             self.send_error(404)
 
@@ -2210,8 +2211,49 @@ def compact_conversation(body):
 
 
 def _storage_dirs():
-    import docs as _d, computer as _c
-    return {"conversations": CONVS, "apercus": _d.PREVIEWS, "captures": _c.SHOTS, "restauration": ext.CKPT}
+    import docs as _d, computer as _c, chatfiles as _cf
+    return {"conversations": CONVS, "apercus": _d.PREVIEWS, "captures": _c.SHOTS, "restauration": ext.CKPT,
+            "joints": _cf.OUT / "Joints"}
+
+
+def to_trash(items, label):
+    """Never a real deletion: the items go to the macOS Trash, together in one folder « Naim <label> <date> » (they can
+    be put back from the Finder). If macOS refuses the Trash, a « Supprimés » folder next to Naim's files."""
+    import chatfiles
+    items = [Path(i) for i in items if Path(i).exists()]
+    if not items:
+        return 0
+    stamp = time.strftime("%Y-%m-%d %H.%M.%S")
+    for where in (Path.home() / ".Trash", chatfiles.OUT.parent / "Supprimés"):
+        try:
+            box = where / f"Naim {label} {stamp}"
+            box.mkdir(parents=True, exist_ok=True)
+            for f in items:
+                dst, k = box / f.name, 1
+                while dst.exists():
+                    dst, k = box / f"{f.stem} ({k}){f.suffix}", k + 1
+                shutil.move(str(f), str(dst))
+            return len(items)
+        except OSError:
+            items = [i for i in items if i.exists()]  # what is left, to the fallback folder
+    raise OSError("impossible de mettre à la Corbeille")
+
+
+def conversation_joints(cid):
+    """The big attached files of a conversation (saved in Fichiers/Joints): paths and total size."""
+    import chatfiles
+    joints = (chatfiles.OUT / "Joints").resolve()
+    try:
+        conv = json.loads((CONVS / f"{cid}.json").read_text())
+    except (OSError, ValueError):
+        return []
+    out = []
+    for m in conv.get("messages") or []:
+        for a in m.get("attachments") or []:
+            p = a.get("path") and Path(a["path"]).resolve()
+            if p and p.parent == joints and p.is_file() and p not in out:  # only Joints: never a project's files
+                out.append(p)
+    return out
 
 
 def _size(p):
@@ -2297,6 +2339,8 @@ def storage_info():
     out["fichiers"] = {"size": _size(chatfiles.OUT), "count": sum(1 for _ in chatfiles.OUT.glob("*")) if chatfiles.OUT.exists() else 0,
                        "path": str(chatfiles.OUT)}
     import learning as _l
+    jd = chatfiles.OUT / "Joints"
+    out["joints"] = {"size": _size(jd), "count": sum(1 for _ in jd.glob("*")) if jd.exists() else 0, "path": str(jd)}
     out["apprentissage"] = {"size": _size(_l.BASE), "count": sum(1 for _ in _l.TRACES.glob("*.json")) if _l.TRACES.exists() else 0,
                             "path": str(_l.BASE)}
     return out
@@ -2307,7 +2351,7 @@ def storage_clear(what, keep_pinned=True):
     d = _storage_dirs().get(what)
     if not d or not Path(d).exists():
         return 0
-    n = 0
+    items = []
     for f in list(Path(d).iterdir()):
         if what == "conversations":
             if f.suffix != ".json":
@@ -2317,9 +2361,9 @@ def storage_clear(what, keep_pinned=True):
                     continue
             except (OSError, ValueError):
                 pass
-        shutil.rmtree(f) if f.is_dir() else f.unlink(missing_ok=True)
-        n += 1
-    return n
+        items.append(f)
+    return to_trash(items, {"conversations": "conversations", "apercus": "aperçus", "captures": "captures",
+                            "restauration": "points de restauration", "joints": "pièces jointes"}.get(what, what))
 
 
 def model_version():

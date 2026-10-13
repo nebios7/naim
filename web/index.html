@@ -2394,7 +2394,16 @@ async function duplicateConv(id) {
 async function deleteConv(id) {
   const c = list.find((x) => x.id === id);
   if (!confirm(`Supprimer « ${c?.title || "cette conversation"} » ?`)) return;
-  await api(`/api/conversations/${id}`, { method: "DELETE" });
+  // its big attached files (saved in Fichiers/Joints): asked separately, never removed without a yes
+  const conv = current?.id === id ? current : await api(`/api/conversations/${id}`).catch(() => ({}));
+  const big = (conv.messages || []).flatMap((m) => m.attachments || []).filter((a) => a.kind === "big" && /\/Fichiers\/Joints\/[^/]+$/.test(a.path || ""));
+  let joints = false;
+  if (big.length) {
+    const size = big.reduce((n, a) => n + (a.size || 0), 0);
+    joints = confirm(`Cette conversation a ${big.length} pièce${big.length > 1 ? "s" : ""} jointe${big.length > 1 ? "s" : ""} enregistrée${big.length > 1 ? "s" : ""} (${fmtSize(size)}) :\n${big.map((a) => "· " + a.name).join("\n")}\n\nOK = les mettre aussi à la Corbeille · Annuler = les garder dans Fichiers/Joints`);
+  }
+  const r = await api(`/api/conversations/${id}${joints ? "?joints=1" : ""}`, { method: "DELETE" });
+  if (r.joints) toast(`${r.joints} pièce${r.joints > 1 ? "s" : ""} jointe${r.joints > 1 ? "s" : ""} mise${r.joints > 1 ? "s" : ""} à la Corbeille`);
   if (current?.id === id) { current = null; renderThread(); updateTitle(); }
   loadList();
 }
@@ -5303,23 +5312,26 @@ async function loadStorage() {
   const line = (key, title, sub, btn) => `<div class="srow"><div class="sl"><b>${title}</b><small>${sub}</small></div><div class="sc">${btn}</div></div>`;
   box.innerHTML =
     line("conversations", `Conversations : ${c.count}`, `${kb(c.size)}${c.pinned ? ` · ${c.pinned} épinglée${c.pinned > 1 ? "s" : ""}` : ""} · Chat, Agent, projets et tâches planifiées`,
-      `<button class="btn danger" data-clear="conversations" ${c.count ? "" : "disabled"}>Tout supprimer</button>`) +
+      `<button class="btn danger" data-clear="conversations" ${c.count ? "" : "disabled"}>Tout mettre à la Corbeille</button>`) +
     line("fichiers", `Fichiers créés en mode Chat : ${st.fichiers.count}`, `${kb(st.fichiers.size)} · PDF, Word, ZIP… (ce sont tes fichiers : Naim ne les supprime pas)`,
       `<button class="btn" data-open="${esc(st.fichiers.path)}">Ouvrir le dossier</button>`) +
-    line("apercus", "Aperçus en cache", `${kb(st.apercus.size)} · miniatures des PDF et images (refaites au besoin)`, `<button class="btn" data-clear="apercus" ${st.apercus.count ? "" : "disabled"}>Vider</button>`) +
-    line("captures", "Captures d'écran", `${kb(st.captures.size)} · prises par Naim quand il contrôle l'écran`, `<button class="btn" data-clear="captures" ${st.captures.count ? "" : "disabled"}>Vider</button>`) +
-    line("restauration", "Points de restauration", `${kb(st.restauration.size)} · permettent « ↶ Annuler les modifications » et l'onglet Modifs`, `<button class="btn" data-clear="restauration" ${st.restauration.count ? "" : "disabled"}>Vider</button>`) +
+    line("joints", `Pièces jointes enregistrées : ${st.joints.count}`, `${kb(st.joints.size)} · les gros fichiers joints (plus de 300 Ko), dans Fichiers/Joints`,
+      `<button class="btn" data-open="${esc(st.joints.path)}" ${st.joints.count ? "" : "disabled"}>Ouvrir</button> <button class="btn" data-clear="joints" ${st.joints.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
+    line("apercus", "Aperçus en cache", `${kb(st.apercus.size)} · miniatures des PDF et images (refaites au besoin)`, `<button class="btn" data-clear="apercus" ${st.apercus.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
+    line("captures", "Captures d'écran", `${kb(st.captures.size)} · prises par Naim quand il contrôle l'écran`, `<button class="btn" data-clear="captures" ${st.captures.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
+    line("restauration", "Points de restauration", `${kb(st.restauration.size)} · permettent « ↶ Annuler les modifications » et l'onglet Modifs`, `<button class="btn" data-clear="restauration" ${st.restauration.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
     line("apprentissage", `Tâches pour l'apprentissage : ${st.apprentissage.count}`, `${kb(st.apprentissage.size)} · gérées dans Personnaliser › Apprentissage`, "");
   $$("[data-open]", box).forEach((b) => (b.onclick = () => api("/api/reveal", { method: "POST", body: { path: b.dataset.open } })));
   $$("[data-clear]", box).forEach((b) => (b.onclick = async () => {
     const w = b.dataset.clear; let keep = true;
     if (w === "conversations") {
-      if (!confirm(`Supprimer les ${c.count} conversations ?\n\nC'est définitif. La mémoire, les skills, les tâches planifiées (dans Planifier) et tes fichiers ne sont pas touchés.`)) return;
+      if (!confirm(`Mettre les ${c.count} conversations à la Corbeille ?\n\nOn peut les remettre depuis le Finder. La mémoire, les skills, les tâches planifiées (dans Planifier) et tes fichiers ne sont pas touchés.`)) return;
       keep = c.pinned ? confirm(`Garder les ${c.pinned} conversation${c.pinned > 1 ? "s" : ""} épinglée${c.pinned > 1 ? "s" : ""} ?\n\nOK = les garder · Annuler = tout supprimer`) : false;
-    } else if (w === "restauration" && !confirm("Vider les points de restauration ?\n\nLes modifications déjà faites par Naim ne pourront plus être annulées (↶).")) return;
+    } else if (w === "restauration" && !confirm("Mettre les points de restauration à la Corbeille ?\n\nLes modifications déjà faites par Naim ne pourront plus être annulées (↶).")) return;
+    else if (w === "joints" && !confirm(`Mettre les ${st.joints.count} pièces jointes enregistrées à la Corbeille ?\n\nOn peut les remettre depuis le Finder. Les conversations ne sont pas touchées.`)) return;
     const r = await api("/api/storage/clear", { method: "POST", body: { what: w, keep_pinned: keep } });
     if (r.error) return toast(r.error);
-    toast(`${r.removed} élément${r.removed > 1 ? "s" : ""} supprimé${r.removed > 1 ? "s" : ""}`);
+    toast(`${r.removed} élément${r.removed > 1 ? "s" : ""} mis à la Corbeille`);
     if (w === "conversations") { if (current && !(keep && current.pinned)) { current = null; renderThread(); updateTitle(); } loadList(); }
     loadStorage();
   }));
