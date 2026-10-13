@@ -1436,7 +1436,7 @@ class Agent:
     SERVER_RE = re.compile(r"(^|&&|;|\s)(\S*python3?\s+\S*(app|main|server|manage|run)\.py(\s+runserver)?\s*$|flask\s+run|uvicorn\s|gunicorn\s|"
                            r"npm\s+(run\s+)?(start|dev|serve)|yarn\s+(start|dev)|node\s+\S*(server|app|index)\.m?js\s*$|php\s+-S\s|rails\s+s)")
 
-    def run_command(self, command, stdin=None, timeout=120):
+    def run_command(self, command, stdin=None, timeout=120, description=None):  # description: the step title shown
         if err := self._check_blocked(command) or self._check_env(command) or self._guard_own_command(command):
             return err
         if not stdin and self.SERVER_RE.search(command.strip()) and "&" not in command.replace("&&", ""):

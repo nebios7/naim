@@ -1876,7 +1876,23 @@ const KW = new Set(("abstract and as assert async await break case catch class c
 const SQLKW = new Set("SELECT FROM WHERE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE PRIMARY KEY FOREIGN REFERENCES JOIN LEFT RIGHT INNER OUTER ON GROUP BY ORDER HAVING LIMIT AND OR NOT NULL AS DISTINCT COUNT SUM AVG MIN MAX INDEX ALTER DROP IF EXISTS DESC ASC UNIQUE DEFAULT AUTO_INCREMENT INT VARCHAR TEXT DATE".split(" "));
 // shell, like a terminal-aware editor: the command of each segment, keywords, strings, variables, options
 const SH_KW = new Set("for in do done if then else elif fi while until case esac function select time".split(" "));
-function highlightShell(code) {
+const HEREDOC_LANG = [[/\bpython3?\b|\.py\b/, "python"], [/\bnode\b|\.m?js\b/, "javascript"], [/\.ts\b/, "typescript"], [/\bruby\b|\.rb\b/, "ruby"],
+  [/\bswift\b|\.swift\b/, "swift"], [/\bosascript\b|\.applescript\b/, "applescript"], [/\.html?\b/, "html"], [/\.css\b/, "css"], [/\.json\b|\bjq\b/, "json"],
+  [/\.ya?ml\b/, "yaml"], [/\.md\b/, "markdown"], [/\.sql\b|\bsqlite3\b|\bpsql\b|\bmysql\b/, "sql"], [/\.(sh|zsh|bash)\b|\b(ba|z)?sh\b/, "bash"]];
+function highlightShell(code) {  // a here-document's body (<<'EOF' … EOF) is coloured in its own language, the rest as shell
+  const hd = /<<-?\s*(['"]?)([A-Za-z_][\w-]*)\1[^\n]*\n/.exec(code);
+  if (hd) {
+    const bodyStart = hd.index + hd[0].length, end = new RegExp(`^\\s*${hd[2]}\\s*$`, "m");
+    const rest = code.slice(bodyStart), m = end.exec(rest);
+    const body = m ? rest.slice(0, m.index) : rest, after = m ? rest.slice(m.index) : "";
+    const head = code.slice(0, bodyStart), line = head.slice(head.lastIndexOf("\n", hd.index) + 1);
+    const lang = (HEREDOC_LANG.find(([re]) => re.test(line)) || [, ""])[1];
+    const bodyHtml = lang && lang !== "bash" ? highlight(body, lang) : lang === "bash" ? highlightShellPlain(body) : esc(body);
+    return highlightShellPlain(head) + `<span class="hdoc">${bodyHtml}</span>` + (after ? highlightShell(after) : "");
+  }
+  return highlightShellPlain(code);
+}
+function highlightShellPlain(code) {
   const re = /(#[^\n]*)|("(?:\\.|[^"\\])*"|'[^']*')|(\$\{[^}]*\}|\$\(|\$[\w@#?*!-]+)|(&&|\|\||[|;&<>()]|\n)|(\s--?[\w-]+(?:=[^\s]*)?)|([^\s|;&<>()"'$#]+)/g;
   let out = "", last = 0, m, start = true;
   while ((m = re.exec(code))) {
@@ -2953,7 +2969,8 @@ function actionInfo(name, a = {}, res = "") {
     write_file: () => ({ kind: "write", label: `Écrit ${cmd(a.path)}${a.lines ? ` <span class="muted">· ${a.lines} lignes</span>` : ""}` }),
     edit_file: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : ""}` }),
     search: () => ({ kind: "read", label: `Recherché ${esc(q(a.pattern))}` }),
-    run_command: () => { const plain = approvalPlain("⚠", "$ " + (a.command || ""));  // a Mac action said simply
+    run_command: () => { if (a.description && String(a.description).trim()) return { kind: "cmd", label: esc(String(a.description).trim().slice(0, 90)) };  // its own words, like a title
+      const plain = approvalPlain("⚠", "$ " + (a.command || ""));  // a Mac action said simply
       return { kind: plain && plain !== "Lancer une commande sur le Mac" ? "mac" : "cmd", label: plain && plain !== "Lancer une commande sur le Mac" ? esc(plain.replace(/^Envoyer/, "Envoi :").replace(/^Imprimer/, "Impression :").replace(/^Appeler/, "Appel :").replace(/^Régler/, "Réglage :").replace(/^Ouvrir/, "Ouverture :").replace(/^Piloter/, "Pilotage :")) : `Commande ${cmd(a.command)}` }; },
     start_process: () => ({ kind: "cmd", label: `Lancé en arrière-plan ${cmd(a.command)}` }),
     process_output: () => ({ kind: "read", label: "Vérifié un programme en cours" }),
@@ -3847,7 +3864,7 @@ function suggestionsOf(text) {
 }
 function toolLabel(name, a) {
   return ({ list_files: "Naim explore les fichiers…", read_file: `Naim lit ${a.path || ""}…`, write_file: `Naim écrit ${a.path || ""}…`,
-    edit_file: `Naim modifie ${a.path || ""}…`, search: "Naim cherche dans le code…", run_command: `Naim exécute « ${(a.command || "").slice(0, 60)} »…`,
+    edit_file: `Naim modifie ${a.path || ""}…`, search: "Naim cherche dans le code…", run_command: a.description ? `${String(a.description).trim().slice(0, 70)}…` : `Naim exécute « ${(a.command || "").slice(0, 60)} »…`,
     start_process: `Naim lance « ${(a.command || "").slice(0, 60)} » en arrière-plan…`, open: `Naim ouvre ${a.target || ""}…`,
     web_search: `Naim cherche sur le web : ${a.query || ""}…`, web_fetch: `Naim lit ${a.url || "une page web"}…`, remember: "Naim mémorise…",
     use_skill: `Naim charge le skill ${a.name || ""}…`, create_skill: "Naim crée un skill…", install_skill: "Naim récupère des skills sur internet…", use_mcp: a.tool ? `Naim utilise l'outil MCP ${a.server || ""} › ${a.tool}…` : `Naim consulte les outils MCP de ${a.server || ""}…`, send_email: "Naim envoie l'email…", planifier: "Naim planifie la tâche…", ask_user: "Naim attend ta réponse…", browser: "Naim teste dans le navigateur…", convert_document: "Naim crée le document…", make_diagram: "Naim dessine le schéma…", look_at: "Naim vérifie le rendu…", delegate: "Naim répartit le travail entre des sous-agents…",
