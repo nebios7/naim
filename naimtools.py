@@ -173,6 +173,8 @@ def now_note():
 
 
 
+# attached files, one folder per conversation (also where Naim keeps its intermediate work on them)
+JOINTS = Path.home() / "Documents" / "Naim" / "Fichiers" / "Joints"
 DOC_EXTS = {".pdf", ".docx", ".doc", ".rtf", ".odt", ".pages", ".xlsx", ".xlsm", ".pptx", ".webarchive"}
 # specialised tools, loaded only when a task needs them (like an assistant that looks up the tool it lacks):
 # group -> (tool names, what it is for, words of a request that load it right away)
@@ -684,6 +686,9 @@ class Agent:
         if p != self.root and self.root not in p.parents:
             skills = (ext.HOME / "skills").resolve()
             if read and (p == skills or skills in p.parents):  # its skills' files (examples, templates): readable
+                return p
+            joints = JOINTS.resolve()
+            if joints in p.parents:  # the attached files and the work on them, in their conversation's folder
                 return p
             raise ValueError(f"path outside the project: {path}")
         return p

@@ -126,11 +126,16 @@ def extract(path):
     return text, note
 
 
-def extract_bytes(name, data, project=None):
-    """Extract from uploaded bytes; in agent mode also save the original into the project. Returns a dict."""
+def extract_bytes(name, data, project=None, keep=None):
+    """Extract from uploaded bytes. keep: a function saving the original (its path back), so Naim can open it later.
+    Returns a dict."""
     safe = re.sub(r"[^\w.\- ]", "_", Path(name).name) or "document"
     saved = None
-    if project and Path(project).is_dir():
+    if keep:
+        dest = Path(keep(safe, data))
+        saved = str(dest)
+        text, note = extract(dest)
+    elif project and Path(project).is_dir():
         dest_dir = Path(project) / ".naim" / "pieces-jointes"
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / safe

@@ -435,31 +435,26 @@ class Handler(BaseHTTPRequestHandler):
     UPLOAD_MAX = 1024 ** 3  # 1 Go
 
     def _upload(self):
-        """A big attached file, streamed as it is to disk (the project, else ~/Documents/Naim/Fichiers/Joints):
-        Naim then reads it with its tools, piece by piece, instead of it being pasted whole into the message."""
-        import chatfiles
+        """A big attached file, streamed as it is to disk, in its conversation's folder (Fichiers/Joints/<id>): Naim
+        then reads it with its tools, piece by piece, instead of it being pasted whole into the message."""
+        import hashlib
         _, q = self.route()
         n = int(self.headers.get("Content-Length") or 0)
         if n > self.UPLOAD_MAX:
             return {"error": "fichier trop gros (max 1 Go)"}
-        name = re.sub(r"[/\\:\0]", "_", Path(q.get("name") or "fichier").name).strip(". ") or "fichier"
-        proj = Path(q.get("project") or "").expanduser()
-        folder = proj if q.get("project") and proj.is_dir() else chatfiles.OUT / "Joints"
-        folder.mkdir(parents=True, exist_ok=True)
-        dst, k = folder / name, 1
-        while dst.exists():
-            dst, k = folder / f"{Path(name).stem} ({k}){Path(name).suffix}", k + 1
-        left = n
+        folder = joints_dir(q.get("conv", ""))
+        dst = _free_name(folder, _safe_name(q.get("name")))
+        left, h = n, hashlib.sha256()
         with open(dst, "wb") as f:
             while left > 0:
                 chunk = self.rfile.read(min(left, 1 << 20))
                 if not chunk:
                     break
-                f.write(chunk); left -= len(chunk)
+                f.write(chunk); h.update(chunk); left -= len(chunk)
         if left:
             dst.unlink(missing_ok=True)
             return {"error": "envoi interrompu"}
-        return {"path": str(dst), "size": n}
+        return {"path": str(_same_file(dst, h.hexdigest())), "size": n, "folder": str(folder)}
 
     def read_json(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -661,6 +656,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(info or {"error": "aucun point de restauration"}, 200 if info else 404)
         elif path == "/api/artifacts":
             self.send_json(collect_artifacts())
+        elif path == "/api/joints":
+            self.send_json(_joints_info(q.get("conv", "")))
         elif path.startswith("/api/conversations/"):
             cid = path.rsplit("/", 1)[1]
             f = CONVS / f"{cid}.json"
@@ -1102,7 +1099,7 @@ class Handler(BaseHTTPRequestHandler):
                 data = base64.b64decode(b.get("data") or "")
                 if len(data) > 40 * 1024 * 1024:
                     raise docs.DocError("fichier trop gros (max 40 Mo)")
-                self.send_json(docs.extract_bytes(b.get("name", "document"), data, b.get("project") or None))
+                self.send_json(docs.extract_bytes(b.get("name", "document"), data, keep=keep_joint(b.get("conv", ""))))
             except docs.DocError as e:
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
@@ -2216,6 +2213,52 @@ def _storage_dirs():
             "joints": _cf.OUT / "Joints"}
 
 
+def _safe_name(name):
+    return re.sub(r"[/\\:\0]", "_", Path(name or "fichier").name).strip(". ") or "fichier"
+
+
+def joints_dir(cid):
+    """The folder of a conversation's attached files (and of Naim's intermediate work on them)."""
+    from naimtools import JOINTS
+    d = JOINTS / (cid if ID_RE.match(cid or "") else "sans-conversation")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _free_name(folder, name):
+    dst, k = folder / name, 1
+    while dst.exists():
+        dst, k = folder / f"{Path(name).stem} ({k}){Path(name).suffix}", k + 1
+    return dst
+
+
+def _same_file(dst, digest):
+    """The same file attached again in this conversation: the copy already there, the new one dropped (no doublon)."""
+    import hashlib
+    size = dst.stat().st_size
+    for f in dst.parent.iterdir():
+        if f != dst and f.is_file() and f.stat().st_size == size:
+            h = hashlib.sha256()
+            with open(f, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            if h.hexdigest() == digest:
+                dst.unlink()
+                return f
+    return dst
+
+
+def keep_joint(cid):
+    """For docs.extract_bytes: the original document saved in the conversation's folder (no doublon)."""
+    import hashlib
+
+    def keep(name, data):
+        dst = _free_name(joints_dir(cid), _safe_name(name))
+        dst.write_bytes(data)
+        return _same_file(dst, hashlib.sha256(data).hexdigest())
+    return keep
+
+
 def to_trash(items, label):
     """Never a real deletion: the items go to the macOS Trash, together in one folder « Naim <label> <date> » (they can
     be put back from the Finder). If macOS refuses the Trash, a « Supprimés » folder next to Naim's files."""
@@ -2240,20 +2283,31 @@ def to_trash(items, label):
 
 
 def conversation_joints(cid):
-    """The big attached files of a conversation (saved in Fichiers/Joints): paths and total size."""
-    import chatfiles
-    joints = (chatfiles.OUT / "Joints").resolve()
+    """What a conversation leaves in Fichiers/Joints: its own folder (attachments + Naim's work on them), and the
+    attachments saved loose there before the folders existed. Never a project's files."""
+    from naimtools import JOINTS
+    joints = JOINTS.resolve()
+    out = []
+    if ID_RE.match(cid or "") and (joints / cid).is_dir():
+        out.append(joints / cid)
     try:
         conv = json.loads((CONVS / f"{cid}.json").read_text())
     except (OSError, ValueError):
-        return []
-    out = []
+        conv = {}
     for m in conv.get("messages") or []:
         for a in m.get("attachments") or []:
             p = a.get("path") and Path(a["path"]).resolve()
-            if p and p.parent == joints and p.is_file() and p not in out:  # only Joints: never a project's files
+            if p and p.parent == joints and p.is_file() and p not in out:
                 out.append(p)
     return out
+
+
+def _joints_info(cid):
+    files = []
+    for p in conversation_joints(cid):
+        for f in ([p] if p.is_file() else sorted(x for x in p.rglob("*") if x.is_file())):
+            files.append({"name": str(f.relative_to(p)) if p.is_dir() else f.name, "size": f.stat().st_size})
+    return {"files": files, "size": sum(f["size"] for f in files)}
 
 
 def _size(p):
@@ -2340,7 +2394,7 @@ def storage_info():
                        "path": str(chatfiles.OUT)}
     import learning as _l
     jd = chatfiles.OUT / "Joints"
-    out["joints"] = {"size": _size(jd), "count": sum(1 for _ in jd.glob("*")) if jd.exists() else 0, "path": str(jd)}
+    out["joints"] = {"size": _size(jd), "count": sum(1 for f in jd.rglob("*") if f.is_file()) if jd.exists() else 0, "path": str(jd)}
     out["apprentissage"] = {"size": _size(_l.BASE), "count": sum(1 for _ in _l.TRACES.glob("*.json")) if _l.TRACES.exists() else 0,
                             "path": str(_l.BASE)}
     return out

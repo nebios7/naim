@@ -2394,16 +2394,15 @@ async function duplicateConv(id) {
 async function deleteConv(id) {
   const c = list.find((x) => x.id === id);
   if (!confirm(`Supprimer « ${c?.title || "cette conversation"} » ?`)) return;
-  // its big attached files (saved in Fichiers/Joints): asked separately, never removed without a yes
-  const conv = current?.id === id ? current : await api(`/api/conversations/${id}`).catch(() => ({}));
-  const big = (conv.messages || []).flatMap((m) => m.attachments || []).filter((a) => a.kind === "big" && /\/Fichiers\/Joints\/[^/]+$/.test(a.path || ""));
+  // its files in Fichiers/Joints (attachments + Naim's work on them): asked separately, never removed without a yes
+  const jf = await api(`/api/joints?conv=${encodeURIComponent(id)}`).catch(() => ({ files: [] }));
   let joints = false;
-  if (big.length) {
-    const size = big.reduce((n, a) => n + (a.size || 0), 0);
-    joints = confirm(`Cette conversation a ${big.length} pièce${big.length > 1 ? "s" : ""} jointe${big.length > 1 ? "s" : ""} enregistrée${big.length > 1 ? "s" : ""} (${fmtSize(size)}) :\n${big.map((a) => "· " + a.name).join("\n")}\n\nOK = les mettre aussi à la Corbeille · Annuler = les garder dans Fichiers/Joints`);
+  if (jf.files?.length) {
+    const n = jf.files.length, list = jf.files.slice(0, 12).map((f) => "· " + f.name).join("\n") + (n > 12 ? `\n· … et ${n - 12} autres` : "");
+    joints = confirm(`Cette conversation a ${n} fichier${n > 1 ? "s" : ""} enregistré${n > 1 ? "s" : ""} (${fmtSize(jf.size)}), pièces jointes et travail de Naim :\n${list}\n\nOK = les mettre aussi à la Corbeille · Annuler = les garder dans Fichiers/Joints`);
   }
   const r = await api(`/api/conversations/${id}${joints ? "?joints=1" : ""}`, { method: "DELETE" });
-  if (r.joints) toast(`${r.joints} pièce${r.joints > 1 ? "s" : ""} jointe${r.joints > 1 ? "s" : ""} mise${r.joints > 1 ? "s" : ""} à la Corbeille`);
+  if (r.joints) toast("Fichiers de la conversation mis à la Corbeille");
   if (current?.id === id) { current = null; renderThread(); updateTitle(); }
   loadList();
 }
@@ -2437,8 +2436,11 @@ async function openConv(id) {
   if (S.mode === "agent" && S.project && $("#panel").classList.contains("show")) loadTree();
 }
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// files attached before the first message: the conversation's id is chosen then, its folder (Fichiers/Joints/<id>) too
+let draftId = null;
+const convIdForFiles = () => current?.id || (draftId ||= newId());
 async function saveConv(conv = current) { if (conv) await api(`/api/conversations/${conv.id}`, { method: "PUT", body: conv }); }
-function newConv() { current = null; pending = []; renderPending(); setView("chat"); renderList(); renderThread(); updateTitle(); }
+function newConv() { current = null; draftId = null; pending = []; renderPending(); setView("chat"); renderList(); renderThread(); updateTitle(); }
 function updateTitle() { if (S.params_open && typeof renderParams === "function" && !$("#params").contains(document.activeElement)) renderParams(); $("#titleBtn").innerHTML = `<span class="tt">${esc(current?.title || "Nouvelle conversation")}</span>${typeof svgI === "function" ? svgI("chevd") : ""}`; document.title = current ? `${current.title} · Naim` : "Naim"; $("#navHome").classList.toggle("on", view === "chat" && !current); }
 $("#backBtn").onclick = () => { setView("chat"); if (current) renderThread(); };
 $("#titleBtn").onclick = (e) => {
@@ -3417,7 +3419,7 @@ async function send(textArg, attsArg, opts = {}) {
   if (atts.some((a) => a.loading)) { toast("Lecture du document en cours… un instant"); return; }
   if (S.mode === "agent" && !S.project) { toast("Choisis d'abord le dossier du projet"); $("#pick").focus(); return; }
   setView("chat");
-  if (!current) current = { id: newId(), title: (text || atts[0].name).slice(0, 60), mode: S.mode, messages: [] };
+  if (!current) { current = { id: draftId || newId(), title: (text || atts[0].name).slice(0, 60), mode: S.mode, messages: [] }; draftId = null; }
   current.mode = S.mode; if (S.mode === "agent") current.project = S.project;
   const end = current.messages.length;
   const userMsg = { role: "user", content: text, attachments: atts.length ? atts : undefined, time: Date.now(), ...(opts.bg ? { bg: opts.bg } : {}) };
@@ -4003,14 +4005,15 @@ const MAX_FILE = 300 * 1024, MAX_UPLOAD = 1024 ** 3;  // inline up to 300 Ko, el
 const IMG_RE = /^image\/(png|jpe?g|gif|webp)$/;
 const DOC_RE = /\.(pdf|docx?|xlsx|xlsm|pptx|rtf|odt|pages)$/i;
 const readDataURL = (f) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+// where Naim works on an attached file: drafts beside it, the result where the user expects it
+const workNote = (folder) => `Tes fichiers de travail intermédiaires (conversions, essais, extraits) vont dans ce même dossier : ${folder}. Le résultat final pour l'utilisateur va ${S.mode === "agent" && S.project ? `dans le projet (${S.project})` : "dans ~/Documents/Naim/Fichiers"}.`;
 // a big file: sent as it is (no base64) to the server, which saves it; Naim gets its path and reads it with its tools
 async function uploadBig(f) {
   if (f.size > MAX_UPLOAD) { toast(`${f.name} est trop gros (max 1 Go)`); return; }
   const chip = { name: f.name, size: f.size, kind: "big", loading: true, content: "" };
   pending.push(chip); renderPending();
   try {
-    const proj = S.mode === "agent" && S.project ? S.project : "";
-    const res = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}&project=${encodeURIComponent(proj)}`, { method: "POST", headers: { "X-Naim": "1" }, body: f });
+    const res = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}&conv=${encodeURIComponent(convIdForFiles())}`, { method: "POST", headers: { "X-Naim": "1" }, body: f });
     const r = await res.json();
     if (r.error) throw new Error(r.error);
     let head = "";
@@ -4019,7 +4022,7 @@ async function uploadBig(f) {
       if (!/[\u0000-\u0008\u000e-\u001f]/.test(t.slice(0, 2000))) head = `\n\nDébut du fichier :\n\`\`\`\n${t}\n\`\`\``;
     }
     chip.loading = false; chip.path = r.path;
-    chip.content = `[Fichier joint volumineux (${fmtSize(f.size)}), enregistré ici : ${r.path}. Il n'est pas collé dans ce message : lis-le avec tes outils, par morceaux (read_file, ou run_command avec grep -n, sed -n, tail, wc -l, ou un script Python).]${head}`;
+    chip.content = `[Fichier joint volumineux (${fmtSize(f.size)}), enregistré ici : ${r.path}. Il n'est pas collé dans ce message : lis-le avec tes outils, par morceaux (read_file, ou run_command avec grep -n, sed -n, tail, wc -l, ou un script Python). ${workNote(r.folder)}]${head}`;
   } catch (e) { pending.splice(pending.indexOf(chip), 1); toast(`${f.name} : ${e.message}`); }
   renderPending(); updateCtx();
 }
@@ -4037,10 +4040,10 @@ async function addFiles(files) {
       pending.push(chip); renderPending();
       try {
         const url = await readDataURL(f);
-        const r = await api("/api/extract", { method: "POST", body: { name: f.name, data: url.split(",")[1], project: S.mode === "agent" ? S.project : "" } });
+        const r = await api("/api/extract", { method: "POST", body: { name: f.name, data: url.split(",")[1], conv: convIdForFiles() } });
         if (r.error) throw new Error(r.error);
         chip.loading = false; chip.note = r.note;
-        chip.content = `[Document ${r.kind}${r.note ? " · " + r.note : ""}${r.saved ? ` · fichier original copié dans le projet : ${r.saved}` : ""}]\n\n${r.text}`;
+        chip.content = `[Document ${r.kind}${r.note ? " · " + r.note : ""}${r.saved ? ` · fichier original : ${r.saved}. ${workNote(r.saved.replace(/\/[^/]+$/, ""))}` : ""}]\n\n${r.text}`;
       } catch (e) { pending.splice(pending.indexOf(chip), 1); toast(`${f.name} : ${e.message}`); }
       renderPending(); updateCtx();
       continue;
@@ -5315,7 +5318,7 @@ async function loadStorage() {
       `<button class="btn danger" data-clear="conversations" ${c.count ? "" : "disabled"}>Tout mettre à la Corbeille</button>`) +
     line("fichiers", `Fichiers créés en mode Chat : ${st.fichiers.count}`, `${kb(st.fichiers.size)} · PDF, Word, ZIP… (ce sont tes fichiers : Naim ne les supprime pas)`,
       `<button class="btn" data-open="${esc(st.fichiers.path)}">Ouvrir le dossier</button>`) +
-    line("joints", `Pièces jointes enregistrées : ${st.joints.count}`, `${kb(st.joints.size)} · les gros fichiers joints (plus de 300 Ko), dans Fichiers/Joints`,
+    line("joints", `Pièces jointes enregistrées : ${st.joints.count}`, `${kb(st.joints.size)} · fichiers joints et travail de Naim dessus, un dossier par conversation (Fichiers/Joints)`,
       `<button class="btn" data-open="${esc(st.joints.path)}" ${st.joints.count ? "" : "disabled"}>Ouvrir</button> <button class="btn" data-clear="joints" ${st.joints.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
     line("apercus", "Aperçus en cache", `${kb(st.apercus.size)} · miniatures des PDF et images (refaites au besoin)`, `<button class="btn" data-clear="apercus" ${st.apercus.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
     line("captures", "Captures d'écran", `${kb(st.captures.size)} · prises par Naim quand il contrôle l'écran`, `<button class="btn" data-clear="captures" ${st.captures.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
