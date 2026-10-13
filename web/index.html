@@ -1458,6 +1458,25 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 .msgacts [data-a=speak].speaking { color: var(--text); animation: micpulse 1.1s ease-in-out infinite; }
 /* conversation mode */
 #talkBtn svg { width: 17px; height: 17px; }
+/* the voice conversation's light: a sunrise from the bottom of the composer, alive with who speaks and how loud */
+.composer { isolation: isolate; }
+#talkGlow { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: -1;
+  opacity: 0; transition: opacity .6s ease; --e: 0; --c1: 255 196 140; --c2: 217 119 87; }
+body:has(#talkBtn.on) #talkGlow { opacity: 1; }
+#talkGlow::before, #talkGlow::after { content: ""; position: absolute; border-radius: 50%;
+  transform-origin: 50% 100%; will-change: transform, opacity; }
+#talkGlow::before {  /* the halo */
+  left: -15%; right: -15%; height: 260%; bottom: -125%;  /* % of the composer's height: the sun stays below the edge */
+  background: radial-gradient(closest-side, rgb(var(--c2) / .85), rgb(var(--c2) / .38) 55%, transparent 100%);
+  transform: scale(calc(.55 + var(--e) * .55), calc(.25 + var(--e) * .85)); opacity: calc(.25 + var(--e) * .75); filter: blur(10px); }
+#talkGlow::after {  /* the sun's rim, brighter, closer to the edge */
+  left: 18%; right: 18%; height: 150%; bottom: -88%;
+  background: radial-gradient(closest-side, rgb(var(--c1) / .95), rgb(var(--c1) / .4) 60%, transparent 100%);
+  transform: scale(calc(.5 + var(--e) * .7), calc(.2 + var(--e) * 1)); opacity: calc(.15 + var(--e) * .85); filter: blur(6px); }
+#talkGlow[data-s=listen] { --c1: 255 238 220; --c2: 236 170 128; }
+#talkGlow[data-s=think], #talkGlow[data-s=prep] { --c1: 255 214 150; --c2: 214 160 70; }
+#talkGlow[data-s=speak] { --c1: 255 200 150; --c2: 217 119 87; }
+@media (prefers-reduced-motion: reduce) { #talkGlow { --e: .35 !important; } }
 #talkBtn.on { color: var(--bg); background: var(--text); border-radius: 999px; }
 /* Admin › Voix de Naim */
 .vl-row { border-top: 1px solid var(--line); padding: 10px 0; }
@@ -1655,7 +1674,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
       <div id="scroll"><div id="thread"></div></div>
       <footer>
         <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris ou parle pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
-        <div class="composer">
+        <div class="composer"><div id="talkGlow" aria-hidden="true"></div>
           <div class="slash" id="slash" hidden></div>
           <div class="atts" id="pending"></div>
           <textarea id="input" rows="1" placeholder="Écris à Naim…"></textarea>
@@ -2597,7 +2616,7 @@ window.naimDictation = (text, final, error) => {
     if (hit && !(voice.said || "").toLowerCase().includes(hit[0].toLowerCase())) { talkHush(); return; }  // « stop », « attends »: it stops at once (not its own « attends »)
     return;
   }
-  if (talk.on && text.trim()) { clearTimeout(talk.timer); talk.timer = setTimeout(talkSend, TALK_SILENCE); }
+  if (talk.on && text.trim()) { clearTimeout(talk.timer); talk.timer = setTimeout(talkSend, TALK_SILENCE); if (text.length !== talk.heardLen) { talk.heardLen = text.length; glowHeard(); } }
   const inp = $("#input");
   inp.value = dictation.base + (dictation.base && text ? " " : "") + text;
   inp.dispatchEvent(new Event("input"));
@@ -2642,8 +2661,55 @@ function talkStateUpdate() {  // who has the floor, shown by the wave button its
               speak: "Naim parle (Espace ou Échap pour lui couper la parole)", prep: "Naim prépare sa voix (Échap pour annuler)" }[st] + " · clic : arrêter la conversation";
 }
 setInterval(talkStateUpdate, 250);
+// ---- the light of the voice conversation (#talkGlow): its height and brightness follow the conversation
+// · Naim speaks: the real loudness of its voice (Web Audio on its player, only once the audio context runs: the sound
+//   never depends on it) · you speak: each word the Mac recognises lifts it · it thinks: a slow golden pulse · silence: an ember
+const glow = { e: 0, kick: 0, raf: 0, ctx: null, an: null, buf: null, linked: false };
+function glowAudio() {  // called on the click that starts the conversation (the browser allows sound from a gesture)
+  try {
+    glow.ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (glow.ctx.state !== "running") glow.ctx.resume?.().catch(() => {});
+  } catch { glow.ctx = null; }
+}
+function glowLink() {  // the analyser joins its player once, only when the context really runs (else: a simulated rhythm)
+  if (glow.linked || !glow.ctx || glow.ctx.state !== "running") return;
+  try {
+    const src = glow.ctx.createMediaElementSource(voicePlayer());
+    glow.an = glow.ctx.createAnalyser(); glow.an.fftSize = 512; glow.an.smoothingTimeConstant = .6;
+    src.connect(glow.an); glow.an.connect(glow.ctx.destination);
+    glow.buf = new Uint8Array(glow.an.fftSize); glow.linked = true;
+    glow.ctx.onstatechange = () => { if (glow.ctx.state !== "running") glow.ctx.resume?.().catch(() => {}); };  // its sound goes through it now
+  } catch { glow.an = null; }
+}
+function glowLevel() {  // loudness of Naim's voice now, 0..1
+  if (!glow.an) return null;
+  glow.an.getByteTimeDomainData(glow.buf);
+  let sum = 0; for (const v of glow.buf) { const d = (v - 128) / 128; sum += d * d; }
+  return Math.min(1, Math.sqrt(sum / glow.buf.length) * 4.5);
+}
+function glowLoop() {
+  const el = $("#talkGlow"); if (!el) return;
+  const st = $("#talkBtn")?.dataset.s || "listen", t = performance.now();
+  if (el.dataset.s !== st) el.dataset.s = st;
+  let target;
+  if (!talk.on) target = 0;
+  else if (st === "speak") {
+    if (voice.audio && !voice.audio.paused) glowLink();
+    const lv = glowLevel();
+    target = lv == null ? .45 + .22 * Math.abs(Math.sin(t / 170) * Math.sin(t / 410)) : .3 + .7 * lv;  // simulated rhythm if no analyser
+  } else if (st === "think" || st === "prep") target = .32 + .12 * Math.sin(t / 650);
+  else target = .2 + .06 * Math.sin(t / 1700) + glow.kick;  // silence: an ember that breathes
+  glow.kick *= .93;
+  glow.e += (target - glow.e) * (target > glow.e ? .22 : .08);  // rises fast, falls slowly, like light
+  el.style.setProperty("--e", glow.e.toFixed(3));
+  if (talk.on || glow.e > .01) glow.raf = requestAnimationFrame(glowLoop); else glow.raf = 0;
+}
+function glowStart() { if (!glow.raf) glow.raf = requestAnimationFrame(glowLoop); }
+function glowHeard() { if (talk.on) glow.kick = Math.min(.55, glow.kick + .22); }  // a word recognised while you speak
+
 function talkStart() {
   talk.on = true; $("#talkBtn").classList.add("on"); $("#talkBtn").innerHTML = `<span class="tw">${"<i></i>".repeat(5)}</span>`; voiceUnlock();
+  glowAudio(); glowStart();
   talkListen();
 }
 const TALK_BYE = /\b(au revoir|bonne (nuit|soirée|journée)|à (plus|tout à l'heure|demain|bientôt)|bye|ciao|salut naim, à|on (s'arrête|arrête) là|c'est fini pour (aujourd'hui|ce soir)|fin de la conversation)\b/i;
@@ -2774,6 +2840,7 @@ async function voiceLoop(my) {
     if (my !== voice.token) { URL.revokeObjectURL(url); break; }
     voice.preparing = false;
     const p = voicePlayer(); voice.audio = p; voice.spoke = true;
+    if (glow.linked && glow.ctx.state !== "running") await glow.ctx.resume().catch(() => {});  // its sound goes through the light's analyser
     await new Promise((ok) => { p.onended = p.onerror = ok; p.src = url; p.play().catch(ok); });
     voice.audio = null; voice.preparing = !voice.done || voice.queue.length > 0 || !!next; talk.quietAt = Date.now();
     URL.revokeObjectURL(url);
