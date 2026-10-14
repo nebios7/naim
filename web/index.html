@@ -5366,13 +5366,17 @@ async function loadMcp() {
   servers.forEach((m) => {
     const el = document.createElement("div"); el.className = "srow col";
     el.innerHTML = `<div style="display:flex;gap:10px;align-items:center"><span class="pdot ${m.running ? "run" : m.error ? "err" : ""}"></span><div class="sl"><b>${esc(m.name)} <span class="badge2">${m.type === "http" ? "distant" : "local"}</span></b><small class="mono">${esc(m.type === "http" ? m.url : [m.command, ...m.args].join(" "))}</small></div>
-      <div class="sc"><label class="chk" title="Toujours prêt : ses outils sont lus à chaque message (plus lourd). Sinon Naim les consulte seulement quand une tâche en a besoin." style="font-size:12.5px;color:var(--muted);gap:5px"><input type="checkbox" ${m.always ? "checked" : ""} data-mcp-always ${m.enabled ? "" : "disabled"}>Toujours prêt</label><label class="switch" title="Activé"><input type="checkbox" ${m.enabled ? "checked" : ""} data-mcp-toggle><span></span></label><button class="btn" data-mcp-restart>${m.running ? "Redémarrer" : "Démarrer"}</button><button class="btn danger" data-mcp-del>Supprimer</button></div></div>
+      <div class="sc"><label class="chk" title="Toujours prêt : ses outils sont lus à chaque message (plus lourd). Sinon Naim les consulte seulement quand une tâche en a besoin." style="font-size:12.5px;color:var(--muted);gap:5px"><input type="checkbox" ${m.always ? "checked" : ""} data-mcp-always ${m.enabled ? "" : "disabled"}>Toujours prêt</label><label class="switch" title="Activé"><input type="checkbox" ${m.enabled ? "checked" : ""} data-mcp-toggle><span></span></label><button class="btn" data-mcp-restart>${m.running ? "Redémarrer" : "Démarrer"}</button>${m.plugin ? "" : `<button class="btn" data-mcp-tolib title="Ne plus le lister à chaque conversation : Naim le cherche au besoin">Vers la bibliothèque</button>`}<button class="btn danger" data-mcp-del>Supprimer</button></div></div>
       ${m.error ? `<div class="error mono" style="font-size:12px;white-space:pre-wrap">${esc(m.error)}\n${esc(m.log.slice(-600))}</div>` : ""}
       ${m.tools.length ? `<div class="tlist">${m.tools.map((t) => `<span title="${esc(t.description)}">${esc(t.name)}</span>`).join("")}</div>` : ""}`;
     const save = async (mut) => { const cfg = Object.fromEntries(servers.map((x) => [x.name, cfgOf(x)])); mut(cfg); await api("/api/mcp", { method: "PUT", body: { servers: cfg } }); loadMcp(); };
     $("[data-mcp-toggle]", el).onchange = (e) => save((c) => (c[m.name].enabled = e.target.checked));
     $("[data-mcp-always]", el).onchange = (e) => save((c) => (c[m.name].always = e.target.checked));
     $("[data-mcp-del]", el).onclick = () => confirm(`Supprimer le serveur ${m.name} ?`) && save((c) => delete c[m.name]);
+    $("[data-mcp-tolib]", el) && ($("[data-mcp-tolib]", el).onclick = async () => {
+      const r = await api("/api/mcp/to-library", { method: "POST", body: { name: m.name } });
+      toast(r.error || `${m.name} est dans la bibliothèque MCP : Naim le cherchera quand il en aura besoin`); loadMcp(); mcpLibLoad?.();
+    });
     $("[data-mcp-restart]", el).onclick = async (e) => { e.target.textContent = "…"; await api(`/api/mcp/${encodeURIComponent(m.name)}/restart`, { method: "POST", body: {} }); loadMcp(); };
     box.appendChild(el);
   });

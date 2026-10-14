@@ -3062,6 +3062,10 @@ class Agent:
             import skills_bibliotheque
             if note := skills_bibliotheque.suggestion(self._task_words or task):
                 task += "\n\n" + note
+        if self.features.get("mcp", True) and not self.plan and not feedback and not self.subagent:
+            import mcp_bibliotheque  # the closest servers of the MCP library, when one really matches
+            if note := mcp_bibliotheque.suggestion(self._task_words or task):
+                task += "\n\n" + note
         if any(m.get("role") == "assistant" for m in self.messages[1:]) and not self.subagent:
             task += "\n\n(La conversation est déjà en cours : ne me salue pas et ne commence pas par mon prénom.)"
         if not feedback and not getattr(self, "subagent", False):

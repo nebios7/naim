@@ -1243,6 +1243,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
                 self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
+        elif path == "/api/mcp/to-library":  # one of the user's servers sent to the MCP library (found on demand)
+            import mcp_bibliotheque as lib
+            name = self.read_json().get("name", "")
+            conf = ext.MCP.config()
+            cfg = conf.get(name)
+            if not cfg or cfg.get("plugin"):
+                self.send_json({"error": "serveur inconnu (ou fourni par un plugin)"}, 400)
+            else:
+                try:
+                    import mcp_catalog
+                    desc = (mcp_catalog.CATALOG.get(name) or [None, ""])[1]
+                except Exception:  # noqa: BLE001
+                    desc = ""
+                lib.add(name, {k: v for k, v in cfg.items() if k not in ("enabled", "always", "plugin")},
+                        desc or cfg.get("description") or "", "mcp.json")
+                rest = {k: v for k, v in conf.items() if k != name and not v.get("plugin")}
+                ext.MCP.save_config(rest)
+                self.send_json({"ok": True})
         elif path == "/api/mcp/bibliotheque":
             import mcp_bibliotheque as lib
             b = self.read_json()
@@ -1748,6 +1766,10 @@ class Handler(BaseHTTPRequestHandler):
                 # a task, but no active skill for it: the closest ones of the library are proposed
                 import skills_bibliotheque
                 if note := skills_bibliotheque.suggestion(body["message"]):
+                    messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + note)
+            if (file_work or files) and helper.features.get("mcp", True):
+                import mcp_bibliotheque  # the closest servers of the MCP library, when one really matches
+                if note := mcp_bibliotheque.suggestion(body["message"]):
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + note)
         if any(m.get("role") == "assistant" for m in (body.get("history") or [])) and not body.get("_relaunched"):
             # mid-conversation: no « Salut Mohamed ! » at the start of every answer

@@ -58,15 +58,32 @@ def config(name):
     return {k: v for k, v in cfg.items() if k not in ("description", "source")} if cfg else None
 
 
-def search(query, n=8):
-    words = [w for w in re.findall(r"[a-z0-9][a-z0-9+#.-]{1,}", _plain(query)) if w not in STOP]
-    if not words:
+def search(query, n=8, min_score=1):
+    """The library's servers that best match the words of the task: name ×4, description ×2; whole words, and each
+    French word also looks for its English twin (the same dictionary as the skills library)."""
+    import skills_bibliotheque as sk
+    base = [w for w in re.findall(r"[a-z0-9][a-z0-9+#.-]{1,}", _plain(query)) if w not in STOP and w not in sk.STOP]
+    if not base:
         return []
+    words = list(dict.fromkeys(base + [t for w in base for t in (sk.FR_EN.get(w, "").split() + [sk.EN_FR.get(w, "")]) if t]))
+    bag = lambda t: frozenset(re.findall(r"[a-z0-9]+", _plain(t)))  # noqa: E731
     scored = []
     for name, cfg in servers().items():
-        hay_name, hay_desc = _plain(name), _plain(cfg.get("description", "") + " " + cfg.get("source", ""))
-        score = sum(4 * ((w[:6] if len(w) > 6 else w) in hay_name) + 2 * ((w[:6] if len(w) > 6 else w) in hay_desc) for w in words)
-        if score:
+        nm, desc = bag(name), bag(cfg.get("description", "") + " " + cfg.get("source", ""))
+        score = sum(4 * sk._hit(w, nm) + 2 * sk._hit(w, desc) for w in words)
+        if score >= min_score:
             scored.append((score, name, cfg))
     scored.sort(key=lambda x: -x[0])
     return [{"name": nm, "description": c.get("description", ""), "remote": bool(c.get("url"))} for _, nm, c in scored[:n]]
+
+
+def suggestion(task):
+    """The note joined to a task: the 2 closest servers of the MCP library (empty if none really matches)."""
+    try:
+        found = search(task, 2, min_score=4) if count() else []
+    except Exception:  # noqa: BLE001
+        return ""
+    if not found:
+        return ""
+    return ("[Bibliothèque MCP : ces serveurs pourraient servir à cette demande. Si l'un convient, use_mcp(server=nom) "
+            "pour voir ses outils ; sinon ignore-les.]\n" + "\n".join(f"- {s['name']} : {s['description'][:160]}" for s in found))

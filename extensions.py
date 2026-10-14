@@ -311,7 +311,8 @@ class MCPManager:
                         "env": cfg.get("env", {}), "enabled": cfg.get("enabled", True) is not False, "always": bool(cfg.get("always")),
                         "running": bool(srv and srv.alive), "error": srv.error if srv else None,
                         "tools": [{"name": t["name"], "description": t.get("description", "")} for t in (srv.tools if srv else [])],
-                        "log": "".join(srv.log[-20:]) if srv else ""})
+                        "log": "".join(srv.log[-20:]) if srv else "",
+                        "plugin": cfg.get("plugin") or ""})  # a plugin's server: never written to mcp.json, no « Vers la bibliothèque »
         return out
 
     def agent_tools(self):
