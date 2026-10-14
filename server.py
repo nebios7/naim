@@ -1336,6 +1336,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Naim travaille : réessaie quand il a fini."})
             else:
                 self.send_json({"ok": True, "removed": storage_clear(b.get("what", ""), bool(b.get("keep_pinned", True)))})
+        elif path == "/api/storage/purge":  # everything Naim keeps (not the user's files), deleted for good
+            b = self.read_json()
+            if _agents or _runs:
+                self.send_json({"error": "Naim travaille : réessaie quand il a fini."})
+            else:
+                keep = bool(b.get("keep_pinned", True))
+                self.send_json({"ok": True, "removed": sum(storage_clear(w, keep, permanent=True) for w in PURGEABLE)})
+        elif path == "/api/backup/delete":
+            b = self.read_json()
+            self.send_json(backup_delete(b.get("path"), everything=bool(b.get("all"))))
         elif path == "/api/save-copy":
             # « Télécharger » on a file card: a copy in ~/Downloads, shown in the Finder
             b = self.read_json()
@@ -2377,6 +2387,18 @@ def backup_make(note=""):
     return {"ok": True, "path": str(dst), "files": n, "size": dst.stat().st_size}
 
 
+def backup_delete(path=None, everything=False):
+    """One backup, or all of them, to the macOS Trash (they can be put back from the Finder)."""
+    if everything:
+        items = sorted(BACKUPS.glob("naim-sauvegarde-*.zip")) if BACKUPS.exists() else []
+    else:
+        p = Path(path or "").expanduser()
+        if p.parent.resolve() != BACKUPS.resolve() or not p.name.startswith("naim-sauvegarde-") or p.suffix != ".zip" or not p.is_file():
+            return {"error": "sauvegarde inconnue"}
+        items = [p]
+    return {"ok": True, "removed": to_trash(items, "sauvegardes")}
+
+
 def backup_list():
     out = []
     for f in sorted(BACKUPS.glob("naim-sauvegarde-*.zip"), reverse=True) if BACKUPS.exists() else []:
@@ -2430,8 +2452,12 @@ def storage_info():
     return out
 
 
-def storage_clear(what, keep_pinned=True):
-    """Empty one of Naim's data folders. Conversations: the pinned ones can be kept. Returns how many items went."""
+PURGEABLE = ("conversations", "joints", "apercus", "captures", "restauration")  # never the user's files nor learning
+
+
+def storage_clear(what, keep_pinned=True, permanent=False):
+    """Empty one of Naim's data folders (to the Trash, or for good when permanent). Conversations: the pinned ones
+    can be kept. Returns how many items went."""
     d = _storage_dirs().get(what)
     if not d or not Path(d).exists():
         return 0
@@ -2446,6 +2472,10 @@ def storage_clear(what, keep_pinned=True):
             except (OSError, ValueError):
                 pass
         items.append(f)
+    if permanent:  # « Tout supprimer définitivement », confirmed twice by the user: no Trash
+        for f in items:
+            shutil.rmtree(f, ignore_errors=True) if f.is_dir() else f.unlink(missing_ok=True)
+        return len(items)
     return to_trash(items, {"conversations": "conversations", "apercus": "aperçus", "captures": "captures",
                             "restauration": "points de restauration", "joints": "pièces jointes"}.get(what, what))
 

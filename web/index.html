@@ -5614,7 +5614,19 @@ async function loadStorage() {
     line("apercus", "Aperçus en cache", `${kb(st.apercus.size)} · miniatures des PDF et images (refaites au besoin)`, `<button class="btn" data-clear="apercus" ${st.apercus.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
     line("captures", "Captures d'écran", `${kb(st.captures.size)} · prises par Naim quand il contrôle l'écran`, `<button class="btn" data-clear="captures" ${st.captures.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
     line("restauration", "Points de restauration", `${kb(st.restauration.size)} · permettent « ↶ Annuler les modifications » et l'onglet Modifs`, `<button class="btn" data-clear="restauration" ${st.restauration.count ? "" : "disabled"}>Mettre à la Corbeille</button>`) +
-    line("apprentissage", `Tâches pour l'apprentissage : ${st.apprentissage.count}`, `${kb(st.apprentissage.size)} · gérées dans Personnaliser › Apprentissage`, "");
+    line("apprentissage", `Tâches pour l'apprentissage : ${st.apprentissage.count}`, `${kb(st.apprentissage.size)} · gérées dans Personnaliser › Apprentissage`, "") +
+    line("purge", "Tout supprimer définitivement", "Conversations, pièces jointes et brouillons, aperçus, captures et points de restauration, effacés sans passer par la Corbeille. Tes fichiers créés en mode Chat et l'apprentissage ne sont pas touchés.",
+      `<button class="btn danger" id="purgeAll">Tout supprimer définitivement</button>`);
+  $("#purgeAll").onclick = async () => {
+    if (!confirm("Tout supprimer définitivement ?\n\nConversations, pièces jointes et brouillons, aperçus, captures et points de restauration seront effacés SANS passer par la Corbeille : impossible de les récupérer.\n\nTes fichiers créés en mode Chat et l'apprentissage ne sont pas touchés.")) return;
+    const keep = c.pinned ? confirm(`Garder les ${c.pinned} conversation${c.pinned > 1 ? "s" : ""} épinglée${c.pinned > 1 ? "s" : ""} ?\n\nOK = les garder · Annuler = les effacer aussi`) : false;
+    if (!confirm("Dernière confirmation : effacer définitivement ?")) return;
+    const r = await api("/api/storage/purge", { method: "POST", body: { keep_pinned: keep } });
+    if (r.error) return toast(r.error);
+    toast(`${r.removed} élément${r.removed > 1 ? "s" : ""} effacé${r.removed > 1 ? "s" : ""} définitivement`);
+    if (current && !(keep && current.pinned)) { current = null; renderThread(); updateTitle(); }
+    loadList(); loadStorage();
+  };
   $$("[data-open]", box).forEach((b) => (b.onclick = () => api("/api/reveal", { method: "POST", body: { path: b.dataset.open } })));
   $$("[data-clear]", box).forEach((b) => (b.onclick = async () => {
     const w = b.dataset.clear; let keep = true;
@@ -5635,11 +5647,19 @@ async function loadBackups() {
   const { folder, backups } = await api("/api/backups");
   const mo = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)} Mo` : `${Math.max(1, Math.round(n / 1024))} Ko`;
   box.innerHTML = `<div class="srow"><div class="sl"><b>Sauvegarder maintenant</b><small>Conversations, mémoire, réglages, tâches planifiées, skills, serveurs MCP, NAIM.md et apprentissage, dans un seul fichier (sans le modèle ni tes clés).</small></div>
-      <div class="sc"><button class="btn" id="bkOpen">Ouvrir le dossier</button><button class="btn primary" id="bkMake">Sauvegarder</button></div></div>`
+      <div class="sc"><button class="btn" id="bkOpen">Ouvrir le dossier</button>${backups.length ? `<button class="btn danger" id="bkDelAll">Tout supprimer</button>` : ""}<button class="btn primary" id="bkMake">Sauvegarder</button></div></div>`
     + (backups.length ? backups.slice(0, 8).map((b) => `<div class="srow"><div class="sl"><b>${esc(b.date)}</b><small>${esc(b.name)} · ${mo(b.size)}</small></div>
-      <div class="sc"><button class="btn" data-restore="${esc(b.path)}">Restaurer</button></div></div>`).join("")
+      <div class="sc"><button class="btn" data-restore="${esc(b.path)}">Restaurer</button><button class="btn danger" data-bkdel="${esc(b.path)}" title="Mettre cette sauvegarde à la Corbeille">Supprimer</button></div></div>`).join("")
       : `<div class="srow"><div class="sl"><small>Aucune sauvegarde pour l'instant.</small></div></div>`);
   $("#bkOpen").onclick = () => api("/api/reveal", { method: "POST", body: { path: folder } });
+  $$("[data-bkdel]", box).forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Supprimer cette sauvegarde ?\n\n${b.dataset.bkdel.split("/").pop()}\n\nElle va à la Corbeille : on peut la remettre depuis le Finder.`)) return;
+    const r = await api("/api/backup/delete", { method: "POST", body: { path: b.dataset.bkdel } }); toast(r.error || "Sauvegarde mise à la Corbeille"); loadBackups();
+  }));
+  $("#bkDelAll") && ($("#bkDelAll").onclick = async () => {
+    if (!confirm(`Supprimer les ${backups.length} sauvegardes ?\n\nElles vont à la Corbeille : on peut les remettre depuis le Finder.`)) return;
+    const r = await api("/api/backup/delete", { method: "POST", body: { all: true } }); toast(r.error || `${r.removed} sauvegarde${r.removed > 1 ? "s" : ""} à la Corbeille`); loadBackups();
+  });
   $("#bkMake").onclick = async () => { const b = $("#bkMake"); b.disabled = true; b.textContent = "Sauvegarde…";
     const r = await api("/api/backup", { method: "POST", body: {} }); toast(r.ok ? `Sauvegardé : ${r.files} fichiers (${mo(r.size)})` : (r.error || "Échec")); loadBackups(); };
   $$("[data-restore]", box).forEach((b) => (b.onclick = async () => {
