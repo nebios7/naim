@@ -20,7 +20,8 @@ from pathlib import Path
 
 import extensions as ext
 
-MAX_ARCHIVE = 60 * 1024 * 1024   # download limit
+MAX_ARCHIVE = 1024 * 1024 * 1024  # download limit (1 Go): the archive goes to disk, never whole in memory
+CACHE_DIR = ext.HOME / "cache" / "depots-skills"  # downloaded archives, kept 10 min (browse then install)
 MAX_SKILL = 25 * 1024 * 1024     # size limit of one installed skill
 POPULAR = [
     {"url": "anthropics/skills", "title": "Skills officiels (documents, PDF, Excel…)",
@@ -59,25 +60,40 @@ def parse_url(url):
 
 
 def _download(owner, repo, ref):
+    """The repository's archive, written to disk as it arrives (up to 1 Go); its path."""
     key = (owner, repo, ref)
-    if key in _cache and time.time() - _cache[key][0] < 600:
+    if key in _cache and time.time() - _cache[key][0] < 600 and _cache[key][1].exists():
         return _cache[key][1]
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    for old in CACHE_DIR.glob("*.tar.gz"):  # archives older than 10 minutes: not needed any more
+        if time.time() - old.stat().st_mtime > 600:
+            old.unlink(missing_ok=True)
+    dst = CACHE_DIR / re.sub(r"[^\w.-]", "_", f"{owner}-{repo}-{ref}.tar.gz")
+    tmp = dst.with_suffix(".part")
     url = f"https://github.com/{owner}/{repo}/archive/{ref}.tar.gz"
     req = urllib.request.Request(url, headers={"User-Agent": ext.UA})
+    size = 0
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            data = r.read(MAX_ARCHIVE + 1)
+        with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
+            while chunk := r.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_ARCHIVE:
+                    raise SkillError("dépôt trop gros (plus de 1 Go)")
+                f.write(chunk)
+    except SkillError:
+        tmp.unlink(missing_ok=True)
+        raise
     except Exception as e:
+        tmp.unlink(missing_ok=True)
         raise SkillError(f"téléchargement impossible de {owner}/{repo} : {e}")
-    if len(data) > MAX_ARCHIVE:
-        raise SkillError("dépôt trop gros (plus de 60 Mo)")
-    _cache[key] = (time.time(), data)
-    return data
+    tmp.replace(dst)
+    _cache[key] = (time.time(), dst)
+    return dst
 
 
-def _members(data):
-    """{relative path inside the repo: TarInfo} for regular files, plus the open archive."""
-    tar = tarfile.open(fileobj=io.BytesIO(data), mode="r:gz")
+def _members(archive):
+    """{relative path inside the repo: TarInfo} for regular files, plus the open archive (read from disk)."""
+    tar = tarfile.open(archive, mode="r:gz") if isinstance(archive, Path) else tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz")
     files = {}
     for m in tar.getmembers():
         if not m.isfile():
