@@ -1116,14 +1116,31 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
                 self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
+        elif path == "/api/skills/to-library":  # an active skill sent to the library (found on demand, not in every prompt)
+            import skills_bibliotheque as lib
+            src = Path(self.read_json().get("path", "")).expanduser().resolve().parent
+            base = (ext.HOME / "skills").resolve()
+            if src.parent != base or not (src / "SKILL.md").is_file():
+                self.send_json({"error": "seules tes skills actives peuvent aller dans la bibliothèque"}, 400)
+            else:
+                lib.LIB.mkdir(parents=True, exist_ok=True)
+                dst, k = lib.LIB / src.name, 1
+                while dst.exists():
+                    dst, k = lib.LIB / f"{src.name}-{k}", k + 1
+                shutil.move(str(src), str(dst))
+                self.send_json({"ok": True, "name": dst.name})
         elif path in ("/api/skills/browse", "/api/skills/install"):
             b = self.read_json()
             try:
                 if path.endswith("browse"):
                     self.send_json({"skills": skill_hub.browse(b.get("url", ""))})
                 else:
-                    self.send_json({"installed": skill_hub.install(b.get("url", ""), b.get("names") or None,
-                                                                   b.get("project"), b.get("scope", "utilisateur"))})
+                    scope, names = b.get("scope", "utilisateur"), b.get("names") or None
+                    # guard: more than 30 skills at once as ACTIVE skills would fill Naim's instructions (each one is
+                    # read at every conversation): they go to the library instead, and the window says so
+                    to_library = scope != "bibliotheque" and len(names or skill_hub.browse(b.get("url", ""))) > 30
+                    installed = skill_hub.install(b.get("url", ""), names, b.get("project"), "bibliotheque" if to_library else scope)
+                    self.send_json({"installed": installed, "moved_to_library": to_library})
             except skill_hub.SkillError as e:
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
@@ -1727,6 +1744,11 @@ class Handler(BaseHTTPRequestHandler):
                 import libs
                 if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
                     messages[-1] = dict(messages[-1], content=messages[-1]["content"] + "\n\n" + lp)
+            elif file_work or files:
+                # a task, but no active skill for it: the closest ones of the library are proposed
+                import skills_bibliotheque
+                if note := skills_bibliotheque.suggestion(body["message"]):
+                    messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + note)
         if any(m.get("role") == "assistant" for m in (body.get("history") or [])) and not body.get("_relaunched"):
             # mid-conversation: no « Salut Mohamed ! » at the start of every answer
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (

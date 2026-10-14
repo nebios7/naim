@@ -20,6 +20,31 @@ ce cette ces qui que quoi comment faire fais fait je tu il on nous vous moi a th
 how make create use using""".split())
 
 
+# the usual words of a French request and their English twins (most skills are written in English), both ways
+FR_EN = {
+    "facture": "invoice", "devis": "quote estimate", "graphique": "chart graph", "diagramme": "diagram chart",
+    "schema": "diagram schema", "tableur": "spreadsheet excel", "tableau": "table spreadsheet", "presentation": "slides presentation powerpoint",
+    "diapo": "slides", "diapositive": "slide", "rapport": "report", "lettre": "letter", "courriel": "email", "mail": "email",
+    "image": "image picture", "photo": "photo image", "video": "video", "son": "audio sound", "musique": "music audio",
+    "traduction": "translation translate", "traduire": "translate", "resume": "summary summarize", "resumer": "summarize",
+    "recherche": "research search", "chercher": "search find", "site": "website web", "application": "app application",
+    "jeu": "game", "base": "database", "donnees": "data", "securite": "security", "test": "test testing", "tests": "testing",
+    "deploiement": "deploy deployment", "serveur": "server", "contrat": "contract legal", "juridique": "legal",
+    "comptabilite": "accounting finance", "banque": "bank finance", "marketing": "marketing", "vente": "sales",
+    "cv": "resume cv", "candidature": "application job", "emploi": "job", "recrutement": "hiring recruiting",
+    "medical": "medical health", "sante": "health", "infirmier": "nurse nursing", "cours": "course lesson", "eleve": "student",
+    "apprendre": "learn learning", "planning": "schedule planning", "calendrier": "calendar", "reunion": "meeting",
+    "note": "notes", "memo": "memo notes", "conception": "design", "dessin": "drawing design", "logo": "logo brand",
+    "couleur": "color", "police": "font typography", "carte": "map card", "mobile": "mobile ios android",
+    "telephone": "phone mobile", "fichier": "file", "dossier": "folder", "pdf": "pdf", "word": "docx word",
+    "nettoyer": "clean", "analyse": "analysis analyze", "statistiques": "statistics stats", "prevision": "forecast",
+}
+EN_FR = {}
+for _fr, _en in FR_EN.items():
+    for _w in _en.split():
+        EN_FR.setdefault(_w, _fr)
+
+
 def _plain(s):
     return unicodedata.normalize("NFD", str(s or "")).encode("ascii", "ignore").decode().lower()
 
@@ -69,22 +94,58 @@ def count():
     return len(index())
 
 
-def search(query, n=8):
-    """The library's skills that best match the words of the task: name ×4, description ×2, beginning of the text ×1."""
-    words = _words(query)
-    if not words:
+SUFFIXES = ("", "s", "es", "e", "ed", "er", "ers", "ing", "ion", "ions", "ent", "ant", "al", "ale", "aux", "ique", "iques", "ic", "ics")
+_TOK = {"stamp": None, "data": []}
+
+
+def _tokens():
+    """Each skill with the whole words of its name, description and beginning (kept until the library changes)."""
+    stamp = _stamp()
+    if _TOK["stamp"] != stamp:
+        bag = lambda t: frozenset(re.findall(r"[a-z0-9]+", _plain(t)))  # noqa: E731
+        _TOK["data"] = [(s, (bag(s["name"] + " " + s["dir"]), bag(s["description"]), bag(s["head"]))) for s in index()]
+        _TOK["stamp"] = stamp
+    return _TOK["data"]
+
+
+def _hit(w, bag):
+    """The word itself, or a real variant of it (plural, conjugation): « chart » finds « charts », « graph » is not « graphql »."""
+    if w in bag:
+        return True
+    root = w[:-1] if len(w) > 5 and w.endswith(("e", "s")) else w
+    return len(root) >= 4 and any(root + suf in bag for suf in SUFFIXES)
+
+
+def search(query, n=8, min_score=1):
+    """The library's skills that best match the words of the task: name ×4, description ×2, beginning of the text ×1
+    (each French word also looks for its English twin, and the other way round)."""
+    base = _words(query)
+    if not base:
         return []
+    words = list(dict.fromkeys(base + [t for w in base for t in (FR_EN.get(w, "").split() + [EN_FR.get(w, "")]) if t]))
     scored = []
-    for s in index():
-        name, desc, head = _plain(s["name"] + " " + s["dir"]), _plain(s["description"]), _plain(s["head"])
+    for s, (name, desc, head) in _tokens():
         score = 0
         for w in words:
-            stem = w[:6] if len(w) > 6 else w
-            score += 4 * (stem in name) + 2 * (stem in desc) + 1 * (stem in head)
-        if score:
+            score += 4 * _hit(w, name) + 2 * _hit(w, desc) + 1 * _hit(w, head)
+        if score >= min_score:
             scored.append((score, s))
     scored.sort(key=lambda x: -x[0])
     return [s for _, s in scored[:n]]
+
+
+def suggestion(task):
+    """The note joined to a task when no active skill fits it: the 3 closest skills of the library (empty if none really
+    matches). Costs ~15 ms and a few lines; the instructions themselves never grow."""
+    try:
+        found = search(task, 3, min_score=4) if count() else []
+    except Exception:  # noqa: BLE001
+        return ""
+    if not found:
+        return ""
+    return ("[Bibliothèque de skills : ces méthodes pourraient servir à cette demande. Si l'une la couvre, charge-la avec "
+            "use_skill(nom) avant de commencer ; sinon ignore-les.]\n"
+            + "\n".join(f"- {s['name']} : {s['description'][:160]}" for s in found))
 
 
 def find(name):

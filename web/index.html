@@ -5413,8 +5413,12 @@ async function loadSkillsPage() {
   skills.forEach((k) => {
     const el = document.createElement("div"); el.className = "srow";
     el.innerHTML = `<div class="sl"><b><span class="skic">${svgI("book")}</span>${esc(k.name)} <span class="badge2">${esc(k.scope)}</span></b><small class="clamp2" title="Cliquer pour tout lire">${esc(k.description)}</small></div>
-      <div class="sc"><label class="switch" title="Activé"><input type="checkbox" ${k.enabled ? "checked" : ""}><span></span></label><button class="btn" data-edit>Modifier</button><button class="btn danger" data-del>Supprimer</button></div>`;
+      <div class="sc"><label class="switch" title="Activé"><input type="checkbox" ${k.enabled ? "checked" : ""}><span></span></label><button class="btn" data-edit>Modifier</button>${k.scope === "utilisateur" ? `<button class="btn" data-tolib title="Ne plus la lire à chaque conversation : Naim la cherche au besoin">Vers la bibliothèque</button>` : ""}<button class="btn danger" data-del>Supprimer</button></div>`;
     $("input", el).onchange = (e) => { const set = new Set(S.disabled_skills); e.target.checked ? set.delete(k.name) : set.add(k.name); S.disabled_skills = [...set]; saveSettings(); };
+    $("[data-tolib]", el) && ($("[data-tolib]", el).onclick = async () => {
+      const r = await api("/api/skills/to-library", { method: "POST", body: { path: k.path } });
+      toast(r.error || `${k.name} est dans la bibliothèque : Naim la cherchera quand il en aura besoin`); loadSkillsPage();
+    });
     $("[data-del]", el).onclick = async () => { if (!confirm(`Supprimer le skill ${k.name} ?`)) return; await fetch(`/api/skill?path=${encodeURIComponent(k.path)}`, { method: "DELETE" }); loadSkillsPage(); };
     $("[data-edit]", el).onclick = async () => {
       const r = await api(`/api/skill?path=${encodeURIComponent(k.path)}`);
@@ -5437,7 +5441,8 @@ async function loadSkillsPage() {
       if (btn) { btn.disabled = true; btn.textContent = "Installation…"; }
       const res = await api("/api/skills/install", { method: "POST", body: { url, names, scope: $("#hubScope").value } });
       if (res.error) { toast(res.error); if (btn) { btn.disabled = false; btn.textContent = "Installer"; } return; }
-      toast(`${$("#hubScope").value === "bibliotheque" ? "Dans la bibliothèque" : "Installé"} : ${res.installed.length > 6 ? res.installed.length + " skills" : res.installed.join(", ")}`); loadSkillsPage();
+      toast(res.moved_to_library ? `${res.installed.length} skills mises dans la bibliothèque (plus de 30 d'un coup en skills actives ralentiraient Naim)`
+        : `${$("#hubScope").value === "bibliotheque" ? "Dans la bibliothèque" : "Installé"} : ${res.installed.length > 6 ? res.installed.length + " skills" : res.installed.join(", ")}`); loadSkillsPage();
     };
     r.skills.forEach((k) => {
       const el = document.createElement("div"); el.className = "srow";
