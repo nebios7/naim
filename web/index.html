@@ -6011,14 +6011,16 @@ const warmState = { i: 0, timer: 0, last: null };
 function warmPhrases(w, long) {
   const mode = /agent/i.test(w?.step || "") ? "Agent" : "Chat", pct = w?.pct != null ? ` · ${w.pct} %` : "";
   const n = /\((\d)\/2\)/.exec(w?.step || "")?.[1] || "1";
+  // the engine reads ONE text, from start to end: the percentage is real, the other lines say what that text holds
+  // (never « now it does X »: the order of the parts is not followed)
   return long ? [
     `Naim lit ses consignes ${mode === "Agent" ? "de l'Agent" : "du Chat"}${pct}`,
-    `Naim charge ses outils (${mode})`,
-    "Naim relit ta mémoire et tes préférences",
-    w?.skills ? `Naim range ses ${w.skills} skills` : "Naim range ses skills",
-    w?.mcp ? `Naim prépare ses ${w.mcp} serveurs MCP` : "Naim prépare ses serveurs MCP",
-    `Préparation ${n}/2 : la première réponse sera rapide`,
-  ] : [`${mode} ${w?.pct != null ? w.pct + " %" : "…"}`, "consignes…", "outils…", "mémoire…", "skills…"];
+    "Dans ce qu'il lit : la description de ses outils",
+    "Dans ce qu'il lit : ta mémoire et tes préférences",
+    w?.skills ? `Dans ce qu'il lit : la liste de ses ${w.skills} skills` : "Dans ce qu'il lit : la liste de ses skills",
+    w?.mcp ? `Dans ce qu'il lit : ses ${w.mcp} serveurs MCP` : "Dans ce qu'il lit : ses serveurs MCP",
+    `Préparation ${n}/2 : ensuite, la première réponse partira vite`,
+  ] : [`${mode} ${w?.pct != null ? w.pct + " %" : "…"}`, `lecture ${w?.pct != null ? w.pct + " %" : "…"}`];
 }
 function warmLine(w, long) {
   const list = warmPhrases(w, long);
