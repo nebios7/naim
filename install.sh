@@ -56,6 +56,11 @@ else
   warn "llama.cpp absent : Naim utilisera Ollama s'il est installé (brew install llama.cpp pour le moteur rapide)."
 fi
 command -v xcodegen >/dev/null || [ -z "$brew_bin" ] || warn "xcodegen absent : utile pour les apps iOS (brew install xcodegen)."
+# Python for documents (skills word, excel, pptx): python-docx, openpyxl, python-pptx, lxml
+if [ ! -x "$HOME/.naim/docs-venv/bin/python" ] && command -v python3 >/dev/null; then
+  python3 -m venv "$HOME/.naim/docs-venv" && "$HOME/.naim/docs-venv/bin/pip" install -q python-docx openpyxl python-pptx lxml defusedxml \
+    && ok "Python pour les documents (Word, Excel, PowerPoint)" || warn "Python pour les documents : installation incomplète"
+fi
 # small tools Naim uses: fast search (ripgrep, fd), Bluetooth and sound output (skill mac)
 missing=""
 for t in rg:ripgrep fd:fd blueutil:blueutil SwitchAudioSource:switchaudio-osx; do

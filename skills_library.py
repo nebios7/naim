@@ -60,15 +60,87 @@ ul { margin: 3pt 0 6pt 14pt; padding: 0 } li { margin: 1.5pt 0 }
 - Vérifier : relire le fichier avec openpyxl et afficher quelques cellules.
 - Lire un .xlsx existant : `read_file`. Version PDF : tableau HTML (`<table>`) puis `convert_document`.
 """),
-    "word": ("Créer des documents Word (.docx) : titres, paragraphes, tableaux, images.", """# Word
+    "word": ("Créer, lire et modifier des documents Word (.docx) : mise en page, tableaux, en-têtes, suivi des modifications, commentaires.", r"""# Word (.docx) — créer, modifier, vérifier
 
-- Bibliothèque : `python-docx`.
-- Structure : `doc.add_heading(text, level)`, `doc.add_paragraph`, styles `List Bullet`, `doc.add_table(rows, cols, style="Table Grid")`.
-- Images : `doc.add_picture(path, width=Inches(5))`. Saut de page : `doc.add_page_break()`.
-- Marges et police : `section.left_margin`, `style.font.name = "Calibri"`.
-- Enregistrer puis vérifier en relisant avec python-docx (nombre de paragraphes, tableaux).
-- Lire un .docx existant : `read_file` (donne son texte). Le convertir : `convert_document` (→ .pdf, .rtf, .odt, .html, .txt).
-- Version PDF demandée : suivre le skill pdf (page HTML soignée puis `convert_document`), pas python-docx.
+Python à utiliser (déjà prêt, ne fais pas de pip install) : `~/.naim/docs-venv/bin/python` (python-docx, lxml).
+Écris un script `faire_doc.py` dans ton brouillon, lance-le avec ce Python, puis VÉRIFIE (étape 4).
+Version PDF seulement : skill pdf (page HTML soignée puis convert_document), pas Word.
+
+## 1. Choisir la méthode
+| Demande | Méthode |
+|---|---|
+| Nouveau document | script python-docx (section 2) |
+| Changer un texte, ajouter un paragraphe à un .docx existant | python-docx en ouvrant le fichier (section 3) |
+| Suivi des modifications, commentaires, garder une mise en forme complexe | XML + scripts de la skill docx (section 5) |
+| Lire un .docx | `read_file` (son texte) · structure fine : `pandoc -t markdown fichier.docx` |
+| Un vieux .doc | `textutil -convert docx fichier.doc` d'abord |
+Ne remplace jamais le fichier de l'utilisateur : écris `nom-modifie.docx` à côté, sauf s'il demande l'inverse.
+
+## 2. Créer : les pièges qui cassent un document
+```python
+from docx import Document
+from docx.shared import Pt, Cm, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+doc = Document()
+s = doc.sections[0]; s.page_width, s.page_height = Cm(21), Cm(29.7)        # A4 (le modèle par défaut est en Letter)
+for m in ("left_margin", "right_margin", "top_margin", "bottom_margin"): setattr(s, m, Cm(2))
+n = doc.styles["Normal"]; n.font.name = "Calibri"; n.font.size = Pt(11)
+n.element.rPr.rFonts.set(qn("w:eastAsia"), "Calibri")                     # sinon la police n'est pas partout
+```
+- **Titres** : `doc.add_heading(texte, level=1)` (styles intégrés : seuls eux vont dans une table des matières).
+- **Listes** : `doc.add_paragraph(t, style="List Bullet")` ou `"List Number"` ; jamais un « • » tapé à la main.
+- **Retour à la ligne** : un paragraphe par ligne ; jamais `\n` dans un texte.
+- **Tableaux** : `t = doc.add_table(rows=1, cols=3); t.style = "Table Grid"; t.autofit = False`, puis la largeur
+  sur CHAQUE cellule de chaque ligne (`cell.width = Cm(5)`) : sur la colonne seule, Word l'ignore.
+  En-tête en gras : `cell.paragraphs[0].runs[0].bold = True`. Fond : ombrage `w:shd` avec `w:val="clear"`.
+- **Saut de page** : `doc.add_page_break()` · **paysage** : `s.orientation = WD_ORIENT.LANDSCAPE` ET inverser
+  `page_width` / `page_height`.
+- **En-tête / pied** : `s.header.paragraphs[0].text = "…"` ; numéro de page = un champ PAGE :
+```python
+r = s.footer.paragraphs[0].add_run()
+for kind, txt in (("begin", None), (None, "PAGE"), ("end", None)):
+    el = OxmlElement("w:fldChar" if kind else "w:instrText")
+    if kind: el.set(qn("w:fldCharType"), kind)
+    else: el.set(qn("xml:space"), "preserve"); el.text = txt
+    r._r.append(el)
+```
+- **Images** : `doc.add_picture("img.png", width=Cm(12))` (PNG ou JPG).
+- **Texte aligné à droite sur la même ligne** (date, prix) : une tabulation droite, pas des espaces.
+
+## 3. Modifier un .docx existant
+```python
+doc = Document("lettre.docx")
+for p in doc.paragraphs:
+    for r in p.runs:
+        if "2025" in r.text: r.text = r.text.replace("2025", "2026")   # garde la mise en forme du morceau
+doc.save("lettre-modifie.docx")
+```
+Word coupe souvent une phrase en plusieurs morceaux (runs) : si le texte cherché n'est dans aucun run, fusionne-les
+d'abord : `~/.naim/docs-venv/bin/python ~/.naim/skills/docx/scripts/merge_runs.py lettre.docx -o fusion.docx`.
+Les tableaux : `doc.tables[0].cell(1, 2).text`.
+
+## 4. VÉRIFIER (obligatoire avant de répondre)
+```bash
+bash ~/.naim/skills/word/apercu.sh "rapport.docx"      # → rapport.apercu.pdf (exporté par Word lui-même)
+```
+puis `look_at` sur le PDF : titres, tableaux, pages, rien de coupé ou de vide. Corrige et recommence sinon.
+Supprime l'aperçu ensuite (il est à côté du document). La première fois, Word peut demander l'accès au dossier :
+l'utilisateur clique « Autoriser ».
+
+## 5. Suivi des modifications et commentaires (XML)
+Scripts prêts dans `~/.naim/skills/docx/scripts` (lis `~/.naim/skills/docx/SKILL.md`, sections « Editing » et
+« Comments », pour le détail ; lance-les avec `~/.naim/docs-venv/bin/python`) :
+- Ouvrir : `mkdir x && cd x && unzip -q ../doc.docx` · éditer `word/document.xml` sans le reformater · refermer :
+  `cd x && zip -Xr ../doc-modifie.docx .`
+- Modification suivie : le texte supprimé dans `<w:del w:id="1" w:author="Naim" w:date="2026-01-01T00:00:00Z">`
+  avec `<w:delText>`, l'ajout dans `<w:ins …>` ; vérifier : `office/validate.py doc-modifie.docx --original doc.docx --author Naim`
+- Commentaire : `comment.py doc.docx "Préciser les dates" -o commente.docx` puis placer les marques qu'il affiche.
+- Tout accepter : `pandoc --track-changes=accept doc.docx -o propre.docx` (LibreOffice n'est pas installé).
+
+## 6. Répondre
+Le chemin du document, ce qu'il contient en 2 lignes, et ce que tu as vérifié dans l'aperçu.
 """),
     "presentation": ("Créer une présentation PowerPoint (.pptx) claire, une idée par diapositive.", """# Présentation
 
