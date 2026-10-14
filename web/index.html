@@ -4812,7 +4812,7 @@ const TABS = {
     <div class="profiles">${Object.entries(PROFILES).map(([k, [t, d]]) => `<button class="profile${currentProfile() === k ? " on" : ""}" data-profile="${k}"><b>${t}</b><small>${d}</small></button>`).join("")}</div>
     <div class="sgroup">
       ${row("Dossier de projet par défaut", "", `<input class="field mono" type="text" data-k="project" value="${esc(S.project)}" style="width:260px"><button class="ghost" id="sPick">Choisir…</button>`)}
-      ${row("Nombre max d'étapes par tâche", "L'agent s'arrête après ce nombre d'actions (tout à droite : sans limite). Pour une grande application : 200 ou plus.", range("max_steps", 10, 310, 10, FMT.max_steps))}
+      ${row("Étapes au départ", "Le nombre d'actions accordées au départ. Tant que Naim avance (fichiers écrits, étapes cochées, commandes réussies), il en reçoit 50 de plus, jusqu'à 1000 ; il ne s'arrête que s'il n'avance plus pendant 25 étapes. Tout à droite : sans limite. Pour une grande application, mets plutôt l'Effort sur Élevé (à côté de la jauge).", range("max_steps", 10, 310, 10, FMT.max_steps))}
     </div>
     <div class="sgroup">
       ${row("Autoriser automatiquement les écritures de fichiers", "Création et modification sans confirmation.", sw("auto_writes"))}
