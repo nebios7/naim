@@ -246,7 +246,8 @@ def repeating(text):
 # a reply that only announces an action (« Je vais envoyer… ») instead of doing it
 ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
                          r"envoie|prépare|regarde|vérifie|imprime|appelle)\b|(?:je vais|laisse-moi|je dois|il (?:me )?faut|je commence par|commençons par)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
-                         r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim))",
+                         r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim|"
+                         r"ajout|rajout|mett|chang|corrig|refai|dessin|termin|complét|rectifi|remplac|retouch|réécri|recré))",
                          re.I | re.M)
 # a remark on the previous result (« pas obligé de… », « t'as rien compris », « c'est pas ça »), not a new request
 FEEDBACK_RE = re.compile(r"pas oblig|rien compris|pas compris|c'?est pas [cç]a|ce n'?est pas [cç]a|je t'?ai (dit|demand)|"
@@ -2005,7 +2006,14 @@ class Agent:
             res = diagrams.render(code, dst, theme=theme or "default")
         except diagrams.DiagramError as e:
             return f"error: {e}"
-        return res + " — vérifie-le avec look_at."
+        # its code is kept next to it: to change the diagram later, edit this code (never redraw it from memory)
+        src = dst.with_suffix(".dot" if re.match(r"\s*(strict\s+)?(di)?graph\b[^\n{]*\{", str(code)) else ".mmd")
+        try:
+            src.write_text(diagrams._clean(code) + "\n")
+            kept = f" Code gardé : {self.rel(src)} (pour le modifier : read_file de ce fichier, change seulement ce qui est demandé, puis make_diagram vers le même fichier)."
+        except OSError:
+            kept = ""
+        return res + " — vérifie-le avec look_at." + kept
 
     def look_at(self, path, page=1):
         """Render a deliverable to an image and show it to the model (once), plus a thumbnail in the chat."""

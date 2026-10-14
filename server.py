@@ -105,7 +105,7 @@ NOT_NOW_RE = re.compile(r"\bn['’e]\s*(?:\w+\s+){0,2}?(?:pas|rien|plus|jamais)\
 MAKE_RE = re.compile(r"\b(cr[ée]e[rz]?|fais|faire|fait|g[ée]n[èe]re[rz]?|dessine[rz]?|[ée]cri[st]|[ée]crire|r[ée]dige[rz]?|"
                      r"pr[ée]pare[rz]?|construi\w*|con[çc]oi\w*|plans?|sch[ée]mas?|nouveau|nouvelle)\b", re.I)
 # the user wants files made or changed (a document, their project), not only an answer
-FILE_WORK_RE = re.compile(r"images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
+FILE_WORK_RE = re.compile(r"\b(?:r?ajout\w*|chang\w*|remplac\w*|rectifi\w*|refai\w*|retouch\w*|corrig\w*)\b|images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
                           r"installe|lance|ex[ée]cute|teste|" + MAC_ACTION, re.I)  # a file name alone (« un exemple chronometre.py ») is a question
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
@@ -1671,6 +1671,12 @@ class Handler(BaseHTTPRequestHandler):
             if ctx:
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + f"\n\n[Contexte ajouté par un hook de l'utilisateur]\n{ctx}")
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
+        prev_answer = next((str(m.get("content") or "") for m in reversed(body.get("history") or []) if m.get("role") == "assistant"), "")
+        if not file_work and not plain and not pure_question(body["message"] or "") and any(
+                ANNOUNCE_RE.search(x) for x in re.split(r"(?<=[.!?…])\s+", prev_answer.strip()[-600:]) if x):
+            # its last answer announced an action it did not do (« Je vais ajouter un titre… »): the user's « j'attends »,
+            # « tu bloques », « vas-y » asks for that action — with the tools, not another announcement
+            file_work = True
         named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
         # « imprime mon CV PDF », « envoie le document »: acting on a file that exists is not making one, no skill
         acting_only = bool(MAC_ACTION_RE.search(body["message"] or "")) and not MAKE_RE.search(body["message"] or "")

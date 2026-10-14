@@ -164,7 +164,17 @@ Le chemin du document, ce qu'il contient en 2 lignes, et ce que tu as vérifié 
 5. Livrer : script `analyse.py` + graphiques + résumé en 5 points avec les chiffres clés.
    Rapport demandé : suivre le skill rapport (page HTML avec les graphiques, puis PDF).
 """),
-    "schemas": ("Dessiner un schéma en fichier PNG/SVG/PDF : architecture, flux, séquence, base de données, organigramme, Gantt, carte mentale.", """# Schémas (Mermaid → fichier)
+    "schemas": ("Dessiner, modifier et expliquer un schéma (PNG/SVG/PDF) : architecture, flux, séquence, base de données, organigramme, Gantt.", r"""# Schémas (Mermaid → fichier)
+
+## Avant de dessiner
+- **Le sujet** : « fais-moi un diagramme » sans dire de quoi → demande-le en UNE question (« un diagramme de quoi :
+  ton projet, une procédure, un organigramme… ? ») et ATTENDS. N'invente jamais un sujet.
+- **Modifier un schéma qui existe** (« ajoute un titre », « change la couleur », « corrige la flèche ») : NE LE REFAIS
+  PAS. Lis son code gardé à côté de l'image (`docs/architecture.mmd`, même nom, extension .mmd) avec read_file,
+  change seulement ce qui est demandé (edit_file sur le .mmd ou nouveau code identique au reste), puis make_diagram vers
+  LE MÊME fichier image. Pas de .mmd (ancien schéma) : réécris le code à l'identique d'après l'image (look_at), puis
+  applique seulement la modification.
+- **Expliquer un schéma** (« explique », « j'ai pas compris ») : NE LE REDESSINE PAS. Explique-le dans la conversation.
 
 ## Méthode
 1. Comprendre ce qu'il faut montrer. Si c'est un projet existant : list_files, lire les fichiers clés (points d'entrée,
@@ -172,10 +182,33 @@ Le chemin du document, ce qu'il contient en 2 lignes, et ce que tu as vérifié 
 2. Choisir le type : architecture / flux → `flowchart LR` (ou TB) ; échanges dans le temps → `sequenceDiagram` ;
    base de données → `erDiagram` ; classes → `classDiagram` ; étapes d'un objet → `stateDiagram-v2` ;
    planning → `gantt` ; idées → `mindmap` ; chronologie → `timeline` ; répartition → `pie`.
-3. `make_diagram` code=… output=`docs/architecture.png` (PNG pour un mail ou un document, SVG pour le web, PDF pour imprimer).
-4. Erreur de syntaxe : lire la ligne indiquée, corriger, relancer make_diagram.
-5. `look_at` sur le fichier : textes lisibles ? rien ne se chevauche ? trop large → passer de LR à TB ou regrouper.
-6. Répondre avec le nom du fichier et 2-3 phrases qui expliquent le schéma.
+3. Un schéma complet a TOUJOURS : un **titre** (en tête du code, voir ci-dessous), des **textes en français clairs**
+   (« Base de données des clients », pas `db1`), des **groupes** par couche (subgraph), des **flèches nommées** (ce qui
+   passe : « commande », « HTTPS »), des **couleurs par couche** (classDef) et, s'il y a plusieurs formes ou couleurs,
+   une **légende** (un subgraph « Légende »). 12 boîtes au plus : au-delà, faire deux schémas.
+4. `make_diagram` code=… output=`docs/architecture.png` (PNG pour un mail ou un document, SVG pour le web, PDF pour
+   imprimer). Le code est gardé tout seul à côté (`docs/architecture.mmd`) : c'est lui qu'on modifie ensuite.
+5. Erreur de syntaxe : lire la ligne indiquée, corriger, relancer make_diagram.
+6. `look_at` sur le fichier : titre présent ? textes lisibles ? rien ne se chevauche ? trop large → TB ou regrouper.
+7. Répondre : le nom du fichier, puis l'explication (section « Expliquer »).
+
+## Le titre (et les réglages) en tête du code
+```
+---
+title: Architecture de l'application de stage
+---
+flowchart LR
+  …
+```
+(gantt : `title …` dans le diagramme lui-même, voir le modèle.)
+
+## Expliquer à quelqu'un qui n'est pas développeur
+1. Une phrase : ce que montre le schéma, dans son ensemble.
+2. Chaque groupe, de gauche à droite (ou de haut en bas), en mots simples : ce qu'il est, à quoi il sert.
+3. Le chemin d'un exemple concret, en suivant les flèches (« quand tu ajoutes une carte : le site web l'envoie à l'API,
+   qui l'enregistre dans la base »).
+4. Ce que veulent dire les formes et les couleurs (la légende).
+Pas de jargon sans l'expliquer (API = « le programme qui reçoit les demandes »).
 
 ## Règles de syntaxe qui évitent 90 % des erreurs
 - Identifiants simples sans accents ni espaces (`api`, `db1`), texte affiché entre crochets : `api[API Flask]`.
@@ -188,6 +221,9 @@ Le chemin du document, ce qu'il contient en 2 lignes, et ce que tu as vérifié 
 
 ## Modèles
 ```
+---
+title: Architecture de l'application
+---
 flowchart LR
   subgraph client["Clients"]
     web["Site web"]
@@ -200,8 +236,17 @@ flowchart LR
   db[("PostgreSQL")]
   web -->|HTTPS| api
   ios -->|HTTPS JSON| api
-  api --> auth
-  api --> db
+  api -->|vérifie| auth
+  api -->|lit et écrit| db
+  classDef front fill:#e8f1fb,stroke:#1f5fa8
+  classDef back fill:#eaf7ea,stroke:#2e7d32
+  class web,ios front
+  class api,auth back
+  subgraph legende["Légende"]
+    l1["Bleu : ce que voit l'utilisateur"]:::front
+    l2["Vert : le serveur"]:::back
+    l3[("Cylindre : les données")]
+  end
 ```
 ```
 sequenceDiagram

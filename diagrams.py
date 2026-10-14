@@ -48,9 +48,9 @@ def _clean(code):
     return code.strip()
 
 
-def mermaid_page(code, theme="default", background="white"):
+def mermaid_page(code, theme="default", background="white", zoom=1):
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{{margin:0;background:{background}}} #naim-capture{{display:inline-block;padding:16px;background:{background}}}
+html,body{{margin:0;background:{background}}} #naim-capture{{display:inline-block;padding:16px;background:{background};zoom:{zoom}}}
 #naim-capture svg{{max-width:none !important;height:auto}}</style>
 <script src="{MERMAID_JS.as_uri()}"></script></head><body><div id="naim-capture"></div>
 <script id="src" type="text/plain">{html.escape(code)}</script>
@@ -116,7 +116,8 @@ def render(code, output, engine="mermaid", theme="default", background="white"):
         return _describe(out, {})
     theme = theme if theme in THEMES else "default"
     mermaid_js()
-    info = _render_page(mermaid_page(code, theme, background or "white"), out)
+    # a PNG is drawn twice as large: sharp and readable in a document or on a big screen (the SVG and PDF are vectors)
+    info = _render_page(mermaid_page(code, theme, background or "white", zoom=2 if fmt == ".png" else 1), out)
     return _describe(out, info)
 
 
