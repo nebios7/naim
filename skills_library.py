@@ -349,7 +349,7 @@ osascript -e 'tell application "Notes" to make new note in folder "Notes" with p
   Confidentialité et sécurité › Accessibilité). Bluetooth : macOS demande une fois l'accès, l'utilisateur accepte.
 - Rien ne marche en ligne de commande : skill controle-ecran (regarder l'écran, cliquer, taper).
 """),
-    "react-app": ("Créer une application React (Vite) soignée et complète, la lancer et l'ouvrir : boutique, tableau de bord, outil…", """# Application React (Vite) — un livrable fini, beau et lancé
+    "react-app": ("Créer une application React (Vite) soignée et complète, la lancer et l'ouvrir : boutique, tableau de bord, outil…", r"""# Application React (Vite) — un livrable fini, beau et lancé
 
 ## Ce que l'utilisateur attend
 Une application qui a l'air d'un vrai produit, qui marche quand il clique partout, et qui est OUVERTE à la fin.
@@ -367,12 +367,20 @@ Une application qui a l'air d'un vrai produit, qui marche quand il clique partou
 - Ordre d'écriture : `src/data.js`, puis les petits composants, puis `src/App.jsx` (À CET EMPLACEMENT : `main.jsx`
   importe `./App.jsx`), puis `src/App.css`. Remplace le contenu d'exemple de Vite (`App.jsx`, `App.css`, `index.css`).
 - Un fichier écrit ne se réécrit pas : si une prop change, corrige-la avec edit_file.
+- **UNE SEULE forme des données, écrite dans le code** : en tête de `src/data.js`, un commentaire qui la décrit
+  exactement (ex. `// columns: [{ id, title, cardIds: [id] }] · cards: { [id]: { id, title, description } }`), et les
+  données de départ qui la respectent. Tous les composants suivent CE commentaire : avant d'écrire ou de corriger un
+  composant, relis `src/data.js` (read_file) — surtout après un long travail ou un résumé de tes étapes. Ne change
+  jamais la forme dans un seul fichier : si elle doit changer, change d'abord le commentaire puis chaque fichier qui
+  l'utilise. Deux formes différentes dans deux fichiers = page blanche (« Cannot read properties of undefined »).
 
 ## 3. Organiser
 - `src/data.js` : les données (pour une boutique : 8 à 12 produits avec nom, prix, catégorie, description courte,
   note, stock, et une couleur ou un dégradé par produit).
 - `src/components/` : un composant par fichier, complet (Header, ProductCard, ProductGrid, Cart, Filters, Toast…).
 - État avec `useState` ; ce qui doit survivre au rechargement (le panier) dans `localStorage` via `useEffect`.
+  Clé versionnée (`monapp-v1`) et lecture prudente : si ce qui est sauvé n'a pas la forme attendue (une ancienne
+  version), repartir des données de départ au lieu de planter.
 
 ## 4. Le design (c'est ce qui se voit en premier)
 - `src/index.css` : variables CSS (`--bg`, `--text`, `--accent`, `--radius`…), une police système propre, des espaces
@@ -395,6 +403,9 @@ confirmation de commande. Tout en français, prix au format `12,90 €` (`toLoca
 2. Lancer avec start_process (keep=true) : `npm run dev -- --port 5173`, attendre que l'adresse réponde.
 3. Ouvrir l'application dans le navigateur (outil browser) : vérifier qu'elle s'affiche, ajouter un produit au
    panier, regarder la capture. Si quelque chose est cassé ou moche, corriger avant de répondre.
+4. Page blanche ou erreur : browser action=console TOUT DE SUITE (ne l'annonce pas, fais-le), lis le message exact
+   (ex. `reading 'map'` = une liste absente : la forme des données ne correspond pas à `src/data.js`), corrige le
+   fichier en cause avec edit_file, rebuild, recharge. Ne réécris pas tout App.jsx pour une erreur.
 L'application reste lancée : l'utilisateur la voit s'ouvrir dans l'Aperçu de Naim.
 
 ## 7. Répondre

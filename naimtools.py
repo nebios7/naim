@@ -2679,7 +2679,10 @@ class Agent:
         "Voici les étapes d'une tâche en cours (les plus anciennes, qui vont être retirées de ta mémoire de travail). "
         "Écris le résumé qui te permettra de continuer sans rien perdre d'important, en 12 lignes au plus, des puces :\n"
         "- Décisions prises et pourquoi (choix techniques, structure, ce que l'utilisateur a demandé en route)\n"
-        "- Erreurs rencontrées et comment elles ont été corrigées (pour ne pas les refaire)\n"
+        "- Forme des données telle qu'elle est DANS LE CODE : structures, noms exacts des champs, ce que chaque composant "
+        "ou fonction reçoit (props, paramètres) et le fichier où elle est définie\n"
+        "- Erreurs réelles du code ou des commandes : message exact, fichier, et si elles sont corrigées ou non (pas de "
+        "consigne générale comme « éviter les répétitions »)\n"
         "- État actuel : ce qui est fait et marche, ce qui est à moitié fait\n"
         "- Ce qui reste à faire\n"
         "Faits précis seulement (noms de fichiers, commandes, messages d'erreur), rien d'inventé, pas de phrase d'introduction.\n\n"
@@ -3038,7 +3041,9 @@ class Agent:
                             "Tu viens de répéter ta réponse précédente. Relis mon dernier message et réponds-y "
                             "directement, en une ou deux phrases, puis fais seulement ce qu'il demande.")})
                         continue
-                    if (ANNOUNCE_RE.search(content) and len(content) < 400 and not self.plan
+                    sentences = [x for x in re.split(r"(?<=[.!?…])\s+", content.strip()) if x]
+                    announced = ANNOUNCE_RE.search(content) or (sentences and ANNOUNCE_RE.search(sentences[-1]))
+                    if (announced and len(content) < 600 and not self.plan
                             and self._stall_pushbacks < 3):  # « Je vais supprimer les fichiers… » without doing it
                         self._stall_pushbacks += 1
                         self.emit({"type": "note", "text": content})  # what it said it will do stays shown
@@ -3119,7 +3124,12 @@ class Agent:
                     "« continue » pour que j'essaie autrement.")
         else:
             text = (f"Pause : {self._step} étapes. Écris « continue » pour que je reprenne là où j'en suis "
-                    "(ou augmente le nombre d'étapes dans Personnaliser › Agent).")
+                    "(ou augmente le nombre d'étapes dans Personnaliser › Agent, ou l'Effort).")
+        last_err = next((str(m.get("content") or "") for m in reversed(self.messages[-12:]) if m.get("role") == "tool"
+                         and re.search(r"error|erreur|exit code [1-9]|failed|échec|traceback|⚠", str(m.get("content") or "")[:600], re.I)), "")
+        if last_err:
+            line = next((l.strip() for l in last_err.splitlines() if re.search(r"error|erreur|failed|échec|⚠", l, re.I)), last_err.splitlines()[0])
+            text += f"\n\nDernière erreur trouvée, à corriger en reprenant : {line[:300]}"
         self.emit({"type": "answer", "text": text})
         self._outcome = "max_steps" if stop_reason == "budget" else "stalled"
         return text
