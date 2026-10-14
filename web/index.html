@@ -1458,6 +1458,13 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 .msgacts [data-a=speak].speaking { color: var(--text); animation: micpulse 1.1s ease-in-out infinite; }
 /* conversation mode */
 #talkBtn svg { width: 17px; height: 17px; }
+/* a command running now: its card stays open with its time and « Exécuter en arrière-plan » */
+.arow .cmdfoot { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; font-size: 12.5px; color: var(--muted); }
+.arow .cmdfoot .cmdstate { color: var(--text); }
+.arow .cmdfoot .spacer { flex: 1; }
+.arow .cmdfoot .cmdbg { border: 1px solid var(--line); background: none; color: var(--text); border-radius: 8px; padding: 3px 10px; font: inherit; cursor: pointer; }
+.arow .cmdfoot .cmdbg:hover { background: var(--hover); }
+.arow.detached .cmdfoot .cmdstate { color: var(--ok, #5cb85c); }
 /* Naim's start (reading its instructions): each phrase slides in */
 .wtick { animation: wtick .45s ease; display: inline-block; }
 @keyframes wtick { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -3215,12 +3222,34 @@ function addBot(m, idx) {
       $(".arows", group).appendChild(row);
       lastRow = row; lastOut = "";
       if (group.open && (name === "run_command" || name === "start_process")) $(".aout", row).hidden = false;
+      if (name === "run_command" && args.command && !v._replay) {
+        // while it runs: open, with its time and « Exécuter en arrière-plan » (like a coding assistant's command card)
+        pre.hidden = false; row.classList.add("cmdcard");
+        const foot = document.createElement("div"); foot.className = "cmdfoot";
+        foot.innerHTML = `<span class="cmdstate">En cours</span><span class="cmdtime"></span><span class="spacer"></span><button class="cmdbg" title="La commande continue derrière, Naim passe à la suite et te prévient quand elle finit">Exécuter en arrière-plan</button>`;
+        row.appendChild(foot);
+        const t0 = Date.now(), fmt = (n) => n < 60 ? `${n} s` : `${Math.floor(n / 60)} min ${String(n % 60).padStart(2, "0")}`;
+        const tick = setInterval(() => {
+          if (!row.classList.contains("run")) { clearInterval(tick); if (!row.classList.contains("detached")) foot.remove(); return; }
+          $(".cmdtime", foot).textContent = fmt(Math.round((Date.now() - t0) / 1000));
+        }, 1000);
+        $(".cmdbg", foot).onclick = async (e) => {
+          e.stopPropagation(); e.target.disabled = true; e.target.textContent = "…";
+          const run = curRun(); const r = run ? await api("/api/detach", { method: "POST", body: { run_id: run.id } }).catch(() => ({})) : {};
+          if (!r.ok) { e.target.disabled = false; e.target.textContent = "Exécuter en arrière-plan"; toast("Cette commande ne peut plus passer en arrière-plan"); }
+        };
+      }
       return row;
     },
     output(t) {
       if (!lastRow) return; lastOut += t; const p = $(".aout", lastRow); p.hidden = false;
       const cmd = ($(".ptitle", p)?.outerHTML || "") + ($(".cmdline", p)?.outerHTML || "");
       p.innerHTML = cmd + (cmd ? "\n" : "") + esc(lastOut.slice(-20000)); p.scrollTop = p.scrollHeight;
+    },
+    detached(id) {  // the command running now went on in the background
+      if (!lastRow) return;
+      lastRow.classList.add("detached");
+      const f = $(".cmdfoot", lastRow); if (f) f.innerHTML = `<span class="cmdstate">En arrière-plan</span><span class="cmdtime">${esc(id)} · Naim te prévient quand elle finit</span>`;
     },
     stepResult(name, res) {
       if (!lastRow) return;
@@ -3796,6 +3825,7 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "output": if (lastTool) lastTool.output = (lastTool.output + ev.text).slice(-8000); v.output(ev.text); break;
           case "tool_result": if (ev.name === "simulator" && /lancé/.test(ev.result || "") && !/^error/.test(ev.result || "")) setTimeout(() => showPanel("sim"), 400);
             if (ev.name === "update_todos") break; if (!ev.sub) v.typing(currentTodo(reply.todos)); if (lastTool) lastTool.result = ev.result.slice(-3000); v.stepResult(ev.name, ev.result); break;
+          case "detached": v.detached(ev.id); break;
           case "email": reply.steps.push({ type: "event", icon: "✉️", text: `Email envoyé à ${ev.to.join(", ")} : ${ev.subject}` }); v.event("✉️", `Email envoyé à ${ev.to.join(", ")} : ${ev.subject}`); break;
           case "screenshot": if (lastTool && ev.image) { lastTool.image = ev.image; v.shot(ev.image, ev.label); } break;
           case "deliverable_look": if (lastTool && ev.image) { lastTool.image = ev.image; v.shot(ev.image, `Aperçu de ${ev.path}`); } break;

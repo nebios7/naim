@@ -343,6 +343,26 @@ class ProcessManager:
         threading.Thread(target=self._pump, args=(p,), daemon=True).start()
         return p
 
+    def adopt(self, proc, command, cwd, name, lines):
+        """A command already running in the foreground, moved to the background by the user: same program, its output
+        so far kept, read on from here (the caller's reader hands its next lines over)."""
+        with self.lock:
+            self.counter += 1
+            pid_id = f"p{self.counter}"
+            p = self.procs[pid_id] = Process(pid_id, name or command.split()[0], command, cwd, proc)
+        with p.lock:
+            p.lines.extend(lines)
+            p.total = len(lines)
+        return p
+
+    def finished(self, p):
+        """A background job ended: Naim is told, and comes back to report (see background_done)."""
+        if p.notify:
+            with BACKGROUND_LOCK:
+                BACKGROUND_DONE.append({"id": p.id, "conv": p.notify.get("conv"), "label": p.notify.get("label") or p.name,
+                                        "command": p.command, "code": p.proc.returncode, "seconds": round(time.time() - p.started),
+                                        "tail": p.tail(40).strip()[-3000:], "ended": time.time()})
+
     def _pump(self, p):
         for line in p.proc.stdout:
             with p.lock:
@@ -1589,13 +1609,40 @@ class Agent:
                     pass
             threading.Thread(target=feed, daemon=True).start()
         lines, deadline = [], time.time() + timeout
-        killer = threading.Thread(target=self._watch, args=(proc, deadline), daemon=True)
+        fg = self._fg = {"proc": proc, "adopted": None}
+        self._detach_req = threading.Event()
+        killer = threading.Thread(target=self._watch, args=(proc, deadline, fg), daemon=True)
         killer.start()
-        for line in proc.stdout:  # stream output live to the UI
-            line = ANSI_RE.sub("", line)  # colour codes of terminal tools (npm, git…): unreadable outside a terminal
-            lines.append(line)
-            self.emit({"type": "output", "text": line})
-        proc.wait()
+
+        def reader():  # stream output live to the UI; once moved to the background, to that background process
+            for line in proc.stdout:
+                line = ANSI_RE.sub("", line)  # colour codes of terminal tools (npm, git…): unreadable outside a terminal
+                bg = fg["adopted"]
+                if bg is None:
+                    lines.append(line)
+                    self.emit({"type": "output", "text": line})
+                else:
+                    with bg.lock:
+                        bg.lines.append(line)
+                        bg.total += 1
+            proc.wait()
+            if fg["adopted"] is not None:
+                PROCESSES.finished(fg["adopted"])
+        rt = threading.Thread(target=reader, daemon=True)
+        rt.start()
+        while rt.is_alive():
+            rt.join(0.25)
+            if self._detach_req.is_set() and proc.poll() is None:  # « Exécuter en arrière-plan » clicked
+                bg = PROCESSES.adopt(proc, command, self.root, (description or command)[:60], lines)
+                bg.keep = True
+                bg.notify = {"conv": getattr(self, "conv_id", None), "label": description or command[:60]}
+                fg["adopted"] = bg
+                self._fg = None
+                self.emit({"type": "detached", "id": bg.id})
+                return (f"moved to the background by the user: process {bg.id} ({command[:80]}) is still running. Do NOT "
+                        "run it again. Go on with the next step; you are told when it ends (or use process_output / wait "
+                        f"with id {bg.id}).\nOutput so far:\n{''.join(lines)[-1500:]}")
+        self._fg = None
         out = "".join(lines).strip()
         if self.cancel.is_set():
             return f"stopped by the user\n{out}"
@@ -2423,8 +2470,17 @@ class Agent:
             return "denied by the user"
         return ext.MCP.call(server, tool, args)
 
-    def _watch(self, proc, deadline):
+    def request_detach(self):
+        """The user clicked « Exécuter en arrière-plan » on the command running now."""
+        if getattr(self, "_fg", None) and getattr(self, "_detach_req", None):
+            self._detach_req.set()
+            return True
+        return False
+
+    def _watch(self, proc, deadline, fg=None):
         while proc.poll() is None:
+            if fg is not None and fg.get("adopted") is not None:
+                return  # in the background now: neither the time limit nor the Stop button ends it
             if self.cancel.is_set() or time.time() > deadline:
                 os.killpg(proc.pid, 9)
                 return

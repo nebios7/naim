@@ -1177,6 +1177,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             threading.Thread(target=scheduler.run_task, args=(task, _settings(), ollama_chat, Agent, CHAT_PROMPT), daemon=True).start()
             self.send_json({"ok": True})
+        elif path == "/api/detach":  # « Exécuter en arrière-plan » on the command running now
+            agent = _agents.get(self.read_json().get("run_id", ""))
+            self.send_json({"ok": bool(agent and agent.request_detach())})
         elif path in ("/api/plugins/toggle", "/api/plugins/tools", "/api/plugins/add", "/api/plugins/remove"):
             import plugins
             b = self.read_json()
