@@ -134,8 +134,13 @@ BLOCKED = None  # message while the automatic training runs (autotrain.py): the 
 
 
 class Server:
-    def __init__(self):
+    """One llama-server. The main one (port 8081) has no vision: then what its slots read can be saved to disk
+    (llama.cpp refuses it with --mmproj) and Naim starts in a second. Images go to a second one, with vision, started
+    only when a message has one and stopped after 5 idle minutes (VISION below)."""
+
+    def __init__(self, port=PORT, vision=False):
         self.proc, self.ctx, self.lock, self.error, self.cfg = None, None, threading.Lock(), None, None
+        self.port, self.url, self.vision, self.used = port, f"http://127.0.0.1:{port}", vision, 0.0
 
     @property
     def running(self):
@@ -143,7 +148,7 @@ class Server:
 
     def healthy(self):
         try:
-            with urllib.request.urlopen(URL + "/health", timeout=2) as r:
+            with urllib.request.urlopen(self.url + "/health", timeout=2) as r:
                 return r.status == 200
         except (urllib.error.URLError, OSError):
             return False
@@ -182,12 +187,14 @@ class Server:
             # parallel slots (sub-agents working at the same time): llama.cpp splits -c between them,
             # so each slot keeps the full context
             slots = slots_for(cfg.get("parallel"))
-            if hardware()["ram_gb"] >= 16:
+            if self.vision:
+                slots = 1  # the images engine: one request at a time
+            elif hardware()["ram_gb"] >= 16:
                 # its own slot for each kind of work, so that none overwrites what another has already read:
                 # 0 = Chat, 1 = Agent (their instructions and tools differ: ~6k and ~10k tokens to read), last =
                 # background jobs (memory, summaries). Sub-agents get the slots in between.
                 slots = max(slots, 3)
-            cmd = [exe, "-m", str(gguf), "--host", "127.0.0.1", "--port", str(PORT), "-c", str(ctx * slots),
+            cmd = [exe, "-m", str(gguf), "--host", "127.0.0.1", "--port", str(self.port), "-c", str(ctx * slots),
                    # a checkpoint every 2048 tokens (default 8192): a new task re-reads only what follows Naim's fixed
                    # instructions (~7k tokens shared by every task), not the whole prompt; 16 kept (50 MB each)
                    "--jinja", "--ctx-checkpoints", str(max(int(cfg["checkpoints"]), 16)), "--checkpoint-every-n-tokens", "2048",
@@ -200,8 +207,14 @@ class Server:
             cmd += ["-fa", "on"]
             if cfg.get("kv_type") in ("q8_0", "q4_0"):
                 cmd += ["-ctk", cfg["kv_type"], "-ctv", cfg["kv_type"]]
-            if mmproj:
+            if self.vision:
+                if not mmproj:
+                    self.error = "la vision de Naim (mmproj) est introuvable"
+                    raise RuntimeError(self.error)
                 cmd += ["--mmproj", str(mmproj)]
+            else:
+                SLOTS_DIR.mkdir(parents=True, exist_ok=True)
+                cmd += ["--slot-save-path", str(SLOTS_DIR)]  # what a slot has read, saved to disk (see warm_prefix)
             HOME.mkdir(parents=True, exist_ok=True)
             log = open(LOG, "a")
             log.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} start: {' '.join(cmd)}\n")
@@ -247,6 +260,18 @@ class Server:
 
 
 SERVER = Server()
+VISION = Server(PORT + 1, vision=True)
+VISION_IDLE = 300  # seconds without an image: the images engine leaves memory
+
+
+def _vision_reaper():
+    while True:
+        time.sleep(30)
+        if VISION.running and time.time() - VISION.used > VISION_IDLE:
+            VISION.stop()
+
+
+threading.Thread(target=_vision_reaper, daemon=True, name="naim-vision-reaper").start()
 SLOT_CHAT, SLOT_AGENT = 0, 1
 _slots_seen = {"n": 0, "at": 0.0}
 
@@ -356,9 +381,76 @@ def _payload(messages, tools, think, stream, options, vision=None):
     return body
 
 
+SLOTS_DIR = HOME / "cache" / "slots"
+WARM_LOG = []  # « restored » / « saved » for each start-up reading (shown in the status)
+
+
+def _post(path, body, timeout=1800):
+    req = urllib.request.Request(URL + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def warm_prefix(messages, tools, think, options):
+    """Naim's start: its instructions and tools (everything before the first user message), as the engine formats
+    them, read ONCE then kept on disk. At the next start they are loaded back in a fraction of a second instead of
+    being read again (~2 min each for the Chat and the Agent). Naim's model is hybrid (SSM layers): its memory cannot
+    go back, so exactly the instructions are kept — the next request goes on from there. A file whose instructions
+    changed (new skill, memory, another day: the date is in them) is replaced: a temporary memory, purged by itself."""
+    import hashlib
+    o = dict(options or {})
+    slot = int(o.get("slot") or 0)
+    payload = _payload(messages, tools, think, False, o)
+    mark = "NAIMMARK7731"
+    msgs = [m for m in payload["messages"]]
+    while msgs and msgs[-1]["role"] != "user":
+        msgs.pop()
+    if not msgs:
+        return False
+    msgs[-1] = {"role": "user", "content": mark}
+    text = _post("/apply-template", {"messages": msgs, "tools": tools or [], "chat_template_kwargs": payload["chat_template_kwargs"]})["prompt"]
+    cut = text.rfind("<|im_start|>", 0, text.index(mark))
+    prefix = text[:cut] if cut > 0 else text[:text.index(mark)]
+    gguf, _ = model_files()
+    key = hashlib.sha256((prefix + str(gguf) + str(gguf.stat().st_mtime if gguf.exists() else 0)
+                          + str(CONFIG.get("kv_type"))).encode()).hexdigest()[:16]
+    name = f"slot{slot}-{key}.bin"
+    if (SLOTS_DIR / name).exists():
+        try:
+            if _post(f"/slots/{slot}?action=restore", {"filename": name}).get("n_restored"):
+                return "restored"
+        except Exception:  # noqa: BLE001 — an unusable file: read again below
+            (SLOTS_DIR / name).unlink(missing_ok=True)
+    _post("/completion", {"prompt": prefix, "n_predict": 0, "cache_prompt": True, "id_slot": slot})
+    for old in SLOTS_DIR.glob(f"slot{slot}-*.bin"):  # the instructions changed: the old memory goes
+        if old.name != name:
+            old.unlink(missing_ok=True)
+    try:
+        _post(f"/slots/{slot}?action=save", {"filename": name})
+    except urllib.error.HTTPError as e:  # an engine started without --slot-save-path (an older Naim): read, not kept
+        if e.code == 501:
+            return "read"
+        raise
+    return "saved"
+
+
 def chat(messages, tools=None, think=False, stream=False, options=None, url=None, ensure=None, vision=None):
     """Same contract as naimtools.ollama_chat: returns an Ollama-shaped message, or yields Ollama-shaped chunks.
     url / ensure / vision: another OpenAI-compatible local server speaking the same language (the MLX engine)."""
+    last_user = next((m for m in reversed(messages) if m.get("role") == "user"), {})
+    if last_user.get("images") and not url:
+        # a message with an image: the images engine (vision), started on demand; the main one keeps its saved memory
+        options = {k: v for k, v in (options or {}).items() if k != "slot"}
+        VISION.used = time.time()
+        url, ensure, vision = VISION.url, VISION.ensure, True
+    if not url and vision is None:
+        vision = False  # the main engine has no vision: earlier images of the conversation stay as text
+    if (options or {}).get("warm_prefix") and not url:  # Naim's start: load (or read once) its instructions, no answer
+        SERVER.ensure(int((options or {}).get("num_ctx") or 16384))
+        done = warm_prefix(messages, tools, think, options)
+        WARM_LOG.append(done)
+        reply = {"role": "assistant", "content": "."}
+        return iter([{"message": reply, "done": True}]) if stream else reply
     data = json.dumps(_payload(messages, tools, think, stream, options, vision)).encode()
     for attempt in (1, 2):
         (ensure or SERVER.ensure)(int((options or {}).get("num_ctx") or 16384))

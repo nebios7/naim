@@ -548,6 +548,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({**p.info(), "output": p.tail(400)})
         elif path == "/api/mcp":
             self.send_json({"servers": ext.MCP.status(), "path": str(ext.MCP.path), "json": ext.MCP.raw_json()})
+        elif path == "/api/aide":  # the user and developer guide shown in Personnaliser › Aide (also on GitHub)
+            data = (WEB / "aide.md").read_bytes() if (WEB / "aide.md").exists() else "Aide introuvable.".encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/markdown; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
         elif path == "/api/plugins":
             import plugins
             self.send_json({"plugins": plugins.all_plugins(), "commands": plugins.commands()})
@@ -1509,6 +1516,8 @@ class Handler(BaseHTTPRequestHandler):
         options, extra = model_options(body)
         if options.get("backend") == "llamacpp":  # the Chat's own slot: its instructions and the conversation stay read
             options = {**options, "slot": llamacpp.SLOT_CHAT}
+            if body.get("_warm"):  # Naim's start: its instructions loaded from disk (or read once and saved)
+                options["warm_prefix"] = True
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
@@ -2687,7 +2696,7 @@ def warm_agent(s):
     « bonsoir », then starts at once instead of waiting for that reading (~3 min on a MacBook Air)."""
     body = {"model": s.get("model") or "naim", "settings": {**s, "num_predict": 1, "think": False}}
     options, extra = model_options(body)
-    options = {**options, "slot": llamacpp.SLOT_AGENT, "num_predict": 1}
+    options = {**options, "slot": llamacpp.SLOT_AGENT, "num_predict": 1, "warm_prefix": True}
     agent = Agent(s.get("project") or str(Path.home()), body["model"], think=False, auto_yes=bool(s.get("autoYes")),
                   approver=lambda *a: False, asker=lambda *a, **k: None, emit=lambda ev: None, history=[],
                   options=options, extra_system=extra, **agent_settings(body))  # built like a real task (same tools)

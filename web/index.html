@@ -1594,6 +1594,8 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 .ctxpop { position: fixed; z-index: 60; width: 340px; max-width: calc(100vw - 16px); background: var(--panel); color: var(--text); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: var(--shadow); padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; font-size: 13px; }
 .ctxpop .cp-row { display: flex; justify-content: space-between; gap: 10px; }
+#spane .aide { max-width: 860px; line-height: 1.6; }
+#spane .aide table { font-size: 13px; }
 #effortPill { color: var(--text); font-variant-numeric: tabular-nums; }
 .effpop { width: 330px; }
 .effpop .ef-head { display: flex; align-items: baseline; gap: 10px; font-size: 15px; }
@@ -1835,6 +1837,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
           <button data-s="about">À propos</button>
           <button data-s="plugins">Plugins</button>
           <button data-s="libs">Bibliothèques</button>
+          <button data-s="aide">Aide</button>
           <button data-s="owner" id="ownerTab" hidden title="Visible seulement sur ce Mac">Admin</button>
           </div>
         </nav>
@@ -4916,6 +4919,7 @@ const TABS = {
     ["⇧⌘C", "Copier la dernière réponse"], ["⇧⌘A", "Basculer Chat / Agent"], ["⇧⌘R", "Activer / désactiver le raisonnement"],
     ["⌘/", "Raccourcis clavier"], ["Échap", "Arrêter la réponse / fermer"], ["/", "Commandes : " + SLASH.map(([c]) => c).join(" ")], ["Entrée", "Envoyer (réglable)"], ["↑ ↓", "Historique du terminal"],
   ].map(([k, l]) => `<tr><td>${l}</td><td><kbd>${k}</kbd></td></tr>`).join("")}</table></div>`,
+  aide: () => `<div class="md aide" id="aideBox"><p class="muted">Chargement de l'aide…</p></div>`,
   plugins: () => `<h2>Plugins</h2>
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Un plugin apporte d'un coup des skills, des serveurs MCP, des commandes <b>/</b> et la liste des outils dont ils ont besoin (Arduino, COBOL…). <b>Activé</b> : Naim s'en sert quand ta demande en a besoin. <b>Désactivé</b> : il est gardé mais ignoré.</p>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter un plugin</b><small>Le lien GitHub d'un plugin (un dépôt avec un plugin.json), ou le chemin d'un dossier sur ce Mac. Rien n'est exécuté à l'ajout.</small></div>
@@ -4968,6 +4972,7 @@ function showSettingsTab(t) {
   if (t === "learning") loadLearning();
   if (t === "libs") loadLibs();
   if (t === "plugins") loadPlugins();
+  if (t === "aide") loadAide();
   if (t === "owner") { loadAutoTrain(); loadVoiceTrain(); loadOwner(); }
   if (t === "about") api("/api/model/version").then((v) => { const e = $("#modelVer"); if (e) e.textContent = v.name || "v2"; const d = $("#modelVerDetail"); if (d && v.detail) d.textContent = " · " + v.detail; }).catch(() => {});
   if (t === "instr") api("/api/naim-home").then((h) => { $("#globalMd").value = h.instructions || ""; $("#globalMdSave").onclick = async () => { await api("/api/global-instructions", { method: "PUT", body: { content: $("#globalMd").value } }); toast("NAIM.md enregistré"); }; });
@@ -5193,6 +5198,14 @@ async function loadEngine() {
   $("#llamaStop").onclick = async () => { await api("/api/llama/stop", { method: "POST", body: {} }); toast("Moteur arrêté"); loadEngine(); };
 }
 // « Bibliothèques »: the external web libraries Naim may use (catalogue + added by GitHub link)
+// the user and developer guide (web/aide.md, the same text as on GitHub), with its diagrams
+async function loadAide() {
+  const box = $("#aideBox"); if (!box) return;
+  try {
+    const text = await fetch("/api/aide").then((r) => r.ok ? r.text() : Promise.reject(new Error(r.status)));
+    box.innerHTML = md(text);
+  } catch (e) { box.innerHTML = `<p class="muted">Aide indisponible (${esc(e.message)}).</p>`; }
+}
 async function loadPlugins() {
   const box = $("#plgList"); if (!box) return;
   const { plugins } = await api("/api/plugins").catch(() => ({ plugins: [] }));

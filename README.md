@@ -55,6 +55,11 @@ commande met Naim à jour. Détails dans [Installation](#installation).
   et il est **prévenu tout seul** quand ils se terminent.
 - **Skills** (méthodes réutilisables, installables depuis GitHub), **MCP** (chargés à la demande), **sous-agents**
   (en parallèle selon la puissance de ta machine), **mémoire** automatique, consignes `NAIM.md`.
+- **Bibliothèques** de skills et de serveurs MCP : autant que tu veux (même des milliers), sans ralentir Naim — il les
+  cherche et les charge seulement quand une tâche en a besoin (recherche français ↔ anglais).
+- **Plugins** (skills + MCP + commandes + hooks + outils en un paquet) et **hooks** (automatismes à chaque étape).
+  Fournis : électronique (Arduino, Raspberry Pi), mainframe (COBOL, JCL, DB2, REXX, PL/I), algorithmique.
+- **Voix** : conversation à voix haute, autorisations données à la voix, voix naturelles locales.
 - **Apprentissage** : chaque tâche réussie peut servir à entraîner une version suivante du modèle.
 
 ## Aperçu
@@ -167,6 +172,24 @@ flowchart LR
   A2 --> R
   A3 --> R
 ```
+
+## À l'intérieur
+
+- **Un seul moteur** (llama.cpp) et **trois mémoires de lecture** : Chat, Agent, tâches de fond. Chacune garde ce
+  qu'elle a déjà lu, pour ne pas le relire.
+- **Démarrage en une seconde** : le modèle de Naim est hybride (couches SSM) ; ses consignes sont lues une fois puis
+  **gardées sur le disque** et rechargées aux ouvertures suivantes. Elles se purgent seules quand elles changent.
+- **Consignes courtes** : les skills et serveurs MCP peu utilisés sont rangés en **bibliothèques** (une ligne chacune
+  dans les consignes) ; les outils MCP ne sont lus qu'au besoin ; le calcul d'attention optimisé est toujours actif.
+- **Mémoire** : la conversation est résumée quand elle s'allonge ; une longue tâche garde un **résumé rédigé**
+  (décisions, forme des données, erreurs corrigées, reste à faire) et un carnet `.naim/tache.md` ; chaque
+  conversation a son **brouillon** ; la mémoire durable garde tes préférences.
+- **Sécurité** : tout ce qui est retiré va à la Corbeille ; payer, envoyer, appeler, éteindre sont toujours demandés ;
+  lecture dans ton dossier personnel, écriture seulement dans le projet.
+
+**Le guide complet** — utilisation, toutes les commandes et raccourcis, architecture, skills, MCP, plugins, hooks,
+fichiers du code, comment écrire une skill ou un plugin : **[web/aide.md](web/aide.md)**. Le même guide est dans
+l'application : *Personnaliser › Aide*.
 
 ## Naim face aux autres
 
@@ -313,6 +336,10 @@ les installations peu fiables, plafonnent la part de chaque installation et refu
 - `naim` — ouvre l'application
 - `naim --web` — interface dans le navigateur
 - `naimtools` — agent dans le terminal
+
+Dans l'application, tape `/` dans la barre de saisie : `/plan`, `/init`, `/test`, `/review`, `/commit`, `/skill`,
+`/remember`, `/undo`, `/web`, `/compact`, `/planifier`… (la liste complète et les raccourcis clavier :
+[web/aide.md](web/aide.md#2-commandes)).
 
 ## Licence
 
