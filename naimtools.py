@@ -124,27 +124,24 @@ USE_MCP_TOOL = {"type": "function", "function": {"name": "use_mcp", "description
 
 # the user's past conversations with Naim (like « souviens-toi, on l'a déjà fait »): search them, then read one
 SKILL_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_skill", "description": (
-    "Search the user's skills LIBRARY (hundreds or thousands of extra methods, not listed above) when no listed skill "
-    "covers the task: a few words of the task → the matching skills with their description. Then call use_skill with "
-    "the name you pick, and follow it."),
+    "Search the skills library (extra methods not listed in your instructions) when no listed skill covers the task: "
+    "a few words → matching skills; then use_skill with the one you pick."),
     "parameters": {"type": "object", "properties": {
         "requete": {"type": "string", "description": "a few words of the task, e.g. « facture latex », « scraping linkedin », « kubernetes helm »"}},
         "required": ["requete"]}}}
 
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
-    "Find the USER'S OWN files anywhere on their Mac (Bureau, Documents, Téléchargements, iCloud…), like the Finder: "
-    "by words in the file NAME and in the CONTENT of documents (PDF, Word, Pages…). Use it whenever the user asks where "
-    "a file of theirs is (« ma convention de stage », « mon CV », « la facture EDF », « le contrat »), before saying "
-    "it does not exist. Programs' code (venv, node_modules, libraries) is left out. Newest first."),
+    "Find the user's own files anywhere on the Mac (Bureau, Documents, Téléchargements…), like the Finder: by words in "
+    "the file NAME and in the CONTENT of documents, programs' code left out, newest first. Use it whenever the user "
+    "asks where a file of theirs is (« mon CV »), before saying it does not exist."),
     "parameters": {"type": "object", "properties": {
         "requete": {"type": "string", "description": "the words of the file, e.g. « convention de stage », « facture EDF 2025 »"},
         "type": {"type": "string", "description": "optional: pdf, word, image, tableur, presentation, texte"}},
         "required": ["requete"]}}}
 
 CONVERSATIONS_TOOL = {"type": "function", "function": {"name": "chercher_conversations", "description": (
-    "Search the user's PAST conversations with you (when they say « souviens-toi », « la dernière fois », « on en a "
-    "déjà parlé », or ask about something done before). 1) chercher_conversations(requete) → matching conversations "
-    "with an excerpt. 2) chercher_conversations(conversation=id) → that conversation's messages."),
+    "Search the user's past conversations with you (« souviens-toi », « la dernière fois »…): requete → the matching "
+    "conversations with an excerpt; conversation=id → that conversation's messages."),
     "parameters": {"type": "object", "properties": {
         "requete": {"type": "string", "description": "words to look for (a name, a project, a subject)"},
         "conversation": {"type": "string", "description": "id of one conversation to read"}}}}}
@@ -723,9 +720,20 @@ class Agent:
                          + "\n".join(f"- {m['name']}: {m['description']} — outils : {', '.join(m['tools'][:12])}"
                                       + (" …" if len(m["tools"]) > 12 else "") for m in self._mcp_deferred))
         if getattr(self, "_mcp_on_demand", None):
+            # short: a name and what it is for (never its launch command); the catalogue's servers, not added yet, by
+            # their name only — use_mcp(name) describes and adds one when a task needs it
+            def what(d):
+                d = str(d or "").split(" (à ajouter")[0].strip()
+                if re.match(r"(/|https?://|npx |uvx |[\w.-]+ --)", d):
+                    return ""
+                d = _short_desc(d)
+                return d if len(d) <= 80 else d[:80].rsplit(" ", 1)[0] + "…"
+            mine = [m for m in self._mcp_on_demand if not m.get("catalog")]
+            cat = [m["name"] for m in self._mcp_on_demand if m.get("catalog")]
             parts.append("MCP servers available on demand (call use_mcp with the server name ONLY when the task needs "
                          "it; your built-in tools come first):\n"
-                         + "\n".join(f"- {m['name']}: {m['description']}" for m in self._mcp_on_demand))
+                         + "\n".join(f"- {m['name']}" + (f": {what(m['description'])}" if what(m["description"]) else "") for m in mine)
+                         + (f"\nCatalogue, not added yet (use_mcp adds one, the user confirms): {', '.join(cat)}" if cat else ""))
         if self.subagent:
             parts.append("You are a sub-agent working on one part of a bigger task: do it fully, then give a short summary.")
         if self.plan:

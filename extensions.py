@@ -371,9 +371,14 @@ class MCPManager:
             known = {k: v[1] for k, v in mcp_catalog.CATALOG.items()}
         except ImportError:
             known = {}
-        out = []
+        out, seen = [], set()
         conf = self.config()
         for name, cfg in conf.items():
+            # the same server added twice under two names (same command and arguments, or same address): listed once
+            key = (Path(str(cfg.get("command") or "")).name, tuple(cfg.get("args") or ()), cfg.get("url") or "")
+            if key != ("", (), "") and key in seen:
+                continue
+            seen.add(key)
             if cfg.get("enabled") is False:
                 what = known.get(name) or cfg.get("description") or (cfg.get("url") or " ".join([cfg.get("command", "")] + cfg.get("args", [])))[:120]
                 out.append({"name": name, "description": what})
