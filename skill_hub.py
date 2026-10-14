@@ -141,6 +141,8 @@ def install(url, names=None, root=None, scope="utilisateur"):
         if names and s["name"] not in names and s["folder"] not in names:
             continue
         if s["size"] > MAX_SKILL:
+            if names and len(names) > 1:
+                continue  # « Tout installer »: one skill too big is skipped, the others are installed
             raise SkillError(f"le skill {s['name']} est trop gros ({s['size'] // 1_000_000} Mo)")
         name = ext.slugify(s["name"])
         folder = s["folder"]

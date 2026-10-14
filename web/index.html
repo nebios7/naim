@@ -5414,7 +5414,7 @@ async function loadSkillsPage() {
     const r = await api("/api/skills/browse", { method: "POST", body: { url } }).catch((e) => ({ error: e.message }));
     if (r.error) { list.innerHTML = `<div class="srow"><div class="sl"><small style="color:var(--danger)">${esc(r.error)}</small></div></div>`; return; }
     const have = new Set(skills.map((k) => k.name));
-    list.innerHTML = `<div class="srow"><div class="sl"><small>${r.skills.length} skill${r.skills.length > 1 ? "s" : ""} trouvé${r.skills.length > 1 ? "s" : ""}</small></div>${r.skills.length > 1 ? '<button class="btn" id="hubAll">Tout installer</button>' : ""}</div>`;
+    list.innerHTML = `<div class="srow"><div class="sl"><small>${r.skills.length} skill${r.skills.length > 1 ? "s" : ""} trouvé${r.skills.length > 1 ? "s" : ""}</small></div>${r.skills.length > 1 ? `<button class="btn primary" data-huball>Tout installer (${r.skills.length})</button>` : ""}</div>`;
     const install = async (names, btn) => {
       if (btn) { btn.disabled = true; btn.textContent = "Installation…"; }
       const res = await api("/api/skills/install", { method: "POST", body: { url, names, scope: $("#hubScope").value } });
@@ -5427,7 +5427,16 @@ async function loadSkillsPage() {
       $("button", el).onclick = (e) => install([k.name], e.target);
       list.appendChild(el);
     });
-    $("#hubAll") && ($("#hubAll").onclick = (e) => { if (confirm(`Installer les ${r.skills.length} skills ?`)) install(r.skills.map((k) => k.name), e.target); });
+    // « Tout installer » at the top AND at the bottom of the list (no need to scroll back up through hundreds of skills)
+    if (r.skills.length > 1) {
+      const bottom = document.createElement("div"); bottom.className = "srow";
+      bottom.innerHTML = `<div class="sl"><small>${r.skills.length} skills</small></div><button class="btn primary" data-huball>Tout installer (${r.skills.length})</button>`;
+      list.appendChild(bottom);
+    }
+    $$("[data-huball]", list).forEach((b) => (b.onclick = (e) => {
+      const where = $("#hubScope").value === "bibliotheque" ? "dans la bibliothèque (Naim les cherche au besoin)" : "en skills actives (toujours chargées : déconseillé pour beaucoup de skills)";
+      if (confirm(`Installer les ${r.skills.length} skills ${where} ?`)) install(r.skills.map((k) => k.name), e.target);
+    }));
   };
   $("#hubBrowse").onclick = hubBrowse;
   // the library: how many skills, a search to see what Naim would find
