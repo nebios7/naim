@@ -499,7 +499,7 @@ class Handler(BaseHTTPRequestHandler):
                     pass
             self.send_json({"ollama": models is not None, "models": models or [], "loaded": loaded, "home": str(Path.home()),
                             "llamacpp": llamacpp.SERVER.status(), "mlx": _mlx_status(),
-                            "warm": {**WARM, "since": round(time.time() - WARM["t0"])}})
+                            "warm": {**WARM, "since": round(time.time() - WARM["t0"]), **_warm_progress()}})
         elif path == "/api/settings":
             self.send_json(json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {})
         elif path == "/api/conversations":
@@ -2566,6 +2566,30 @@ def warm_voice():
 
 # where the opening preparation stands, shown discreetly under the conversations (« Naim · préparation… » → « prêt »)
 WARM = {"state": "starting", "step": "", "t0": time.time()}
+
+
+def _warm_progress():
+    """While Naim reads its instructions at start: how far the engine is (its log says « progress = 0.65 »), and what
+    there is to read (skills, MCP servers) so the window can tell what Naim is doing."""
+    if WARM.get("state") == "ready":
+        return {}
+    out = {}
+    try:
+        with open(llamacpp.LOG, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 6000))
+            tail = f.read().decode(errors="replace")
+        m = re.findall(r"progress = ([0-9.]+)", tail)
+        if m:
+            out["pct"] = min(99, round(float(m[-1]) * 100))
+    except OSError:
+        pass
+    try:
+        out["skills"] = len(ext.list_skills())
+        out["mcp"] = len(ext.MCP.config())
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 def warm_up():

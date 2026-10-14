@@ -1458,6 +1458,10 @@ body.home #chatcol > * { position: relative; z-index: 1; }
 .msgacts [data-a=speak].speaking { color: var(--text); animation: micpulse 1.1s ease-in-out infinite; }
 /* conversation mode */
 #talkBtn svg { width: 17px; height: 17px; }
+/* Naim's start (reading its instructions): each phrase slides in */
+.wtick { animation: wtick .45s ease; display: inline-block; }
+@keyframes wtick { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wtick { animation: none; } }
 /* the voice conversation's light: a sunrise from the bottom of the composer, alive with who speaks and how loud */
 .composer { isolation: isolate; }
 #talkGlow { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: -1;
@@ -6002,6 +6006,38 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("wheel", (e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(S.zoom - Math.sign(e.deltaY) * 0.05); } }, { passive: false });
 
 // ======================================================================= status + boot
+// ---- while Naim reads its instructions at start: what it is doing, shown in turn (side bar and the model pill)
+const warmState = { i: 0, timer: 0, last: null };
+function warmPhrases(w, long) {
+  const mode = /agent/i.test(w?.step || "") ? "Agent" : "Chat", pct = w?.pct != null ? ` · ${w.pct} %` : "";
+  const n = /\((\d)\/2\)/.exec(w?.step || "")?.[1] || "1";
+  return long ? [
+    `Naim lit ses consignes ${mode === "Agent" ? "de l'Agent" : "du Chat"}${pct}`,
+    `Naim charge ses outils (${mode})`,
+    "Naim relit ta mémoire et tes préférences",
+    w?.skills ? `Naim range ses ${w.skills} skills` : "Naim range ses skills",
+    w?.mcp ? `Naim prépare ses ${w.mcp} serveurs MCP` : "Naim prépare ses serveurs MCP",
+    `Préparation ${n}/2 : la première réponse sera rapide`,
+  ] : [`${mode} ${w?.pct != null ? w.pct + " %" : "…"}`, "consignes…", "outils…", "mémoire…", "skills…"];
+}
+function warmLine(w, long) {
+  const list = warmPhrases(w, long);
+  return list[warmState.i % list.length];
+}
+function warmTicker(w) {  // every 2.6 s the next phrase, with a short slide (the real progress stays in the first one)
+  warmState.last = w;
+  if (!w) { clearInterval(warmState.timer); warmState.timer = 0; $("#statusText")?.classList.remove("wtick"); return; }
+  if (warmState.timer) return;
+  warmState.timer = setInterval(() => {
+    if (!warmState.last) return;
+    warmState.i++;
+    for (const [el, long] of [[$("#statusText"), true], [$("#mpName"), false]]) {
+      if (!el) continue;
+      el.textContent = warmLine(warmState.last, long);
+      el.classList.remove("wtick"); void el.offsetWidth; el.classList.add("wtick");
+    }
+  }, 2600);
+}
 async function checkStatus() {
   try {
     const s = await api("/api/status"); lastStatus = s;
@@ -6014,8 +6050,9 @@ async function checkStatus() {
     $("#dot").classList.toggle("idle", (onMlx || onLlama) && !engineOn);
     const warming = onLlama && s.warm && s.warm.state !== "ready";
     $("#dot").classList.toggle("warming", warming);
-    if (warming) { $("#dot").classList.remove("idle"); clearTimeout(checkStatus._t); checkStatus._t = setTimeout(checkStatus, 4000); }
-    $("#statusText").textContent = warming ? `Naim · préparation${s.warm.step ? " " + s.warm.step : "…"}` : (onMlx || onLlama) ? `Naim · ${engineOn ? "prêt" : "en veille"}` : !s.ollama ? "Ollama injoignable" : others.length ? `⚠ ${others.length} autre${others.length > 1 ? "s" : ""} modèle${others.length > 1 ? "s" : ""} chargé${others.length > 1 ? "s" : ""}` : `Ollama · ${S.model}`;
+    if (warming) { $("#dot").classList.remove("idle"); clearTimeout(checkStatus._t); checkStatus._t = setTimeout(checkStatus, 2000); }
+    warmTicker(warming ? s.warm : null);
+    $("#statusText").textContent = warming ? warmLine(s.warm, true) : (onMlx || onLlama) ? `Naim · ${engineOn ? "prêt" : "en veille"}` : !s.ollama ? "Ollama injoignable" : others.length ? `⚠ ${others.length} autre${others.length > 1 ? "s" : ""} modèle${others.length > 1 ? "s" : ""} chargé${others.length > 1 ? "s" : ""}` : `Ollama · ${S.model}`;
     const st = $("#statusText").parentElement;
     st.title = others.length ? `Chargés en mémoire : ${s.loaded.join(", ")}.\nIls ralentissent Naim (Ollama traite une requête à la fois). Clique pour les décharger.`
       : warming ? "Naim lit une fois ses instructions et ses outils (Chat puis Agent), quelques minutes après l'ouverture. Tu peux déjà écrire : la première réponse sera seulement plus lente."
@@ -6230,7 +6267,7 @@ function updateModelPick() {
   $("#mpDot").classList.toggle("warming", !!warming);
   if (warming) updateModelPick.warmed = false;
   else if (updateModelPick.warmed === false) { updateModelPick.warmed = true; updateModelPick.readyUntil = Date.now() + 5000; setTimeout(updateModelPick, 5100); }
-  $("#mpName").textContent = warming ? "préparation…" : Date.now() < (updateModelPick.readyUntil || 0) ? "prêt" : S.model;  // same width as the name: nothing moves
+  $("#mpName").textContent = warming ? warmLine(lastStatus.warm, false) : Date.now() < (updateModelPick.readyUntil || 0) ? "prêt" : S.model;
   $("#modelPick").title = warming ? "Naim se prépare (lecture de ses instructions) : la première réponse sera plus lente" : "Choisir le modèle (⌘L)";
   $("#mpInfo").textContent = `${loaded ? "chargé" : "prêt"} · ${Math.round(ctx / 1024)}k${onMlx ? " · MLX" : onLlama ? " · llama.cpp" : ""}`;
 }
