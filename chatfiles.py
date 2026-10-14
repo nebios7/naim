@@ -12,6 +12,7 @@ One tool, creer_fichier: the extension of the name decides the format.
 import csv
 import io
 import re
+import shutil
 import subprocess
 import tempfile
 import zipfile
@@ -107,9 +108,27 @@ def _xlsx(csv_text, dst):
             z.writestr(k, v)
 
 
+PANDOC = next((p for p in ("/opt/homebrew/bin/pandoc", "/usr/local/bin/pandoc") if Path(p).exists()), shutil.which("pandoc"))
+REFERENCE_DOCX = Path(__file__).with_name("reference-a4.docx")  # A4, Calibri, 2 cm margins, page numbers, table borders
+
+
+def _docx_pandoc(dst, content):
+    """A real Word document (styled headings, lists, tables) from Markdown or HTML, with pandoc; False if not possible."""
+    if not PANDOC:
+        return False
+    src = "html" if (content or "").lstrip().startswith("<") else "markdown"
+    cmd = [PANDOC, "-f", src, "-t", "docx", "-o", str(dst)]
+    if REFERENCE_DOCX.exists():
+        cmd += ["--reference-doc", str(REFERENCE_DOCX)]
+    r = subprocess.run(cmd, input=content or "", capture_output=True, text=True, timeout=120)
+    return r.returncode == 0 and dst.exists()
+
+
 def _make(dst, content):
     """Write one file at dst in the format given by its extension."""
     ext = dst.suffix.lower()
+    if ext in (".docx", ".doc") and _docx_pandoc(dst.with_suffix(".docx"), content):
+        return
     if ext in DOCS or ext == ".png":
         with tempfile.TemporaryDirectory() as tmp:
             page = Path(tmp) / f"{dst.stem}.html"

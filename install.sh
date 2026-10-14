@@ -104,6 +104,7 @@ fi
 say "Installation de Naim"
 mkdir -p "$dest/app" "$dest/bin"
 cp "$here"/*.py "$here"/*.swift "$here/NAIM.default.md" "$dest/app/"
+cp "$here/reference-a4.docx" "$dest/app/" 2>/dev/null || true  # Word template (A4, page numbers) for documents made in Chat
 [ -f "$here/naim_prompts.json" ] && cp "$here/naim_prompts.json" "$dest/app/"  # owner's checkout; otherwise fetched from Naim's server
 rm -rf "$dest/app/web" && cp -R "$here/web" "$dest/app/web"
 rm -rf "$dest/app/skills_extra" && cp -R "$here/skills_extra" "$dest/app/skills_extra"  # extra files of built-in skills

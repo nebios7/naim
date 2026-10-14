@@ -8,16 +8,20 @@ src="$1"
 [ -f "$src" ] || { echo "error: fichier introuvable : $src" >&2; exit 1; }
 abs="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
 pdf="${abs%.*}.apercu.pdf"
-if [ -d "/Applications/Microsoft Word.app" ]; then
+# Word is sandboxed by macOS: outside the user's own folders it asks for access (a window on screen) — never there
+case "$abs" in "$HOME"/Library/*|"$HOME"/.*) word=no ;; "$HOME"/*) word=yes ;; *) word=no ;; esac
+if [ "$word" = yes ] && [ -d "/Applications/Microsoft Word.app" ]; then
   if osascript - "$abs" "$pdf" <<'EOF' >/dev/null 2>&1
 on run argv
   set src to POSIX file (item 1 of argv)
+  with timeout of 60 seconds
   tell application "Microsoft Word"
     open src
     set d to active document
     save as d file name (item 2 of argv) file format format PDF
     close d saving no
   end tell
+  end timeout
 end run
 EOF
   then
