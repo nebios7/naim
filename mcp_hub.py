@@ -155,8 +155,9 @@ def browse(url):
     return out
 
 
-def install(url, name, env_values=None, project=""):
-    """Install one server found by browse(): its config goes into mcp.json, then it is started."""
+def install(url, name, env_values=None, project="", scope="serveurs"):
+    """Install one server found by browse(): its config goes into mcp.json, then it is started — or, scope
+    « bibliotheque », into the MCP library (not listed in Naim's instructions, started only when a task needs it)."""
     found = next((s for s in browse(url) if s["name"] == name), None)
     if not found:
         raise McpError(f"serveur {name} introuvable dans ce dépôt")
@@ -181,6 +182,10 @@ def install(url, name, env_values=None, project=""):
         cfg = {"command": mcp_catalog._which(found["command"]) or found["command"], "args": args,
                "env": {**found["env_defaults"], **{k: env_values[k] for k in found["env"] if k not in found["headers"]}},
                "enabled": True}
+    if scope == "bibliotheque":
+        import mcp_bibliotheque
+        mcp_bibliotheque.add(found["name"], cfg, found.get("description") or "", url)
+        return {"name": found["name"], "error": None, "bibliotheque": True}
     servers = dict(ext.MCP.config())
     servers[found["name"]] = cfg
     ext.MCP.save_config(servers)

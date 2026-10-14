@@ -4781,7 +4781,10 @@ const TABS = {
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Installe un serveur en un clic. Ceux qui demandent une clé te la demandent avant l'installation.</p>
     <div id="mcpCatalog" class="agrid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))"></div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter depuis un lien</b><small>Colle le lien GitHub d'un serveur MCP (Naim lit sa documentation et en extrait la configuration, sans rien exécuter) ou l'adresse d'un serveur distant (https://…/mcp).</small></div>
-      <div style="display:flex;gap:8px"><input class="field mono" id="mcpHubUrl" placeholder="https://github.com/owner/repo  ou  https://exemple.com/mcp" style="flex:1"><button class="btn primary" id="mcpHubGo">Extraire</button></div></div>
+      <div style="display:flex;gap:8px"><input class="field mono" id="mcpHubUrl" placeholder="https://github.com/owner/repo  ou  https://exemple.com/mcp" style="flex:1"><button class="btn primary" id="mcpHubGo">Extraire</button></div>
+      <div style="display:flex;gap:8px;align-items:center"><small class="muted">Installer dans :</small><select class="field" id="mcpHubScope" style="flex:1"><option value="bibliotheque">la bibliothèque — autant que tu veux, Naim les cherche au besoin (recommandé)</option><option value="serveurs">mes serveurs MCP — listés pour Naim à chaque conversation</option></select></div>
+      <div class="srow" style="padding:6px 0"><div class="sl"><small id="mcpLibInfo">Bibliothèque MCP : …</small></div><div class="sc"><input class="field" id="mcpLibQ" placeholder="chercher dans la bibliothèque" style="width:220px"></div></div>
+      <div id="mcpLibFound"></div></div>
       <div id="mcpHubList"></div></div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Ajouter un serveur</b><small>Commande lancée en local (transport stdio). Exemples rapides :</small></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${Object.keys(MCP_PRESETS).map((k) => `<button class="ghost" data-preset="${k}">＋ ${k}</button>`).join("")}</div>
@@ -5302,16 +5305,31 @@ function loadMcpHub() {
         const env = Object.fromEntries($$("[data-k]", el).map((i) => [i.dataset.k, i.value.trim()]));
         const miss = it.env.filter((k) => !env[k]); if (miss.length) return toast("Renseigne d'abord : " + miss.join(", "));
         b.disabled = true; b.textContent = "Installation…";
-        const res = await api("/api/mcp/extract-install", { method: "POST", body: { url: input.value.trim(), name: it.name, env, project: S.project } });
+        const scope = $("#mcpHubScope").value;
+        const res = await api("/api/mcp/extract-install", { method: "POST", body: { url: input.value.trim(), name: it.name, env, project: S.project, scope } });
         b.disabled = false; b.textContent = res.error && !res.name ? "Installer" : "Installé ✓";
-        toast(res.error ? `⚠ ${it.name} : ${String(res.error).slice(0, 140)}` : `${it.name} installé ✓`);
-        loadMcp();
+        toast(res.error ? `⚠ ${it.name} : ${String(res.error).slice(0, 140)}` : res.bibliotheque ? `${it.name} est dans la bibliothèque MCP ✓` : `${it.name} installé ✓`);
+        loadMcp(); mcpLibLoad();
       };
       list.appendChild(el);
     });
   };
   go.onclick = browse;
   input.onkeydown = (e) => { if (e.key === "Enter") browse(); };
+  let t; $("#mcpLibQ").oninput = (e) => { clearTimeout(t); t = setTimeout(() => mcpLibLoad(e.target.value.trim()), 250); };
+  mcpLibLoad();
+}
+// the MCP library: how many servers, a search, and « Retirer » (mcp.json is never touched)
+async function mcpLibLoad(q = "") {
+  const info = $("#mcpLibInfo"); if (!info) return;
+  const r = await api("/api/mcp/bibliotheque", { method: "POST", body: { q } }).catch(() => null); if (!r) return;
+  info.textContent = `Bibliothèque MCP : ${r.count} serveur${r.count > 1 ? "s" : ""} (cherchés par Naim quand une tâche en a besoin)`;
+  const box = $("#mcpLibFound");
+  box.innerHTML = (q || r.count <= 30) && r.servers.length ? r.servers.map((k) => `<div class="srow"><div class="sl"><b>${esc(k.name)}${k.remote ? ' <span class="badge2">distant</span>' : ""}</b><small class="clamp2">${esc(k.description || "")}</small></div><div class="sc"><button class="btn danger" data-mcplibrm="${esc(k.name)}">Retirer</button></div></div>`).join("") : (q ? `<div class="srow"><div class="sl"><small>Rien trouvé.</small></div></div>` : "");
+  $$("[data-mcplibrm]", box).forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Retirer ${b.dataset.mcplibrm} de la bibliothèque MCP ?`)) return;
+    await api("/api/mcp/bibliotheque", { method: "POST", body: { remove: b.dataset.mcplibrm, q } }); mcpLibLoad(q);
+  }));
 }
 async function loadMcpCatalog() {
   const box = $("#mcpCatalog"); if (!box) return;

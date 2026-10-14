@@ -130,6 +130,13 @@ SKILL_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_skill", 
         "requete": {"type": "string", "description": "a few words of the task, e.g. « facture latex », « scraping linkedin », « kubernetes helm »"}},
         "required": ["requete"]}}}
 
+MCP_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_mcp", "description": (
+    "Search the MCP library (extra MCP servers not listed in your instructions) when no listed tool or server fits: a "
+    "few words → matching servers; then use_mcp with the one you pick."),
+    "parameters": {"type": "object", "properties": {
+        "requete": {"type": "string", "description": "a few words, e.g. « notion », « base postgres », « slack »"}},
+        "required": ["requete"]}}}
+
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
     "Find the user's own files anywhere on the Mac (Bureau, Documents, Téléchargements…), like the Finder: by words in "
     "the file NAME and in the CONTENT of documents, programs' code left out, newest first. Use it whenever the user "
@@ -211,7 +218,7 @@ TOOL_GROUPS = {
     "api": (("http_request",), "envoyer des requêtes HTTP pour tester une API", r"\bapi\b|endpoint|requ[eê]te|\bpost\b|\bcurl\b|rest\b|json"),
 }
 
-READ_ONLY = {"look_at", "list_files", "find_files", "chercher_sur_mac", "chercher_skill", "find_symbol", "find_references", "check_code", "read_file", "search", "process_output", "list_processes", "web_search", "web_fetch", "use_skill", "update_todos",
+READ_ONLY = {"look_at", "list_files", "find_files", "chercher_sur_mac", "chercher_skill", "chercher_mcp", "find_symbol", "find_references", "check_code", "read_file", "search", "process_output", "list_processes", "web_search", "web_fetch", "use_skill", "update_todos",
              "mail_inbox"}
 
 PORT_RE = re.compile(r"\b(?:port|listening on|écoute sur)\s*[:=]?\s*(\d{4,5})\b", re.I)
@@ -592,6 +599,8 @@ class Agent:
             tools.append(MAC_SEARCH_TOOL)
             if self.features["skills"]:
                 tools.append(SKILL_SEARCH_TOOL)
+            if self.features.get("mcp", True):
+                tools.append(MCP_SEARCH_TOOL)
             if self.external.get("on"):
                 tools.append(EXTERNAL_TOOL)
         if self.features["simulator"] and not self.subagent:
@@ -725,6 +734,14 @@ class Agent:
                 n = skills_bibliotheque.count()
             except Exception:  # noqa: BLE001
                 n = 0
+            try:
+                import mcp_bibliotheque
+                nm = mcp_bibliotheque.count() if self.features.get("mcp", True) else 0
+            except Exception:  # noqa: BLE001
+                nm = 0
+            if nm:
+                parts.append(f"MCP library: {nm} more MCP servers, not listed here. When no tool or listed server fits, "
+                             "call chercher_mcp with a few words, then use_mcp with the one you pick.")
             if n:
                 parts.append(f"Skills library: {n} more skills, not listed here. When no skill above covers the task, "
                              "call chercher_skill with a few words of the task, then use_skill with the one you pick.")
@@ -1104,6 +1121,15 @@ class Agent:
             except OSError:
                 pass
         return [x for _, x in sorted(files, reverse=True)[:limit]]
+
+    def chercher_mcp(self, requete):
+        import mcp_bibliotheque as lib
+        found = lib.search(requete)
+        if not found:
+            return f"(aucun serveur de la bibliothèque MCP ne correspond à « {requete} » : fais sans, ou avec tes outils)"
+        return (f"{len(found)} serveur(s) MCP de la bibliothèque pour « {requete} ». Choisis-en un : use_mcp(server=nom) "
+                "pour voir ses outils, puis use_mcp(server, tool, arguments) :\n"
+                + "\n".join(f"- {s['name']}{' (distant)' if s['remote'] else ''} : {s['description'][:220]}" for s in found))
 
     def chercher_skill(self, requete):
         import skills_bibliotheque as lib
@@ -2441,7 +2467,12 @@ class Agent:
             return self.call_mcp(tid, arguments if isinstance(arguments, dict) else {})
         deferred = next((m for m in getattr(self, "_mcp_deferred", []) if m["name"] == server), None)
         entry = next((m for m in self._mcp_on_demand if m["name"] == server), None)
-        if not deferred and not entry:
+        try:
+            import mcp_bibliotheque
+            in_library = mcp_bibliotheque.config(server) is not None
+        except Exception:  # noqa: BLE001
+            in_library = False
+        if not deferred and not entry and not in_library:
             known = [m["name"] for m in getattr(self, "_mcp_deferred", [])] + [m["name"] for m in self._mcp_on_demand]
             return "error: unknown MCP server. Available: " + ", ".join(known)
         if entry and entry.get("catalog"):  # not configured yet: add it (the user confirms), loaded on demand from now on
@@ -2526,7 +2557,7 @@ class Agent:
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
               "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
-              "chercher_sur_mac": self.chercher_sur_mac, "chercher_skill": self.chercher_skill,
+              "chercher_sur_mac": self.chercher_sur_mac, "chercher_skill": self.chercher_skill, "chercher_mcp": self.chercher_mcp,
               "confier_tache": self.confier_tache,
               "wait": self.wait}.get(name)
         rule = self._rule_for(name, args) if self.rules else None
@@ -3287,7 +3318,7 @@ TOOL_LABELS = {"write_file": "Écrire", "edit_file": "Modifier", "multi_edit": "
                "list_files": "Lister", "find_files": "Chercher", "search": "Rechercher", "run_command": "Commande",
                "start_process": "Lancer", "web_search": "Recherche web", "web_fetch": "Lire la page", "browser": "Navigateur",
                "delete_file": "Supprimer", "look_at": "Regarder", "computer": "Écran", "delegate": "Sous-agent",
-               "confier_tache": "Confier", "chercher_conversations": "Souvenirs", "chercher_sur_mac": "Chercher sur le Mac", "chercher_skill": "Chercher une skill", "use_skill": "Skill", "use_mcp": "MCP",
+               "confier_tache": "Confier", "chercher_conversations": "Souvenirs", "chercher_sur_mac": "Chercher sur le Mac", "chercher_skill": "Chercher une skill", "chercher_mcp": "Chercher un MCP", "use_skill": "Skill", "use_mcp": "MCP",
                "send_email": "E-mail", "planifier": "Planifier", "update_todos": "Tâches"}
 MAIN_ARG = ("path", "command", "query", "url", "requete", "pattern", "name", "server", "tache", "dossier")
 

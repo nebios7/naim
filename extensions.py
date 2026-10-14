@@ -279,6 +279,13 @@ class MCPManager:
     def get(self, name, on_demand=False):
         """Running server `name`. A disabled server is started only on demand (Naim's use_mcp tool)."""
         cfg = self.config().get(name)
+        if not cfg and on_demand:  # a server of the MCP library (found by chercher_mcp): started when a task needs it
+            try:
+                import mcp_bibliotheque
+                lib = mcp_bibliotheque.config(name)
+                cfg = {**lib, "enabled": False} if lib else None
+            except Exception:  # noqa: BLE001
+                cfg = None
         if not cfg or (cfg.get("enabled") is False and not on_demand):
             return None
         with self.lock:

@@ -1220,11 +1220,21 @@ class Handler(BaseHTTPRequestHandler):
                 if path.endswith("browse"):
                     self.send_json({"servers": mcp_hub.browse(b.get("url", ""))})
                 else:
-                    self.send_json(mcp_hub.install(b.get("url", ""), b.get("name", ""), b.get("env") or {}, b.get("project", "")))
+                    self.send_json(mcp_hub.install(b.get("url", ""), b.get("name", ""), b.get("env") or {}, b.get("project", ""),
+                                                   b.get("scope", "serveurs")))
             except mcp_hub.McpError as e:
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
                 self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
+        elif path == "/api/mcp/bibliotheque":
+            import mcp_bibliotheque as lib
+            b = self.read_json()
+            if b.get("remove"):
+                lib.remove(b["remove"])
+            q = b.get("q", "")
+            self.send_json({"count": lib.count(), "path": str(lib.FILE),
+                            "servers": lib.search(q, 30) if q else [{"name": k, "description": v.get("description", ""), "remote": bool(v.get("url"))}
+                                                                     for k, v in list(lib.servers().items())[:30]]})
         elif path == "/api/mcp/install":
             b = self.read_json()
             name = b.get("name")
