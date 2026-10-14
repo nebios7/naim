@@ -3674,6 +3674,7 @@ async function send(textArg, attsArg, opts = {}) {
 // « Continuer »: the rest is written INTO the same answer (no bubble from you, a cut code block goes on in its block)
 async function continueReply() {
   if (curRun() || !current) return;
+  if (current.mode === "agent") return send("continue");  // Agent: resume the task (its notebook, its skill), not finish a cut text
   const idx = current.messages.length - 1, last = current.messages[idx];
   if (!last || last.role !== "assistant") return;
   const hist = histFor(current, current.messages.length);

@@ -2794,7 +2794,7 @@ class Agent:
         self._loops = self._loops + 1 if repeated else 0
         return repeated
 
-    CONTINUE_RE = re.compile(r"^\s*(continue|continuer|reprends|reprend|reprendre|vas-y|vas y|go|termine|finis|poursuis|la suite)\b", re.I)
+    CONTINUE_RE = re.compile(r"^\s*(continue|continuer|reprends|reprend|reprendre|vas-y|vas y|go|termine|finis|poursuis|la suite)\b(?!\s+exactement)", re.I)
     NOTEBOOK = ".naim/tache.md"
 
     def interject(self, text):
@@ -2829,8 +2829,17 @@ class Agent:
             return ""
         unfinished = "État : terminée" not in text
         fresh = not any(m.get("role") == "user" for m in self.messages[1:])  # new conversation
-        if unfinished and (self.CONTINUE_RE.search(task) or (fresh and len(task) < 200 and re.search(r"\b(t[aâ]che|continue|reprend)", task, re.I))):
+        if self.CONTINUE_RE.search(task) or (unfinished and fresh and len(task) < 200 and re.search(r"\b(t[aâ]che|continue|reprend)", task, re.I)):
+            # « continue »: the notebook even if it says « terminée » (a task can end on a problem it only announced)
             return text[:6000]
+        return ""
+
+    def _last_request(self):
+        """The conversation's last real request (not a « continue »): what a « continue » goes on with."""
+        for m in reversed(self.messages[1:]):
+            t = str(m.get("content") or "").strip()
+            if m.get("role") == "user" and t and not self.CONTINUE_RE.search(t) and not t.startswith(("(Rappel)", "[")):
+                return t.split("\n\n[", 1)[0][:1500]
         return ""
 
     def _notebook(self, task, state="en cours"):
@@ -2874,6 +2883,9 @@ class Agent:
             task = (f"{task}\n\n[Carnet de la tâche précédente, restée inachevée : reprends là où elle s'est arrêtée, "
                     f"sans refaire ce qui est coché. Vérifie d'abord l'état des fichiers listés.]\n{prev}")
             self._task_words = (prev.split("Demande : ", 1)[-1].split("\n", 1)[0] or task)[:1500]
+        if self.CONTINUE_RE.search(task) and (orig := self._last_request()):
+            self._task_words = orig  # the notebook keeps the real request, and its skill comes back with it
+            task = f"{task}\n\n[Je continue cette demande : {orig}]"
         hk = self._user_hooks()
         if hk.get("UserPromptSubmit") and not self.subagent:
             blocked, msg, ctx = naim_hooks.run(hk, "UserPromptSubmit", {"prompt": task, "session_id": self.run_id}, self.root)
@@ -2895,7 +2907,7 @@ class Agent:
                     "trop) ; ne refais pas la tâche et ne répète pas ton résumé précédent. Si tu n'es pas sûr de ce "
                     "qu'il veut, pose une seule question.]")
         if (self.features["skills"] and self.auto_skill and not self.plan and not feedback
-                and (sk := ext.match_skill(task, self.root, self.disabled_skills))):
+                and (sk := ext.match_skill(self._task_words if self.CONTINUE_RE.search(task) else task, self.root, self.disabled_skills))):
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
             task = f"{task}\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
