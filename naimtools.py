@@ -123,6 +123,14 @@ USE_MCP_TOOL = {"type": "function", "function": {"name": "use_mcp", "description
 
 
 # the user's past conversations with Naim (like « souviens-toi, on l'a déjà fait »): search them, then read one
+SKILL_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_skill", "description": (
+    "Search the user's skills LIBRARY (hundreds or thousands of extra methods, not listed above) when no listed skill "
+    "covers the task: a few words of the task → the matching skills with their description. Then call use_skill with "
+    "the name you pick, and follow it."),
+    "parameters": {"type": "object", "properties": {
+        "requete": {"type": "string", "description": "a few words of the task, e.g. « facture latex », « scraping linkedin », « kubernetes helm »"}},
+        "required": ["requete"]}}}
+
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
     "Find the USER'S OWN files anywhere on their Mac (Bureau, Documents, Téléchargements, iCloud…), like the Finder: "
     "by words in the file NAME and in the CONTENT of documents (PDF, Word, Pages…). Use it whenever the user asks where "
@@ -206,7 +214,7 @@ TOOL_GROUPS = {
     "api": (("http_request",), "envoyer des requêtes HTTP pour tester une API", r"\bapi\b|endpoint|requ[eê]te|\bpost\b|\bcurl\b|rest\b|json"),
 }
 
-READ_ONLY = {"look_at", "list_files", "find_files", "chercher_sur_mac", "find_symbol", "find_references", "check_code", "read_file", "search", "process_output", "list_processes", "web_search", "web_fetch", "use_skill", "update_todos",
+READ_ONLY = {"look_at", "list_files", "find_files", "chercher_sur_mac", "chercher_skill", "find_symbol", "find_references", "check_code", "read_file", "search", "process_output", "list_processes", "web_search", "web_fetch", "use_skill", "update_todos",
              "mail_inbox"}
 
 PORT_RE = re.compile(r"\b(?:port|listening on|écoute sur)\s*[:=]?\s*(\d{4,5})\b", re.I)
@@ -564,6 +572,8 @@ class Agent:
             tools.append(SCHEDULE_TOOL)
             tools.append(CONVERSATIONS_TOOL)
             tools.append(MAC_SEARCH_TOOL)
+            if self.features["skills"]:
+                tools.append(SKILL_SEARCH_TOOL)
             if self.external.get("on"):
                 tools.append(EXTERNAL_TOOL)
         if self.features["simulator"] and not self.subagent:
@@ -679,9 +689,27 @@ class Agent:
         if self.features["skills"]:
             skills = [s for s in ext.list_skills(self.root, self.disabled_skills) if s["enabled"]]
             if skills:
+                # skills picked by their own keywords are loaded automatically when a request names them: only their
+                # name here; the others keep a short description (what makes Naim think of them)
+                try:
+                    import plugins
+                    auto = set(ext.SKILL_TRIGGERS) | set(plugins.triggers())
+                except Exception:  # noqa: BLE001
+                    auto = set(ext.SKILL_TRIGGERS)
+                described = [s for s in skills if s["name"] not in auto]
+                named = sorted(s["name"] for s in skills if s["name"] in auto)
                 parts.append("Available skills (call use_skill to load one before a task it covers; after solving a new "
                              "kind of task, you may save the method with create_skill):\n"
-                             + "\n".join(f"- {s['name']}: {_short_desc(s['description'])}" for s in skills))
+                             + "\n".join(f"- {s['name']}: {_short_desc(s['description'])}" for s in described)
+                             + (f"\nAlso (loaded by themselves when the request is about them): {', '.join(named)}" if named else ""))
+            try:
+                import skills_bibliotheque
+                n = skills_bibliotheque.count()
+            except Exception:  # noqa: BLE001
+                n = 0
+            if n:
+                parts.append(f"Skills library: {n} more skills, not listed here. When no skill above covers the task, "
+                             "call chercher_skill with a few words of the task, then use_skill with the one you pick.")
         if self.mcp_lookup:
             servers = sorted({v[0] for v in self.mcp_lookup.values()})
             parts.append("External tools from MCP servers are available (names start with mcp__): " + ", ".join(servers))
@@ -1047,6 +1075,18 @@ class Agent:
             except OSError:
                 pass
         return [x for _, x in sorted(files, reverse=True)[:limit]]
+
+    def chercher_skill(self, requete):
+        import skills_bibliotheque as lib
+        found = lib.search(requete)
+        if not found:
+            return (f"(aucune skill de la bibliothèque ne correspond à « {requete} » : essaie d'autres mots, ou fais la "
+                    "tâche avec ce que tu sais)")
+        return (f"{len(found)} skill(s) de la bibliothèque pour « {requete} » (la plus pertinente d'abord). Choisis-en une "
+                "et charge-la avec use_skill(nom) avant de faire la tâche :\n"
+                + "\n".join(f"- {s['name']} : {s['description'][:220]}"
+                             + (f" [contient des scripts {', '.join(s['scripts'])} : lis-les avant de les lancer]" if s["scripts"] else "")
+                             for s in found))
 
     MAC_SEARCH_STOP = set("""de du des la le les l d un une mon ma mes ton ta tes son sa ses mon notre votre leur et ou en
         au aux pour par sur dans avec fichier fichiers document documents dossier mac the of a""".split())
@@ -2414,7 +2454,7 @@ class Agent:
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
               "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
-              "chercher_sur_mac": self.chercher_sur_mac,
+              "chercher_sur_mac": self.chercher_sur_mac, "chercher_skill": self.chercher_skill,
               "confier_tache": self.confier_tache,
               "wait": self.wait}.get(name)
         rule = self._rule_for(name, args) if self.rules else None
@@ -3175,7 +3215,7 @@ TOOL_LABELS = {"write_file": "Écrire", "edit_file": "Modifier", "multi_edit": "
                "list_files": "Lister", "find_files": "Chercher", "search": "Rechercher", "run_command": "Commande",
                "start_process": "Lancer", "web_search": "Recherche web", "web_fetch": "Lire la page", "browser": "Navigateur",
                "delete_file": "Supprimer", "look_at": "Regarder", "computer": "Écran", "delegate": "Sous-agent",
-               "confier_tache": "Confier", "chercher_conversations": "Souvenirs", "chercher_sur_mac": "Chercher sur le Mac", "use_skill": "Skill", "use_mcp": "MCP",
+               "confier_tache": "Confier", "chercher_conversations": "Souvenirs", "chercher_sur_mac": "Chercher sur le Mac", "chercher_skill": "Chercher une skill", "use_skill": "Skill", "use_mcp": "MCP",
                "send_email": "E-mail", "planifier": "Planifier", "update_todos": "Tâches"}
 MAIN_ARG = ("path", "command", "query", "url", "requete", "pattern", "name", "server", "tache", "dossier")
 

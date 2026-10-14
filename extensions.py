@@ -611,7 +611,11 @@ def find_skill(name, root=None):
     for s in list_skills(root):
         if s["name"] == name or s["dir"] == name:
             return s
-    return None
+    try:  # not an active skill: one of the library (found with chercher_skill)
+        import skills_bibliotheque
+        return skills_bibliotheque.find(name)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def slugify(name):

@@ -1128,6 +1128,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
                 self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
+        elif path == "/api/skills/bibliotheque":
+            import skills_bibliotheque as lib
+            q = (self.read_json() or {}).get("q", "")
+            self.send_json({"count": lib.count(), "path": str(lib.LIB),
+                            "skills": [{k: s[k] for k in ("name", "description", "scripts", "files")}
+                                       for s in (lib.search(q, 30) if q else lib.index()[:30])]})
         elif path == "/api/skills/popular":
             self.send_json({"sources": skill_hub.POPULAR})
         elif path in ("/api/sim/relaunch", "/api/sim/save"):

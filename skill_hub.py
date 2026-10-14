@@ -120,7 +120,11 @@ def browse(url):
 
 def install(url, names=None, root=None, scope="utilisateur"):
     """Install the skills found at `url` (only `names` if given). Returns the list of installed skill names."""
-    base = (Path(root) / ".naim" / "skills") if scope == "projet" and root else ext.HOME / "skills"
+    if scope == "bibliotheque":  # the library: as many as wanted, found by chercher_skill, not listed in the prompt
+        import skills_bibliotheque
+        base = skills_bibliotheque.LIB
+    else:
+        base = (Path(root) / ".naim" / "skills") if scope == "projet" and root else ext.HOME / "skills"
     base.mkdir(parents=True, exist_ok=True)
     p = parse_url(url)
     installed = []
