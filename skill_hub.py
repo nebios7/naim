@@ -147,7 +147,7 @@ def browse(url):
     return out
 
 
-def install(url, names=None, root=None, scope="utilisateur"):
+def install(url, names=None, root=None, scope="utilisateur", progress=None):
     """Install the skills found at `url` (only `names` if given). Returns the list of installed skill names."""
     if scope == "bibliotheque":  # the library: as many as wanted, found by chercher_skill, not listed in the prompt
         import skills_bibliotheque
@@ -165,35 +165,83 @@ def install(url, names=None, root=None, scope="utilisateur"):
         return [name]
     _, owner, repo, ref, sub = p
     available = browse(url)
-    tar, files = _members(_download(owner, repo, ref))
+    archive = _download(owner, repo, ref)
+    wanted = set(names or [])
+    chosen = {}  # skill folder in the repo → its folder in Naim
     for s in available:
-        if names and s["name"] not in names and s["folder"] not in names:
+        if wanted and s["name"] not in wanted and s["folder"] not in wanted:
             continue
         if s["size"] > MAX_SKILL:
-            if names and len(names) > 1:
+            if wanted and len(wanted) > 1:
                 continue  # « Tout installer »: one skill too big is skipped, the others are installed
             raise SkillError(f"le skill {s['name']} est trop gros ({s['size'] // 1_000_000} Mo)")
         name = ext.slugify(s["name"])
-        folder = s["folder"]
-
-        def write(dest, folder=folder):
-            for path, m in files.items():
-                if folder and not path.startswith(folder + "/"):
-                    continue
-                rel = path[len(folder) + 1:] if folder else path
-                if rel.startswith((".github/", ".git/")):
-                    continue
-                target = (dest / rel).resolve()
-                if dest.resolve() not in target.parents:
-                    continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(tar.extractfile(m).read())
-                if m.mode & 0o111:
-                    target.chmod(0o755)
+        if name in (d.name for d in chosen.values()):  # two skills with the same name in one repository: the first
+            continue
+        chosen[s["folder"]] = base / name
+    if not chosen:
+        raise SkillError("aucun skill correspondant à installer")
+    for dest in chosen.values():  # an existing skill with the same name is kept in .anciens/ first
+        if dest.exists():
+            src = dest / ".source"
+            if src.is_file() and src.read_text().split("\n", 1)[0].strip() == url:
+                shutil.rmtree(dest)  # the same repository installed again: replaced, no thousand useless copies
+            else:
+                backup = dest.parent / ".anciens" / f"{dest.name}-{time.strftime('%Y%m%d-%H%M%S')}"
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(dest), str(backup))
+        dest.mkdir(parents=True)
+    # ONE pass through the archive (a big repository has thousands of skills: reading it again for each one, or
+    # looking through all its files for each skill, took minutes); each file goes to the skill folder that holds it
+    folders = sorted(chosen, key=len, reverse=True)
+    roots = {f for f in folders}
+    done, total = 0, len(chosen)
+    seen_skill = set()
+    with tarfile.open(archive, mode="r|gz") if isinstance(archive, Path) else tarfile.open(fileobj=io.BytesIO(archive), mode="r|gz") as tar:
+        for m in tar:
+            if not m.isfile():
+                continue
+            parts = m.name.split("/", 1)
+            if len(parts) != 2 or ".." in Path(parts[1]).parts or parts[1].startswith("/"):
+                continue
+            path = parts[1]
+            folder = "" if "" in roots else None
+            pp = path.split("/")
+            for k in range(len(pp) - 1, 0, -1):  # the deepest skill folder that holds this file
+                cand = "/".join(pp[:k])
+                if cand in roots:
+                    folder = cand
+                    break
+            if folder is None:
+                continue
+            rel = path[len(folder) + 1:] if folder else path
+            if rel.startswith((".github/", ".git/")):
+                continue
+            dest = chosen[folder]
+            target = (dest / rel).resolve()
+            if dest.resolve() not in target.parents:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            fobj = tar.extractfile(m)
+            if fobj is None:
+                continue
+            target.write_bytes(fobj.read())
+            if m.mode & 0o111:
+                target.chmod(0o755)
+            if folder not in seen_skill:
+                seen_skill.add(folder)
+                done += 1
+                if progress and done % 50 == 0:
+                    progress(done, total)
+    installed = []
+    for folder, dest in chosen.items():
+        if any(dest.iterdir()):
             (dest / ".source").write_text(f"{url}\n{owner}/{repo}@{ref}/{folder}\n")
-
-        _replace(base / name, write)
-        installed.append(name)
+            installed.append(dest.name)
+        else:
+            dest.rmdir()
+    if progress:
+        progress(total, total)
     if not installed:
         raise SkillError("aucun skill correspondant à installer")
     return installed

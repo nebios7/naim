@@ -5456,7 +5456,16 @@ async function loadSkillsPage() {
     list.innerHTML = `<div class="srow"><div class="sl"><small>${r.skills.length} skill${r.skills.length > 1 ? "s" : ""} trouvé${r.skills.length > 1 ? "s" : ""}</small></div>${r.skills.length > 1 ? `<button class="btn primary" data-huball>Tout installer (${r.skills.length})</button>` : ""}</div>`;
     const install = async (names, btn) => {
       if (btn) { btn.disabled = true; btn.textContent = "Installation…"; }
-      const res = await api("/api/skills/install", { method: "POST", body: { url, names, scope: $("#hubScope").value } });
+      let res = await api("/api/skills/install", { method: "POST", body: { url, names, scope: $("#hubScope").value } });
+      if (res.job) {  // a big batch, installed in the background: its progress on the button, then the result
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const st = await api("/api/skills/install-status", { method: "POST", body: { job: res.job } }).catch(() => ({}));
+          if (btn) btn.textContent = `Installation… ${st.done || 0} / ${st.total || res.total}`;
+          if (st.error) { res = { error: st.error }; break; }
+          if (st.installed) { res = { installed: st.installed, moved_to_library: st.moved_to_library }; break; }
+        }
+      }
       if (res.error) { toast(res.error); if (btn) { btn.disabled = false; btn.textContent = "Installer"; } return; }
       toast(res.moved_to_library ? `${res.installed.length} skills mises dans la bibliothèque (plus de 30 d'un coup en skills actives ralentiraient Naim)`
         : `${$("#hubScope").value === "bibliotheque" ? "Dans la bibliothèque" : "Installé"} : ${res.installed.length > 6 ? res.installed.length + " skills" : res.installed.join(", ")}`); loadSkillsPage();

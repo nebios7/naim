@@ -226,6 +226,7 @@ APPROVAL_TIMEOUT = 600  # seconds before an unanswered approval counts as "denie
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 _pending = {}  # approval id -> {"event": threading.Event, "allow": bool}
+INSTALL_JOBS = {}  # big skills installations running in the background: id -> {done, total, installed, error}
 _agents = {}  # run id -> running Agent (to pass it the messages typed while it works)
 _runs = {}     # run id -> threading.Event (stop flag)
 LAST_ACTIVITY = [time.time()]  # last request from the user (the automatic check waits for 30 min of quiet)
@@ -1123,6 +1124,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
                 self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
+        elif path == "/api/skills/install-status":
+            self.send_json(INSTALL_JOBS.get(self.read_json().get("job", ""), {"error": "installation inconnue"}))
         elif path == "/api/skills/to-library":  # an active skill sent to the library (found on demand, not in every prompt)
             import skills_bibliotheque as lib
             src = Path(self.read_json().get("path", "")).expanduser().resolve().parent
@@ -1146,8 +1149,25 @@ class Handler(BaseHTTPRequestHandler):
                     # guard: more than 30 skills at once as ACTIVE skills would fill Naim's instructions (each one is
                     # read at every conversation): they go to the library instead, and the window says so
                     to_library = scope != "bibliotheque" and len(names or skill_hub.browse(b.get("url", ""))) > 30
-                    installed = skill_hub.install(b.get("url", ""), names, b.get("project"), "bibliotheque" if to_library else scope)
-                    self.send_json({"installed": installed, "moved_to_library": to_library})
+                    scope = "bibliotheque" if to_library else scope
+                    if len(names or []) > 40:
+                        # a big batch (thousands of skills): installed in the background, the window follows its
+                        # progress (/api/skills/install-status) instead of waiting for one long request
+                        job = uuid.uuid4().hex[:10]
+                        INSTALL_JOBS[job] = {"done": 0, "total": len(names), "installed": None, "error": None, "moved_to_library": to_library}
+
+                        def run(job=job, url=b.get("url", ""), names=names, project=b.get("project"), scope=scope):
+                            try:
+                                got = skill_hub.install(url, names, project, scope,
+                                                        progress=lambda d, t: INSTALL_JOBS[job].update(done=d, total=t))
+                                INSTALL_JOBS[job].update(installed=got, done=len(got))
+                            except Exception as e:  # noqa: BLE001
+                                INSTALL_JOBS[job]["error"] = str(e)
+                        threading.Thread(target=run, daemon=True, name="naim-skills-install").start()
+                        self.send_json({"job": job, "total": len(names), "moved_to_library": to_library})
+                    else:
+                        installed = skill_hub.install(b.get("url", ""), names, b.get("project"), scope)
+                        self.send_json({"installed": installed, "moved_to_library": to_library})
             except skill_hub.SkillError as e:
                 self.send_json({"error": str(e)}, 400)
             except Exception as e:
