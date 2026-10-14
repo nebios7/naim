@@ -11,9 +11,11 @@ The repository is downloaded once as a tar.gz archive (no git, no API rate limit
 a SKILL.md is copied with its scripts and resources. Files are only copied, never executed.
 """
 import io
+import os
 import re
 import shutil
 import tarfile
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -59,17 +61,28 @@ def parse_url(url):
     raise SkillError("lien non reconnu : donne un lien GitHub (owner/repo ou https://github.com/…) ou un lien vers un SKILL.md")
 
 
+_dl_locks, _dl_guard = {}, threading.Lock()
+
+
 def _download(owner, repo, ref):
-    """The repository's archive, written to disk as it arrives (up to 1 Go); its path."""
+    """The repository's archive, written to disk as it arrives (up to 1 Go); its path. One download at a time per
+    repository (a double click on « Parcourir », or browse and install together, waits for it and shares it)."""
     key = (owner, repo, ref)
+    with _dl_guard:
+        lock = _dl_locks.setdefault(key, threading.Lock())
+    with lock:
+        return _download_locked(owner, repo, ref, key)
+
+
+def _download_locked(owner, repo, ref, key):
     if key in _cache and time.time() - _cache[key][0] < 600 and _cache[key][1].exists():
         return _cache[key][1]
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    for old in CACHE_DIR.glob("*.tar.gz"):  # archives older than 10 minutes: not needed any more
+    for old in [*CACHE_DIR.glob("*.tar.gz"), *CACHE_DIR.glob("*.part")]:  # older than 10 minutes: not needed any more
         if time.time() - old.stat().st_mtime > 600:
             old.unlink(missing_ok=True)
     dst = CACHE_DIR / re.sub(r"[^\w.-]", "_", f"{owner}-{repo}-{ref}.tar.gz")
-    tmp = dst.with_suffix(".part")
+    tmp = dst.parent / f"{dst.name}.{os.getpid()}.{threading.get_ident()}.part"  # its own temporary file
     url = f"https://github.com/{owner}/{repo}/archive/{ref}.tar.gz"
     req = urllib.request.Request(url, headers={"User-Agent": ext.UA})
     size = 0
