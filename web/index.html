@@ -232,7 +232,8 @@ body .chip { display: flex; gap: 12px; align-items: flex-start; text-align: left
 .arow .alabel code { color: var(--text); }
 @media (max-width: 760px) { body .chips { grid-template-columns: 1fr; } }
 
-@media (min-width: 761px) { #sideBtn, .pagebar [data-cmd=sidebar], .brand [data-cmd=sidebar] { display: none !important; } }
+@media (min-width: 761px) { .pagebar [data-cmd=sidebar], .brand [data-cmd=sidebar] { display: none !important; } }
+#chatHeader #sideBtn { margin-right: 4px; color: var(--muted); } #chatHeader #sideBtn:hover { color: var(--text); }
 .group.folder { cursor: pointer; }
 .group.folder.drop { background: var(--hover); border-radius: 6px; }
 @media (max-width: 760px) { #rail { display: none; } #params { position: fixed; inset: 0 0 0 auto; z-index: 16; box-shadow: var(--shadow); } }
@@ -424,6 +425,11 @@ footer { padding: 8px 20px 12px; }
 .composer .atts:empty { display: none; }
 #input { width: 100%; border: 0; outline: 0; resize: none; background: none; max-height: 260px; padding: 6px 4px; display: block; }
 .ctools { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; }
+/* the composer: the text, then one quiet row (attach · voice · send); its settings sit under the box */
+.cin { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.cin .spacer { flex: 1; }
+footer > .ctools { max-width: var(--w); margin: 6px auto 0; padding: 0 6px; }
+footer > .ctools .pill, footer > .ctools .chk { color: var(--muted); }
 .ctools > * { flex-shrink: 0; white-space: nowrap; }
 .ctools .pill, .ctools .chk { display: inline-flex; align-items: center; gap: 5px; height: 30px; box-sizing: border-box; }
 .ctools .spacer { flex: 1 1 0; min-width: 0; }
@@ -1684,7 +1690,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 
 <main>
   <header id="chatHeader">
-    <button class="icon" data-cmd="sidebar" id="sideBtn" title="Barre latérale (⌘B)" hidden>☰</button>
+    <button class="icon" data-cmd="sidebar" id="sideBtn" title="Afficher / masquer la liste des sessions (⌘B)">☰</button>
     <button class="titlebtn" id="titleBtn" title="Options de la conversation">Nouvelle conversation ▾</button>
     <div class="seg" id="modeSeg">
       <button data-mode="chat" class="on">Chat</button>
@@ -1723,10 +1729,16 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
           <div class="slash" id="slash" hidden></div>
           <div class="atts" id="pending"></div>
           <textarea id="input" rows="1" placeholder="Écris à Naim…"></textarea>
-          <div class="ctools">
+          <!-- inside the box, like a coding assistant's composer: attach, voice, send; the settings go below it -->
+          <div class="cin">
             <button class="icon" id="attach" title="Joindre des fichiers">＋</button>
+            <div class="spacer"></div>
             <button class="icon" id="micBtn" title="Dicter (parle, Naim écrit)" hidden></button>
             <button class="icon" id="talkBtn" title="Conversation à voix haute : tu parles, Naim répond avec sa voix" hidden></button>
+            <button id="send" title="Envoyer">↑</button>
+          </div>
+        </div>
+          <div class="ctools">
             <button class="pill" id="modePill" title="Changer de mode">💬 Chat</button>
             <button class="pill" id="folderPill" title="Dossier de travail"></button>
             <button class="pill" id="permPill" title="Mode d'autorisation de l'agent (⇧⇥ pour passer au suivant)" hidden></button>
@@ -1734,9 +1746,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
             <div class="spacer"></div>
             <button class="pill" id="effortPill" title="Effort : plus rapide ou plus intelligent"></button>
             <span class="ctx" id="ctxInfo"></span>
-            <button id="send" title="Envoyer">↑</button>
           </div>
-        </div>
         <div class="hint" id="hint"></div>
         <div id="homeBelow" hidden></div>
       </footer>
@@ -2333,7 +2343,7 @@ function fitViewport() {
   b.classList.toggle("vnarrow", w < 860); b.classList.toggle("vtiny", w < 640); b.classList.toggle("vwide", w >= 1250);
   if (!b.classList.contains("vnarrow")) b.classList.remove("sideopen");
   const hidden = b.classList.contains("vnarrow") ? !b.classList.contains("sideopen") : b.classList.contains("noside");
-  if ($("#sideBtn")) $("#sideBtn").hidden = !hidden;
+  if ($("#sideBtn")) { $("#sideBtn").hidden = false; $("#sideBtn").classList.toggle("on", !hidden); }  // always at the top left, like a coding assistant's title bar
 }
 addEventListener("resize", () => fitViewport());
 document.addEventListener("click", (e) => {  // the overlay sidebar closes when you click elsewhere or pick a conversation
@@ -6412,7 +6422,7 @@ if (dictationAvailable()) { const m = $("#micBtn"); m.hidden = false; m.innerHTM
 api("/api/tts").then((r) => { if (!r.available || !dictationAvailable()) return;  // speaking needs both: dictation and Naim's voice
   const t = $("#talkBtn"); t.hidden = false; t.innerHTML = svgI("wave"); t.onclick = () => { earcon(talk.on ? "off" : "on"); talk.on ? talkStop() : talkStart(); }; }).catch(() => {});
 // header like a pro IDE: title on the left, tools on the right; mode and model live in the composer
-$(".composer .ctools").insertBefore($("#modelPick"), $("#ctxInfo"));
+$(".ctools").insertBefore($("#modelPick"), $("#ctxInfo"));
 fitViewport(); updateTitle();
 renderFolderPill();
 $$("[data-ic]").forEach((e) => { if (!e.innerHTML) e.innerHTML = svgI(e.dataset.ic); });  // line icons named in the markup
@@ -6423,7 +6433,6 @@ function buildRail() {
   $("#rail").innerHTML = `<div class="rtop"></div>`
     + items.map(([ic, go, t, c]) => `<button class="rbtn" data-go="${go}" data-c style="--rc:${c}" title="${t}">${svgI(ic)}${go === "schedules" ? '<span class="rdot" id="railAsk" hidden></span>' : ""}</button>`).join("")
     + `<div class="spacer"></div><button class="rbtn" id="railTheme" title="Thème : clair / sombre / automatique"></button>`
-    + `<button class="rbtn" data-cmd="sidebar" title="Afficher / masquer la liste des conversations (⌘B)">${svgI("list")}</button>`
     + `<button class="rbtn" data-go="settings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`;
   $$("#rail [data-go]").forEach((b) => (b.onclick = () => {
     const g = b.dataset.go;
@@ -6507,7 +6516,7 @@ function polishSettings() {
 function polishUI() {
   const set = (id, ic) => { const b = $(id); if (b && !b.dataset.svg) { b.dataset.svg = 1; const badge = b.querySelector(".pbadge"); b.innerHTML = svgI(ic); if (badge) b.appendChild(badge); } };
   if ($("#projectBar").parentElement === $("#chatHeader")) $("#chatHeader").after($("#projectBar"));
-  set("#procBtn", "activity"); set("#termBtn", "term"); set("#filesBtn", "folder"); set("#moreBtn", "dots"); set("#paramsBtn", "sliders");
+  set("#sideBtn", "columns"); set("#procBtn", "activity"); set("#termBtn", "term"); set("#filesBtn", "folder"); set("#moreBtn", "dots"); set("#paramsBtn", "sliders");
   const pal = $('#chatHeader [data-cmd="palette"]'); if (pal && !pal.dataset.svg) { pal.dataset.svg = 1; pal.innerHTML = svgI("search"); }
   // Raisonnement / Plan d'abord become toggle chips in the composer (same inputs, same ids)
   const tools = $(".ctools"), temp = $("#tempPill");
