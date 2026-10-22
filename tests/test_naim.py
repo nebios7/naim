@@ -88,6 +88,19 @@ class Compaction(unittest.TestCase):
                 self.assertIn(a.messages[i - 1]["role"], ("assistant", "tool"))
 
 
+class Interface(unittest.TestCase):
+    """A CSS comment left open hides every style after it (it broke the home page once): never again."""
+
+    def test_css_comments_closed(self):
+        import re
+        css = "".join(re.findall(r"<style>(.*?)</style>", (ROOT / "web" / "index.html").read_text(), re.S))
+        i = 0
+        while (a := css.find("/*", i)) >= 0:
+            b, n = css.find("*/", a + 2), css.find("/*", a + 2)
+            self.assertTrue(b >= 0 and (n < 0 or b < n), "commentaire CSS non fermé : " + css[a:a + 80])
+            i = b + 2
+
+
 class ToolCallsWrittenAsText(unittest.TestCase):
     def test_xml(self):
         c = naimtools.raw_tool_calls("<tool_call>\n<function=read_file>\n<parameter=path>\nx.py\n</parameter>\n</function>\n</tool_call>")
