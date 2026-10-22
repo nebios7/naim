@@ -28,6 +28,33 @@ LOG = HOME / "llama-server.log"
 
 
 
+ERRLOG = HOME / "cache" / "erreurs-moteur.log"
+
+
+def note_error(kind, text):
+    """What went wrong with the engine, kept (last ~200 KB) so that the cause can be found afterwards."""
+    try:
+        ERRLOG.parent.mkdir(parents=True, exist_ok=True)
+        if ERRLOG.exists() and ERRLOG.stat().st_size > 200_000:
+            ERRLOG.write_text(ERRLOG.read_text(errors="replace")[-100_000:])
+        with ERRLOG.open("a") as f:
+            f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} {kind}\n{text[:4000]}\n")
+    except OSError:
+        pass
+
+
+def _repair(raw):
+    """The usual ways a small model breaks the JSON of its arguments, mended: a backslash that escapes nothing
+    (a Windows path, a regex digit class), and a call cut just before its closing quote and brace."""
+    fixed = re.sub(r"\\(.)", lambda m: m.group(0) if m.group(1) in '"\\/bfnrtu' else "\\\\" + m.group(1), raw, flags=re.S)
+    for tail in ("", '"}', "}", '"]}'):
+        try:
+            return json.loads(fixed + tail, strict=False), bool(tail)
+        except json.JSONDecodeError:
+            continue
+    return None, False
+
+
 def _args(raw):
     """A tool call's arguments. A raw line break or tab inside a string (frequent in code) is accepted; arguments
     that still cannot be read are reported instead of becoming an empty call that fails without saying why."""
@@ -36,6 +63,12 @@ def _args(raw):
     try:
         return json.loads(raw or "{}", strict=False)
     except json.JSONDecodeError as e:
+        args, cut = _repair(raw)
+        if isinstance(args, dict):
+            if cut:  # it ended too early: the content may be incomplete, the tool says so to the model
+                args["_maybe_cut"] = True
+            return args
+        note_error("arguments illisibles", f"{e.msg} at {e.pos}\n{raw[max(0, e.pos - 300):e.pos + 300]}")
         return {"_unreadable": f"{e.msg} at character {e.pos} of {len(raw)}"}
 
 def model_files():
@@ -459,10 +492,17 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
             resp = urllib.request.urlopen(req, timeout=1800)
             break
         except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", "replace") if e.code == 400 else ""
+            try:
+                body = e.read().decode("utf-8", "replace")
+            except OSError:
+                body = ""
             if "exceeds the available context" in body or "context size" in body:
                 raise ContextFull(body[:300]) from e
-            raise
+            note_error(f"HTTP {e.code}", body or str(e))
+            if e.code >= 500 and attempt == 1:  # a passing failure of the engine: once more before giving up
+                time.sleep(2)
+                continue
+            raise RuntimeError(f"le moteur a répondu {e.code} : {(body or str(e))[:300]}") from e
         except (http.client.RemoteDisconnected, ConnectionError, urllib.error.URLError) as e:
             # the shared llama-server was stopped (another Naim window quit, crash): start it again once
             if attempt == 2 or isinstance(e, urllib.error.HTTPError):
@@ -496,6 +536,10 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 if data == "[DONE]":
                     break
                 ev = json.loads(data)
+                if ev.get("error"):  # the engine failed in the middle of the answer: said, not an empty reply
+                    err = ev["error"] if isinstance(ev["error"], str) else (ev["error"].get("message") or json.dumps(ev["error"]))
+                    note_error("erreur pendant la réponse", err)
+                    raise RuntimeError(f"le moteur s'est arrêté pendant la réponse : {err[:300]}")
                 t = ev.get("timings")
                 if ev.get("choices"):
                     delta = ev["choices"][0].get("delta", {})

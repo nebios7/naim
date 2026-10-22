@@ -225,7 +225,9 @@ PORT_RE = re.compile(r"\b(?:port|listening on|écoute sur)\s*[:=]?\s*(\d{4,5})\b
 URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(?::\d+)?[^\s'\"<>)]*")
 
 
-RAW_CALL_RE = re.compile(r"<tool_call>\s*<function=([\w.-]+)>(.*?)</function>\s*(?:</tool_call>|$)", re.S)
+RAW_CALL_RE = re.compile(r"<tool_call>\s*<function=([\w.-]+)>(.*?)(?:</function>\s*(?:</tool_call>|$)|$)", re.S)
+# the other way models write a call as text: <tool_call>{"name": …, "arguments": {…}}</tool_call>
+RAW_JSON_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*(?:</tool_call>|$)", re.S)
 RAW_PARAM_RE = re.compile(r"<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>", re.S)
 
 
@@ -241,6 +243,20 @@ def raw_tool_calls(text):
             except ValueError:
                 args[k] = v
         calls.append({"function": {"name": m.group(1), "arguments": args}})
+    if not calls:
+        for m in RAW_JSON_CALL_RE.finditer(text or ""):
+            try:
+                c = json.loads(m.group(1), strict=False)
+            except ValueError:
+                continue
+            if isinstance(c, dict) and isinstance(c.get("name"), str):
+                a = c.get("arguments") if c.get("arguments") is not None else c.get("parameters") or {}
+                if isinstance(a, str):
+                    try:
+                        a = json.loads(a, strict=False)
+                    except ValueError:
+                        a = {}
+                calls.append({"function": {"name": c["name"], "arguments": a if isinstance(a, dict) else {}}})
     return calls
 
 
@@ -306,6 +322,10 @@ def chat_watched(model, messages, tools=None, think=False, options=None, cancel=
         raw = raw_tool_calls(msg["content"])
         if raw:
             msg["tool_calls"], msg["content"] = raw, msg["content"].split("<tool_call")[0].rstrip()
+    elif not msg.get("tool_calls") and not (msg.get("content") or "").strip() and "<tool_call" in (msg.get("thinking") or ""):
+        raw = raw_tool_calls(msg["thinking"])  # it wrote its action inside its reasoning, then stopped: done anyway
+        if raw:
+            msg["tool_calls"] = raw
     return msg
 
 
@@ -2630,14 +2650,20 @@ class Agent:
             return (f"error: your {name} call could not be read ({args['_unreadable']}): its arguments were not valid "
                     "JSON (often a quote or backslash not escaped, or the call was cut off). Call it again with valid "
                     "arguments; for a long file, write a first part with write_file, then add the rest with edit_file.")
+        cut = isinstance(args, dict) and args.pop("_maybe_cut", False)
         try:
-            return fn(**args)
+            result = fn(**args)
         except TypeError as e:
             return f"error: bad arguments for {name}: {e}"
         except ValueError as e:
             return f"error: {e}"
         except Exception as e:  # tools must never crash the agent loop
             return f"error: {type(e).__name__}: {e}"
+        if cut and isinstance(result, str) and not result.startswith(("error", "denied", "refused")):
+            # its arguments ended too early and were closed for it: the end of what it sent may be missing
+            result += ("\n[Attention : ton appel s'arrêtait avant sa fin (guillemet et accolade ajoutés). Vérifie la fin de "
+                       "ce qui a été écrit (read_file des dernières lignes) et complète-la si elle manque.]")
+        return result
 
     MAIL_ASK_RE = re.compile(r"\b(envoie|envoy\w*|envoi|renvoie|transmet\w*|exp[ée]die)\b[^.?!]*\b((e-?)?mails?|courriel|bo[iî]te)\b"
                              r"|\b((e-?)?mails?|courriel)\b[^.?!]*\b(envoie|envoy\w*|envoi|renvoie|transmet\w*)\b", re.I)
@@ -3110,8 +3136,11 @@ class Agent:
             self.emit({"type": "status", "text": "Naim réfléchit..."})
             self._compact_history()
             self._sent_msgs_tokens = self._msgs_tokens()
+            # right after « Fais-le maintenant », the next step must be an action, not the same announcement
+            step_opts = dict(self.options, tool_choice="required") if getattr(self, "_force_tool", False) else self.options
+            self._force_tool = False
             try:
-                msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options,
+                msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=step_opts,
                                    cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
             except Exception as e:  # noqa: BLE001
                 if type(e).__name__ != "ContextFull":
@@ -3219,6 +3248,7 @@ class Agent:
                         self.emit({"type": "note", "text": content})  # what it said it will do stays shown
                         self.messages.append({"role": "assistant", "content": content})
                         self.messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), puis dis-moi le résultat."})
+                        self._force_tool = True
                         continue
                     self._outcome = "answer"
                 hk = self._user_hooks()

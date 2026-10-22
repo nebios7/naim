@@ -129,6 +129,19 @@ QUESTION_RE = re.compile(r"\?\s*$|^\W*(?:c'est quoi|qu'est[- ]ce|pourquoi|commen
                          r"est[- ]ce que|explique|dis[- ]moi|parle[- ]moi|à quoi sert|quelle est la diff[ée]rence|c'est quoi la)", re.I)
 
 
+# a real piece of work (a project to build, code to compile and test, an app to rebuild): it needs the Agent's loop
+# (task notebook, long runs, compaction), whatever mode the window is in — like an assistant that has one way of working
+PROJECT_WORK_RE = re.compile(
+    r"\b(dotnet|npm|yarn|pnpm|pip install|cargo|gradle|mvn|xcodebuild|swift build|pytest|jest|phpunit|go build|makefile|"
+    r"compil\w*|build|d[ée]ploi\w*|tests? unitaires?|lance\w*[- ](toi[- ]m[êe]me |toi )?(le |les )?(tests?|programme|projet|serveur|appli\w*)|"
+    r"code erreur|erreur de compilation|traceback|stack ?trace|arborescence|prototype|architecture (du |de l'|d'un )?(projet|syst[èe]me|appli\w*)|"
+    r"(cr[ée]\w*|d[ée]velopp\w*|programm\w*|construi\w*|reconstrui\w*|d[ée]cortiqu\w*|clone\w*)\b[^.?!]{0,60}\b(app(li(cation)?)?s?|logiciel|api|"
+    r"backend|frontend|site web|syst[èe]me|projet|jeu|saas|plateforme)|ne t'?arr[êe]te pas|jusqu'?[àa] ce que (tout |[çc]a |le |les )?"
+    r"(marche|fonctionne|passe))\b", re.I)
+PROJECT_SKILLS = {"application-web", "react-app", "react-native", "app-macos", "ios-swiftui", "api-rest", "api-php", "node-typescript",
+                  "tests-unitaires", "debug", "projet-existant", "docker", "deploiement-vps", "ci-cd", "base-de-donnees"}
+
+
 def pure_question(text):
     """A question that asks for nothing to be done (no action verb): it gets an answer, not a task."""
     t = (text or "").strip()
@@ -1587,6 +1600,11 @@ class Handler(BaseHTTPRequestHandler):
             if any((chatfiles.OUT / n.strip()).is_file() for n in named):
                 files = False  # the file exists (✉ Envoyer on its card): only send it
         web = s.get("enable_web", True) is not False and bool(WEB_NEED_RE.search(body["message"] or ""))
+        if (where := self.big_work(body)) is not None:
+            # a whole project asked in the Chat: done by the Agent's loop, in the same conversation (the window follows)
+            self.event({"type": "escalate", "project": str(where)})
+            self.event({"type": "project", "path": str(where)})
+            return self.run_agent({**body, "mode": "agent", "project": str(where), "_from_chat": True}, stop)
         if options.get("backend") == "llamacpp" and s.get("chat_tools", True) is not False and not body.get("images"):
             # Chat with every tool, like an assistant that talks AND acts: answers stream as usual; when a tool is
             # needed, it is used in the same reply, then the answer goes on
@@ -1612,6 +1630,38 @@ class Handler(BaseHTTPRequestHandler):
                             "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
                             "prompt": chunk.get("prompt_eval_count", 0), "reason": chunk.get("done_reason")})
         self.event({"type": "done"})
+
+    def big_work(self, body):
+        """The folder to work in when this Chat message is a real piece of work for the Agent (else None)."""
+        s, msg = body.get("settings") or {}, body.get("message") or ""
+        if (body.get("_question") or body.get("_warm") or body.get("voice") or body.get("images") or s.get("auto_agent") is False
+                or trivial_message(msg) or pure_question(msg) or s.get("chat_tools", True) is False):
+            return None
+        recent = " ".join([msg] + [str(m.get("content") or "")[:1500] for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
+        sk = ext.match_skill(msg)
+        follow = bool(re.search(r"\b(continue|reprends|corrige|r[ée]pare|relance|encore|toujours|code erreur|erreur)\b", msg, re.I))
+        if re.match(r"\s*(comment|pourquoi|c'?est quoi|qu'?est[- ]ce|est[- ]ce que|quel\w*|o[uù])\b", msg, re.I) and msg.rstrip().endswith("?"):
+            return None  # « comment je lance le test ? »: an explanation, not the work itself
+        several = len(set(re.findall(r"\b[\w-]+\.(?:py|js|ts|tsx|cs|cbl|cob|jcl|java|kt|swift|sql|php|go|rs|rb|c|cpp|h|html|css|vue)\b", msg, re.I)))
+        if not (PROJECT_WORK_RE.search(msg) or several >= 2 or (sk and (sk["name"] in PROJECT_SKILLS or sk["name"].startswith("replica-")))
+                or (follow and PROJECT_WORK_RE.search(recent))):
+            return None
+        named, _ = self.folder_from_text([msg] + [str(m.get("content") or "") for m in reversed((body.get("history") or [])[-6:])
+                                                  if m.get("role") == "user"])
+        if named:
+            return named
+        proj = Path(str(s.get("project") or body.get("project") or "")).expanduser()
+        if str(proj) not in ("", ".") and proj.is_dir() and proj.resolve() != Path.home().resolve():
+            return proj
+        # a new project with no folder given: its own folder, like a developer opening a fresh directory
+        import chatfiles
+        import unicodedata
+        plain = "".join(c for c in unicodedata.normalize("NFD", msg) if unicodedata.category(c) != "Mn")
+        words = [w for w in re.findall(r"[a-z0-9]+", plain.lower()) if w not in ("le", "la", "les", "un", "une", "de", "du", "des", "pour", "en", "et", "l", "d", "moi", "cree", "fais", "fait")]
+        name = "-".join(words[:5]) or "projet"
+        d = chatfiles.OUT.parent / "Projets" / f"{name}-{time.strftime('%Y%m%d')}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
 
     FOLDER_TOOL = {"type": "function", "function": {
         "name": "aller_dans_dossier",
@@ -1749,6 +1799,7 @@ class Handler(BaseHTTPRequestHandler):
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
         copies = 0
+        force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
             head = flat(text)[:160]
@@ -1879,7 +1930,9 @@ class Handler(BaseHTTPRequestHandler):
 
             # « salut », « merci » (plain): no tool_choice "none" — it removes the tools from what the engine reads, so the
             # next real message would find nothing in common and re-read everything (~1 min); a tool call is refused instead
-            opts = dict(options, tool_choice="required") if (files and step == 0) else options
+            # after « Fais-le maintenant » the next step MUST be a tool call: announcing it again is no longer possible
+            opts = dict(options, tool_choice="required") if ((files and step == 0) or force_tool) and tools else options
+            force_tool = False
             content, calls, shown, thinking_text, copied = "", [], 0, "", False
             try:
                 stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
@@ -1974,6 +2027,7 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "assistant", "content": content})
                 messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), "
                                  "puis dis-moi le résultat. Si une information te manque vraiment, pose une seule question."})
+                force_tool = bool(content.strip())  # it announced: the next step is the action itself
                 if content.strip():
                     self.event({"type": "token", "text": "\n\n"})
                 continue
