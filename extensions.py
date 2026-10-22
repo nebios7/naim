@@ -489,8 +489,10 @@ Objectif : une première version qui MARCHE, petite et rapide à écrire. Pas de
     "tests-unitaires": ("Ajouter des tests unitaires au projet et les faire passer.", """# Tests unitaires
 
 1. Détecter le langage et le framework de test existant (pytest, jest/vitest, JUnit, XCTest, PHPUnit…) ; sinon choisir le standard.
-2. Lister les fonctions publiques importantes ; pour chacune : cas nominal, cas limites, cas d'erreur.
-3. Écrire les tests dans le dossier habituel du projet.
+2. Choisir les tests qui comptent : le parcours principal, puis les cas limites et d'erreur qui pourraient vraiment
+   casser. 6 à 12 tests au total pour un petit projet (plus seulement si l'utilisateur demande une couverture
+   complète) : chaque test écrit coûte du temps, mieux vaut peu de tests justes que beaucoup de tests à corriger.
+3. Écrire les tests dans le dossier habituel du projet, courts (une idée par test, pas de commentaires inutiles).
 4. Lancer la suite avec run_command, corriger jusqu'à ce que tout passe.
 5. Donner la commande pour relancer les tests.
 """),
