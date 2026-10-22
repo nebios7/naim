@@ -496,6 +496,9 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
    width, until it is closed — never a conversation squeezed into a strip */
 body.vnarrow #panel.show { position: fixed; inset: 0 0 0 auto; width: 100% !important; max-width: none !important; z-index: 12; }
 body.vnarrow #panel .presize { display: none; }
+/* the panel as a card set slightly apart from the window's edges, rounded, like a coding assistant's side pane */
+#panel.show { margin: 8px 8px 8px 0; border: 1px solid var(--line) !important; border-radius: 14px; box-sizing: border-box; }
+body.vnarrow #panel.show { margin: 6px; inset: 0 !important; width: auto !important; }
 #pChanges .chead { flex-wrap: wrap; row-gap: 6px; } #pChanges .chead b, #pChanges .chead .btn { white-space: nowrap; }
 .ptabs #closePanel, .ptabs #refreshTree { position: absolute !important; top: 6px; }
 .ptabs #closePanel { right: 6px; } .ptabs #refreshTree { right: 36px; }
