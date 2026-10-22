@@ -37,7 +37,16 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-#rail { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: var(--side); border-right: 1px solid var(--line); }
+#rail { display: none !important; } /* its sections now sit at the top of the sessions list */
+#sidenav { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 8px; }
+#sidenav .snav { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; border: 0; background: none; color: var(--text); font-size: 13.5px; text-align: left; cursor: pointer; position: relative; }
+#sidenav .snav:hover { background: var(--hover); }
+#sidenav .snav.on { background: var(--hover); font-weight: 500; }
+#sidenav .sic { display: inline-flex; color: var(--muted); } #sidenav .sic svg { width: 16px; height: 16px; }
+#sidenav .snav.on .sic { color: var(--text); }
+#sidenav .rdot { position: static; margin-left: auto; }
+aside#side .sidefoot #sideTheme svg, aside#side .sidefoot #sideSettings svg { width: 16px; height: 16px; }
+#rail-old { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: var(--side); border-right: 1px solid var(--line); }
 #rail .spacer { flex: 1; }
 .rbtn { width: 38px; height: 38px; border-radius: 10px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; position: relative; }
 .rbtn:hover { background: var(--hover); color: var(--text); }
@@ -1282,7 +1291,7 @@ header#chatHeader { min-height: 46px; gap: 4px; border-bottom: 1px solid color-m
 .ctools #modelPick .mdot { width: 7px; height: 7px; }
 /* narrow window or big zoom: the sidebar folds away and opens over the page */
 body.vnarrow aside#side { display: none; }
-body.vnarrow.sideopen aside#side { display: flex; position: fixed; top: 0; bottom: 0; left: 52px; z-index: 30; width: min(300px, 80vw); box-shadow: var(--shadow); animation: naimSlide .16s var(--ease) both; }
+body.vnarrow.sideopen aside#side { display: flex; position: fixed; top: 0; bottom: 0; left: 0; z-index: 30; width: min(300px, 80vw); box-shadow: var(--shadow); animation: naimSlide .16s var(--ease) both; }
 body.vtiny .ctools #modelPick b { max-width: 70px; }
 body.vtiny #titleBtn { max-width: 52%; }
 /* the robot is alive on the home page */
@@ -6434,7 +6443,12 @@ function buildRail() {
     + items.map(([ic, go, t, c]) => `<button class="rbtn" data-go="${go}" data-c style="--rc:${c}" title="${t}">${svgI(ic)}${go === "schedules" ? '<span class="rdot" id="railAsk" hidden></span>' : ""}</button>`).join("")
     + `<div class="spacer"></div><button class="rbtn" id="railTheme" title="Thème : clair / sombre / automatique"></button>`
     + `<button class="rbtn" data-go="settings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`;
-  $$("#rail [data-go]").forEach((b) => (b.onclick = () => {
+  // the same sections at the top of the sessions list (like a coding assistant's sidebar): the rail itself is hidden
+  const side = $("#sidenav") || (() => { const d = document.createElement("div"); d.id = "sidenav"; $("aside#side .searchrow").before(d); return d; })();
+  side.innerHTML = items.map(([ic, go, t]) => `<button class="snav" data-go="${go}" title="${t}"><span class="sic">${svgI(ic)}</span><span>${{ agent: "Code" }[go] || t.split(" :")[0]}</span>${go === "schedules" ? '<span class="rdot" id="sideAsk" hidden></span>' : ""}</button>`).join("");
+  const foot = $("aside#side .sidefoot");
+  if (foot && !$("#sideTheme")) foot.insertAdjacentHTML("beforeend", `<button class="icon" id="sideTheme" title="Thème : clair / sombre / automatique"></button><button class="icon" data-go="settings" id="sideSettings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`);
+  $$("#rail [data-go], #sidenav [data-go], #sideSettings").forEach((b) => (b.onclick = () => {
     const g = b.dataset.go;
     // a second click on the page already open closes it and goes back to the conversation (a toggle)
     if (g !== "chat" && g !== "agent" && b.classList.contains("on")) { setView("chat"); updateRail(); return; }
@@ -6444,11 +6458,12 @@ function buildRail() {
     updateRail();
   }));
   $("#railTheme").onclick = () => { naimCmd("theme"); updateRail(); };
+  if ($("#sideTheme")) $("#sideTheme").onclick = () => { naimCmd("theme"); updateRail(); };
   placeRobots?.();
 }
 function updateRail() {
   const tab = $("#spane")?.dataset.tab;
-  $$("#rail [data-go]").forEach((b) => {
+  $$("#rail [data-go], #sidenav [data-go], #sideSettings").forEach((b) => {
     const g = b.dataset.go;
     b.classList.toggle("on", view === "chat" ? g === S.mode : view === "settings" ? (g === tab || (g === "settings" && !["models", "skills", "mcp"].includes(tab))) : g === view);
   });
@@ -6456,8 +6471,10 @@ function updateRail() {
     $("#railTheme").innerHTML = svgI({ light: "sun", dark: "moon" }[S.theme] || "auto");
     $("#railTheme").title = `Thème : ${{ auto: "automatique", light: "clair", dark: "sombre" }[S.theme]} — clic pour changer`;
   }
+  if ($("#sideTheme")) { $("#sideTheme").innerHTML = svgI({ light: "sun", dark: "moon" }[S.theme] || "auto"); $("#sideTheme").title = $("#railTheme")?.title || "Thème"; }
   const n = +($("#askCount")?.textContent || 0);
   if ($("#railAsk")) $("#railAsk").hidden = !n || $("#askCount").hidden;
+  if ($("#sideAsk")) $("#sideAsk").hidden = !n || $("#askCount").hidden;
 }
 
 
