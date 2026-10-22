@@ -656,6 +656,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"running": naim_check.STATE["running"], "last": last and {
                 "date": last["date"], "ok": sum(x["ok"] for x in last["results"]), "total": len(last["results"]),
                 "failed": [x["name"] for x in last["results"] if not x["ok"]]}, "lessons": naim_check.lessons()})
+        elif path == "/api/room":  # the real room of one conversation in the running engine (98k with shared memory)
+            self.send_json({"room": llamacpp.slot_ctx() if llamacpp.available() else 0})
         elif path == "/api/llama":
             files = [{"name": f.name, "size": f.stat().st_size} for f in sorted(llamacpp.MODELS.glob("*.gguf"))
                      if "mmproj" not in f.name]  # Naim's own model files (the vision part goes with them)
