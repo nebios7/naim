@@ -2045,7 +2045,7 @@ function codeBlock(lang, body, file = "", open = false) {
 }
 function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
-  return `<div class="code${open ? " writing" : ""}"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} lignes</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">${file ? `✓ Appliquer à ${esc(file.split("/").pop())}` : "⤓ Projet"}</button>` : ""}<button data-save>Enregistrer</button><button data-copy>Copier</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
+  return `<div class="code${open ? " writing" : ""}"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} ligne${body.split("\n").length > 1 ? "s" : ""}</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">${file ? `✓ Appliquer à ${esc(file.split("/").pop())}` : "⤓ Projet"}</button>` : ""}<button data-save>Enregistrer</button><button data-copy>Copier</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
 }
 // redraw an answer without rebuilding what did not change: each top-level block is kept when its HTML is the same, so
 // finished code blocks, their buttons and the text already read stay still while the end of the answer is written
@@ -3008,7 +3008,7 @@ function actionInfo(name, a = {}, res = "") {
   const M = {
     list_files: () => ({ kind: "read", label: `Exploré ${a.path && a.path !== "." ? cmd(a.path) : "le projet"}` }),
     read_file: () => ({ kind: "read", label: `Lu ${cmd(a.path)}` }),
-    write_file: () => ({ kind: "write", label: `Écrit ${cmd(a.path)}${a.lines ? ` <span class="muted">· ${a.lines} lignes</span>` : ""}` }),
+    write_file: () => ({ kind: "write", label: `Écrit ${cmd(a.path)}${a.lines ? ` <span class="muted">· ${a.lines} ligne${a.lines > 1 ? "s" : ""}</span>` : ""}` }),
     edit_file: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : ""}` }),
     search: () => ({ kind: "read", label: `Recherché ${esc(q(a.pattern))}` }),
     run_command: () => { if (a.description && String(a.description).trim()) return { kind: "cmd", label: esc(String(a.description).trim().slice(0, 90)) };  // its own words, like a title
@@ -3052,7 +3052,7 @@ function actionInfo(name, a = {}, res = "") {
     creer_fichier: () => ({ kind: "write", label: a.nom ? `Créé ${cmd(a.nom)}` : "Créé un fichier" }),
     aller_dans_dossier: () => ({ kind: "read", label: `Ouvert le dossier ${cmd(a.dossier)}` }),
     find_files: () => ({ kind: "read", label: `Cherché les fichiers ${cmd(a.pattern || a.name || a.query)}` }),
-    multi_edit: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.edits?.length ? ` <span class="muted">· ${a.edits.length} changements</span>` : ""}` }),
+    multi_edit: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : a.edits?.length ? ` <span class="muted">· ${a.edits.length} changements</span>` : ""}` }),
     move_file: () => ({ kind: "write", label: `Déplacé ${cmd(a.source || a.src)} vers ${cmd(a.destination || a.dst)}` }),
     delete_file: () => ({ kind: "write", label: `Mis à la corbeille ${cmd(a.path)}` }),
     http_request: () => ({ kind: "web", label: `Requête ${esc(a.method || "GET")} ${cmd(a.url)}` }),
@@ -3091,6 +3091,22 @@ function groupSummary(counts) {  // what was done, said like a person: « Lu 2 f
   return t ? t[0].toUpperCase() + t.slice(1) : "Travail";
 }
 const EXT_LANG = { py: "python", js: "javascript", ts: "typescript", html: "html", css: "css", java: "java", swift: "swift", php: "php", go: "go", rs: "rust", sql: "sql", sh: "bash", json: "json", yml: "yaml", yaml: "yaml", md: "markdown", kt: "kotlin", c: "c", cpp: "cpp" };
+// a line-by-line comparison (longest common subsequence): only the lines that really change are coloured, the
+// others stay as context — a block rewritten with 3 lines changed shows those 3, not the whole block twice
+function lineDiff(a, b) {
+  if (a.length * b.length > 90000) return [...a.map((l) => "-" + l), ...b.map((l) => "+" + l)];  // too big: plain
+  const L = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out = []; let i = 0, j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { out.push(" " + a[i]); i++; j++; }
+    else if (L[i + 1][j] >= L[i][j + 1]) out.push("-" + a[i++]);
+    else out.push("+" + b[j++]);
+  }
+  while (i < a.length) out.push("-" + a[i++]);
+  while (j < b.length) out.push("+" + b[j++]);
+  return out;
+}
 // what a file change looked like, kept with the step (short): the conversation reopened still shows it
 function editDiff(name, a) {
   const pairs = name === "edit_file" ? [[a.old_text, a.new_text]] : name === "multi_edit" && Array.isArray(a.edits) ? a.edits.map((e) => [e.old_text, e.new_text]) : [];
@@ -3098,7 +3114,7 @@ function editDiff(name, a) {
   for (const [o, n] of pairs) {
     if (typeof n !== "string") continue;
     if (out.length) out.push(" …");
-    out.push(...String(o || "").split("\n").map((l) => "-" + l), ...n.split("\n").map((l) => "+" + l));
+    out.push(...lineDiff(String(o || "").split("\n"), n.split("\n")));
   }
   return out.length ? out.slice(0, 60).join("\n").slice(0, 4000) + (out.length > 60 ? `\n … ${out.length - 60} lignes de plus` : "") : "";
 }
@@ -3109,7 +3125,10 @@ function toolMeta(name, a) {
     return { lines: lines.length, preview: lines.slice(0, 14).join("\n").slice(0, 2000) };
   }
   const diff = editDiff(name, a);
-  if (name === "edit_file" && typeof a.old_text === "string") return { removed: a.old_text.split("\n").length, added: String(a.new_text || "").split("\n").length, diff };
+  if ((name === "edit_file" && typeof a.old_text === "string") || (name === "multi_edit" && diff)) {
+    const ls = diff.split("\n");  // the lines really changed (not the whole block replaced)
+    return { removed: ls.filter((l) => l.startsWith("-")).length, added: ls.filter((l) => l.startsWith("+")).length, diff };
+  }
   return diff ? { diff } : {};
 }
 
@@ -3236,7 +3255,7 @@ function addBot(m, idx) {
         group.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum"></span></summary><div class="arows"></div>`;
         flow.appendChild(group);
       }
-      const info = actionInfo(name, args);
+      const info = actionInfo(name, args.added != null || !/^(edit_file|multi_edit)$/.test(name) ? args : { ...args, ...toolMeta(name, args) });  // live: +/− counted now
       counts[info.kind] = (counts[info.kind] || 0) + 1;
       $(".gsum", group).textContent = groupSummary(counts);
       const row = document.createElement("div"); row.className = "arow run"; row.dataset.tool = "1";
