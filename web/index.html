@@ -3599,7 +3599,7 @@ const kfmt = (n) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replac
 var engineRoom = 0;  // (var: read by functions that may run before this line) what the running engine really gives one conversation (asked to it: 98k with its shared memory)
 function ctxSize() { return /^naim/i.test(S.model || "") ? Math.max(S.num_ctx, 32768, engineRoom || 0) : S.num_ctx; }  // the model's real memory
 const loadRoom = () => api("/api/room").then((r) => { if (r.room && r.room !== engineRoom) { engineRoom = r.room; updateCtx(); } }).catch(() => {});
-setTimeout(loadRoom, 1500); setInterval(loadRoom, 60000);
+setTimeout(loadRoom, 1500); setInterval(() => { if (!engineRoom || Date.now() % 60000 < 5000) loadRoom(); }, 5000);  // every 5 s until the engine has started, then every minute
 function fitComposer() {
   const c = $(".composer"), t = $(".ctools"); if (!c || !t) return;
   c.classList.remove("compact", "tiny", "wrap");
