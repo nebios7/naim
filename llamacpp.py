@@ -159,7 +159,8 @@ def slots_for(value):
         return 1
 
 
-DEFAULT_CFG = {"gpu_layers": 99, "threads": 0, "batch": 512, "kv_type": "f16", "checkpoints": 16, "parallel": 1}
+DEFAULT_CFG = {"gpu_layers": 99, "threads": 0, "batch": 512, "kv_type": "f16", "checkpoints": 16, "parallel": 1,
+               "kv_unified": False}
 CONFIG = dict(DEFAULT_CFG)  # updated from the app settings (Personnaliser → Moteur)
 
 
@@ -235,6 +236,10 @@ class Server:
                    "-b", str(cfg["batch"]), "-np", str(slots), "--no-webui"]
             if int(cfg.get("threads") or 0) > 0:
                 cmd += ["-t", str(cfg["threads"])]
+            if cfg.get("kv_unified") and not self.vision and slots > 1:
+                # one memory shared by the slots instead of equal fixed parts: the Agent can use all of it for a long
+                # task while the Chat is idle (otherwise each slot is capped at the total divided by the slots)
+                cmd += ["--kv-unified"]
             # flash attention: measured on an M4 with Naim's Agent prompt, a new conversation reads its instructions
             # 1.7× faster (85 s instead of 144 s) and writes 1.5× faster (8.8 instead of 5.9 tokens/s), same memory
             cmd += ["-fa", "on"]

@@ -300,7 +300,8 @@ def model_options(body):
     elif uses_llamacpp(body):
         opts["backend"] = "llamacpp"
         for k, key in (("gpu_layers", "llama_gpu_layers"), ("threads", "llama_threads"), ("batch", "llama_batch"),
-                       ("kv_type", "llama_kv_type"), ("checkpoints", "llama_checkpoints"), ("parallel", "llama_parallel")):
+                       ("kv_type", "llama_kv_type"), ("checkpoints", "llama_checkpoints"), ("parallel", "llama_parallel"),
+                       ("kv_unified", "llama_kv_unified")):
             if s.get(key) not in (None, ""):
                 llamacpp.CONFIG[k] = s[key]
         opts.pop("keep_alive", None)
@@ -1223,7 +1224,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ("/api/llama/restart", "/api/llama/stop"):
             b = self.read_json()
             for k, key in (("gpu_layers", "llama_gpu_layers"), ("threads", "llama_threads"), ("batch", "llama_batch"),
-                           ("kv_type", "llama_kv_type"), ("checkpoints", "llama_checkpoints"), ("parallel", "llama_parallel")):
+                           ("kv_type", "llama_kv_type"), ("checkpoints", "llama_checkpoints"), ("parallel", "llama_parallel"),
+                       ("kv_unified", "llama_kv_unified")):
                 if b.get(key) not in (None, ""):
                     llamacpp.CONFIG[k] = b[key]
             llamacpp.SERVER.stop()
