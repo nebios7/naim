@@ -160,7 +160,7 @@ def slots_for(value):
 
 
 DEFAULT_CFG = {"gpu_layers": 99, "threads": 0, "batch": 512, "kv_type": "f16", "checkpoints": 16, "parallel": 1,
-               "kv_unified": False}
+               "kv_unified": True}  # measured: the same task 23% faster (45 instead of 58 min), room 98k instead of 32k
 CONFIG = dict(DEFAULT_CFG)  # updated from the app settings (Personnaliser → Moteur)
 
 
