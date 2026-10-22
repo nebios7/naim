@@ -67,6 +67,27 @@ class EngineSlots(unittest.TestCase):
         self.assertEqual(self.slot([{"role": "system", "content": "s"}], {}), 2)
 
 
+class Compaction(unittest.TestCase):
+    """A compaction re-reads the whole prompt: it must free real room (down to ~40%), keep calls before their results
+    and leave the last step whole."""
+
+    def test_frees_room(self):
+        a = naimtools.Agent.__new__(naimtools.Agent)
+        a.options, a._task_idx, a.todos, a.tools = {"num_ctx": 32768}, 1, [], []
+        a._room = lambda: 32768
+        a._written_summary = lambda old: "résumé"
+        a.messages = [{"role": "system", "content": "s " * 8000}, {"role": "user", "content": "tâche"}]
+        for i in range(8):
+            a.messages += [{"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": f"f{i}"}}}]},
+                           {"role": "tool", "tool_name": "read_file", "content": "x " * 12000}]
+        a._compact_history()
+        self.assertLess(a._ctx_tokens(), 32768 * 0.6)
+        self.assertEqual(a.messages[-1]["content"], "x " * 12000)
+        for i, m in enumerate(a.messages):
+            if m["role"] == "tool":
+                self.assertIn(a.messages[i - 1]["role"], ("assistant", "tool"))
+
+
 class ToolCallsWrittenAsText(unittest.TestCase):
     def test_xml(self):
         c = naimtools.raw_tool_calls("<tool_call>\n<function=read_file>\n<parameter=path>\nx.py\n</parameter>\n</function>\n</tool_call>")

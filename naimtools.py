@@ -2930,10 +2930,23 @@ class Agent:
         summary = {"role": "assistant", "content": "(Résumé de mes étapes précédentes, les fichiers sont sur le disque ; "
                    "carnet complet dans .naim/tache.md)\n" + (f"{written}\n\nActions : {done[:1500]}" if written else done)}
         self.messages = self.messages[:task_idx + 1] + [summary] + self.messages[keep_from:]
-        if force:  # the engine refused: the big outputs kept (a whole file read) are cut too, the files stay on disk
-            for m in self.messages[task_idx + 2:]:
-                if m.get("role") == "tool" and len(str(m.get("content") or "")) > 4000:
-                    m["content"] = str(m["content"])[:4000] + "\n… (raccourci : relis le fichier si besoin)"
+        # every pass re-reads the whole prompt (minutes): it must free real room, down to ~40%, so that it stays rare —
+        # the big outputs kept (a whole file read, a long log) are cut first, except the last step's, then fewer steps
+        target = int(self._room() * 0.4)
+        for limit in ((4000, 2000) if not force else (2000,)):
+            if self._ctx_tokens() < target and not force:
+                break
+            for m in self.messages[task_idx + 2:-2]:
+                if m.get("role") == "tool" and len(str(m.get("content") or "")) > limit:
+                    m["content"] = str(m["content"])[:limit] + "\n… (raccourci : relis le fichier si besoin)"
+        while self._ctx_tokens() >= target and len(self.messages) > task_idx + 5:
+            cut = task_idx + 2  # the oldest kept step goes into the summary's place (a call and its results together)
+            nxt = cut + 1
+            while nxt < len(self.messages) - 3 and self.messages[nxt].get("role") == "tool":
+                nxt += 1
+            if nxt >= len(self.messages) - 3:
+                break
+            del self.messages[cut:nxt]
         if self._ctx_tokens() >= budget and self.todos:
             # still too long: re-state the plan right after the task so it stays in view
             self.messages.insert(task_idx + 1, {"role": "user", "content": "(Rappel) " + self._todo_text()})
