@@ -405,6 +405,14 @@ def _payload(messages, tools, think, stream, options, vision=None):
     body["max_tokens"] = o["num_predict"] if o.get("num_predict") else 8192
     if o.get("slot") is not None and int(o["slot"]) < total_slots():  # its own slot (Chat 0, Agent 1, background last)
         body["id_slot"] = int(o["slot"])
+        if body["id_slot"] in (SLOT_CHAT, SLOT_AGENT) and (not messages or messages[0].get("role") != "system"):
+            # a side request (a check, a summary: no instructions of its own) in the Chat's or the Agent's slot would wipe
+            # what that slot has read — measured: the Agent then re-read its whole 18k-token task at every step (minutes)
+            body["id_slot"] = bg_slot()
+    elif o.get("slot") is None and total_slots() == 3 and not vision:
+        # no slot asked (a sub-agent, a description): left to the engine, it would take the idle slot whose text is the
+        # most alike — the Agent's — and wipe it; with only Chat, Agent and background slots, it goes to the background one
+        body["id_slot"] = bg_slot()
     if tools:
         body["tools"] = tools
         if o.get("tool_choice"):  # "required": the answer must be a tool call (constrained by llama.cpp's grammar)
@@ -484,7 +492,10 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         WARM_LOG.append(done)
         reply = {"role": "assistant", "content": "."}
         return iter([{"message": reply, "done": True}]) if stream else reply
-    data = json.dumps(_payload(messages, tools, think, stream, options, vision)).encode()
+    payload = _payload(messages, tools, think, stream, options, vision)
+    if url:  # another server (vision, MLX): the main engine's slot numbers mean nothing there
+        payload.pop("id_slot", None)
+    data = json.dumps(payload).encode()
     for attempt in (1, 2):
         (ensure or SERVER.ensure)(int((options or {}).get("num_ctx") or 16384))
         req = urllib.request.Request((url or URL) + "/v1/chat/completions", data=data, headers={"Content-Type": "application/json"})

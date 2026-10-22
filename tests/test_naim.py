@@ -43,6 +43,30 @@ class ToolArguments(unittest.TestCase):
         self.assertIn("_unreadable", llamacpp._args('{"a": "x" "y"}'))
 
 
+class EngineSlots(unittest.TestCase):
+    """Chat (0) and Agent (1) keep what they have read: side requests never land in their slot."""
+
+    def setUp(self):
+        self._n, llamacpp.total_slots = llamacpp.total_slots, lambda: 3
+
+    def tearDown(self):
+        llamacpp.total_slots = self._n
+
+    def slot(self, messages, options):
+        return llamacpp._payload(messages, None, False, False, options, False).get("id_slot")
+
+    def test_main_conversations_keep_their_slot(self):
+        sysmsg = [{"role": "system", "content": "s"}, {"role": "user", "content": "x"}]
+        self.assertEqual(self.slot(sysmsg, {"slot": 0}), 0)
+        self.assertEqual(self.slot(sysmsg, {"slot": 1}), 1)
+
+    def test_side_request_goes_to_background(self):
+        self.assertEqual(self.slot([{"role": "user", "content": "résume"}], {"slot": 1}), 2)
+
+    def test_no_slot_goes_to_background(self):
+        self.assertEqual(self.slot([{"role": "system", "content": "s"}], {}), 2)
+
+
 class ToolCallsWrittenAsText(unittest.TestCase):
     def test_xml(self):
         c = naimtools.raw_tool_calls("<tool_call>\n<function=read_file>\n<parameter=path>\nx.py\n</parameter>\n</function>\n</tool_call>")
