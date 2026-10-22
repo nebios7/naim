@@ -491,7 +491,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 #panel { container-type: inline-size; container-name: panel; }
 .ptab { display: inline-flex; align-items: center; gap: 6px; }
 .ptab .pti svg { width: 15px; height: 15px; display: block; }
-@container panel (max-width: 460px) { .ptab .ptl { display: none; } .ptab { padding: 5px 8px; } .ptabs { flex-wrap: nowrap; } }
+.ptabs.iconly .ptab .ptl { display: none; } .ptabs.iconly .ptab { padding: 5px 8px; }
 /* a window too narrow for the conversation AND the panel (zoom included): the panel covers the conversation, full
    width, until it is closed — never a conversation squeezed into a strip */
 body.vnarrow #panel.show { position: fixed; inset: 0 0 0 auto; width: 100% !important; max-width: none !important; z-index: 12; }
@@ -4673,8 +4673,17 @@ function decoratePanelTabs() {  // once: a line icon before each tab name, the n
     b.innerHTML = `<span class="pti">${svgI(PTAB_ICON[b.dataset.tab] || "file")}</span><span class="ptl">${esc(name)}</span>`;
   });
 }
+// names fold away when the tabs do not fit on one line (measured: CSS zoom makes width rules unreliable)
+function fitPanelTabs() {
+  const bar = $(".ptabs"); if (!bar || !$("#panel").classList.contains("show")) return;
+  bar.classList.remove("iconly");
+  const tabs = $$(".ptab:not([hidden])", bar); if (!tabs.length) return;
+  const top = tabs[0].offsetTop;
+  if (tabs.some((b) => b.offsetTop > top + 4)) bar.classList.add("iconly");
+}
+new ResizeObserver(() => fitPanelTabs()).observe(document.querySelector("#panel"));
 function showPanel(tab) {
-  decoratePanelTabs(); refreshSimTab(tab);
+  decoratePanelTabs(); refreshSimTab(tab); setTimeout(fitPanelTabs, 0);
   $("#panel").classList.add("show"); document.body.classList.add("panelopen");
   $$(".ptab").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
   $("#pSim").hidden = tab !== "sim"; if (tab === "sim") simLive();
