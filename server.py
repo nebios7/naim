@@ -727,13 +727,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"pages": int(n) if n.isdigit() and int(n) > 0 else None})
             except (ValueError, OSError, subprocess.SubprocessError):
                 self.send_json({"pages": None})
-        elif path in ("/api/thumb", "/api/raw") or path in ("/vendor/mermaid.min.js", "/vendor/gsap.min.js", "/vendor/lenis.min.js"):
+        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js"):
             try:
                 if path == "/vendor/mermaid.min.js":
                     import diagrams
                     f, ctype = diagrams.mermaid_js(), "text/javascript"
-                elif path.startswith("/vendor/"):  # GSAP and Lenis, bundled with Naim (its own animations)
-                    f, ctype = WEB / "vendor" / path.split("/")[-1], "text/javascript"
                 else:
                     _, f = project_path(q.get("root", ""), q.get("path", ""))
                     if path == "/api/thumb":
