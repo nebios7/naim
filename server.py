@@ -1514,6 +1514,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             try:
+                if isinstance(body.get("message"), str):  # the Mac's typographic apostrophe: every rule is written with '
+                    body["message"] = body["message"].replace("’", "'").replace("‘", "'")
                 body = with_vision(self, body)
                 if body.get("mode") == "agent":
                     self.run_agent(body, stop)

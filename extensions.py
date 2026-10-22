@@ -1063,7 +1063,7 @@ def match_skill(task, root=None, disabled=()):
         # attached files come first, the user's own words last: only their words choose the skill (a Word file
         # about health that says « celle-ci » is not a CI/CD request)
         task = task.rsplit("\n\n", 1)[-1]
-    text = task.lower()
+    text = task.lower().replace("’", "'").replace("‘", "'")  # the Mac's typographic apostrophe, as typed
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches

@@ -135,6 +135,9 @@ class SkillRouting(unittest.TestCase):
     def test_named_skill_wins(self):
         self.assertEqual(self.name("utilise la skill pseudo-code pour ce tri"), "pseudo-code")
 
+    def test_typographic_apostrophe(self):
+        self.assertEqual(self.name("qu’est-ce que j’avais demandé hier ?"), "mem-search")
+
     def test_memory(self):
         self.assertEqual(self.name("la dernière fois on avait corrigé la facture, tu te souviens ?"), "mem-search")
 
