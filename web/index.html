@@ -631,6 +631,14 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .muted { color: var(--muted); }
 .add { color: var(--add-t); font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .del { color: var(--del-t); font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.chcard { border: 1px solid var(--border); border-radius: 10px; margin: 6px 0 10px; font-size: 13px; overflow: hidden; }
+.chhead { display: flex; align-items: center; gap: 8px; padding: 7px 10px; }
+.chhead .aic svg { width: 15px; height: 15px; }
+.chhead .btn { padding: 3px 10px; font-size: 12.5px; }
+.chrow { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 33px; border-top: 1px solid var(--border); color: var(--muted); }
+.chcard .cbadge { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--hover); color: var(--muted); }
+.chcard .cbadge.new { background: var(--add); color: var(--add-t); } .chcard .cbadge.del { background: var(--del); color: var(--del-t); }
+.chpath { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text); }
 .agroup > summary { list-style: none; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; padding: 2px 6px 2px 2px; border-radius: 6px; }
 .agroup > summary::-webkit-details-marker { display: none; }
 .agroup > summary:hover { color: var(--text); background: var(--hover); }
@@ -3083,11 +3091,26 @@ function groupSummary(counts) {  // what was done, said like a person: « Lu 2 f
   return t ? t[0].toUpperCase() + t.slice(1) : "Travail";
 }
 const EXT_LANG = { py: "python", js: "javascript", ts: "typescript", html: "html", css: "css", java: "java", swift: "swift", php: "php", go: "go", rs: "rust", sql: "sql", sh: "bash", json: "json", yml: "yaml", yaml: "yaml", md: "markdown", kt: "kotlin", c: "c", cpp: "cpp" };
+// what a file change looked like, kept with the step (short): the conversation reopened still shows it
+function editDiff(name, a) {
+  const pairs = name === "edit_file" ? [[a.old_text, a.new_text]] : name === "multi_edit" && Array.isArray(a.edits) ? a.edits.map((e) => [e.old_text, e.new_text]) : [];
+  const out = [];
+  for (const [o, n] of pairs) {
+    if (typeof n !== "string") continue;
+    if (out.length) out.push(" …");
+    out.push(...String(o || "").split("\n").map((l) => "-" + l), ...n.split("\n").map((l) => "+" + l));
+  }
+  return out.length ? out.slice(0, 60).join("\n").slice(0, 4000) + (out.length > 60 ? `\n … ${out.length - 60} lignes de plus` : "") : "";
+}
 function toolMeta(name, a) {
-  // extra info kept with the step (line counts), computed from the full arguments
-  if (name === "write_file" && typeof a.content === "string") return { lines: a.content.split("\n").length };
-  if (name === "edit_file" && typeof a.old_text === "string") return { removed: a.old_text.split("\n").length, added: String(a.new_text || "").split("\n").length };
-  return {};
+  // extra info kept with the step (line counts, a short view of the change), computed from the full arguments
+  if (name === "write_file" && typeof a.content === "string") {
+    const lines = a.content.split("\n");
+    return { lines: lines.length, preview: lines.slice(0, 14).join("\n").slice(0, 2000) };
+  }
+  const diff = editDiff(name, a);
+  if (name === "edit_file" && typeof a.old_text === "string") return { removed: a.old_text.split("\n").length, added: String(a.new_text || "").split("\n").length, diff };
+  return diff ? { diff } : {};
 }
 
 function addBot(m, idx) {
@@ -3221,12 +3244,14 @@ function addBot(m, idx) {
       const pre = $(".aout", row);
       if ((name === "run_command" || name === "start_process") && args.command) {
         pre.innerHTML = `<span class="ptitle">Terminal</span><span class="cmdline"><button class="ccopy" title="Copier la commande" data-cmd="${esc(args.command)}">${svgI("copy")}</button><span class="ho">$</span> ${highlight(args.command, "bash")}</span>\n`; pre.hidden = !group.open;
-      } else if (name === "write_file" && typeof args.content === "string" && !v._replay) {
-        const lines = args.content.split("\n"); const lang = (EXT_LANG[(args.path || "").split(".").pop()] || "");
-        pre.innerHTML = highlight(lines.slice(0, 14).join("\n"), lang) + (lines.length > 14 ? `\n<span class="muted">… ${lines.length - 14} lignes de plus</span>` : "");
+      } else if (name === "write_file" && (typeof args.content === "string" || args.preview)) {
+        const shown = typeof args.content === "string" ? args.content : args.preview;
+        const total = typeof args.content === "string" ? args.content.split("\n").length : args.lines || 0;
+        const lines = shown.split("\n").slice(0, 14); const lang = (EXT_LANG[(args.path || "").split(".").pop()] || "");
+        pre.innerHTML = highlight(lines.join("\n"), lang) + (total > lines.length ? `\n<span class="muted">… ${total - lines.length} lignes de plus</span>` : "");
         pre.hidden = !group.open; row.dataset.preview = "1";
-      } else if (name === "edit_file" && typeof args.new_text === "string" && !v._replay) {
-        pre.innerHTML = diffHtml((args.old_text || "").split("\n").map((l) => "-" + l).join("\n") + "\n" + args.new_text.split("\n").map((l) => "+" + l).join("\n"));
+      } else if ((name === "edit_file" || name === "multi_edit") && (args.diff || editDiff(name, args))) {
+        pre.innerHTML = diffHtml(args.diff || editDiff(name, args));  // removed lines in red, added in green, like a code review
         pre.hidden = !group.open; row.dataset.preview = "1";
       }
       $(".aline", row).onclick = () => { const p = $(".aout", row); if (p.textContent) p.hidden = !p.hidden; };
@@ -3355,7 +3380,16 @@ function addBot(m, idx) {
         <div class="sact">${done ? "✓ terminé" : esc(c.dataset.action || "démarre…")}</div>`;
     },
     actions(r) {
-      $(".ractions", d)?.remove();
+      $(".ractions", d)?.remove(); $(".chcard", d)?.remove();
+      if (r.changes?.length) {  // what this turn changed in the files, at the end of the turn (details in « Modifs »)
+        const add = r.changes.reduce((a, c) => a + (c.added || 0), 0), rem = r.changes.reduce((a, c) => a + (c.removed || 0), 0);
+        const card = document.createElement("div"); card.className = "chcard";
+        card.innerHTML = `<div class="chhead"><span class="aic">${svgI("file")}</span><b>${r.changes.length} fichier${r.changes.length > 1 ? "s" : ""} modifié${r.changes.length > 1 ? "s" : ""}</b><span class="add">+${add}</span><span class="del">−${rem}</span><span class="spacer"></span><button class="btn" data-see>Voir les modifs</button></div>`
+          + r.changes.slice(0, 8).map((c) => `<div class="chrow"><span class="chpath" title="${esc(c.path)}">${esc(c.path)}</span>${c.created ? '<span class="cbadge new">nouveau</span>' : c.deleted ? '<span class="cbadge del">supprimé</span>' : ""}<span class="add">+${c.added || 0}</span><span class="del">−${c.removed || 0}</span></div>`).join("")
+          + (r.changes.length > 8 ? `<div class="chrow muted">… ${r.changes.length - 8} de plus</div>` : "");
+        $("[data-see]", card).onclick = () => showPanel("changes");
+        d.insertBefore(card, $(".msgacts", d));
+      }
       const box = document.createElement("div"); box.className = "ractions";
       if (r.plan && r.content && !r.executed) {
         const b = document.createElement("button"); b.className = "btn primary"; b.textContent = "▶ Exécuter ce plan";
@@ -3897,6 +3931,11 @@ async function stream(reply, v, message, hist, extra = {}) {
   v.finish();
   delete runs[conv.id];
   v.actions(reply);
+  if (reply.checkpoint) api(`/api/changes?runs=${encodeURIComponent(reply.checkpoint)}`).then((r) => {
+    const list = (r.changes || []).filter((c) => !c.reverted).map((c) => ({ path: c.path, added: c.added, removed: c.removed, created: !!c.created, deleted: !!c.deleted }));
+    if (!list.length) return;
+    reply.changes = list; saveConv(conv); v.actions(reply);
+  }).catch(() => {});
   // an application it started and that still runs: it is the deliverable, it opens in the preview (like a PDF)
   if (reply.appUrl && S.auto_preview !== false && current === conv && !/⏹ Arrêté/.test(reply.content || "")) {
     api("/api/processes").then((ps) => { if ((ps || []).some((p) => p.running && p.url === reply.appUrl)) showPreviewUrl(reply.appUrl); }).catch(() => {});
