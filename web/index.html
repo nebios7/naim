@@ -1260,6 +1260,7 @@ body.home #toBottom, body.home #liveBar { display: none !important; }
 body.home #thread { padding-bottom: 0; }
 body.home footer { padding-bottom: 6vh; }
 body.home .composer { max-width: min(var(--w), 720px); box-shadow: 0 6px 24px rgb(0 0 0 / .10); }
+body.home footer > .ctools { max-width: min(var(--w), 720px, 100%); }  /* the settings row: exactly as wide as the box above it
 body.home .empty { margin: 0 auto 22px; }
 .empty .hero { display: flex; align-items: center; justify-content: center; gap: 14px; }
 .empty .hero .logo { width: 46px; height: 46px; margin: 0; flex: none; display: inline-flex; }
@@ -1654,6 +1655,15 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
 .ctxpop .cp-row span { color: var(--muted); } .ctxpop .cp-row b { font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ctxpop .cp-bar { height: 7px; border-radius: 4px; background: var(--hover); display: flex; overflow: hidden; gap: 2px; }
 .ctxpop .cp-bar i { display: block; height: 100%; border-radius: 3px; }
+.ctxpop .cp-bar { height: 9px; }
+.ctxpop .cp-bar i.free { background: transparent !important; }
+.ctxpop .cp-bar i.rsv, .ctxpop .cp-cat i.rsv { background: repeating-linear-gradient(45deg, var(--line) 0 3px, transparent 3px 6px) !important; }
+.ctxpop .cp-cats { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.ctxpop .cp-cat { display: grid; grid-template-columns: 10px 1fr auto 52px; align-items: center; gap: 8px; }
+.ctxpop .cp-cat i { width: 9px; height: 9px; border-radius: 2px; }
+.ctxpop .cp-cat i.free { border: 1px solid var(--line); box-sizing: border-box; }
+.ctxpop .cp-cat span { color: var(--muted); } .ctxpop .cp-cat b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.ctxpop .cp-cat small { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .ctxpop .cp-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; }
 .ctxpop .cp-leg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
 .ctxpop .cp-note { color: var(--muted); font-size: 11.5px; }
@@ -3716,24 +3726,41 @@ $("#effortPill").onclick = effortPanel;
 updateEffortPill();
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#effPop")?.remove(); });
 
-function ctxPanel() {
+async function ctxPanel() {
   const old = $("#ctxPop"); if (old) { old.remove(); return; }
+  // what the engine reads before the conversation, part by part, counted by its own tokenizer (like /context)
+  const parts = await Promise.race([api(`/api/context?mode=${S.mode}&project=${encodeURIComponent(S.project || "")}`).catch(() => null),
+    new Promise((r) => setTimeout(() => r(null), 2500))]);
+  if ($("#ctxPop")) return;
   const msgs = current?.messages || [];
   const convTok = Math.round((current ? histFor(current) : []).reduce((n, m) => n + m.content.length, 0) / 3.5);
   const inputTok = Math.round(($("#input").value.length + pending.reduce((n, a) => n + (a.kind === "image" ? 3000 : a.content.length), 0)) / 3.5);
   const lastBot = [...msgs].reverse().find((m) => m.role === "assistant" && m.stats?.prompt);
   const measured = lastBot ? (lastBot.stats.prompt || 0) + (lastBot.stats.tokens || 0) : 0;
-  const instr = Math.max(0, measured - convTok);  // instructions, tools and memory: what the engine read besides the talk
-  const used = Math.max(measured, convTok) + inputTok, size = ctxSize(), pct = Math.min(100, Math.round(100 * used / size));
+  const size = ctxSize();
+  const fixed = parts ? parts.instructions + parts.outils + parts.mcp + parts.memoire + parts.skills : Math.max(0, measured - convTok);
+  // the messages: what the engine really read last time, less the fixed part (the estimate when nothing was measured yet)
+  const talk = measured && parts ? Math.max(convTok, measured - fixed) : convTok;
+  const used = fixed + talk + inputTok, pct = Math.min(100, Math.round(100 * used / size));
+  const reserve = Math.round(size * (1 - (parts?.compact_at || 0.6)));  // kept free: Naim summarizes before reaching it
+  const free = Math.max(0, size - used - reserve);
+  const cats = [
+    ["Instructions système", parts ? parts.instructions : fixed, "var(--muted)"],
+    ["Outils", parts?.outils || 0, "#8b7fd6"], ["Outils MCP", parts?.mcp || 0, "#3fb9a0"],
+    ["Mémoire", parts?.memoire || 0, "#e0a43c"], ["Skills", parts?.skills || 0, "#e56aa0"],
+    ["Messages", talk, "#5b8def"], ["Ton message", inputTok, "#d97757"]].filter(([, n]) => n > 0);
+  const p100 = (n) => (100 * n / size), fmtp = (n) => `${p100(n) < 0.1 && n ? "<0,1" : p100(n).toFixed(1).replace(".", ",")} %`;
+  const seg = (n, c, tl, cls = "") => n > 0 ? `<i class="${cls}" style="width:${Math.max(0.5, p100(n))}%;background:${c}" title="${tl} : ${kfmt(n)}"></i>` : "";
+  const line = (n, c, tl, cls = "") => `<div class="cp-cat"><i class="${cls}" style="background:${c}"></i><span>${tl}</span><b>${kfmt(n)}</b><small>${fmtp(n)}</small></div>`;
   const st = msgs.filter((m) => m.role === "assistant" && m.stats).map((m) => m.stats);
   const sum = (k) => st.reduce((n, x) => n + (+x[k] || 0), 0);
   const tps = st.filter((x) => x.tps).map((x) => x.tps), avg = tps.length ? tps.reduce((a, b) => a + b, 0) / tps.length : 0;
-  const secs = sum("total"), seg = (n, c, t) => n > 0 ? `<i style="width:${Math.max(0.6, 100 * n / size)}%;background:${c}" title="${t} : ${kfmt(n)}"></i>` : "";
+  const secs = sum("total");
   const pop = document.createElement("div"); pop.id = "ctxPop"; pop.className = "ctxpop";
   pop.innerHTML = `<div class="cp-row"><span>Fenêtre de contexte</span><b>${kfmt(used)} / ${Math.round(size / 1024)}k (${pct} %)</b></div>
-    <div class="cp-bar">${seg(instr, "var(--muted)", "Instructions et outils")}${seg(convTok, "#5b8def", "Conversation")}${seg(inputTok, "#e0a43c", "Ton message")}</div>
-    <div class="cp-leg"><span><i style="background:#5b8def"></i>Conversation ${kfmt(convTok)}</span>${instr ? `<span><i style="background:var(--muted)"></i>Instructions et outils ${kfmt(instr)}</span>` : ""}${inputTok ? `<span><i style="background:#e0a43c"></i>Ton message ${kfmt(inputTok)}</span>` : ""}</div>
-    <small class="cp-note">Au-delà de ~${kfmt(Math.round(compactLimit()))}, Naim résume le début de la conversation pour continuer.</small>
+    <div class="cp-bar">${cats.map(([tl, n, c]) => seg(n, c, tl)).join("")}${seg(free, "transparent", "Espace libre", "free")}${seg(reserve, "var(--line)", "Réserve du résumé automatique", "rsv")}</div>
+    <div class="cp-cats">${cats.map(([tl, n, c]) => line(n, c, tl)).join("")}${line(free, "transparent", "Espace libre", "free")}${line(reserve, "var(--line)", "Réserve du résumé automatique", "rsv")}</div>
+    <small class="cp-note">${parts?.exact ? "Compté par le moteur de Naim." : "Estimation (le moteur n'est pas encore démarré)."} Avant d'entamer la réserve, Naim résume le début de la conversation pour continuer.</small>
     <hr><div class="cp-row"><span>Utilisation de cette conversation</span><b>gratuite · sur ce Mac</b></div>
     <div class="cp-grid"><span>Réponses</span><b>${st.length}</b><span>Jetons lus</span><b>${kfmt(sum("prompt"))}</b><span>Jetons écrits</span><b>${kfmt(sum("tokens"))}</b>
       <span>Vitesse moyenne</span><b>${avg ? avg.toFixed(1) + " jetons/s" : "—"}</b><span>Temps de réponse</span><b>${secs ? (secs >= 90 ? Math.round(secs / 60) + " min" : Math.round(secs) + " s") : "—"}</b></div>
@@ -3748,6 +3775,7 @@ function ctxPanel() {
     const r = el.getBoundingClientRect(), k = el.offsetWidth ? r.width / el.offsetWidth : 1;
     const z = parseFloat(document.documentElement.style.zoom) || S.zoom || 1, vw = innerWidth / z;
     const right = r.right / k, top = r.top / k;
+    pop.style.maxHeight = `${Math.max(160, top - 18)}px`; pop.style.overflowY = "auto";  // never taller than the room above the gauge
     pop.style.left = `${Math.max(8, Math.min(right - pop.offsetWidth, vw - pop.offsetWidth - 8))}px`;
     pop.style.top = `${Math.max(8, top - pop.offsetHeight - 10)}px`;
   };

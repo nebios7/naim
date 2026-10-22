@@ -31,6 +31,20 @@ LOG = HOME / "llama-server.log"
 ERRLOG = HOME / "cache" / "erreurs-moteur.log"
 
 
+def count_tokens(texts):
+    """Exact token counts of some texts, by the running engine's own tokenizer ([] when it is not running)."""
+    out = []
+    try:
+        for text in texts:
+            req = urllib.request.Request(URL + "/tokenize", data=json.dumps({"content": text}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                out.append(len(json.load(r).get("tokens") or []))
+    except (urllib.error.URLError, OSError, ValueError):
+        return []
+    return out
+
+
 def note_error(kind, text):
     """What went wrong with the engine, kept (last ~200 KB) so that the cause can be found afterwards."""
     try:

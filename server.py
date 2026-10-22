@@ -142,6 +142,38 @@ PROJECT_SKILLS = {"application-web", "react-app", "react-native", "app-macos", "
                   "tests-unitaires", "debug", "projet-existant", "docker", "deploiement-vps", "ci-cd", "base-de-donnees"}
 
 
+_CTX_CACHE = {}
+
+
+def context_parts(mode, project):
+    """Tokens of each part Naim reads before the conversation: instructions, tools, MCP tools, memory, skills.
+    Counted by the engine's own tokenizer (characters / 3.5 when it is not running); kept 2 minutes."""
+    key = (mode, project)
+    if key in _CTX_CACHE and time.time() - _CTX_CACHE[key][0] < 120:
+        return _CTX_CACHE[key][1]
+    root = project if project and Path(project).expanduser().is_dir() else str(Path.home())
+    agent = Agent(root, "naim", options={"backend": "llamacpp"}, **agent_settings({"settings": _settings()}))
+    system = agent.messages[0]["content"] if mode == "agent" else CHAT_PROMPT + "\n\n" + WRITING_STYLE + Handler.CHAT_TOOLS_NOTE
+    mem = ext.memory_prompt() or ""
+    skills = ""
+    if mode == "agent":
+        m = re.search(r"Available skills .*?(?=\n\n|$)", system, re.S)
+        skills = m.group(0) if m else ""
+        for x in (mem, skills):
+            system = system.replace(x, "") if x else system
+    is_mcp = lambda n: n.startswith("mcp__") or n in ("use_mcp", "chercher_mcp")  # noqa: E731
+    tools = [t for t in agent.tools if not is_mcp(t["function"]["name"])]
+    mcp = [t for t in agent.tools if is_mcp(t["function"]["name"])]
+    texts = [system, json.dumps(tools, ensure_ascii=False), json.dumps(mcp, ensure_ascii=False) if mcp else "", mem, skills]
+    counted = llamacpp.count_tokens([x for x in texts]) if llamacpp.available() else []
+    n = counted if len(counted) == len(texts) else [round(len(x) / 3.5) for x in texts]
+    out = {"instructions": n[0], "outils": n[1], "mcp": n[2] if mcp else 0, "memoire": n[3], "skills": n[4],
+           "exact": len(counted) == len(texts), "room": llamacpp.slot_ctx() if llamacpp.available() else 0,
+           "compact_at": 0.6}
+    _CTX_CACHE[key] = (time.time(), out)
+    return out
+
+
 def pure_question(text):
     """A question that asks for nothing to be done (no action verb): it gets an answer, not a task."""
     t = (text or "").strip()
@@ -656,6 +688,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"running": naim_check.STATE["running"], "last": last and {
                 "date": last["date"], "ok": sum(x["ok"] for x in last["results"]), "total": len(last["results"]),
                 "failed": [x["name"] for x in last["results"] if not x["ok"]]}, "lessons": naim_check.lessons()})
+        elif path == "/api/context":  # what the engine reads before the conversation, part by part (like /context)
+            self.send_json(context_parts(q.get("mode") or "chat", q.get("project") or ""))
         elif path == "/api/room":  # the real room of one conversation in the running engine (98k with shared memory)
             self.send_json({"room": llamacpp.slot_ctx() if llamacpp.available() else 0})
         elif path == "/api/llama":
