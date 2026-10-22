@@ -2828,16 +2828,16 @@ class Agent:
         return sum(len(json.dumps(m, ensure_ascii=False)) for m in self.messages) // 3
 
     def _ctx_tokens(self):
-        # what the engine reads besides the messages (the tool list, the template: ~9 000 tokens) is measured on its
-        # last answer; before the first one, a rough estimate
-        extra = getattr(self, "_extra_tokens", None)
-        if extra is None:
-            extra = len(json.dumps(self.tools or [], ensure_ascii=False)) // 6
-        return self._msgs_tokens() + extra
+        # the engine's own count of its last read, plus the estimate of what was added (or removed) since: the
+        # estimate alone (characters / 3) counts code about 1.5× too high, and made it compact at a third of its room
+        measured = getattr(self, "_measured_total", None)
+        if measured is not None:
+            return max(0, measured + self._msgs_tokens() - self._sent_msgs_tokens)
+        return self._msgs_tokens() + len(json.dumps(self.tools or [], ensure_ascii=False)) // 6
 
     def _measured(self, total):
-        """The engine said how many tokens it read: the part that is not the messages is remembered."""
-        self._extra_tokens = max(0, total - self._sent_msgs_tokens)
+        """The engine said how many tokens it read for the messages just sent: the size is known exactly."""
+        self._measured_total = int(total)
 
     def _room(self):
         """Tokens one request may use: the setting, or the engine's real room per conversation when it is known."""
