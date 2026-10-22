@@ -699,6 +699,13 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 /* live status bar above the input + Modifications tab + narrow windows */
 #liveBar { display: flex; align-items: center; gap: 10px; max-width: var(--w, 820px); margin: 0 auto 6px; padding: 2px 14px; font-size: 12.5px; color: var(--muted); }
 #liveBar[hidden] { display: none; }
+#goalBar { display: flex; align-items: center; gap: 10px; max-width: var(--w, 820px); margin: 0 auto 6px; padding: 7px 12px; font-size: 12.5px; border: 1px solid var(--border, #ddd); border-radius: 10px; color: var(--muted); }
+#goalBar[hidden] { display: none; }
+#goalBar svg { width: 15px; height: 15px; flex: none; }
+#goalBar .gtext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text, inherit); }
+#goalBar .gstate { flex: none; }
+#goalBar.done { border-color: var(--ok, #3a9a5b); }
+#goalBar button { flex: none; }
 #liveBar .ldot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #d97757); animation: lpulse 1.2s ease-in-out infinite; flex: none; }
 @keyframes lpulse { 50% { opacity: .35; } }
 #liveBar .ltext { flex: 1; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1697,6 +1704,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
       <div id="findBar" hidden><input id="findIn" placeholder="Chercher dans la conversation…" spellcheck="false"><span id="findN"></span><button class="icon" id="findPrev" title="Précédent (⇧↩)">↑</button><button class="icon" id="findNext" title="Suivant (↩)">↓</button><button class="icon" id="findClose" title="Fermer (Échap)">✕</button></div>
       <div id="scroll"><div id="thread"></div></div>
       <footer>
+        <div id="goalBar" hidden></div>
         <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris ou parle pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
         <div class="composer"><div id="talkGlow" aria-hidden="true"></div>
           <div class="slash" id="slash" hidden></div>
@@ -2522,7 +2530,7 @@ let draftId = null;
 const convIdForFiles = () => current?.id || (draftId ||= newId());
 async function saveConv(conv = current) { if (conv) await api(`/api/conversations/${conv.id}`, { method: "PUT", body: conv }); }
 function newConv() { current = null; draftId = null; pending = []; renderPending(); setView("chat"); renderList(); renderThread(); updateTitle(); }
-function updateTitle() { if (S.params_open && typeof renderParams === "function" && !$("#params").contains(document.activeElement)) renderParams(); $("#titleBtn").innerHTML = `<span class="tt">${esc(current?.title || "Nouvelle conversation")}</span>${typeof svgI === "function" ? svgI("chevd") : ""}`; document.title = current ? `${current.title} · Naim` : "Naim"; $("#navHome").classList.toggle("on", view === "chat" && !current); }
+function updateTitle() { if (typeof renderGoalBar === "function") renderGoalBar(); if (S.params_open && typeof renderParams === "function" && !$("#params").contains(document.activeElement)) renderParams(); $("#titleBtn").innerHTML = `<span class="tt">${esc(current?.title || "Nouvelle conversation")}</span>${typeof svgI === "function" ? svgI("chevd") : ""}`; document.title = current ? `${current.title} · Naim` : "Naim"; $("#navHome").classList.toggle("on", view === "chat" && !current); }
 $("#backBtn").onclick = () => { setView("chat"); if (current) renderThread(); };
 $("#titleBtn").onclick = (e) => {
   e.stopPropagation();
@@ -3684,6 +3692,11 @@ async function send(textArg, attsArg, opts = {}) {
   setView("chat");
   if (!current) { current = { id: draftId || newId(), title: (text || atts[0].name).slice(0, 60), mode: S.mode, messages: [] }; draftId = null; }
   current.mode = S.mode; if (S.mode === "agent") current.project = S.project;
+  if (opts.goal) current.goal = { text: opts.goal, turns: 0, max: GOAL_MAX, active: true, last: "", same: 0 };
+  else if (!opts.goalTurn && !opts.bg && textArg === undefined && current.goal?.active) {
+    current.goal.active = false; current.goal.why = "en pause : tu as écrit"; toast("Objectif en pause — /goal pour le reprendre");
+  }
+  renderGoalBar();
   const end = current.messages.length;
   const userMsg = { role: "user", content: text, attachments: atts.length ? atts : undefined, time: Date.now(), ...(opts.bg ? { bg: opts.bg } : {}) };
   current.messages.push(userMsg);
@@ -3699,7 +3712,8 @@ async function send(textArg, attsArg, opts = {}) {
   updateTitle();
   saveConv().then(loadList);
   const cited = S.mode === "agent" && S.project ? [...new Set((text.match(/(?:^|\s)@([\w./-]+)/g) || []).map((x) => x.trim().slice(1)))].filter((f) => (mentionFiles || []).includes(f)) : [];
-  const content = composeContent(text, atts) + (cited.length ? `\n\n(Fichiers cités : ${cited.join(", ")} — lis-les d'abord.)` : "");
+  const content = composeContent(text, atts) + (cited.length ? `\n\n(Fichiers cités : ${cited.join(", ")} — lis-les d'abord.)` : "")
+    + ((opts.goal || opts.goalTurn) && current.goal?.active ? goalNote(current.goal) : "");
   if (S.auto_compact !== false && estTokens(histFor(current, end)) >= compactLimit()) {
     v.typing("🗜 Naim résume le début de la conversation pour aller plus vite…");
     if (await maybeCompact(current, end)) { const n = compactNote(current.summary); $("#thread").insertBefore(n, $("#thread").children[current.summary.upto] || null); }
@@ -3892,6 +3906,7 @@ async function stream(reply, v, message, hist, extra = {}) {
   await saveConv(conv); loadList();
   mentionFiles = null;  // files may have been created: the @ list is rebuilt next time
   if (run.queue?.length && current === conv) setTimeout(() => send(run.queue.join("\n\n")), 300);
+  else goalAfter(conv, reply);
   const quiet = talk.on && conv.mode !== "agent";  // a spoken conversation: no notification, no sound
   if (!quiet && (document.hidden || !document.hasFocus())) notify("Naim a terminé", (reply.content || "").replace(/[`*#_>]/g, "").slice(0, 120), { conv: conv.id });
   if (S.sound && !quiet) ding();
@@ -3996,9 +4011,65 @@ function earcon(kind) {
 function ding() {
   try { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.08, c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.35); o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + 0.35); } catch {}
 }
+// ---- /goal: an objective Naim keeps working on, turn after turn, until it is reached and checked
+const GOAL_MAX = 20;
+function goalNote(g) {
+  return `\n\n[Objectif (/goal) : « ${g.text} ». Travaille jusqu'à ce qu'il soit complètement atteint ET vérifié (fichiers présents, `
+    + `programme lancé, tests qui passent). Avance le plus possible dans ce tour, sans me redemander ce que tu peux décider. Termine `
+    + `TOUJOURS ta réponse par une de ces deux lignes : « OBJECTIF ATTEINT : » suivi des preuves, seulement si tout est fait et `
+    + `vérifié ; sinon « RESTE : » suivi de ce qui manque, précisément, en une ligne.]`;
+}
+function renderGoalBar() {
+  const bar = $("#goalBar"), g = current?.goal;
+  if (!bar) return;
+  bar.hidden = !g || view !== "chat";
+  if (bar.hidden) return;
+  const state = g.done ? "atteint" : g.active ? `tour ${g.turns + 1} / ${g.max}` : g.why || "en pause";
+  bar.classList.toggle("done", !!g.done);
+  bar.innerHTML = `${svgI(g.done ? "check" : "target")}<span class="gtext" title="${esc(g.text)}">Objectif : ${esc(g.text)}</span><span class="gstate">${esc(state)}</span>`
+    + `<button class="btn" data-g>${g.done ? "Fermer" : g.active ? "Arrêter" : "Reprendre"}</button>`;
+  $("[data-g]", bar).onclick = () => goalCmd(g.done ? "fermer" : g.active ? "stop" : "");
+}
+function goalCmd(a) {
+  const g = current?.goal;
+  if (/^(stop|arr[eê]te|pause)$/i.test(a)) {
+    if (!g?.active) return toast("Aucun objectif en cours");
+    g.active = false; g.why = "arrêté"; if (curRun()) stop(); renderGoalBar(); saveConv(); return toast("Objectif arrêté — /goal pour le reprendre");
+  }
+  if (/^fermer$/i.test(a)) { if (current) { delete current.goal; renderGoalBar(); saveConv(); } return; }
+  if (!a) {
+    if (!g) return toast("Écris l'objectif après /goal (ex. : /goal reconstruire Doctor jusqu'à ce que les tests passent)");
+    if (g.done) return toast("Cet objectif est déjà atteint");
+    if (g.active) return toast(`Objectif en cours : tour ${g.turns + 1} / ${g.max}`);
+    if (curRun()) return toast("Naim travaille : attends la fin de sa réponse");
+    Object.assign(g, { active: true, why: "", same: 0, max: Math.max(g.max, g.turns + GOAL_MAX) });
+    renderGoalBar(); return send(`Reprends l'objectif là où tu en étais.`, [], { goalTurn: true });
+  }
+  if (curRun()) return toast("Naim travaille : attends la fin de sa réponse, ou arrête-le");
+  setMode("agent");
+  send(a, [], { goal: a });
+}
+function goalAfter(conv, reply) {
+  const g = conv.goal;
+  if (!g?.active) return;
+  const txt = reply.content || "", pause = (why) => { g.active = false; g.why = why; renderGoalBar(); saveConv(conv); toast(`Objectif ${why} — /goal pour le reprendre`); };
+  if (/⏹ Arrêté/.test(txt)) return pause("arrêté");
+  if (/OBJECTIF ATTEINT/i.test(txt)) {
+    g.active = false; g.done = true; renderGoalBar(); saveConv(conv);
+    notify("Naim : objectif atteint", g.text.slice(0, 120), { conv: conv.id }); return;
+  }
+  const rest = ((txt.match(/RESTE\s*:\s*([^\n]{0,400})/i) || [])[1] || txt.slice(-300)).trim();
+  g.same = rest && rest === g.last ? (g.same || 0) + 1 : 0; g.last = rest;
+  if (g.same >= 2) return pause("en pause : Naim tourne en rond");
+  if (g.turns + 1 >= g.max) return pause(`en pause : ${g.max} tours faits`);
+  if (current !== conv) return pause("en pause : conversation quittée");
+  g.turns++; renderGoalBar(); saveConv(conv);
+  setTimeout(() => { if (current === conv && !curRun() && conv.goal?.active) send(`Continue l'objectif (tour ${g.turns + 1} / ${g.max}).`, [], { goalTurn: true }); }, 1200);
+}
 async function stop() {
   const run = curRun();
   if (!run) return;
+  if (run.conv.goal?.active) { run.conv.goal.active = false; run.conv.goal.why = "arrêté"; renderGoalBar(); }
   await api("/api/stop", { method: "POST", body: { run_id: run.id } }).catch(() => {});
   setTimeout(() => runs[run.conv.id]?.controller.abort(), 4000);
 }
@@ -4114,6 +4185,7 @@ async function undoLast() {
 
 // ======================================================================= slash commands
 const SLASH = [
+  ["/goal", "<objectif>", "Naim travaille tout seul, tour après tour, jusqu'à l'objectif atteint et vérifié (/goal stop pour l'arrêter)", (a) => goalCmd(a)],
   ["/plan", "<tâche>", "Explorer puis proposer un plan avant d'agir", (a) => { setMode("agent"); return a ? send(a, [], { plan: true }) : toast("Écris la tâche après /plan"); }],
   ["/init", "", "Analyser le projet et créer NAIM.md", () => { setMode("agent"); send("Analyse ce projet (structure, langages, commandes pour installer/lancer/tester, conventions) puis crée un fichier NAIM.md concis à la racine qui servira d'instructions pour les prochaines tâches."); }],
   ["/test", "", "Lancer les tests et corriger les échecs", () => { setMode("agent"); send("Trouve comment lancer les tests de ce projet, lance-les et corrige les échecs. S'il n'y a pas de tests, propose-en."); }],
@@ -6206,6 +6278,7 @@ const RICON = {
   star: '<path d="M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6 9.6 9z"/>',
   ban: '<circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
   bolt: '<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',

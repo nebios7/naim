@@ -28,6 +28,7 @@ le disque** : aux ouvertures suivantes, elles sont rechargées en une seconde.
 
 | Commande | Effet |
 |---|---|
+| `/goal <objectif>` | Naim travaille **tout seul, tour après tour**, jusqu'à ce que l'objectif soit atteint et vérifié (bannière avec Arrêter / Reprendre, 20 tours au plus, pause s'il tourne en rond ou si tu écris). `/goal` reprend, `/goal stop` arrête |
 | `/plan <tâche>` | Explorer puis proposer un plan avant d'agir |
 | `/init` | Analyser le projet et créer `NAIM.md` (ses règles et sa structure) |
 | `/test` | Lancer les tests et corriger les échecs |
@@ -45,7 +46,7 @@ le disque** : aux ouvertures suivantes, elles sont rechargées en une seconde.
 | `/planifier <demande>` | Programmer une tâche récurrente ou à une heure précise |
 | `/help` | Toutes les commandes et raccourcis |
 
-Les **plugins** ajoutent leurs propres commandes (ex. `/cartes`, `/televerser`, `/cobol`, `/algo`).
+Les **plugins** ajoutent leurs propres commandes (ex. `/cartes`, `/televerser`, `/cobol`, `/algo`, `/anime`).
 
 ### Raccourcis clavier
 
