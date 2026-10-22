@@ -1,13 +1,24 @@
 {
   "name": "algorithmique",
-  "version": "1.0",
-  "description": "Pseudo-code aux conventions françaises (Algorithme, Si … FinSi, Pour … FinPour), tableaux de trace, passage en Python.",
+  "version": "1.1",
+  "description": "Pseudo-code aux conventions françaises (Algorithme, Si … FinSi, Pour … FinPour), tableaux de trace, passage en Python, et animations pas à pas d'un algorithme (tri, recherche…).",
   "skills": "skills",
   "triggers": {
+    "animation-algorithme": "\\b(anim\\w*|visualis\\w*|simul\\w*)\\b[^.?!]{0,60}\\b(algorithmes?|tris?|tri [àa] bulles|recherche (dichotomique|lin[ée]aire)|quicksort|tri rapide|tri par (s[ée]lection|insertion|fusion)|r[ée]cursivit[ée]|boucles?)\\b|\\b(tri [àa] bulles|tri par (s[ée]lection|insertion|fusion)|tri rapide|recherche dichotomique)\\b[^.?!]{0,40}\\b(anim\\w*|visuel\\w*|interactif|page)\\b",
     "pseudo-code": "\\b(pseudo[- ]?code|algorithme|algorithmique|organigramme|tableau de trace|finsi|finpour|fintantque|structogramme|lexique des variables)\\b"
   },
   "commands": [
-    {"cmd": "/algo", "arg": "<le problème>", "description": "Écrire l'algorithme en pseudo-code, avec sa trace",
-     "prompt": "Écris l'algorithme de ce problème en pseudo-code (skill pseudo-code), puis son tableau de trace sur un petit exemple, puis la version Python :"}
+    {
+      "cmd": "/algo",
+      "arg": "<le problème>",
+      "description": "Écrire l'algorithme en pseudo-code, avec sa trace",
+      "prompt": "Écris l'algorithme de ce problème en pseudo-code (skill pseudo-code), puis son tableau de trace sur un petit exemple, puis la version Python :"
+    },
+    {
+      "cmd": "/anime",
+      "arg": "<l'algorithme>",
+      "description": "Une page qui anime l'algorithme pas à pas, code surligné",
+      "prompt": "Fais une page HTML qui anime pas à pas cet algorithme (skill animation-algorithme, à partir de son modèle) :"
+    }
   ]
 }

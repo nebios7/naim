@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>Tri à bulles — le robot met de l’ordre</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:#12121c;color:#e8e8f2;font-family:Montserrat,system-ui,sans-serif;display:flex;justify-content:center}
+.app{width:100%;max-width:560px;padding:20px 16px 28px}
+h1{font-size:28px;line-height:1.15;text-align:center;margin:8px 0 14px;font-weight:800}
+.sub{text-align:center;letter-spacing:.4em;font-size:13px;color:#aab;font-family:ui-monospace,Menlo,monospace;margin-bottom:10px}
+.stats{display:flex;gap:14px;justify-content:center;margin-bottom:6px}
+.stat{background:#1b1b2a;border:1px solid #2c2c40;border-radius:12px;padding:10px 18px;font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:.12em;color:#aab}
+.stat b{font-size:26px;color:#ffc53d;margin-left:10px;letter-spacing:0}
+#stage{position:relative;height:270px;border-top:1px solid #34344a;margin-top:8px}
+#stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+.slot{position:absolute;bottom:4px;transition:left .38s ease;padding:0 4px}
+.bar{border:2px solid #4b4b86;background:#2a2a48;border-radius:6px 6px 3px 3px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-weight:700;font-size:20px;transition:background .2s,border-color .2s,box-shadow .2s,height .2s}
+.bar.cmp{background:#25506a;border-color:#5cc8ff}
+.bar.swp{background:#e5566c;border-color:#ff7a8e}
+.bar.ok{background:#3cc46e;border-color:#6fe898;box-shadow:0 0 14px #3cc46e99;color:#06240f}
+#floor{height:2px;background:#34344a}
+.code{margin-top:16px;background:#171724;border:1px solid #2c2c40;border-radius:14px;overflow:hidden;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.tab{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid #2c2c40;color:#aab}
+.tab i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.tab span{margin-left:10px;background:#222236;padding:3px 10px;border-radius:6px}
+.ln{display:flex;padding:1px 14px 1px 0;white-space:pre;position:relative;line-height:1.55}
+.ln em{width:36px;text-align:right;color:#667;font-style:normal;padding-right:14px;flex:none}
+.ln.on{background:#3b3220;box-shadow:inset 3px 0 #ffc53d}
+.ln .note{margin-left:auto;color:#ffc53d;padding-left:10px}
+.k{color:#ff79a8}.t{color:#5cc8ff}.n{color:#ffc53d}.c{color:#778;font-style:italic}.f{color:#7ee0a0}
+.vars{display:flex;gap:16px;padding:9px 14px;border-top:1px solid #2c2c40;color:#aab}
+.vars .sw{margin-left:auto;color:#ffc53d}
+#pass{text-align:center;margin:10px 0 4px;font-family:ui-monospace,Menlo,monospace;font-size:14px}
+#msg{min-height:64px;background:#1b1b2a;border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.45;margin-top:8px}
+.ctl{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+button{background:#262640;color:#e8e8f2;border:0;border-radius:10px;padding:10px 14px;font-size:15px;font-weight:600;cursor:pointer}
+button:active{background:#33335a}
+#play{background:#ffc53d;color:#1b1400;min-width:92px}
+input[type=range]{flex:1 1 100%;accent-color:#ffc53d}
+input[type=text]{flex:1;min-width:140px;background:#1b1b2a;color:#e8e8f2;border:1px solid #2c2c40;border-radius:10px;padding:10px;font-size:15px}
+</style></head><body><div class="app">
+<h1>Regarde ce robot transformer le chaos en ordre</h1>
+<div class="sub">TRI À BULLES</div>
+<div class="stats"><div class="stat">COMPARAISONS<b id="c">0</b></div><div class="stat">ÉCHANGES<b id="s">0</b></div></div>
+<div id="stage"><svg id="claw"></svg></div><div id="floor"></div>
+<div class="code"><div class="tab"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span>bubble_sort.c</span></div><div id="lines"></div>
+<div class="vars"><span id="vn"></span><span id="vi"></span><span id="vj"></span><span class="sw" id="vs"></span></div></div>
+<div id="pass"></div>
+<div id="msg"></div>
+<div class="ctl">
+<input type="range" id="bar" min="0" max="0" value="0">
+<button id="rst" title="Recommencer">⟲</button><button id="prev">◀</button><button id="play">⏸ Pause</button><button id="next">▶</button><button id="spd">1×</button>
+</div>
+<div class="ctl"><input type="text" id="inp" value="2,5,1,7,8,3,6,4" aria-label="Valeurs"><button id="go">Appliquer</button><button id="rnd">Mélanger</button></div>
+</div>
+<script>
+// 1. The code shown, line by line (the trace below points at these line numbers)
+const CODE=[
+'<span class="t">void</span> <span class="f">bubble_sort</span>(<span class="t">int</span> a[], <span class="t">size_t</span> n)',
+'{',
+'  <span class="k">for</span> (<span class="t">size_t</span> i = <span class="n">0</span>; i + <span class="n">1</span> &lt; n; i++) {',
+'    <span class="t">bool</span> swapped = <span class="n">false</span>;',
+'    <span class="k">for</span> (<span class="t">size_t</span> j = <span class="n">0</span>; j + <span class="n">1</span> &lt; n - i; j++) {',
+'      <span class="k">if</span> (a[j] &gt; a[j + <span class="n">1</span>]) {',
+'        <span class="t">int</span> tmp = a[j];',
+'        a[j] = a[j + <span class="n">1</span>];',
+'        a[j + <span class="n">1</span>] = tmp;',
+'        swapped = <span class="n">true</span>;',
+'      }','    }',
+'    <span class="k">if</span> (!swapped) <span class="k">break</span>; <span class="c">// déjà trié</span>',
+'  }','}'];
+const L=document.getElementById('lines');
+CODE.forEach((h,i)=>{const d=document.createElement('div');d.className='ln';d.innerHTML='<em>'+(i+1)+'</em><span>'+h+'</span><span class="note"></span>';L.appendChild(d)});
+const $=id=>document.getElementById(id);
+let S=[],idx=0,playing=true,speeds=[.5,1,2,4],si=1,timer=null,n=0,slots={};
+// 2. The algorithm runs once, for real, and records every step (line, variables, array, message): the trace
+function build(vals){
+ const a=vals.map((v,k)=>({id:k,v})),N=a.length,T=[];let c=0,s=0;
+ const P=o=>T.push(Object.assign({a:a.map(x=>({...x})),c,s,n:N,i:0,j:0,sw:false,locked:0,pair:[0,1],note:'',done:false},o));
+ let ended=false;
+ for(let i=0;i+1<N&&!ended;i++){
+  let sw=false;
+  P({line:3,i,locked:i,sw,msg:`<b>Passe ${i+1}.</b> On va faire remonter le plus grand des ${N-i} éléments restants jusqu’à sa place.`});
+  P({line:4,i,locked:i,sw,msg:'On remet <b>swapped = false</b> : on notera si au moins un échange a lieu pendant cette passe.'});
+  for(let j=0;j+1<N-i;j++){
+   P({line:5,i,j,locked:i,sw,pair:[j,j+1],msg:`Le robot se place sur les cases <b>${j}</b> et <b>${j+1}</b>.`});
+   c++;const x=a[j].v,y=a[j+1].v,gt=x>y;
+   P({line:6,i,j,locked:i,sw,pair:[j,j+1],c,note:`${x} ${gt?'&gt;':'≤'} ${y}`,msg:gt?`<b>${x} &gt; ${y}</b> : mauvais ordre, il faut échanger.`:`<b>${x} ≤ ${y}</b> : déjà dans le bon ordre, on ne touche à rien.`});
+   if(gt){
+    P({line:7,i,j,locked:i,sw,pair:[j,j+1],c,note:`tmp = ${x}`,msg:`On garde <b>${x}</b> de côté dans <b>tmp</b>.`});
+    P({line:8,i,j,locked:i,sw,pair:[j,j+1],c,msg:`<b>a[${j}]</b> reçoit la valeur de droite (${y}).`});
+    [a[j],a[j+1]]=[a[j+1],a[j]];s++;
+    P({line:9,i,j,locked:i,sw,pair:[j,j+1],c,s,msg:`<b>a[${j+1}]</b> reçoit tmp (${x}) : l’échange est fait.`});
+    sw=true;
+    P({line:10,i,j,locked:i,sw,pair:[j,j+1],c,s,msg:'On note <b>swapped = true</b>.'});
+   }
+  }
+  const lj=Math.max(0,N-i-2);
+  if(!sw){P({line:13,i,j:lj,locked:N,sw,pair:[lj,lj+1],c,s,done:true,msg:'<b>Aucun échange pendant cette passe</b> : le tableau est trié, on s’arrête.'});ended=true}
+  else P({line:13,i,j:lj,locked:i+1,sw,pair:[lj,lj+1],c,s,msg:`Il y a eu des échanges : le plus grand est en place, on passe à la passe ${i+2}.`});
+ }
+ if(!ended)P({line:15,i:N-1,j:0,locked:N,done:true,pair:[0,1],c,s,msg:'Fin des passes : le tableau est trié.'});
+ return T;
+}
+function load(vals){
+ n=vals.length;S=build(vals);idx=0;
+ const st=$('stage');st.querySelectorAll('.slot').forEach(e=>e.remove());slots={};
+ vals.forEach((v,k)=>{const d=document.createElement('div');d.className='slot';d.style.width=100/n+'%';d.innerHTML='<div class="bar">'+v+'</div>';st.appendChild(d);slots[k]=d});
+ const mx=Math.max(...vals),mn=Math.min(...vals);
+ vals.forEach((v,k)=>{slots[k].firstChild.style.height=(50+(mx===mn?1:(v-mn)/(mx-mn))*(mx>mn?150:0)+(mx===mn?60:0))+'px'});
+ $('bar').max=S.length-1;render();
+}
+// 3. One step of the trace on screen: highlighted line, variables, bars and their colours, the explanation
+function render(){
+ const t=S[idx];if(!t)return;
+ $('bar').value=idx;$('c').textContent=t.c;$('s').textContent=t.s;
+ [...L.children].forEach((d,i)=>{const on=t.line===i+1;d.classList.toggle('on',on);d.lastChild.innerHTML=on&&t.note?t.note:''});
+ $('vn').textContent='n = '+t.n;$('vi').textContent='i = '+t.i;$('vj').textContent='j = '+t.j;
+ $('vs').textContent='swapped = '+t.sw;
+ $('pass').textContent=t.done?`passe ${t.i+1} · aucun échange → terminé`:`passe ${t.i+1} · ${t.locked} verrouillés`;
+ $('msg').innerHTML=t.msg;
+ const swapping=t.line>=7&&t.line<=10,cmp=t.line===5||t.line===6;
+ t.a.forEach((o,pos)=>{
+  const s=slots[o.id];s.style.left=pos*100/n+'%';
+  const b=s.firstChild;b.className='bar';
+  if(pos>=n-t.locked)b.classList.add('ok');
+  else if(!t.done&&t.pair.includes(pos)&&swapping)b.classList.add('swp');
+  else if(!t.done&&t.pair.includes(pos)&&cmp)b.classList.add('cmp');
+ });
+ setClaw(t);
+}
+// 4. The robot arm: follows the two compared cells, eased
+let cur=null,tgt=null,raf=null;
+function setClaw(t){
+ const W=$('stage').clientWidth,sl=W/n;
+ const h=p=>slots[t.a[p].id].firstChild.offsetHeight+4;
+ const [p,q]=t.pair;
+ tgt=[(p+.5)*sl,(q+.5)*sl,270-h(p)-4,270-h(q)-4];
+ if(!cur)cur=tgt.slice();
+ if(!raf)raf=requestAnimationFrame(tick);
+}
+function tick(){
+ raf=null;let m=0;
+ for(let k=0;k<4;k++){const d=tgt[k]-cur[k];cur[k]+=d*.22;m=Math.max(m,Math.abs(d))}
+ const [x1,x2,y1,y2]=cur,mx=(x1+x2)/2,ty=10,pw=Math.min(30,$('stage').clientWidth/n/2.2);
+ $('claw').innerHTML=`<g stroke="#a99cff" stroke-width="2.5" fill="#12121c" stroke-linecap="round"><line x1="${mx}" y1="${ty}" x2="${x1}" y2="${y1}"/><line x1="${mx}" y1="${ty}" x2="${x2}" y2="${y2}"/><rect x="${mx-16}" y="2" width="32" height="14" rx="5"/><rect x="${x1-pw}" y="${y1-4}" width="${2*pw}" height="7" rx="3"/><rect x="${x2-pw}" y="${y2-4}" width="${2*pw}" height="7" rx="3"/></g>`;
+ if(m>.4)raf=requestAnimationFrame(tick);
+}
+// 5. Controls: play / pause, step by step, slider, speed, the user's own values
+function loop(){clearTimeout(timer);if(!playing)return;
+ timer=setTimeout(()=>{if(idx<S.length-1){idx++;render();loop()}else{playing=false;ui()}},750/speeds[si])}
+function ui(){$('play').textContent=playing?'⏸ Pause':(idx>=S.length-1?'⟲ Rejouer':'▶ Lecture')}
+function go(i){idx=Math.max(0,Math.min(S.length-1,i));render();ui()}
+$('play').onclick=()=>{if(!playing&&idx>=S.length-1)idx=0;playing=!playing;render();ui();loop()};
+$('next').onclick=()=>{playing=false;go(idx+1)};$('prev').onclick=()=>{playing=false;go(idx-1)};
+$('rst').onclick=()=>{playing=false;go(0)};
+$('bar').oninput=e=>{playing=false;go(+e.target.value)};
+$('spd').onclick=()=>{si=(si+1)%speeds.length;$('spd').textContent=speeds[si]+'×';loop()};
+function parse(){const v=$('inp').value.split(/[\s,;]+/).map(Number).filter(x=>Number.isFinite(x)).slice(0,12);return v.length>=2?v:null}
+function restart(v){cur=null;load(v);playing=true;ui();loop()}
+$('go').onclick=()=>{const v=parse();if(v)restart(v)};
+$('rnd').onclick=()=>{const v=[1,2,3,4,5,6,7,8].sort(()=>Math.random()-.5);$('inp').value=v.join(',');restart(v)};
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'&&e.target.type==='text')return;if(e.code==='Space'){e.preventDefault();$('play').click()}if(e.key==='ArrowRight')$('next').click();if(e.key==='ArrowLeft')$('prev').click()});
+addEventListener('resize',()=>S[idx]&&setClaw(S[idx]));
+restart(parse());
+</script></body></html>

@@ -497,6 +497,39 @@ Objectif : une première version qui MARCHE, petite et rapide à écrire. Pas de
 }
 
 
+BUILTIN_SKILLS["cv-lettre"] = ("Faire ou enrichir un CV et une lettre de motivation, dans le style demandé (modèle joint, skill de style ou image).", """# CV et lettre de motivation
+
+## 1. Le contenu
+- Il vient de l'utilisateur : texte collé, ou fichier joint (« fichier original : … » : lis-le avec read_file).
+- N'invente aucun diplôme, poste, date, chiffre ni coordonnée. « Enrichir » = reformuler avec des verbes d'action,
+  ordonner (le plus utile pour le poste d'abord), ajouter les mots-clés du poste visé et les compétences qui
+  découlent de ce qui est écrit. Dis ensuite ce que tu as ajouté.
+
+## 2. Le style (le plus important : c'est ce qui est demandé)
+- **Un modèle HTML** (joint, « enregistré ici : … », ou un fichier du dossier) : NE RETAPE JAMAIS son HTML ni son CSS.
+  Copie-le : `run_command` → `cp "<modèle>" "<dossier>/CV_<Nom>.html"`, puis change SEULEMENT les textes avec
+  `multi_edit` (balises, classes, couleurs, polices et <style> restent identiques). Une section en plus = copie une
+  section existante du même fichier et change ses textes.
+- **Une skill de style nommée** (design-style-gitingest…) : charge-la avec use_skill et suis ses valeurs exactes ;
+  si son dossier contient `modele.html`, pars de ce fichier avec `cp`, comme ci-dessus.
+- **Une image de référence** : reprends ce que tu vois (couleurs, polices, disposition, cartes, badges).
+- **Rien de donné** : sobre, une colonne, A4, une couleur d'accent.
+
+## 3. La lettre « avec le même style »
+- `cp` du CV terminé vers `Lettre_motivation_<Nom>.html` : garde le <style> et l'en-tête (nom, coordonnées), remplace
+  le corps : lieu et date ; destinataire ; objet ; 3 ou 4 paragraphes (le poste et pourquoi lui ; ce que j'apporte,
+  avec des faits du CV ; ce que nous ferons ensemble) ; formule de politesse ; signature.
+- Une seule page A4. Pas de .docx ni de .txt sauf si l'utilisateur le demande : un .docx joint est une SOURCE de
+  contenu, pas le format à rendre.
+
+## 4. Livrer et vérifier
+1. `convert_document` de chaque .html vers .pdf (A4).
+2. `look_at` du PDF : le style est-il celui du modèle ? CV en 1-2 pages, lettre en 1 page ? Sinon corrige le .html
+   (resserre les marges ou le texte) et reconvertis.
+3. Réponds avec les chemins exacts des fichiers et ce qui a été enrichi. Jamais un fichier vide ou sans nom.
+""")
+
+
 try:  # extended built-in library (documents, data, stacks, quality)
     from skills_library import LIBRARY as _LIB
     BUILTIN_SKILLS.update(_LIB)
@@ -991,6 +1024,7 @@ SKILL_TRIGGERS = {
     "pdf": r"\bpdf\b",
     "excel": r"\b(excel|xlsx|tableur)\b",
     "word": r"\b(word|docx)\b",
+    "cv-lettre": r"\b(cv|curriculum( vitae)?|lettres? de motivation|lettre de candidature)\b",
     # slides; « la page de présentation d'un café » is a web page, not slides
     "presentation": r"\b(powerpoint|pptx|diapo|keynote|slides?\b)|(?<!page de )(?<!site de )(?<!page d'accueil et de )\bpr[ée]sentation\b(?! (?:d'une? |du |de la )?(?:site|page|web))",
     "analyse-donnees": r"\b(csv|analyse[rz]? (les |des )?donn[ée]es|pandas|graphiques?|statistiques)\b",
@@ -1062,7 +1096,7 @@ def match_skill(task, root=None, disabled=()):
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
-    first = ("plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
+    first = ("cv-lettre", "plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     triggers = dict(SKILL_TRIGGERS)
     priority = []
     try:  # words that pick a plugin's skill (« arduino », « cobol »…), checked before the broad generic skills
@@ -1077,6 +1111,17 @@ def match_skill(task, root=None, disabled=()):
         for name in triggers:
             if name not in by_name and name not in disabled and (lib_skill := skills_bibliotheque.find(name)):
                 by_name[name] = lib_skill
+    except Exception:  # noqa: BLE001
+        pass
+    # a skill the user names (« utilise design-style-gitingest ») is that one, before any guess from the words
+    for s in sorted(skills, key=lambda s: -len(s["name"])):
+        if len(s["name"]) >= 4 and re.search(rf"(?<![\w-]){re.escape(s['name'].lower())}(?![\w-])", text):
+            return s
+    try:
+        import skills_bibliotheque
+        for token in re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)+", text):  # a library skill named: a-hyphenated-name
+            if token not in disabled and (lib_skill := skills_bibliotheque.find(token)):
+                return lib_skill
     except Exception:  # noqa: BLE001
         pass
     ordered = priority + [n for n in first if n not in priority] + [n for n in triggers if n not in generic and n not in first

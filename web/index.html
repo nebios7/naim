@@ -3469,7 +3469,7 @@ function addBot(m, idx) {
 function composeContent(text, atts) {
   atts = (atts || []).filter((a) => a.kind !== "image");
   if (!atts.length) return text;
-  const files = atts.map((a) => a.kind === "big" ? `Fichier joint « ${a.name} » :\n${a.content}` : a.kind === "doc" ? `Document joint « ${a.name} » :\n${a.content}` : `Fichier joint « ${a.name} » :\n\`\`\`${(a.name.split(".").pop() || "").toLowerCase()}\n${a.content}\n\`\`\``).join("\n\n");
+  const files = atts.map((a) => a.kind === "big" ? `Fichier joint « ${a.name} » :\n${a.content}` : a.kind === "doc" ? `Document joint « ${a.name} » :\n${a.content}` : `Fichier joint « ${a.name} »${a.path ? ` (enregistré ici : ${a.path} ; pour reprendre ce modèle ou ce style, copie ce fichier avec cp puis change seulement les textes, sans retaper son HTML ni son CSS)` : ""} :\n\`\`\`${(a.name.split(".").pop() || "").toLowerCase()}\n${a.content}\n\`\`\``).join("\n\n");
   return `${files}\n\n${text}`;
 }
 function historyFor(msgs) {
@@ -3788,6 +3788,7 @@ async function stream(reply, v, message, hist, extra = {}) {
               reply.content = reply.content.replace(g, "");
             }
             renderText(); break; }
+          case "retract": if (ev.chars > 0) { reply.content = reply.content.slice(0, Math.max(0, reply.content.length - ev.chars)); renderText(); } break;  // an old answer copied again: taken back
           case "thinking_token": reply.thinking += ev.text; v.setThinking(reply.thinking); break;
           case "thinking": reply.thinking += (reply.thinking ? "\n\n" : "") + ev.text; v.setThinking(reply.thinking); break;
           case "status": if (!ev.sub) v.typing(ev.text); break;
@@ -4317,7 +4318,15 @@ async function addFiles(files) {
     const text = await f.text();
     const head = text.slice(0, 4000), bad = (head.match(/[\u0000-\u0008\u000e-\u001f\ufffd]/g) || []).length;
     if (bad > head.length * 0.02 || /^%PDF|^PK\u0003\u0004/.test(head)) { await uploadBig(f); continue; }  // binary: saved, Naim opens it with a tool
-    pending.push({ name: f.name, size: f.size, content: text });
+    const chip = { name: f.name, size: f.size, content: text };
+    if (/\.(html?|css)$/i.test(f.name)) {  // a page or a style given as a model: also saved, so Naim copies it instead of retyping it
+      try {
+        const res = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}&conv=${encodeURIComponent(convIdForFiles())}`, { method: "POST", headers: { "X-Naim": "1" }, body: f });
+        const r = await res.json();
+        if (!r.error) chip.path = r.path;
+      } catch (e) { /* the text is still in the message */ }
+    }
+    pending.push(chip);
   }
   renderPending(); updateCtx();
 }

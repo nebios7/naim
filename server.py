@@ -1279,7 +1279,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "serveur inconnu (ou fourni par un plugin)"}, 400)
             else:
                 try:
-                    import mcp_catalog
                     desc = (mcp_catalog.CATALOG.get(name) or [None, ""])[1]
                 except Exception:  # noqa: BLE001
                     desc = ""
@@ -1734,6 +1733,13 @@ class Handler(BaseHTTPRequestHandler):
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
         heard = []  # what the user said while Naim worked
+        flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
+        earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
+        copies = 0
+
+        def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
+            head = flat(text)[:160]
+            return len(head) >= 160 and any(e.startswith(head) for e in earlier)
         asked = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
         hk = helper._user_hooks()
         if hk.get("UserPromptSubmit") and not body.get("_warm") and not body.get("_relaunched"):
@@ -1778,6 +1784,10 @@ class Handler(BaseHTTPRequestHandler):
                 if generic_app:
                     keep = ("app-macos", "react-app", "react-native")  # an application stays an application
                 found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k and k["name"] in keep] if keep else []
+                if not found and re.search(r"\b(respect\w*|pas mis|pas fait|toujours|encore|m[êe]me style|le style|l'affichage|enrichi\w*|"
+                                           r"refai\w*|recommence\w*|c'?est pas [cç]a|pas ce que)\b", m_, re.I):
+                    # a remark on the work under way (« tu n'as pas respecté le style ») keeps that work's skill
+                    found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k][:1]
                 sk = (next((k for k in found if k["name"] != "application-web"), None) or (found[0] if found else None)
                       or ext.match_skill(body["message"], helper.root, helper.disabled_skills))  # nothing under way: the generic one
             if acting_only and sk and sk["name"] != "mac":
@@ -1787,7 +1797,9 @@ class Handler(BaseHTTPRequestHandler):
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
-                                    f"\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}")
+                                    f"\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}"
+                                    + (f"\n(Fichiers de cette skill, dans {Path(sk['path']).parent} : {', '.join(sk['files'][:12])})"
+                                       if sk.get("files") else ""))
                 import libs
                 if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
                     messages[-1] = dict(messages[-1], content=messages[-1]["content"] + "\n\n" + lp)
@@ -1855,7 +1867,7 @@ class Handler(BaseHTTPRequestHandler):
             # « salut », « merci » (plain): no tool_choice "none" — it removes the tools from what the engine reads, so the
             # next real message would find nothing in common and re-read everything (~1 min); a tool call is refused instead
             opts = dict(options, tool_choice="required") if (files and step == 0) else options
-            content, calls, shown = "", [], 0
+            content, calls, shown, thinking_text, copied = "", [], 0, "", False
             try:
                 stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
             except llamacpp.ContextFull:
@@ -1883,11 +1895,16 @@ class Handler(BaseHTTPRequestHandler):
                 if repeating(content):  # the model loops on the same line (it happens with images): cut at once
                     stream.close()
                     break
+                if copying(content.split("<tool_call")[0]):
+                    stream.close()
+                    copied = True
+                    break
                 if chunk.get("writing"):  # a whole file written in a tool call: shown while it is written
                     self.event({"type": "status", "text": writing_text(chunk["writing"])})
                 msg = chunk.get("message", {})
                 if msg.get("thinking"):
                     thought = True
+                    thinking_text += msg["thinking"]
                     self.event({"type": "thinking_token", "text": msg["thinking"]})
                 if msg.get("content"):
                     content += msg["content"]
@@ -1895,6 +1912,7 @@ class Handler(BaseHTTPRequestHandler):
                     if len(visible) > shown:
                         self.event({"type": "token", "text": visible[shown:]})
                         shown = len(visible)
+                        helper._spoke = True
                 if msg.get("tool_calls"):
                     calls = msg["tool_calls"]
                 if chunk.get("done") and chunk.get("eval_duration"):
@@ -1902,6 +1920,18 @@ class Handler(BaseHTTPRequestHandler):
                     prompt_tokens += chunk.get("prompt_eval_count", 0)
                     self.event({"type": "stats", "tokens": total_tokens, "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
                                 "prompt": prompt_tokens, "reason": chunk.get("done_reason")})
+            if copied:
+                # the old answer goes away from the screen, and it says what it did in THIS turn instead
+                self.event({"type": "retract", "chars": shown})
+                copies += 1
+                helper._spoke = False
+                if copies > 2:
+                    break
+                messages.append({"role": "user", "content": "(Tu recopiais mot pour mot une de tes réponses précédentes : ne la "
+                                 "répète pas. Si le travail n'est pas fini, continue-le avec tes outils. Sinon dis ce que tu "
+                                 "as fait PENDANT CE TOUR : fichiers modifiés, commandes lancées et leur résultat exact (tests "
+                                 "réussis ou échoués, erreurs), puis ce qui reste à faire.)"})
+                continue
             if not redirected and not calls and helper._inbox and not stop.is_set():
                 redirected = True  # spoken just as the answer ended: answered too, in the same reply
             if redirected:
@@ -1910,8 +1940,8 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "assistant", "content": said})
                     self.event({"type": "token", "text": "\n\n"})
                 continue
-            raw = raw_tool_calls(content)
-            if not calls and raw:  # written as text: executed anyway
+            raw = raw_tool_calls(content) or (raw_tool_calls(thinking_text) if not content.strip() else [])
+            if not calls and raw:  # written as text (or inside its reasoning, then it stopped): executed anyway
                 calls = raw
             if think and thought and not calls and not content.strip() and not stop.is_set():
                 # it stopped inside its reasoning, without answering: the same step again, without reasoning
@@ -1921,6 +1951,7 @@ class Handler(BaseHTTPRequestHandler):
             clean = content.split("<tool_call")[0]
             if not calls and len(clean) > shown:  # end of a plain answer: the characters held back
                 self.event({"type": "token", "text": clean[shown:]})
+                helper._spoke = True
             content = clean
             if not calls and not stop.is_set() and nudges < 2 and (
                     not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400)):
@@ -2057,6 +2088,14 @@ class Handler(BaseHTTPRequestHandler):
                                     chatfiles, run_id)
         if mail_error and not sent:  # never let a reply suggest an email left when it did not
             self.event({"type": "token", "text": f"\n\nL'e-mail n'a pas pu partir. Erreur exacte : {mail_error.removeprefix('error: ')[:300]}"})
+        if not getattr(helper, "_spoke", False) and not stop.is_set():
+            # never an empty bubble: what was done is said, and how to go on
+            acts = [m.get("tool_name") for m in messages if m.get("role") == "tool"][-40:]
+            done = ", ".join(f"{n} ×{acts.count(n)}" for n in dict.fromkeys(acts)) if acts else ""
+            self.event({"type": "token", "text": ("Je n'ai pas réussi à rédiger ma réponse cette fois"
+                        + (f", mais j'ai travaillé ({done})" if done else "") + ". Écris « continue » pour que je reprenne et "
+                        "te dise où j'en suis ; pour un long projet (plusieurs fichiers, compiler, tester), le mode Agent "
+                        "va plus loin.")})
         self.event({"type": "done"})
 
     def chat_with_web(self, body, messages, options, stop, schedule=False, files=False, web=True, email=False, send_now=False):
