@@ -1174,10 +1174,25 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
         elif path == "/api/skills/bibliotheque":
             import skills_bibliotheque as lib
-            q = (self.read_json() or {}).get("q", "")
-            self.send_json({"count": lib.count(), "path": str(lib.LIB),
-                            "skills": [{k: s[k] for k in ("name", "description", "scripts", "files")}
-                                       for s in (lib.search(q, 30) if q else lib.index()[:30])]})
+            b = self.read_json() or {}
+            q, start, n = b.get("q", ""), max(0, int(b.get("offset") or 0)), min(200, max(1, int(b.get("limit") or 50)))
+            found = lib.search(q, 100) if q else lib.index()
+            self.send_json({"count": lib.count(), "path": str(lib.LIB), "total": len(found),
+                            "skills": [{k: s[k] for k in ("name", "dir", "description", "scripts", "files", "path")}
+                                       for s in found[start:start + n]]})
+        elif path == "/api/skills/from-library":  # a library skill made active again (listed in every prompt)
+            import skills_bibliotheque as lib
+            src = Path(self.read_json().get("path", "")).expanduser().resolve().parent
+            if src.parent != lib.LIB.resolve() or not (src / "SKILL.md").is_file():
+                self.send_json({"error": "skill introuvable dans la bibliothèque"}, 400)
+            else:
+                base = ext.HOME / "skills"
+                base.mkdir(parents=True, exist_ok=True)
+                dst, k = base / src.name, 1
+                while dst.exists():
+                    dst, k = base / f"{src.name}-{k}", k + 1
+                shutil.move(str(src), str(dst))
+                self.send_json({"ok": True, "name": dst.name})
         elif path == "/api/skills/popular":
             self.send_json({"sources": skill_hub.POPULAR})
         elif path in ("/api/sim/relaunch", "/api/sim/save"):

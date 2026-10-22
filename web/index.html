@@ -4822,7 +4822,7 @@ const TABS = {
       <div style="display:flex;gap:8px"><input class="field mono" id="hubUrl" placeholder="https://github.com/owner/repo  ou  owner/repo" style="flex:1"><button class="btn primary" id="hubBrowse">Parcourir</button></div>
       <div style="display:flex;gap:8px;align-items:center"><small class="muted">Installer dans :</small><select class="field" id="hubScope" style="flex:1"><option value="bibliotheque">la bibliothèque — autant que tu veux, Naim les cherche au besoin (recommandé)</option><option value="utilisateur">les skills actives — toujours chargées (garde-les peu nombreuses)</option></select></div>
       <div class="srow" id="libRow" style="padding:6px 0"><div class="sl"><small id="libInfo">Bibliothèque : …</small></div><div class="sc" style="gap:6px"><input class="field" id="libQ" placeholder="chercher dans la bibliothèque" style="width:220px"><button class="btn" id="libOpen">Ouvrir le dossier</button></div></div>
-      <div id="libFound"></div>
+      <div id="libFound" style="max-height:520px;overflow:auto"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap" id="hubPopular"></div>
       <div id="hubList"></div></div></div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Nouveau skill</b></div>
@@ -5497,12 +5497,35 @@ async function loadSkillsPage() {
     }));
   };
   $("#hubBrowse").onclick = hubBrowse;
-  // the library: how many skills, a search to see what Naim would find
-  const libLoad = async (q = "") => {
-    const r = await api("/api/skills/bibliotheque", { method: "POST", body: { q } }).catch(() => null); if (!r) return;
-    $("#libInfo").textContent = `Bibliothèque : ${r.count} skill${r.count > 1 ? "s" : ""} (cherchées par Naim quand une tâche en a besoin)`;
+  // the library: every skill, 50 at a time (a search filters), each one can be read or made active again
+  let libShown = 0, libQuery = "";
+  const libRow = (k) => {
+    const el = document.createElement("div"); el.className = "srow";
+    el.innerHTML = `<div class="sl"><b>${esc(k.name)}</b><small class="clamp2">${esc(k.description)}${k.scripts.length ? ` · scripts ${esc(k.scripts.join(" "))}` : ""}</small></div><div class="sc" style="gap:6px"><button class="btn" data-see>Voir</button><button class="btn" data-on title="La remettre dans les skills actives (lue à chaque conversation)">Activer</button></div>`;
+    $("[data-see]", el).onclick = () => api("/api/reveal", { method: "POST", body: { path: k.path } });
+    $("[data-on]", el).onclick = async (e) => {
+      const r = await api("/api/skills/from-library", { method: "POST", body: { path: k.path } }).catch(() => null);
+      if (!r || r.error) return toast(r?.error || "Impossible d'activer cette skill");
+      toast(`${k.name} : skill active`); el.remove(); loadSkillsPage();
+    };
+    return el;
+  };
+  const libLoad = async (q = libQuery, more = false) => {
+    libQuery = q; if (!more) libShown = 0;
+    const r = await api("/api/skills/bibliotheque", { method: "POST", body: { q, offset: libShown, limit: 50 } }).catch(() => null); if (!r) return;
+    $("#libInfo").textContent = `Bibliothèque : ${r.count} skill${r.count > 1 ? "s" : ""} — Naim les cherche et les charge tout seul quand une tâche en a besoin`;
     $("#libOpen").onclick = () => api("/api/reveal", { method: "POST", body: { path: r.path } });
-    $("#libFound").innerHTML = q ? (r.skills.length ? r.skills.map((k) => `<div class="srow"><div class="sl"><b>${esc(k.name)}</b><small class="clamp2">${esc(k.description)}${k.scripts.length ? ` · scripts ${esc(k.scripts.join(" "))}` : ""}</small></div></div>`).join("") : `<div class="srow"><div class="sl"><small>Rien trouvé.</small></div></div>`) : "";
+    const box = $("#libFound"); if (!more) box.innerHTML = "";
+    $("[data-libmore]", box)?.remove();
+    if (!r.skills.length && !more) box.innerHTML = `<div class="srow"><div class="sl"><small>${q ? "Rien trouvé." : "La bibliothèque est vide."}</small></div></div>`;
+    r.skills.forEach((k) => box.appendChild(libRow(k)));
+    libShown += r.skills.length;
+    if (libShown < r.total) {
+      const m = document.createElement("div"); m.className = "srow"; m.dataset.libmore = "1";
+      m.innerHTML = `<div class="sl"><small>${libShown} sur ${r.total}</small></div><button class="btn">Afficher 50 de plus</button>`;
+      $("button", m).onclick = () => libLoad(libQuery, true);
+      box.appendChild(m);
+    }
   };
   let libT; $("#libQ").oninput = (e) => { clearTimeout(libT); libT = setTimeout(() => libLoad(e.target.value.trim()), 250); };
   libLoad();
