@@ -492,6 +492,10 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .ptab { display: inline-flex; align-items: center; gap: 6px; }
 .ptab .pti svg { width: 15px; height: 15px; display: block; }
 @container panel (max-width: 460px) { .ptab .ptl { display: none; } .ptab { padding: 5px 8px; } .ptabs { flex-wrap: nowrap; } }
+/* a window too narrow for the conversation AND the panel (zoom included): the panel covers the conversation, full
+   width, until it is closed — never a conversation squeezed into a strip */
+body.vnarrow #panel.show { position: fixed; inset: 0 0 0 auto; width: 100% !important; max-width: none !important; z-index: 12; }
+body.vnarrow #panel .presize { display: none; }
 #pChanges .chead { flex-wrap: wrap; row-gap: 6px; } #pChanges .chead b, #pChanges .chead .btn { white-space: nowrap; }
 .ptabs #closePanel, .ptabs #refreshTree { position: absolute !important; top: 6px; }
 .ptabs #closePanel { right: 6px; } .ptabs #refreshTree { right: 36px; }
@@ -504,6 +508,10 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe { 
 .pbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .files { display: flex; flex: 1; min-height: 0; }
 #tree { width: 44%; min-width: 150px; overflow: auto; border-right: 1px solid var(--line); padding: 6px 4px; font-size: 13.5px; }
+/* a long file name is shortened with … on its own line: its icon and indent stay aligned with the others */
+#tree .node { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+#tree .node > span:last-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#tree .node .tw, #tree .node .attic { flex: none; }
 .node { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .node:hover { background: var(--hover); }
 .node.sel { background: var(--accent-soft); }
