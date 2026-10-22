@@ -32,7 +32,8 @@ FILE_TOOL = {"type": "function", "function": {
         "this tool. The extension of `nom` decides the format. For .pdf/.docx/.odt/.rtf/.html give `contenu` in Markdown "
         "(titles #, lists, **bold**, tables) or HTML; for .png give HTML or SVG; for .xlsx give CSV; for .zip give "
         "`fichiers` (each {nom, contenu}). Write the COMPLETE content, never a summary or a placeholder. "
-        "NEVER use it to send, share, print or open a file that ALREADY exists (« envoie mon CV », « celui-là », a file "
+        "To enrich or redo a document the user gave (a .docx CV or letter) in its style, do NOT use it: open that file "
+        "with python-docx and change its text (skill word). NEVER use it to send, share, print or open a file that ALREADY exists (« envoie mon CV », « celui-là », a file "
         "found by find_files): use that existing file with its full path (SMS: skill mac; email: send_email). Making a "
         "new version of the user's CV, letter or document they did not ask to rewrite is a serious mistake."),
     "parameters": {"type": "object", "properties": {
@@ -148,6 +149,17 @@ def _make(dst, content):
         _xlsx(content, dst)
     else:
         dst.write_text(content or "")
+
+
+def missing(args):
+    """Why a creer_fichier call cannot be done (no name, nothing to write), else None: never an empty « fichier.txt »."""
+    if not str((args or {}).get("nom") or "").strip():
+        return ("error: creer_fichier needs `nom` (the file name with its extension) and `contenu`. To enrich or redo a "
+                "document the user gave you (a .docx CV, a letter) in ITS style, do not use creer_fichier: open it with "
+                "python-docx and change its text (skill word, section 3).")
+    if not str((args or {}).get("contenu") or "").strip() and not (args or {}).get("fichiers"):
+        return "error: creer_fichier needs `contenu`: the COMPLETE content of the file, nothing was written."
+    return None
 
 
 def create(nom, contenu="", fichiers=None, folder=None):

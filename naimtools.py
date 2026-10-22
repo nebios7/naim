@@ -1863,6 +1863,10 @@ class Agent:
         return f"ok: skill saved to {path}"
 
     def install_skill(self, url, names=None):
+        url = str(url or "").strip()
+        m = re.fullmatch(r"(?:https?://skills\.sh/)?([\w.-]+)/([\w.-]+)(?:@|/)([\w.-]+)", url)
+        if m and not url.startswith("https://github.com"):  # « owner/repo@skill » (the skills search) or skills.sh/owner/repo/skill
+            url, names = f"{m.group(1)}/{m.group(2)}", [m.group(3)]
         try:
             found = skill_hub.browse(url)
         except skill_hub.SkillError as e:
@@ -1879,13 +1883,15 @@ class Agent:
         detail = f"Depuis {url} :\n" + "\n".join(f"- {s['name']} ({s['files']} fichiers) : {s['description'][:120]}" for s in chosen)
         if not self.approve("Installer des skills depuis internet", detail):
             return "denied by the user"
-        try:
-            done = skill_hub.install(url, [s["name"] for s in chosen], self.root)
+        try:  # into the library: found on demand, Naim's instructions stay light (the user can make it active)
+            done = skill_hub.install(url, [s["name"] for s in chosen], self.root, scope="bibliotheque")
         except skill_hub.SkillError as e:
             return f"error: {e}"
+        import skills_bibliotheque
         for n in done:
-            self.emit({"type": "skill_created", "name": n, "path": str(ext.HOME / "skills" / n)})
-        return f"ok: installed {', '.join(done)} in ~/.naim/skills. Load one with use_skill before using it."
+            self.emit({"type": "skill_created", "name": n, "path": str(skills_bibliotheque.LIB / n)})
+        return (f"ok: installed {', '.join(done)} in the skills library. Load it now with use_skill(\"{done[0]}\") and "
+                "follow it.")
 
     # ---- sub-agents
     def delegate(self, tasks):

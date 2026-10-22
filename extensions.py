@@ -600,7 +600,13 @@ def parse_frontmatter(text):
 
 
 def parse_skill(path):
-    return parse_frontmatter(path.read_text(errors="replace"))
+    meta, body = parse_frontmatter(path.read_text(errors="replace"))
+    # a skill moved elsewhere (the library, a plugin) that names its own files by « ~/.naim/skills/<it>/… »: the path is
+    # given where the skill really is now, so that its scripts and detail files are found
+    d = Path(path).parent
+    if d.parent != HOME / "skills":
+        body = body.replace(f"~/.naim/skills/{d.name}/", f"{d}/").replace(f"{HOME}/skills/{d.name}/", f"{d}/")
+    return meta, body
 
 
 def list_skills(root=None, disabled=()):
@@ -1058,12 +1064,23 @@ def match_skill(task, root=None, disabled=()):
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
     first = ("plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     triggers = dict(SKILL_TRIGGERS)
+    priority = []
     try:  # words that pick a plugin's skill (« arduino », « cobol »…), checked before the broad generic skills
         import plugins
         triggers.update({k: v for k, v in plugins.triggers().items() if k not in SKILL_TRIGGERS})
+        priority = [k for k in plugins.priority_skills() if k in triggers]
     except Exception:  # noqa: BLE001
         pass
-    ordered = list(first) + [n for n in triggers if n not in generic and n not in first] + list(generic)
+    # a skill with its own words, moved to the library by the user, is still loaded by itself when a request names it
+    try:
+        import skills_bibliotheque
+        for name in triggers:
+            if name not in by_name and name not in disabled and (lib_skill := skills_bibliotheque.find(name)):
+                by_name[name] = lib_skill
+    except Exception:  # noqa: BLE001
+        pass
+    ordered = priority + [n for n in first if n not in priority] + [n for n in triggers if n not in generic and n not in first
+                                                                     and n not in priority] + list(generic)
     # a phone number, SMS, iMessage, WhatsApp, a call: sending or calling on the Mac, whatever else the message names
     # (« envoie le PDF à 06 52 90 96 62 » is a message to send, not a PDF to make)
     if "mac" in by_name and re.search(r"(?<!\d)(?:0[1-9](?:[\s.-]?\d{2}){4}|\+\d{2}[\s.]?\d(?:[\s.-]?\d{2}){4})(?!\d)|\b(sms|texto|imessage|whatsapp|facetime)\b", text):

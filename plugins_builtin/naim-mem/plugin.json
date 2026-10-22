@@ -1,0 +1,53 @@
+{
+  "name": "naim-mem",
+  "version": "1.0",
+  "description": "La mémoire des sessions : chaque demande, chaque action et chaque réponse sont gardées sur ce Mac et retrouvées par mots (« la dernière fois », « on avait corrigé… »).",
+  "skills": "skills",
+  "triggers": {
+    "mem-search": "\\b(la derni[èe]re fois|l'autre jour|on avait (fait|corrig|d[ée]cid|parl)\\w*|tu te souviens|souviens[- ]toi|qu'est-ce que j'avais|on en [ée]tait o[uù]|d[ée]j[àa] (fait|r[ée]solu|corrig[ée])|historique de (mes|nos) (t[âa]ches|sessions|travaux))\\b"
+  },
+  "mcp": {
+    "memoire": {
+      "command": "python3",
+      "args": [
+        "${PLUGIN_DIR}/serveur.py"
+      ]
+    }
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_DIR}/capture.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "write_file|edit_file|multi_edit|delete_file|move_file|run_command|start_process|creer_fichier|convert_document|make_diagram|send_email|web_search|web_fetch|install_skill|use_skill|remember|planifier|use_mcp|confier_tache|computer|simulator|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_DIR}/capture.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_DIR}/capture.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

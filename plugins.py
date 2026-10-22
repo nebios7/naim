@@ -115,6 +115,12 @@ def skill_dirs():
     return out
 
 
+def priority_skills():
+    """Skills of the plugins marked « priority » in their plugin.json: their words are checked before Naim's own."""
+    return [k for p in _enabled() if (_manifest(Path(p["path"])) or {}).get("priority")
+            for k in ((_manifest(Path(p["path"])) or {}).get("triggers") or {})]
+
+
 def triggers():
     """{skill name: regex} of the plugins that are on."""
     out = {}

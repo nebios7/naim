@@ -2003,8 +2003,12 @@ class Handler(BaseHTTPRequestHandler):
                                       + "\nFiles:\n" + helper.list_files(".")[:3000])
                     elif name == "creer_fichier":
                         here = helper.root if helper.root.resolve() != chatfiles.OUT.resolve() else None
-                        result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"), here)
-                        made.append(info)
+                        if (why := chatfiles.missing(args)):
+                            result, info = why, None
+                        else:
+                            result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"), here)
+                        if info:
+                            made.append(info)
                         self.event({"type": "deliverables", "root": str(here or chatfiles.OUT), "files": list(reversed(made))})
                     else:
                         result = helper.call_tool(name, args)
@@ -2168,9 +2172,12 @@ class Handler(BaseHTTPRequestHandler):
                     elif name == "chercher_contact":
                         result = helper.chercher_contact(args.get("nom", ""))
                     elif name == "creer_fichier":
-                        result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"))
-                        made.append(info)
-                        self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": list(reversed(made))})
+                        if (why := chatfiles.missing(args)):
+                            result = why
+                        else:
+                            result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"))
+                            made.append(info)
+                            self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": list(reversed(made))})
                     else:
                         result = (helper.planifier(**args) if name == "planifier" else helper.web_search(args.get("query", ""))
                                   if name == "web_search" else helper.web_fetch(args.get("url", "")))

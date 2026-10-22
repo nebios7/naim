@@ -134,6 +134,7 @@ Ses **consignes** (≈ 18 000 caractères) et la description de ses **outils** (
 | Brouillon | essais, conversions, pièces jointes de **cette** conversation | `~/Documents/Naim/Fichiers/Joints/<conversation>` |
 | Durable | tes préférences et tes projets, d'une conversation à l'autre | `~/.naim` (mémoire) |
 | Anciennes conversations | il peut les rechercher (« la dernière fois… ») | conversations |
+| Sessions (naim-mem) | chaque demande, chaque action qui change quelque chose et chaque réponse, cherchables par mots | `~/.naim/naim-mem/memoire.db` |
 
 « continue » (ou le bouton → en mode Agent) reprend la **dernière vraie demande**, avec son carnet et sa skill.
 
@@ -172,7 +173,8 @@ Un clic : elle continue derrière sans être coupée, Naim passe à la suite et 
 Un plugin (`~/.naim/plugins/<nom>/plugin.json`) apporte d'un coup des skills, des serveurs MCP, des commandes `/`,
 des hooks et la liste de ses outils Homebrew. Personnaliser › Plugins : activer, installer les outils, ajouter depuis
 GitHub ou un dossier, retirer (Corbeille). Fournis : **électronique** (Arduino, Raspberry Pi), **mainframe** (COBOL
-vérifié par un hook, JCL, DB2, REXX, PL/I), **algorithmique** (pseudo-code).
+vérifié par un hook, JCL, DB2, REXX, PL/I), **algorithmique** (pseudo-code), **naim-mem** (la mémoire des sessions : des hooks gardent ce qui
+est fait, un serveur MCP le retrouve ; « on avait corrigé quoi la dernière fois ? »).
 
 ### Hooks (automatismes)
 
