@@ -2194,7 +2194,18 @@ class Handler(BaseHTTPRequestHandler):
             # a screenshot or an image looked at: Naim SEES it (only the latest one stays, older ones are dropped)
             imgs, helper._pending_images = getattr(helper, "_pending_images", []), []
             looked, helper._looked = getattr(helper, "_looked", False), False
-            if imgs and (helper._can_see() if looked else helper._vision()):
+            described = False
+            if imgs and looked and options.get("backend") == "llamacpp" and helper._can_see():
+                # a file looked at: the images engine describes the image alone, the conversation stays on the main engine
+                try:
+                    self.event({"type": "status", "text": "Naim regarde le fichier…"})
+                    from naimtools import describe_look
+                    messages.append({"role": "user", "content": "Voici ce que montre le fichier (vu en image) :\n"
+                                     + describe_look(body.get("model", "naim"), imgs, options)})
+                    described = True
+                except Exception:  # noqa: BLE001 — no description: the image itself, as before
+                    pass
+            if imgs and not described and (helper._can_see() if looked else helper._vision()):
                 for i in shots:
                     messages[i].pop("images", None)
                 shots.append(len(messages))

@@ -189,6 +189,21 @@ def today_line():
             "Use this date for anything about time (schedules, « demain », « lundi prochain », ages, deadlines).")
 
 
+LOOK_ASK = ("Décris précisément ce document vu en image : tout le texte lisible (titres, sections, noms, dates, coordonnées), "
+            "la mise en page, les couleurs et les polices, puis tout défaut visible (texte coupé ou qui déborde, chevauchement, "
+            "page vide, élément manquant). En français, en notes courtes.")
+
+
+def describe_look(model, imgs, options):
+    """What a file looked at shows, written by the images engine from the image ALONE. Sending the whole conversation
+    with the image made that second engine read everything from zero while the main one also ran — measured: 249 s of
+    reading, then 1.2 tokens/s, about 13 minutes for a CV. The text then joins the conversation on the main engine."""
+    opts = {k: v for k, v in (options or {}).items() if k not in ("slot", "warm_prefix", "tool_choice")}
+    msg = ollama_chat(model, [{"role": "user", "content": LOOK_ASK, "images": imgs}], think=False,
+                      options={**opts, "num_predict": 700, "temperature": 0.2})
+    return (msg.get("content") or "").strip()
+
+
 def now_note():
     """The current time, added at the end of the user's message (not in the system prompt: see today_line)."""
     return f"\n\n[Maintenant : {time.strftime('%Y-%m-%d %H:%M')}, {JOURS[time.localtime().tm_wday]}]"
@@ -2475,6 +2490,14 @@ class Agent:
         looked, self._looked = getattr(self, "_looked", False), False
         if not imgs or not (self._can_see() if looked else self._vision()):
             return
+        if looked and self.options.get("backend") == "llamacpp":  # a file looked at: its description, not the image
+            try:
+                self.emit({"type": "status", "text": "Naim regarde le fichier…"})
+                self.messages.append({"role": "user", "content": "Voici ce que montre le fichier (vu en image) :\n"
+                                      + describe_look(self.model, imgs, self.options)})
+                return
+            except Exception:  # noqa: BLE001 — no description: the image itself, as before
+                pass
         self.messages.append({"role": "user", "content": "Voici l'image du fichier." if looked else
                               "Voici la capture d'écran demandée.", "images": imgs})
 
