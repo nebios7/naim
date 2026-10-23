@@ -1016,10 +1016,19 @@ class Handler(BaseHTTPRequestHandler):
             body = self.read_json()
             with _lock:
                 p = _pending.get(body.get("id"))
+                if body.get("always") and body.get("allow"):  # « Autoriser tous »: the task under way too, not only the next ones
+                    for a in _agents.values():
+                        a.auto_yes = True
             if p:
                 p["allow"] = bool(body.get("allow"))
                 p["event"].set()
             self.send_json({"ok": bool(p)})
+        elif path == "/api/autoyes":  # « Tout autoriser » switched while Naim works: applied to the running tasks at once
+            on = bool(self.read_json().get("on"))
+            with _lock:
+                for a in _agents.values():
+                    a.auto_yes = on
+            self.send_json({"ok": True, "running": len(_agents)})
         elif path == "/api/models/delete":
             try:
                 ollama_call("/api/delete", {"model": self.read_json()["name"]}, method="DELETE").close()

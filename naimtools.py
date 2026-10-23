@@ -1630,7 +1630,10 @@ class Agent:
             if area_.startswith("l'envoi") and who and not all(re.fullmatch(r"[+\d][\d\s().-]{5,}|[^@\s]+@[^@\s]+", w.strip()) for w in who):
                 return (f"error: « {who[0]} » is a name, Messages needs a phone number or an email address. Find it with "
                         "chercher_contact first (use the number it gives), or ask the user for it.")
-        if (area := mac_area(command)) in MAC_ALWAYS_ASK:  # a message or a call: the user's yes every time
+        everything = self.auto_yes and self.scheduled in (False, None, "auto")  # « Tout autoriser » = vraiment tout
+        if everything and (area := mac_area(command)) and area != "les mots de passe et le trousseau":  # passwords: always asked
+            mac_allow(area) if area not in MAC_ALWAYS_ASK else None  # remembered as allowed, as if the user said yes
+        elif (area := mac_area(command)) in MAC_ALWAYS_ASK:  # a message or a call: the user's yes every time
             if not self.approver(f"⚠ {area[0].upper() + area[1:]}", shown):
                 return f"denied by the user ({area})"
         elif area and not mac_allowed(area):
@@ -2165,7 +2168,7 @@ class Agent:
         if not where.is_dir():
             where = self.root
         key = getattr(self, "conv_id", None) or self.run_id
-        if key not in _EXTERNAL_OK:  # the first time in this conversation: the user says yes (the task leaves Naim)
+        if key not in _EXTERNAL_OK and not (self.auto_yes and self.scheduled in (False, None, "auto")):  # first time: the user's yes
             if not self.approver(f"Confier cette tâche à {label}", f"Dossier : {where}\n\n{tache[:4000]}"):
                 return "denied: l'utilisateur ne veut pas confier cette tâche à un autre modèle ; fais-la toi-même."
             _EXTERNAL_OK.add(key)

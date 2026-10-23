@@ -3551,7 +3551,7 @@ function addBot(m, idx) {
         $(".btns", a).outerHTML = `<div class="res">${allow ? "✓ Autorisé" : "✕ Refusé"}</div>`;
         a.classList.add("done");
         if (always) { S.autoYes = true; saveSettings(); applySettings(); }
-        await api("/api/approve", { method: "POST", body: { id: ev.id, allow } });
+        await api("/api/approve", { method: "POST", body: { id: ev.id, allow, always: !!always } });
       };
       yes.onclick = () => answer(true); no.onclick = () => answer(false); all.onclick = () => answer(true, true);
       pendingApproval = (allow, always) => { pendingApproval = null; answer(allow, always && !String(ev.action).startsWith("⚠")); };
@@ -6186,13 +6186,30 @@ async function pullModel() {
 }
 
 // ======================================================================= persistence of settings
+// the settings are written back only once they were really read from the server: a page opened while the server did
+// not answer (Naim starting) would otherwise write its defaults over the user's settings (name, folder, permissions…)
+let settingsLoaded = false, lastAutoYes = null;
 async function loadSettings() {
-  const server = await api("/api/settings").catch(() => ({}));
+  let server = await api("/api/settings").catch(() => null);
+  if (server && server.error) server = null;
   let local = {};
   try { local = JSON.parse(localStorage.getItem("naim.settings") || "{}"); } catch {}
-  S = { ...DEFAULTS, ...local, ...server };
+  S = { ...DEFAULTS, ...local, ...(server || {}) };
+  settingsLoaded = server !== null;  // read (even empty on a first start); null = the server did not answer
+  if (!settingsLoaded) setTimeout(async () => {  // the server comes up a little later: its settings, then saving is allowed
+    const again = await api("/api/settings").catch(() => null);
+    if (again !== null) { S = { ...S, ...again }; settingsLoaded = true; applySettings?.(); }
+  }, 3000);
+  lastAutoYes = S.autoYes;
 }
-function saveSettings() { api("/api/settings", { method: "PUT", body: S }).catch(() => {}); }
+function saveSettings() {
+  if (!settingsLoaded) return;
+  api("/api/settings", { method: "PUT", body: S }).catch(() => {});
+  if (S.autoYes !== lastAutoYes) {  // « Tout autoriser » changed (anywhere): the task under way follows at once
+    lastAutoYes = S.autoYes;
+    api("/api/autoyes", { method: "POST", body: { on: !!S.autoYes } }).catch(() => {});
+  }
+}
 let saveTimer; function saveSettingsSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 400); }
 const WIDTHS = { narrow: "700px", normal: "840px", wide: "1080px", full: "100%" };
 const ACCENTS = { sobre: ["#2c2a26", "#2c2a26", "Naim (sobre, s'accorde au thème)"], argile: ["#d97757", "#c6613f", "Argile"], bleu: ["#3b82f6", "#2563eb", "Bleu"], violet: ["#8b5cf6", "#7c3aed", "Violet"],
