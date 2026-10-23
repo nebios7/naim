@@ -1966,7 +1966,10 @@ class Handler(BaseHTTPRequestHandler):
             last = last or stuck
             # after a refused tool call, the next step is the answer itself: without this the model announced « je vais
             # créer un fichier… », was refused, and started again — six times, five minutes, nothing made
-            tools = None if (last and used_tools) or refusals else helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
+            # always the same tool list: it comes first in what the engine reads, so removing it (after a refused call, or
+            # for the last step) made it re-read the whole conversation from its first token — measured: 80 s for a « merci ».
+            # The refusal and the « answer now » note are enough to get a plain answer.
+            tools = helper.tools + [chatfiles.FILE_TOOL, self.FOLDER_TOOL]
 
             # « salut », « merci » (plain): no tool_choice "none" — it removes the tools from what the engine reads, so the
             # next real message would find nothing in common and re-read everything (~1 min); a tool call is refused instead
@@ -2049,6 +2052,8 @@ class Handler(BaseHTTPRequestHandler):
             raw = raw_tool_calls(content) or (raw_tool_calls(thinking_text) if not content.strip() else [])
             if not calls and raw:  # written as text (or inside its reasoning, then it stopped): executed anyway
                 calls = raw
+            if calls and ((last and used_tools) or refusals >= 2):
+                calls = []  # no more tools at this point (out of steps, or refused twice): what it wrote is the answer
             if think and thought and not calls and not content.strip() and not stop.is_set():
                 # it stopped inside its reasoning, without answering: the same step again, without reasoning
                 think = False
