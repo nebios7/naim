@@ -366,7 +366,7 @@ header select { max-width: 220px; text-overflow: ellipsis; }
 .fb .rate.on.r2 { background: #3fb9a022; border-color: #3fb9a0; color: #2f9c86; }
 .icon.on { background: var(--hover); }
 .msgacts { display: flex; gap: 2px; margin-top: 4px; opacity: 0; transition: opacity .15s; align-items: center; }
-.turn:hover .msgacts, .turn:last-child .msgacts { opacity: 1; }
+.turn:hover .msgacts, .turn:focus-within .msgacts { opacity: 1; }  /* like a coding assistant: the actions of an answer show on hover */
 .stats, .time { font-size: 12px; color: var(--muted); margin-left: 6px; }
 .who { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
 .who .robot { width: 20px; height: 20px; }
@@ -440,6 +440,13 @@ footer { padding: 8px 20px 12px; }
 footer > .ctools { max-width: min(var(--w), 100%); margin: 6px auto 0; padding: 0 6px; box-sizing: border-box; overflow: hidden; }
 footer { min-width: 0; } footer > .composer, #homeBelow { max-width: min(var(--w), 100%); box-sizing: border-box; }
 footer > .ctools .pill, footer > .ctools .chk { color: var(--muted); }
+/* the settings under the box: plain words, no frames (like a coding assistant's composer); the active mode only tinted */
+footer > .ctools .pill, footer > .ctools .chk, footer > .ctools #modelPick { border-color: transparent !important; background: transparent !important; box-shadow: none !important; }
+footer > .ctools .pill:hover, footer > .ctools .chk:hover, footer > .ctools #modelPick:hover { background: var(--hover) !important; color: var(--text); }
+footer > .ctools .chk:has(input:checked) { color: var(--brand); }
+footer > .ctools #modePill.chat, footer > .ctools #modePill.agent { background: transparent !important; border-color: transparent !important; }
+footer > .ctools #modePill.chat { color: var(--text) !important; }
+footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #folderPill { background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
 .ctools > * { flex-shrink: 0; white-space: nowrap; }
 .ctools .pill, .ctools .chk { display: inline-flex; align-items: center; gap: 5px; height: 30px; box-sizing: border-box; }
 .ctools .spacer { flex: 1 1 0; min-width: 0; }
@@ -6220,7 +6227,7 @@ function applySettings() {
   $("#planWrap").hidden = true; $("#planMode").checked = !!S.planMode;  // « Plan » is now one of the modes of #permPill
   updatePermPill();
   if (updateNaimMd.last !== S.mode + S.project) { updateNaimMd.last = S.mode + S.project; updateNaimMd(); }
-  $("#input").placeholder = agent ? "Décris une tâche : Naim agit dans ton projet…" : "Écris à Naim…";
+  $("#input").placeholder = (agent ? "Décris une tâche à Naim" : "Écris à Naim") + (S.send_key === "mod" ? " · ⌘↩ pour envoyer" : " · ↩ pour envoyer, ⇧↩ pour aller à la ligne");
   if (typeof svgI === "function") {
     $("#modePill").innerHTML = `${svgI(agent ? "agent" : "chat")}<span class="pl">${agent ? "Agent" : "Chat"}</span>`;
     $("#tempPill").innerHTML = `${svgI("thermo")}<span class="pl">${(+S.temperature).toFixed(2)}</span>`;
