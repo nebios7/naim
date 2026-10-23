@@ -499,6 +499,10 @@ body.vnarrow #panel .presize { display: none; }
 /* the panel as a card set slightly apart from the window's edges, rounded, like a coding assistant's side pane */
 #panel.show { margin: 8px 8px 8px 0; border: 1px solid var(--line) !important; border-radius: 14px; box-sizing: border-box; }
 body.vnarrow #panel.show { margin: 0; inset: 0 !important; width: auto !important; border: 0 !important; border-radius: 0; }  /* covering: edge to edge, nothing of the conversation shows through */
+/* an empty preview says so instead of a blank white page */
+#preview:not([src]):not([srcdoc]), #preview[src="about:blank"] { display: none; }
+.pvstage .pvempty { display: none; text-align: center; padding: 40px 20px; color: var(--muted); line-height: 1.6; }
+.pvstage:has(#preview:not([src]):not([srcdoc])) .pvempty, .pvstage:has(#preview[src="about:blank"]) .pvempty { display: block; }
 #pChanges .chead { flex-wrap: wrap; row-gap: 6px; } #pChanges .chead b, #pChanges .chead .btn { white-space: nowrap; }
 .ptabs #closePanel, .ptabs #refreshTree { position: absolute !important; top: 6px; }
 .ptabs #closePanel { right: 6px; } .ptabs #refreshTree { right: 36px; }
@@ -1839,7 +1843,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
       <div class="pbody" id="pPreview" hidden>
         <div class="procbar" id="previewBar" hidden><span class="mono" id="previewUrl" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button class="icon" id="previewReload" title="Recharger">↻</button><button class="icon" id="previewExt" title="Ouvrir dans le navigateur">↗</button></div>
         <div class="pvbar" id="pvBar"><div class="pvsizes"><button data-pv="100%" class="on" title="Pleine largeur">Ordinateur</button><button data-pv="820px" title="768 px">Tablette</button><button data-pv="390px" title="390 px">Téléphone</button></div><span style="flex:1"></span><button class="icon" id="pvRedo" title="Recharger l'aperçu">↻</button><button class="icon" id="pvBig" title="Agrandir / réduire l'aperçu">⤢</button></div>
-        <div class="pvstage" id="pvStage"><iframe id="preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"></iframe></div></div>
+        <div class="pvstage" id="pvStage"><div class="ph pvempty">Rien à prévisualiser pour l'instant.<br>Une page web ou une application que Naim lance (ou un fichier HTML ouvert avec l'œil) s'affiche ici.</div><iframe id="preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"></iframe></div></div>
       <div class="pbody" id="pChanges" hidden></div>
       <div class="pbody" id="pSim" hidden>
         <div class="simbar"><span class="simdot" id="simDot"></span><div class="simid"><b id="simName">Simulateur</b><small id="simState">aucun appareil</small></div><select id="simDev" title="Appareil affiché"></select><span class="sp"></span>
