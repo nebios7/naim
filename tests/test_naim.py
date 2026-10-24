@@ -88,6 +88,29 @@ class Compaction(unittest.TestCase):
                 self.assertIn(a.messages[i - 1]["role"], ("assistant", "tool"))
 
 
+class AutoMode(unittest.TestCase):
+    """Mode Auto (« Tout autoriser »): no question at each step; only what is typed or paid on screen stays asked."""
+
+    def agent(self, asked):
+        a = naimtools.Agent.__new__(naimtools.Agent)
+        a.scheduled, a.power, a._allow_once, a.auto_yes = False, False, False, True
+        a.auto_writes = a.auto_commands = a.auto_mcp = a.auto_computer = False
+        a.approver = lambda action, detail: asked.append(action) or False
+        return a
+
+    def test_nothing_asked(self):
+        asked = []
+        a = self.agent(asked)
+        for kind in ("write", "command", "mcp", "computer"):
+            self.assertTrue(a.approve("Exécuter", "$ ls", kind=kind), kind)
+        self.assertEqual(asked, [])
+
+    def test_sensitive_screen_action_still_asked(self):
+        asked = []
+        self.assertFalse(self.agent(asked).approve("⚠ Action sensible à l'écran", "carte", kind="sensitive"))
+        self.assertEqual(len(asked), 1)
+
+
 class Interface(unittest.TestCase):
     """A CSS comment left open hides every style after it (it broke the home page once): never again."""
 
