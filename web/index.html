@@ -1141,15 +1141,10 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 /* the work in progress lives in the conversation (dots, light, time on the group being done): no second line above
    the input */
 #liveBar { display: none !important; }
-/* Naim at work: four dots of different sizes that drift at random in a small square, gather and part, softly
-   (moved by naimDrift() below); a finished background job keeps its check / warning icon */
-.glive .bgdots, .liveline .bgdots, details.bgjob:not(.ok):not(.ko) .bgdots { position: relative; display: inline-block !important; width: 15px; height: 15px; flex: none; }
-.glive .bgdots i, .liveline .bgdots i, details.bgjob:not(.ok):not(.ko) .bgdots i { position: absolute; left: 0; top: 0; width: 5px; height: 5px; border-radius: 50%;
-  background: var(--accent, #d97757); animation: none !important; will-change: transform, opacity;
-  transition: transform .8s cubic-bezier(.45, 0, .2, 1), opacity .8s ease; }
-.bgdots i:nth-child(2) { transform: translate(9px, 2px) scale(.7); } .bgdots i:nth-child(3) { transform: translate(3px, 9px) scale(1.3); }
-.bgdots i:nth-child(4) { transform: translate(10px, 9px) scale(.85); }
-@media (prefers-reduced-motion: reduce) { .bgdots i { transition: none !important; } }
+/* Naim at work: four dots drawn on a small canvas at every frame (naimDots below); a finished background job keeps
+   its check / warning icon */
+.glive .bgdots, .liveline .bgdots, details.bgjob:not(.ok):not(.ko) .bgdots { display: inline-block !important; width: 16px; height: 16px; flex: none; }
+.bgdots canvas { display: block; width: 16px; height: 16px; }
 .glive { display: inline-flex; margin-right: 6px; }
 .agroup.live > summary .gsum, .liveline .ltxt {
   background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
@@ -3317,7 +3312,7 @@ function addBot(m, idx) {
     process(pr) {
       if (pr.notify) {  // a background job: one compact line (dots, label, time), opened to see the command and its state
         const c = document.createElement("details"); c.className = "bgjob run"; c.dataset.bgid = pr.id; c.dataset.t0 = String((pr.started || Date.now() / 1000) * 1000);
-        c.innerHTML = `<summary><span class="bgdots"><i></i><i></i><i></i><i></i></span><span class="bglabel">Tâche de fond · ${esc(pr.label || pr.name)}</span><span class="bgtime"></span><span class="gchev">${svgI("chevd")}</span></summary>
+        c.innerHTML = `<summary>${LDOTS}<span class="bglabel">Tâche de fond · ${esc(pr.label || pr.name)}</span><span class="bgtime"></span><span class="gchev">${svgI("chevd")}</span></summary>
           <div class="bgbody"><pre class="mono">$ ${esc(pr.command || "")}</pre><div class="bgstate"><span>En cours</span><span class="muted">Naim te prévient à la fin et fait le point</span></div></div>`;
         block(c); bgTick(); return;
       }
@@ -4269,19 +4264,54 @@ $("#send").onclick = () => (curRun() && !$("#input").value.trim() ? stop() : sen
 const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span>';
 // the last piece of work in a reply (the live line at the bottom is not one)
 function lastWork(flow) { return [...flow.children].filter((c) => !c.classList.contains("liveline")).pop() || null; }
-const LDOTS = '<span class="bgdots"><i></i><i></i><i></i><i></i></span>';
-// each dot goes somewhere else in its little square every so often (not all at once), bigger or smaller, brighter or
-// dimmer: a living, never-repeating motion instead of a blinking grid
-function naimDrift() {
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  for (const i of document.querySelectorAll(".glive .bgdots i, .liveline .bgdots i, details.bgjob:not(.ok):not(.ko) .bgdots i")) {
-    if (Math.random() < 0.45) continue;  // not every dot at every tick: they move out of step
-    const s = 0.55 + Math.random() * 0.95, x = Math.random() * 10, y = Math.random() * 10;
-    i.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${s.toFixed(2)})`;
-    i.style.opacity = (0.4 + Math.random() * 0.6).toFixed(2);
+const LDOTS = '<span class="bgdots" aria-hidden="true"><canvas></canvas></span>';
+// four dots of different sizes, each held by a spring to a place in a shape that changes every second or so (square,
+// diamond, line, tight cluster, turned at random) while a slow wander and a breath keep them alive: the motion is
+// smooth, never the same twice, and drawn only while a dots canvas is on screen
+const naimDots = (() => {
+  const SHAPES = [
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]],
+    [[0, -1.35], [1.35, 0], [0, 1.35], [-1.35, 0]],
+    [[-1.6, 0], [-.55, 0], [.55, 0], [1.6, 0]],
+    [[-.45, -.45], [.45, -.45], [-.45, .45], [.45, .45]],
+    [[0, -1.3], [1.15, .7], [-1.15, .7], [0, 0]],
+  ];
+  const SIZE = [1.9, 1.5, 1.25, 1.7], still = matchMedia("(prefers-reduced-motion: reduce)");
+  const dots = SIZE.map((r, k) => ({ x: SHAPES[0][k][0], y: SHAPES[0][k][1], vx: 0, vy: 0, r, ph: Math.random() * 6.3 }));
+  let shape = SHAPES[0], turn = 0, next = 0, last = 0, running = false;
+  const target = (k) => { const [a, b] = shape[k], c = Math.cos(turn), s = Math.sin(turn); return [a * c - b * s, a * s + b * c]; };
+  function frame(now) {
+    const cvs = [...document.querySelectorAll(".bgdots canvas")].filter((c) => c.isConnected && c.offsetParent);
+    if (!cvs.length) { running = false; return; }
+    const dt = Math.min(0.05, (now - (last || now)) / 1000), t = now / 1000; last = now;
+    if (now > next) {  // a new shape, turned somewhere else, never the same one twice in a row
+      let s; do s = SHAPES[Math.floor(Math.random() * SHAPES.length)]; while (s === shape);
+      shape = s; turn += (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 1.2); next = now + 900 + Math.random() * 900;
+    }
+    turn += dt * 0.6;  // the whole figure keeps turning slowly
+    for (const [k, d] of dots.entries()) {
+      const [tx, ty] = target(k), wx = 0.18 * Math.sin(t * 1.7 + d.ph), wy = 0.18 * Math.cos(t * 1.3 + d.ph * 1.7);
+      d.vx += ((tx + wx - d.x) * 70 - d.vx * 11) * dt; d.vy += ((ty + wy - d.y) * 70 - d.vy * 11) * dt;  // a spring, a little lively
+      d.x += d.vx * dt; d.y += d.vy * dt;
+    }
+    for (const c of cvs) {
+      const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
+      if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
+      c._color ||= getComputedStyle(c).getPropertyValue("--accent").trim() || "#d97757";
+      const g = c.getContext("2d"), u = w / 5.2;  // one unit of the shapes, in pixels
+      g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, w); g.fillStyle = c._color;
+      for (const d of dots) {
+        const breath = still.matches ? 1 : 1 + 0.22 * Math.sin(t * 2.4 + d.ph);
+        g.globalAlpha = still.matches ? 1 : 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(t * 1.9 + d.ph * 2));
+        g.beginPath(); g.arc(w / 2 + d.x * u, w / 2 + d.y * u, d.r * breath * w / 16, 0, 6.2832); g.fill();
+      }
+    }
+    if (still.matches) { running = false; return; }  // reduced motion: one still frame
+    requestAnimationFrame(frame);
   }
-}
-setInterval(naimDrift, 420);
+  return () => { if (!running) { running = true; last = 0; requestAnimationFrame(frame); } };
+})();
+new MutationObserver(() => naimDots()).observe(document.body, { childList: true, subtree: true });
 // like a pro tool: what Naim is doing is shown IN the conversation, on the work itself — the group of steps being
 // done carries the dots, the light and the time (« 9 lectures · 1 skill · 1 min 26 ») ; before any step, one line
 // « Naim réfléchit… 12 s » in its place
