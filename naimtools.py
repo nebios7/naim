@@ -30,6 +30,7 @@ import hooks as naim_hooks
 import learning
 import mailer
 import skill_hub
+import shlex
 from shlex import quote as shlex_quote
 
 # ---------------------------------------------------------------- Naim protects itself
@@ -136,6 +137,35 @@ MCP_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_mcp", "des
     "parameters": {"type": "object", "properties": {
         "requete": {"type": "string", "description": "a few words, e.g. « notion », « base postgres », « slack »"}},
         "required": ["requete"]}}}
+
+# Naim adds to its own library what the user asks for, like an assistant that installs the tool it lacks: any MCP
+# server (not only the catalogue's) and the user's hooks; install_skill does the same for skills
+INSTALL_MCP_TOOL = {"type": "function", "function": {"name": "install_mcp", "description": (
+    "Install a new MCP server in your library when the user asks for one that chercher_mcp does not find: a command "
+    "that starts it (npx, uvx, python, node… with its arguments, e.g. command=\"npx\", args=[\"-y\", \"@scope/server\"]) "
+    "or the URL of a remote server. It is started once to check it works and list its tools; then use_mcp(server) as "
+    "usual. Put API keys the user gave you in env, never in args."),
+    "parameters": {"type": "object", "properties": {
+        "name": {"type": "string", "description": "short name, e.g. « github », « postgres »"},
+        "command": {"type": "string", "description": "program that starts the server: npx, uvx, python3, node…"},
+        "args": {"type": "array", "items": {"type": "string"}, "description": "its arguments"},
+        "env": {"type": "object", "description": "environment variables (API keys…)"},
+        "url": {"type": "string", "description": "for a remote server: its http(s) URL, instead of command"},
+        "description": {"type": "string", "description": "what it is for, in a few words"}}, "required": ["name"]}}}
+
+ADD_HOOK_TOOL = {"type": "function", "function": {"name": "add_hook", "description": (
+    "Add a hook the user asks for: a shell command that runs by itself at a moment of your work. Events: PreToolUse "
+    "(before a tool; exit 2 blocks it), PostToolUse (after a tool), UserPromptSubmit (when a message is sent; what it "
+    "prints is added to your context), Stop (when you finish; exit 2 sends you back to work), SessionStart (first "
+    "message of a conversation), PreCompact (before you sum up older steps). The command receives a JSON on stdin "
+    "(tool_name, tool_input, tool_response, prompt…). matcher: tool names for PreToolUse/PostToolUse, e.g. "
+    "\"write_file|edit_file\". scope: \"project\" (this folder) or \"global\" (every project)."),
+    "parameters": {"type": "object", "properties": {
+        "event": {"type": "string", "enum": ["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop", "SessionStart", "PreCompact"]},
+        "command": {"type": "string", "description": "the shell command"},
+        "matcher": {"type": "string", "description": "tools it applies to (regex), for PreToolUse / PostToolUse"},
+        "scope": {"type": "string", "enum": ["project", "global"]},
+        "timeout": {"type": "integer", "description": "seconds, 60 by default"}}, "required": ["event", "command"]}}}
 
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
     "Find the user's own files anywhere on the Mac (Bureau, Documents, Téléchargements…), like the Finder: by words in "
@@ -642,6 +672,8 @@ class Agent:
                 tools.append(SKILL_SEARCH_TOOL)
             if self.features.get("mcp", True):
                 tools.append(MCP_SEARCH_TOOL)
+                tools.append(INSTALL_MCP_TOOL)
+            tools.append(ADD_HOOK_TOOL)
             if self.external.get("on"):
                 tools.append(EXTERNAL_TOOL)
         if self.features["simulator"] and not self.subagent:
@@ -2581,6 +2613,77 @@ class Agent:
         return (f"ok: tools of the MCP server {server} (call one with use_mcp(server=\"{server}\", tool=…, arguments={{…}})):\n"
                 + text)
 
+    def install_mcp(self, name, command=None, args=None, env=None, url=None, description=None):
+        import mcp_catalog
+        import unicodedata  # « Mémoire Test » → memoire-test
+        name = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+        name = re.sub(r"[^a-z0-9_-]+", "-", name.lower()).strip("-")[:40]
+        if not name:
+            return "error: name is required"
+        if not command and not url:
+            return "error: give the command that starts the server (npx, uvx, python…) with its args, or its url"
+        servers = dict(ext.MCP.config())
+        if name in servers:
+            return f"already installed: {name}. Use use_mcp(server=\"{name}\") to see its tools."
+        if url:
+            if not re.match(r"^https?://", str(url)):
+                return "error: url must start with http:// or https://"
+            cfg, shown = {"url": str(url), "type": "http"}, str(url)
+        else:
+            if isinstance(args, str):
+                args = shlex.split(args)
+            parts = shlex.split(str(command)) if not args and " " in str(command).strip() else [str(command)]
+            args = parts[1:] + [str(a) for a in (args or [])]
+            cmd = mcp_catalog._which(parts[0]) or parts[0]
+            cfg, shown = {"command": cmd, "args": args}, " ".join([parts[0], *args])
+        cfg.update(env={str(k): str(v) for k, v in (env or {}).items()} if isinstance(env, dict) else {},
+                   enabled=False, description=str(description or "")[:200])  # loaded when a task needs it
+        keys = f"\nVariables : {', '.join(cfg['env'])}" if cfg["env"] else ""
+        if not self.approve(f"Installer le serveur MCP « {name} »", f"{shown}{keys}\n\nNaim l'ajoute à sa bibliothèque "
+                            "(chargé seulement quand une tâche en a besoin ; tu peux le retirer dans Personnaliser › MCP).",
+                            kind="mcp"):
+            return "denied by the user"
+        servers[name] = cfg
+        ext.MCP.save_config(servers)
+        self.emit({"type": "status", "text": f"Naim démarre le serveur MCP {name} pour le vérifier…"})
+        try:
+            text, lookup = ext.MCP.describe(name)
+        except Exception as e:  # noqa: BLE001 — a server that does not start is not kept
+            servers.pop(name, None)
+            ext.MCP.save_config(servers)
+            return f"error: the server did not start ({e}); nothing was kept. Check the package name or the command."
+        self.mcp_lookup.update(lookup)
+        self._mcp_on_demand.append({"name": name, "description": cfg["description"] or shown})
+        self.emit({"type": "event", "icon": "🔌", "text": f"Serveur MCP installé : {name}"})
+        return f"ok: MCP server {name} installed and working. Its tools (call with use_mcp(server=\"{name}\", tool=…, arguments={{…}})):\n{text}"
+
+    def add_hook(self, event, command, matcher="", scope="project", timeout=60):
+        if event not in naim_hooks.EVENTS:
+            return f"error: unknown event « {event} ». One of: {', '.join(naim_hooks.EVENTS)}"
+        if not str(command or "").strip():
+            return "error: command is required"
+        f = naim_hooks.files(self.root)[0 if scope == "global" else 1]
+        try:
+            data = json.loads(f.read_text()) if f.exists() else {}
+        except ValueError:
+            return f"error: {f} is not valid JSON; fix it first (read_file)"
+        groups = data.setdefault("hooks", {}).setdefault(event, [])
+        if any(h.get("command") == command for g in groups for h in (g.get("hooks") or [g])):
+            return f"already there: this command is already a {event} hook in {f}"
+        group = {"hooks": [{"type": "command", "command": str(command), "timeout": int(timeout or 60)}]}
+        if matcher:
+            group = {"matcher": str(matcher), **group}
+        where = "tous les projets" if scope == "global" else "ce projet"
+        if not self.approve(f"Ajouter un hook {event} ({where})", f"{f}\n\n{event}{f' · {matcher}' if matcher else ''}\n$ {command}",
+                            kind="command"):
+            return "denied by the user"
+        groups.append(group)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        self._hk_at = 0  # read again at once: it applies from the next step
+        self.emit({"type": "event", "icon": "🪝", "text": f"Hook ajouté : {event}{f' · {matcher}' if matcher else ''}"})
+        return f"ok: {event} hook added in {f} ({where}); it runs from now on. To remove it, edit that file."
+
     def call_mcp(self, tid, args):
         server, tool = self.mcp_lookup[tid]
         if not self.approve(f"Outil MCP {server} › {tool}", json.dumps(args, ensure_ascii=False, indent=2), kind="mcp"):
@@ -2638,6 +2741,7 @@ class Agent:
               "web_search": self.web_search, "web_fetch": self.web_fetch, "remember": self.remember, "forget": self.forget,
               "use_skill": self.use_skill, "create_skill": self.create_skill, "install_skill": self.install_skill,
               "use_mcp": self.use_mcp, "use_tools": self.use_tools, "delegate": self.delegate,
+              "install_mcp": self.install_mcp, "add_hook": self.add_hook,
               "update_todos": self.update_todos, "computer": self.computer, "simulator": self.simulator,
               "send_email": self.send_email, "chercher_contact": self.chercher_contact, "mail_inbox": self.mail_inbox, "mail_draft_reply": self.mail_draft_reply,
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,

@@ -196,6 +196,33 @@ class ScriptsInCommands(unittest.TestCase):
             self.assertEqual(a.run_command(good), "exit code 0\nL'apprentissage")
 
 
+class SelfInstall(unittest.TestCase):
+    """Asked to, Naim adds to its own library any MCP server (checked by starting it) and the user's hooks."""
+
+    SCRIPT = """
+import os, sys, tempfile
+sys.path.insert(0, sys.argv[1])
+import extensions as ext, naimtools
+a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+print(a.install_mcp("Mémoire Test", "python3", [os.path.join(sys.argv[1], "plugins_builtin/naim-mem/serveur.py")])[:37])
+print("memoire-test" in ext.MCP.config())
+print(a.install_mcp("casse", "python3", ["-c", "import sys; sys.exit(1)"])[:31], "casse" in ext.MCP.config())
+print(a.add_hook("PostToolUse", "echo vu par le hook", matcher="write_file")[:20])
+print(a.call_tool("write_file", {"path": "x.py", "content": "print(1)"}).splitlines()[-1])
+"""
+
+    def test_mcp_and_hook(self):
+        with tempfile.TemporaryDirectory() as home:
+            r = subprocess.run([sys.executable, "-c", self.SCRIPT, str(ROOT)], capture_output=True, text=True,
+                               env={**os.environ, "NAIM_HOME": home}, timeout=120)
+            out = r.stdout.splitlines()
+            self.assertEqual(out[0], "ok: MCP server memoire-test installed", r.stderr[-500:])
+            self.assertEqual(out[1], "True")
+            self.assertEqual(out[2], "error: the server did not start False")
+            self.assertEqual(out[3], "ok: PostToolUse hook")
+            self.assertEqual(out[4], "[Hook après write_file] vu par le hook")
+
+
 class LiveProgress(unittest.TestCase):
     """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
 
