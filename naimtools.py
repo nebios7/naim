@@ -1726,6 +1726,14 @@ class Agent:
             # French CUPS: « inactive, mais activée » means idle = ready, not switched off
             hint += ("\n(note: « inactive » / « idle » here means the printer is ready and waiting: print now with "
                      "`lp -d <printer> <file>`. Only « désactivée » / « disabled » means it is stopped.)")
+        if proc.returncode and re.search(r"python3?\S*\s+-c\s", command) and re.search(
+                r"unexpected EOF while looking for matching|syntax error near unexpected token|name '__file__' is not defined", out):
+            # a script squeezed into python -c "…": the shell cut it at a quote, or __file__ does not exist there
+            hint += ("\n(hint: do not put a script in python -c \"…\": write it in a heredoc, where nothing is interpreted "
+                     "by the shell and quotes, apostrophes and accents pass as they are:\n  cd <dossier> && python3 - <<'EOF'\n"
+                     "  …le code…\n  EOF\nIn such a script __file__ does not exist: use a path (os.getcwd() or the file's "
+                     "name), not os.path.dirname(__file__). Run the same script again that way; do not change the "
+                     "project's files to work around this.)")
         return f"exit code {proc.returncode}\n{out}{hint}"
 
     def start_process(self, command, name="", keep=False, notify=False):

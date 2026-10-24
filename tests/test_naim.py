@@ -182,6 +182,20 @@ class StartAndCompactHooks(unittest.TestCase):
         self.assertIn("ne pas toucher a la base de prod", summary)
 
 
+class ScriptsInCommands(unittest.TestCase):
+    """A script with quotes squeezed into python -c breaks in the shell: Naim is told to use a heredoc, which works."""
+
+    def test_heredoc_hint_and_heredoc_works(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            bad = 'python3 -c "\ncours = [(\'Intro\', "print(\'Bonjour\')")]\nprint(len(cours))\n"'
+            r = a.run_command(bad)
+            self.assertTrue(r.startswith("exit code 2"), r)
+            self.assertIn("heredoc", r)
+            good = "python3 - <<'EOF'\ncours = [(\"L'apprentissage\", 'print(\"x\") et $var')]\nprint(cours[0][0])\nEOF"
+            self.assertEqual(a.run_command(good), "exit code 0\nL'apprentissage")
+
+
 class LiveProgress(unittest.TestCase):
     """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
 
