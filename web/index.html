@@ -4278,6 +4278,12 @@ const naimDots = (() => {
     return 1 + (v - 1) * (1 - smooth(Math.max(0, (s - 0.4) / (MOVE - 0.4))));
   };
   const CORNERS = [[0, 0], [1, 0], [1, 1], [0, 1]];  // top left, top right, bottom right, bottom left
+  const dotColor = (c) => {  // the accent the user chose when it is a real colour; terracotta with the sober (grey) one
+    const a = getComputedStyle(c).getPropertyValue("--accent").trim(), m = a.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    if (!m) return "#d97757";
+    const [r, g, b] = m.slice(1).map((h) => parseInt(h, 16));
+    return Math.max(r, g, b) - Math.min(r, g, b) > 60 ? a : "#d97757";
+  };
   let running = false;
   function frame(now) {
     const cvs = [...document.querySelectorAll(".bgdots canvas")].filter((c) => c.isConnected && c.offsetParent);
@@ -4291,7 +4297,7 @@ const naimDots = (() => {
     for (const c of cvs) {
       const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
       if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
-      c._color ||= getComputedStyle(c).getPropertyValue("--accent").trim() || "#d97757";
+      c._color ||= dotColor(c);
       const g = c.getContext("2d"), r = w * 0.11, lo = w * 0.2, span = w * 0.6;
       g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, w); g.fillStyle = c._color;
       for (const [x, y] of pts) { g.beginPath(); g.arc(lo + x * span, lo + y * span, r, 0, 6.2832); g.fill(); }
