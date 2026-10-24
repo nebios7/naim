@@ -3923,7 +3923,7 @@ async function stream(reply, v, message, hist, extra = {}) {
   const conv = current;
   const run = runs[conv.id] = { id: runId, controller: new AbortController(), conv, reply, v, status: "" };
   // the view can be re-created when the user comes back to this conversation: always talk to the latest one
-  v = new Proxy({}, { get: (_, k) => (...a) => { if (k === "typing") run.status = a[0]; return run.v?.[k]?.(...a); } });
+  v = new Proxy({}, { get: (_, k) => (...a) => { if (k === "typing") run.status = a[0]; const out = run.v?.[k]?.(...a); liveSoon(); return out; } });  // the live line follows each event at once
   setBusy(true); scrollDown(true); renderList();
   let lastTool = null;
   try {
@@ -4366,6 +4366,10 @@ function updateLiveBar() {
   $(".ltime", bar).textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")}`;
   liveInThread(view === "chat" ? r : null, label, step, $(".ltime", bar).textContent);
 }
+// the live line (dots, what is being done, time) is redrawn on the very frame an event arrives — a step starts or
+// ends, the answer begins — not up to a second later; the clock still ticks every second
+let liveQueued = false;
+function liveSoon() { if (!liveQueued) { liveQueued = true; requestAnimationFrame(() => { liveQueued = false; updateLiveBar(); }); } }
 setInterval(() => {
   updateLiveBar();
   $$(".subgrid .subchip:not([data-t1])").forEach((c) => {  // running sub-agents: their clock keeps ticking
