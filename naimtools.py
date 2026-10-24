@@ -299,9 +299,15 @@ STOP_WORDS_RE = re.compile(r"^\s*(?:(?:non|bon|ok|mais|attends)[ ,!.]*)*(stop|st
 
 
 def writing_text(w):
-    """« Naim écrit index.html… 12 Ko »: what a long tool call is writing, while it is written."""
+    """« Naim écrit index.html · 120 lignes »: what a long tool call is writing, while it is written; « Naim réfléchit ·
+    2,1k jetons » while it thinks."""
+    if w.get("think"):
+        n = w.get("tokens", 0)
+        return f"Naim réfléchit · {n / 1000:.1f}k jetons".replace(".", ",") if n >= 1000 else f"Naim réfléchit · {n} jetons"
     what = Path(w.get("path") or "").name or {"write_file": "un fichier", "creer_fichier": "un fichier", "edit_file": "une modification",
                                                "run_command": "une commande"}.get(w.get("name"), "")
+    if w.get("lines", 0) >= 2:
+        return f"Naim écrit {what} · {w['lines']} lignes"
     kb = w.get("chars", 0) / 1024
     return f"Naim écrit {what}… {kb:.0f} Ko" if kb >= 1 else f"Naim écrit {what}…"
 

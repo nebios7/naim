@@ -111,6 +111,18 @@ class AutoMode(unittest.TestCase):
         self.assertEqual(len(asked), 1)
 
 
+class LiveProgress(unittest.TestCase):
+    """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
+
+    def test_file_in_lines(self):
+        w = {"name": "write_file", "path": "tests/test_maths.py", "chars": 5000, "lines": 120}
+        self.assertEqual(naimtools.writing_text(w), "Naim écrit test_maths.py · 120 lignes")
+
+    def test_thinking_in_tokens(self):
+        self.assertEqual(naimtools.writing_text({"think": True, "tokens": 2140}), "Naim réfléchit · 2,1k jetons")
+        self.assertEqual(naimtools.writing_text({"think": True, "tokens": 640}), "Naim réfléchit · 640 jetons")
+
+
 class Interface(unittest.TestCase):
     """A CSS comment left open hides every style after it (it broke the home page once): never again."""
 

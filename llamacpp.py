@@ -557,6 +557,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
     def chunks():
         first, calls, reason = None, {}, None  # tool calls arrive in pieces while streaming: assembled, then given at the end
         told = 0.0  # last « writing » progress given (a whole file written in a tool call is otherwise invisible)
+        made = 0  # tokens generated so far (one streamed piece is one token): shown while it thinks or writes
         with resp:
             for raw in resp:
                 line = raw.decode("utf-8", errors="replace").strip()
@@ -573,6 +574,7 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 t = ev.get("timings")
                 if ev.get("choices"):
                     delta = ev["choices"][0].get("delta", {})
+                    made += 1
                     for tc in delta.get("tool_calls") or []:
                         c = calls.setdefault(tc.get("index", len(calls)), {"name": "", "args": ""})
                         f = tc.get("function") or {}
@@ -582,7 +584,11 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                             told = time.time()
                             path = re.search(r'"(?:path|nom|output|file|filename)"\s*:\s*"([^"]{1,200})"', c["args"])
                             yield {"message": {}, "done": False,
-                                   "writing": {"name": c["name"], "chars": len(c["args"]), "path": path.group(1) if path else ""}}
+                                   "writing": {"name": c["name"], "chars": len(c["args"]), "path": path.group(1) if path else "",
+                                               "lines": c["args"].count("\\n") + 1, "tokens": made}}
+                    if delta.get("reasoning_content") and not calls and time.time() - told > 1.0:  # thinking: how far it got
+                        told = time.time()
+                        yield {"message": {}, "done": False, "writing": {"think": True, "tokens": made}}
                     if first is None and (delta.get("content") or delta.get("reasoning_content")):
                         first = time.time()
                     yield {"message": {"content": delta.get("content") or "", "thinking": delta.get("reasoning_content") or ""},
