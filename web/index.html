@@ -1146,7 +1146,9 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .glive .bgdots, .liveline .bgdots, details.bgjob:not(.ok):not(.ko) .bgdots { display: inline-block !important; width: 16px; height: 16px; flex: none; }
 .bgdots canvas { display: block; width: 16px; height: 16px; }
 .glive { display: inline-flex; margin-right: 6px; }
-.agroup.live > summary .gsum, .liveline .ltxt {
+.agroup.live > summary:has(.gnow) .gsum { display: none; }
+.agroup.live > summary .gnow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agroup.live > summary .gnow, .liveline .ltxt {
   background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
   background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: naimShimmer 3.2s cubic-bezier(.4, 0, .6, 1) infinite; }
@@ -4316,7 +4318,7 @@ new MutationObserver(() => naimDots()).observe(document.body, { childList: true,
 // « Naim réfléchit… 12 s » in its place
 function liveInThread(r, label, step, time) {
   const mine = r?.v?.el;
-  $$(".agroup.live").forEach((g) => { if (g.closest(".turn") !== mine || g !== lastWork(g.parentElement)) { g.classList.remove("live"); $(".glive", g)?.remove(); $(".gtime", g)?.remove(); } });
+  $$(".agroup.live").forEach((g) => { if (g.closest(".turn") !== mine || g !== lastWork(g.parentElement)) { g.classList.remove("live"); $(".glive", g)?.remove(); $(".gtime", g)?.remove(); $(".gnow", g)?.remove(); } });
   $$(".liveline").forEach((l) => { if (!r || l.closest(".turn") !== mine) l.remove(); });
   if (!r || !mine) return;
   const flow = $(".flow", mine); if (!flow) return;
@@ -4326,8 +4328,13 @@ function liveInThread(r, label, step, time) {
     last.classList.add("live");
     const sum = $(":scope > summary", last);
     if (!$(".glive", sum)) { const gl = document.createElement("span"); gl.className = "glive"; gl.innerHTML = LDOTS; sum.prepend(gl); }
+    // the title says what is being done right now (« Lit index.html », the command's own description), then the
+    // time and the chevron; the tally (« Lu 2 fichiers… ») comes back once the work is done
+    let now = $(".gnow", sum); if (!now) { now = document.createElement("span"); now.className = "gnow"; $(".gsum", sum).after(now); }
+    const doing = label.replace(/^Naim /, ""), txt = (step ? step + " · " : "") + doing.charAt(0).toUpperCase() + doing.slice(1);
+    if (now.textContent !== txt) now.textContent = txt;
     let gt = $(".gtime", sum); if (!gt) { gt = document.createElement("span"); gt.className = "gtime"; $(".gchev", sum).before(gt); }
-    gt.textContent = "· " + (writing ? writing + " · " : "") + time;
+    gt.textContent = time;
   } else if ((r.reply?.content || "").trim() && !writing) {
     $(".liveline", flow)?.remove();  // it is writing its answer: the words themselves show it works
   } else {
