@@ -4265,51 +4265,41 @@ const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span
 // the last piece of work in a reply (the live line at the bottom is not one)
 function lastWork(flow) { return [...flow.children].filter((c) => !c.classList.contains("liveline")).pop() || null; }
 const LDOTS = '<span class="bgdots" aria-hidden="true"><canvas></canvas></span>';
-// four dots of different sizes, each held by a spring to a place in a shape that changes every second or so (square,
-// diamond, line, tight cluster, turned at random) while a slow wander and a breath keep them alive: the motion is
-// smooth, never the same twice, and drawn only while a dots canvas is on screen
+// four dots in a square; every 0.6 s two opposite corners swap places, the other pair on the next turn. The vertical
+// motion leads and overshoots a little (a spring), the horizontal one follows smoothly, so the two dots pass along a
+// curve and the square becomes a slanted line for an instant before settling again. Drawn only while on screen.
 const naimDots = (() => {
-  const SHAPES = [
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]],
-    [[0, -1.35], [1.35, 0], [0, 1.35], [-1.35, 0]],
-    [[-1.6, 0], [-.55, 0], [.55, 0], [1.6, 0]],
-    [[-.45, -.45], [.45, -.45], [-.45, .45], [.45, .45]],
-    [[0, -1.3], [1.15, .7], [-1.15, .7], [0, 0]],
-  ];
-  const SIZE = [1.9, 1.5, 1.25, 1.7], still = matchMedia("(prefers-reduced-motion: reduce)");
-  const dots = SIZE.map((r, k) => ({ x: SHAPES[0][k][0], y: SHAPES[0][k][1], vx: 0, vy: 0, r, ph: Math.random() * 6.3 }));
-  let shape = SHAPES[0], turn = 0, next = 0, last = 0, running = false;
-  const target = (k) => { const [a, b] = shape[k], c = Math.cos(turn), s = Math.sin(turn); return [a * c - b * s, a * s + b * c]; };
+  const PERIOD = 0.6, MOVE = 0.56, still = matchMedia("(prefers-reduced-motion: reduce)");
+  const smooth = (p) => (p >= 1 ? 1 : p * p * (3 - 2 * p));
+  const spring = (s) => {  // step response of a spring (w 8.5, damping 0.53), its last wobble faded out by the end
+    if (s >= MOVE) return 1;
+    const z = 0.53, w = 8.5, wd = w * Math.sqrt(1 - z * z);
+    const v = 1 - Math.exp(-z * w * s) * (Math.cos(wd * s) + (z / Math.sqrt(1 - z * z)) * Math.sin(wd * s));
+    return 1 + (v - 1) * (1 - smooth(Math.max(0, (s - 0.4) / (MOVE - 0.4))));
+  };
+  const CORNERS = [[0, 0], [1, 0], [1, 1], [0, 1]];  // top left, top right, bottom right, bottom left
+  let running = false;
   function frame(now) {
     const cvs = [...document.querySelectorAll(".bgdots canvas")].filter((c) => c.isConnected && c.offsetParent);
     if (!cvs.length) { running = false; return; }
-    const dt = Math.min(0.05, (now - (last || now)) / 1000), t = now / 1000; last = now;
-    if (now > next) {  // a new shape, turned somewhere else, never the same one twice in a row
-      let s; do s = SHAPES[Math.floor(Math.random() * SHAPES.length)]; while (s === shape);
-      shape = s; turn += (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 1.2); next = now + 900 + Math.random() * 900;
-    }
-    turn += dt * 0.6;  // the whole figure keeps turning slowly
-    for (const [k, d] of dots.entries()) {
-      const [tx, ty] = target(k), wx = 0.18 * Math.sin(t * 1.7 + d.ph), wy = 0.18 * Math.cos(t * 1.3 + d.ph * 1.7);
-      d.vx += ((tx + wx - d.x) * 70 - d.vx * 11) * dt; d.vy += ((ty + wy - d.y) * 70 - d.vy * 11) * dt;  // a spring, a little lively
-      d.x += d.vx * dt; d.y += d.vy * dt;
-    }
+    const t = now / 1000, s = still.matches ? MOVE : t % PERIOD, pair = Math.floor(t / PERIOD) % 2;  // 0: TL and BR move
+    const pts = CORNERS.map(([x, y], k) => {
+      if (k % 2 !== pair || still.matches) return [x, y];
+      const [ox, oy] = CORNERS[(k + 2) % 4];
+      return [x + (ox - x) * smooth(s / MOVE), y + (oy - y) * spring(s)];
+    });
     for (const c of cvs) {
       const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
       if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
       c._color ||= getComputedStyle(c).getPropertyValue("--accent").trim() || "#d97757";
-      const g = c.getContext("2d"), u = w / 5.2;  // one unit of the shapes, in pixels
+      const g = c.getContext("2d"), r = w * 0.11, lo = w * 0.2, span = w * 0.6;
       g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, w); g.fillStyle = c._color;
-      for (const d of dots) {
-        const breath = still.matches ? 1 : 1 + 0.22 * Math.sin(t * 2.4 + d.ph);
-        g.globalAlpha = still.matches ? 1 : 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(t * 1.9 + d.ph * 2));
-        g.beginPath(); g.arc(w / 2 + d.x * u, w / 2 + d.y * u, d.r * breath * w / 16, 0, 6.2832); g.fill();
-      }
+      for (const [x, y] of pts) { g.beginPath(); g.arc(lo + x * span, lo + y * span, r, 0, 6.2832); g.fill(); }
     }
-    if (still.matches) { running = false; return; }  // reduced motion: one still frame
+    if (still.matches) { running = false; return; }  // reduced motion: one still square
     requestAnimationFrame(frame);
   }
-  return () => { if (!running) { running = true; last = 0; requestAnimationFrame(frame); } };
+  return () => { if (!running) { running = true; requestAnimationFrame(frame); } };
 })();
 new MutationObserver(() => naimDots()).observe(document.body, { childList: true, subtree: true });
 // like a pro tool: what Naim is doing is shown IN the conversation, on the work itself — the group of steps being
