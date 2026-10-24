@@ -2525,7 +2525,9 @@ const MENU_ICONS = { "🪝": "bolt", "↻": "refresh", "🔔": "bell", "📄": "
   "⭐": "star", "★": "star", "🚫": "ban", "✅": "check", "✓": "check", "✗": "x", "✕": "x", "👁": "eye", "⚡": "bolt", "✋": "hand",
   "🧑": "user", "🤖": "robot", "⚠": "warn", "⚠️": "warn", "▾": "chevd", "▸": "chevr", "⌂": "home", "🗺": "map", "❓": "help",
   "📍": "pin", "◇": "art", "📁": "folder", "⚙": "settings", "⚙︎": "settings", "📘": "book", "🧠": "brain", "🔎": "search", "💬": "chat", "✉️": "mail2", "✉": "mail2", "🗜": "compress", "✎": "edit", "📌": "pin", "⧉": "copy", "#": "tag", "▢": "folder", "📂": "folder", "↓": "download", "⬇": "download",
-  "🗑": "trash", "▶": "play", "↗": "ext", "＋": "plus", "+": "plus", "↶": "undo", "✨": "spark", "⌘": "cmd" };
+  "🗑": "trash", "▶": "play", "↗": "ext", "＋": "plus", "+": "plus", "↶": "undo", "✨": "spark", "⌘": "cmd",
+  ">_": "term", "↩": "undo", "⇤": "sidebar", "−": "minus", "⌨︎": "keyboard", "⎘": "copy", "⏏": "eject", "▣": "models", "◐": "moon",
+  "◻︎": "target", "⤓": "download" };
 function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()]; return k && RICON[k] ? svgI(k) : esc(ic || ""); }
 function showMenu(anchor, items) {
   closeMenu();
@@ -6550,6 +6552,10 @@ async function checkStatus() {
 
 // ======================================================================= UI v3: rail, model picker, parameters panel, folders
 const RICON = {
+  minus: '<path d="M5 12h14"/>',
+  sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+  keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M8 14h8"/>',
+  eject: '<path d="M12 5l7 8H5z"/><path d="M5 18h14"/>',
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
   wave: '<path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 10v4M21 12h0"/>',
