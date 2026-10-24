@@ -1494,6 +1494,11 @@ body { letter-spacing: -0.006em; }
 .md h2 { font-size: 1.18em; margin: 22px 0 8px; } .md h3 { font-size: 1.05em; margin: 18px 0 6px; }
 .turn + .turn { margin-top: 6px; }
 .turn.user .bubble { border-radius: 18px !important; padding: 9px 15px !important; }
+/* code in your own message shown as code, as in Naim's answers: a block in its language, `inline` in monospace */
+.bubble pre.ucode { margin: 6px 0; padding: 9px 12px; background: var(--code); border: 1px solid var(--line); border-radius: 10px;
+  white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.55 ui-monospace, "SF Mono", Menlo, monospace; }
+.bubble code.uinline { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; background: var(--code);
+  border: 1px solid var(--line); padding: 0 5px; border-radius: 5px; }
 /* rating and secondary actions: visible on the latest answer, on hover elsewhere */
 .turn.bot .fb { opacity: 0; transition: opacity .18s var(--ease); }
 .turn.bot:hover .fb, .turn.bot:last-child .fb, .turn.bot .fb:has(.rate.on) { opacity: 1; }
@@ -2121,6 +2126,32 @@ function codeFile(prev, body) {
   for (const x of m.reverse()) { const f = x.replace(/[`*]/g, "").match(FILE_RE); if (f) return f[1] || f[2]; }
   const bare = (prev || "").trim().match(new RegExp("^" + FILE_RE.source + "\\s*:?$"));
   return bare ? bare[1] || bare[2] : "";
+}
+// your message as you wrote it, its code shown as code: a ```block``` (or a `span` over several lines, like a pasted
+// command) coloured in its language — a first line « Bash » / « python » names it, a command start means shell — and
+// `inline code` in monospace; everything else stays plain text
+const SHELL_START = /^\s*(\$ )?(python3?|pip3?|cd|grep|head|tail|sed|awk|cat|ls|git|npm|npx|node|curl|echo|brew|uvx?|make|bash|sh|zsh|swift|xcodebuild|open|find|rm|mv|cp|mkdir)\b/;
+function userHtml(src) {
+  src = String(src || "");
+  const out = [], re = /```([\w+#.-]*)[^\n]*\n?([\s\S]*?)(?:```|$)|`([^`]+)`/g;
+  let i = 0, m;
+  while ((m = re.exec(src)) && m[0]) {
+    const fenced = m[3] === undefined;
+    let body = fenced ? m[2] : m[3], lang = fenced ? m[1] : "";
+    if (fenced || body.includes("\n")) {
+      const first = body.match(/^\s*(bash|shell|sh|zsh|python|py|js|javascript|ts|typescript|html|css|sql|json|swift|php|java|c|cpp|go|rust|yaml)\s*\n/i);
+      if (first && !lang) { lang = first[1]; body = body.slice(first[0].length); }
+      body = body.replace(/^\s*\n|\s+$/g, "");
+      out.push(esc(src.slice(i, m.index).replace(/\n$/, "")));
+      out.push(`<pre class="ucode"><code>${highlight(body, lang || (SHELL_START.test(body) ? "bash" : ""))}</code></pre>`);
+      i = re.lastIndex; while (src[i] === " " || src[i] === "\t") i++; if (src[i] === "\n") i++;  // the block is its own line
+    } else {
+      out.push(esc(src.slice(i, m.index)), `<code class="uinline">${esc(body)}</code>`);
+      i = re.lastIndex;
+    }
+  }
+  out.push(esc(src.slice(i)));
+  return out.join("");
 }
 function codeBlock(lang, body, file = "", open = false) {
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
@@ -3066,7 +3097,7 @@ function addUser(m, idx) {
   const imgs = (m.attachments || []).filter((a) => a.kind === "image"), files = (m.attachments || []).filter((a) => a.kind !== "image");
   d.innerHTML = `${imgs.length ? `<div class="imgs">${imgs.map((a) => `<img src="data:${a.mime};base64,${a.data}" alt="${esc(a.name)}">`).join("")}</div>` : ""}${files.length ? `<div class="atts">${attChips(files)}</div>` : ""}<div class="bubble"></div>
     <div class="msgacts">${S.show_time && m.time ? `<span class="time">${fmtTime(m.time)}</span>` : ""}<button class="icon" data-a="copy" title="Copier">⧉</button><button class="icon" data-a="edit" title="Modifier et renvoyer">✎</button></div>`;
-  $(".bubble", d).textContent = m.content;
+  $(".bubble", d).innerHTML = userHtml(m.content);
   if (!m.content) $(".bubble", d).hidden = true;
   $$(".imgs img", d).forEach((im) => (im.onclick = () => lightbox(im.src)));
   $("[data-a=copy]", d).onclick = () => { copyText(m.content); toast("Copié"); };
