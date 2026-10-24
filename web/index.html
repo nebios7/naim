@@ -961,9 +961,6 @@ details.bgjob .bglabel { color: var(--text); }
 details.bgjob .bgtime { font-variant-numeric: tabular-nums; }
 details.bgjob .gchev { margin-left: auto; display: inline-flex; transition: transform .15s; } details.bgjob[open] .gchev { transform: rotate(180deg); }
 details.bgjob .gchev svg, details.bgjob .bgdots svg { width: 14px; height: 14px; }
-details.bgjob .bgdots { display: inline-grid; grid-template-columns: 5px 5px; gap: 3px; width: 13px; }
-details.bgjob .bgdots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent, #d97757); animation: bgdot 1.2s ease-in-out infinite; }
-details.bgjob .bgdots i:nth-child(2) { animation-delay: .3s; } details.bgjob .bgdots i:nth-child(3) { animation-delay: .9s; } details.bgjob .bgdots i:nth-child(4) { animation-delay: .6s; }
 details.bgjob.ok .bgdots, details.bgjob.ko .bgdots { display: inline-flex; width: auto; }
 details.bgjob.ok .bgdots { color: var(--ok); } details.bgjob.ko .bgdots { color: var(--warn); }
 @keyframes bgdot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
@@ -1144,11 +1141,15 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 /* the work in progress lives in the conversation (dots, light, time on the group being done): no second line above
    the input */
 #liveBar { display: none !important; }
-.glive .bgdots, .liveline .bgdots { display: inline-grid; grid-template-columns: 5px 5px; gap: 3px; width: 13px; flex: none; }
-.glive .bgdots i, .liveline .bgdots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent, #d97757); animation: bgdot 1.2s ease-in-out infinite; }
-.glive .bgdots i:nth-child(2), .liveline .bgdots i:nth-child(2) { animation-delay: .3s; }
-.glive .bgdots i:nth-child(3), .liveline .bgdots i:nth-child(3) { animation-delay: .9s; }
-.glive .bgdots i:nth-child(4), .liveline .bgdots i:nth-child(4) { animation-delay: .6s; }
+/* Naim at work: four dots of different sizes that drift at random in a small square, gather and part, softly
+   (moved by naimDrift() below); a finished background job keeps its check / warning icon */
+.glive .bgdots, .liveline .bgdots, details.bgjob:not(.ok):not(.ko) .bgdots { position: relative; display: inline-block !important; width: 15px; height: 15px; flex: none; }
+.glive .bgdots i, .liveline .bgdots i, details.bgjob:not(.ok):not(.ko) .bgdots i { position: absolute; left: 0; top: 0; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent, #d97757); animation: none !important; will-change: transform, opacity;
+  transition: transform .8s cubic-bezier(.45, 0, .2, 1), opacity .8s ease; }
+.bgdots i:nth-child(2) { transform: translate(9px, 2px) scale(.7); } .bgdots i:nth-child(3) { transform: translate(3px, 9px) scale(1.3); }
+.bgdots i:nth-child(4) { transform: translate(10px, 9px) scale(.85); }
+@media (prefers-reduced-motion: reduce) { .bgdots i { transition: none !important; } }
 .glive { display: inline-flex; margin-right: 6px; }
 .agroup.live > summary .gsum, .liveline .ltxt {
   background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
@@ -4269,6 +4270,18 @@ const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span
 // the last piece of work in a reply (the live line at the bottom is not one)
 function lastWork(flow) { return [...flow.children].filter((c) => !c.classList.contains("liveline")).pop() || null; }
 const LDOTS = '<span class="bgdots"><i></i><i></i><i></i><i></i></span>';
+// each dot goes somewhere else in its little square every so often (not all at once), bigger or smaller, brighter or
+// dimmer: a living, never-repeating motion instead of a blinking grid
+function naimDrift() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const i of document.querySelectorAll(".glive .bgdots i, .liveline .bgdots i, details.bgjob:not(.ok):not(.ko) .bgdots i")) {
+    if (Math.random() < 0.45) continue;  // not every dot at every tick: they move out of step
+    const s = 0.55 + Math.random() * 0.95, x = Math.random() * 10, y = Math.random() * 10;
+    i.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${s.toFixed(2)})`;
+    i.style.opacity = (0.4 + Math.random() * 0.6).toFixed(2);
+  }
+}
+setInterval(naimDrift, 420);
 // like a pro tool: what Naim is doing is shown IN the conversation, on the work itself — the group of steps being
 // done carries the dots, the light and the time (« 9 lectures · 1 skill · 1 min 26 ») ; before any step, one line
 // « Naim réfléchit… 12 s » in its place
