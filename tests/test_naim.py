@@ -111,6 +111,77 @@ class AutoMode(unittest.TestCase):
         self.assertEqual(len(asked), 1)
 
 
+class AdaptiveThinking(unittest.TestCase):
+    """Naim thinks where it pays (planning, after a failure), briefly; routine steps go straight on."""
+
+    def agent(self, step, results=(), think=False):
+        a = naimtools.Agent.__new__(naimtools.Agent)
+        a.think, a.features, a._step = think, {}, step
+        a.messages = [{"role": "user", "content": "fais l'app"}, {"role": "assistant", "content": "", "tool_calls": []}]
+        a.messages += [{"role": "tool", "content": r} for r in results]
+        return a
+
+    def test_plans_first(self):
+        self.assertTrue(self.agent(1)._think_now())
+
+    def test_routine_goes_on(self):
+        self.assertFalse(self.agent(4, ["exit code 0\nok", "wrote app.py"])._think_now())
+
+    def test_failure_makes_it_think(self):
+        for r in ("exit code 1\nboom", "error: file not found", "Traceback (most recent call last):\n  x",
+                  "===== 2 FAILED, 3 passed =====", "BUILD FAILED"):
+            self.assertTrue(self.agent(5, ["wrote a.py", r])._think_now(), r)
+
+    def test_switch_on_means_always(self):
+        self.assertTrue(self.agent(7, ["exit code 0"], think=True)._think_now())
+
+    def test_budget_sent_only_for_a_short_thought(self):
+        msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": "x"}]
+        short = llamacpp._payload(msgs, None, True, False, {"think_budget": 800}, False)
+        self.assertEqual(short["reasoning_budget_tokens"], 800)
+        self.assertNotIn("reasoning_budget_tokens", llamacpp._payload(msgs, None, True, False, {}, False))
+        self.assertNotIn("reasoning_budget_tokens", llamacpp._payload(msgs, None, False, False, {"think_budget": 800}, False))
+
+
+class StartAndCompactHooks(unittest.TestCase):
+    """A new conversation knows where the git project stands; SessionStart and PreCompact hooks are heard."""
+
+    def test_project_state(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = lambda *a: subprocess.run(["git", *a], cwd=d, capture_output=True)  # noqa: E731
+            run("init", "-b", "main"); run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "premier")
+            Path(d, "app.py").write_text("x = 1\n")
+            a = naimtools.Agent.__new__(naimtools.Agent)
+            a.root = Path(d)
+            state = a._project_state()
+            self.assertIn("Branche : main", state)
+            self.assertIn("app.py", state)
+            self.assertIn("premier", state)
+
+    def test_session_start_hook_adds_context(self):
+        import hooks
+        h = {"SessionStart": [{"matcher": "", "command": "echo tickets ouverts : 3", "timeout": 10, "source": "t"}]}
+        blocked, _, ctx = hooks.run(h, "SessionStart", {"source": "startup"}, tempfile.gettempdir())
+        self.assertFalse(blocked)
+        self.assertEqual(ctx, "tickets ouverts : 3")
+
+    def test_pre_compact_hook_kept_in_summary(self):
+        import time
+        a = naimtools.Agent.__new__(naimtools.Agent)
+        a.options, a._task_idx, a.todos, a.tools, a.run_id, a.root = {"num_ctx": 32768}, 1, [], [], "t", Path(tempfile.gettempdir())
+        a._hk, a._hk_at = {"PreCompact": [{"matcher": "", "command": "echo ne pas toucher a la base de prod", "timeout": 10, "source": "t"}]}, time.time() + 60
+        a.emit = lambda ev: None
+        a._room = lambda: 32768
+        a._written_summary = lambda old: "résumé"
+        a.messages = [{"role": "system", "content": "s " * 8000}, {"role": "user", "content": "tâche"}]
+        for i in range(8):
+            a.messages += [{"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": f"f{i}"}}}]},
+                           {"role": "tool", "tool_name": "read_file", "content": "x " * 12000}]
+        a._compact_history()
+        summary = next(m["content"] for m in a.messages if str(m.get("content", "")).startswith("(Résumé"))
+        self.assertIn("ne pas toucher a la base de prod", summary)
+
+
 class LiveProgress(unittest.TestCase):
     """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
 

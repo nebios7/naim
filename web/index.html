@@ -3974,7 +3974,7 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "memory": reply.steps.push({ type: "event", icon: "🧠", text: `Mémorisé : ${ev.fact}` }); v.event("🧠", `Mémorisé : ${ev.fact}`); break;
           case "skill": reply.steps.push({ type: "event", icon: "📘", text: `Skill utilisé : ${ev.name}` }); v.event("📘", `Skill utilisé : ${ev.name}`); break;
           case "hook": {  // one of the user's hooks ran: a line of the work, like a skill
-            const when = { PreToolUse: "avant", PostToolUse: "après", UserPromptSubmit: "à l'envoi", Stop: "à la fin" }[ev.event] || "";
+            const when = { PreToolUse: "avant", PostToolUse: "après", UserPromptSubmit: "à l'envoi", Stop: "à la fin", SessionStart: "au démarrage", PreCompact: "avant le résumé" }[ev.event] || "";
             const t = `Hook ${when}${ev.tool ? " " + ev.tool : ""}${ev.blocked ? " · bloqué" : ""}${ev.text ? " — " + ev.text.split("\n")[0].slice(0, 140) : ""}`;
             reply.steps.push({ type: "event", icon: "🪝", text: t }); v.event("🪝", t); break; }
           case "skill_created": reply.steps.push({ type: "event", icon: "✨", text: `Nouveau skill enregistré : ${ev.name}` }); v.event("✨", `Nouveau skill enregistré : ${ev.name}`); break;

@@ -1797,6 +1797,26 @@ class Agent:
         extra = f"\nlast output of {id}:\n{p.tail(20).strip()}" if p else ""
         return f"timeout: nothing after {timeout} s{extra}"
 
+    THINK_BUDGET = 800  # tokens of one adaptive thought: enough to plan or to find a cause, not minutes of musing
+    FAILED_RE = re.compile(r"^(error|denied)\b|^exit code [1-9]|Traceback \(most recent call last\)|\bFAILED\b|AssertionError|"
+                           r"SyntaxError|\bnpm ERR!|\berror\[E\d+\]|BUILD FAILED", re.M)
+
+    def _think_now(self):
+        """Adaptive reasoning, as an experienced developer works: it thinks where it pays — planning the task at its
+        first step, right after something failed — and goes straight on for routine steps. « Raisonnement » on: always."""
+        if self.think:
+            return True
+        if not self.features.get("adaptive_think", True) or getattr(self, "subagent", False):
+            return False
+        if self._step == 1:
+            return True
+        results = []  # the results of the last step's tools (a step may call several)
+        for m in reversed(self.messages):
+            if m.get("role") != "tool":
+                break
+            results.append(str(m.get("content") or "")[:6000])
+        return any(self.FAILED_RE.search(r) for r in results)
+
     def _notify_finished(self):
         """Tell the model, without being asked, when a program it started in the background has finished."""
         done = [p for p in self.started if p.proc.poll() is not None and not getattr(p, "_noticed", False)]
@@ -2662,6 +2682,25 @@ class Agent:
                 result = f"{result}\n[Hook après {name}{' — à corriger' if blocked else ''}] {note}"
         return result
 
+    def _project_state(self):
+        """« branche main · 3 fichiers modifiés (…) · derniers commits … »: where a git project stands, in a few lines."""
+        if not (Path(self.root) / ".git").exists():
+            return ""
+        def git(*a):
+            try:
+                r = subprocess.run(["git", *a], cwd=self.root, capture_output=True, text=True, timeout=3)
+                return r.stdout.strip() if r.returncode == 0 else ""
+            except (OSError, subprocess.TimeoutExpired):
+                return ""
+        branch, changed, log = git("branch", "--show-current"), git("status", "--porcelain"), git("log", "--oneline", "-3")
+        lines = changed.splitlines()
+        out = [f"Branche : {branch or '(détachée)'}"]
+        out.append(f"Fichiers modifiés, non commités ({len(lines)}) :\n" + "\n".join(lines[:15]) + ("\n…" if len(lines) > 15 else "")
+                   if lines else "Aucun fichier modifié depuis le dernier commit.")
+        if log:
+            out.append("Derniers commits :\n" + log)
+        return "\n".join(out)
+
     def _user_hooks(self):
         """The user's hooks (~/.naim/hooks.json and the project's .naim/hooks.json), read again at most every 5 s."""
         now = time.time()
@@ -2957,6 +2996,13 @@ class Agent:
                     facts.append(n)
         done = ("J'ai " + ", ".join(dict.fromkeys(facts)) + "." if facts else "J'ai commencé la tâche.")
         written = self._written_summary(old)  # decisions, errors fixed, state, what remains: not only the actions
+        if getattr(self, "root", None) and not getattr(self, "subagent", False) and (hk := self._user_hooks()).get("PreCompact"):
+            _, msg, ctx = naim_hooks.run(hk, "PreCompact", {"trigger": "manual" if force else "auto", "session_id": self.run_id,
+                                                            "summary": written or done}, self.root)
+            if ctx or msg:
+                self.emit({"type": "hook", "event": "PreCompact", "blocked": False, "text": ctx or msg})
+            if ctx:  # what the user's hook wants kept goes into the summary itself
+                written = (f"{written}\n\n" if written else "") + f"[Gardé par un hook de l'utilisateur]\n{ctx[:3000]}"
         if written:
             self._summaries = (getattr(self, "_summaries", []) + [written])[-3:]
         summary = {"role": "assistant", "content": "(Résumé de mes étapes précédentes, les fichiers sont sur le disque ; "
@@ -3119,6 +3165,17 @@ class Agent:
                 self.emit({"type": "hook", "event": "UserPromptSubmit", "blocked": False, "text": ctx or msg})
             if ctx:
                 task = f"{task}\n\n[Contexte ajouté par un hook de l'utilisateur]\n{ctx}"
+        if not self.subagent and not any(m.get("role") == "assistant" for m in self.messages[1:]):
+            # a new conversation: where the project stands (git), and the user's SessionStart hooks — in the task, not
+            # in the system prompt, which must stay the same from one task to the next (prompt cache)
+            if state := self._project_state():
+                task = f"{task}\n\n[État du projet au démarrage]\n{state}"
+            if hk.get("SessionStart"):
+                _, msg, ctx = naim_hooks.run(hk, "SessionStart", {"source": "startup", "session_id": self.run_id}, self.root)
+                if ctx or msg:
+                    self.emit({"type": "hook", "event": "SessionStart", "blocked": False, "text": ctx or msg})
+                if ctx:
+                    task = f"{task}\n\n[Contexte ajouté au démarrage par un hook de l'utilisateur]\n{ctx}"
         self._stop_hooks = 0
         feedback = len(self.messages) > 1 and bool(FEEDBACK_RE.search(task or ""))
         if feedback:  # a remark on what was just done, not a new task: answer it, fix only what it asks
@@ -3184,8 +3241,12 @@ class Agent:
             # right after « Fais-le maintenant », the next step must be an action, not the same announcement
             step_opts = dict(self.options, tool_choice="required") if getattr(self, "_force_tool", False) else self.options
             self._force_tool = False
+            think = self._think_now()
+            if think and not self.think:
+                step_opts = dict(step_opts, think_budget=self.THINK_BUDGET)
+                self.emit({"type": "status", "text": "Naim planifie..." if self._step == 1 else "Naim analyse l'échec..."})
             try:
-                msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=step_opts,
+                msg = chat_watched(self.model, self.messages, tools=self.tools, think=think, options=step_opts,
                                    cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
             except Exception as e:  # noqa: BLE001
                 if type(e).__name__ != "ContextFull":
@@ -3194,13 +3255,13 @@ class Agent:
                 self.emit({"type": "status", "text": "Naim résume ses étapes précédentes pour continuer…"})
                 self._compact_history(force=True)
                 self._sent_msgs_tokens = self._msgs_tokens()
-                msg = chat_watched(self.model, self.messages, tools=self.tools, think=self.think, options=self.options,
+                msg = chat_watched(self.model, self.messages, tools=self.tools, think=think, options=step_opts,
                                    cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
             if self.cancel.is_set():
                 self.emit({"type": "answer", "text": "⏹ Arrêté."})
                 self._outcome = "stopped"
                 return "⏹ Arrêté."
-            if self.think and not msg.get("tool_calls") and not (msg.get("content") or "").strip():
+            if think and not msg.get("tool_calls") and not (msg.get("content") or "").strip():
                 # the model stopped inside its reasoning (no answer, no action): same step again, without reasoning
                 if msg.get("thinking"):
                     self.emit({"type": "thinking", "text": msg["thinking"].strip()})
@@ -3208,7 +3269,7 @@ class Agent:
                 msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options,
                                    cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
             self.messages.append(msg)
-            if msg.get("thinking") and self.think:
+            if msg.get("thinking") and think:
                 self.emit({"type": "thinking", "text": msg["thinking"].strip()})
             calls = msg.get("tool_calls") or []
             content = (msg.get("content") or "").strip()

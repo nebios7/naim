@@ -420,6 +420,9 @@ def _payload(messages, tools, think, stream, options, vision=None):
     for src, dst in (("repeat_penalty", "repeat_penalty"), ("presence_penalty", "presence_penalty"), ("seed", "seed")):
         if o.get(src) is not None:
             body[dst] = o[src]
+    if think and o.get("think_budget"):  # a short thought (adaptive reasoning): the engine closes it at this many tokens
+        body["reasoning_budget_tokens"] = body["thinking_budget_tokens"] = int(o["think_budget"])
+        body["reasoning_budget_message"] = "\n\nJ'en sais assez : j'agis maintenant.\n"
     # safety cap: a small model can fall into an endless repetition; one reply never needs more than this
     body["max_tokens"] = o["num_predict"] if o.get("num_predict") else 8192
     if o.get("slot") is not None and int(o["slot"]) < total_slots():  # its own slot (Chat 0, Agent 1, background last)

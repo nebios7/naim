@@ -1452,7 +1452,7 @@ class Handler(BaseHTTPRequestHandler):
                     f.write_text(json.dumps({"hooks": {
                         "PreToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command":
                             "python3 -c \"import json,sys; c=json.load(sys.stdin)['tool_input'].get('command',''); sys.exit(2 if 'rm -rf' in c else 0)\" || { echo 'rm -rf est interdit ici' >&2; exit 2; }"}]}],
-                        "PostToolUse": [], "UserPromptSubmit": [], "Stop": []}}, ensure_ascii=False, indent=2) + "\n")
+                        "PostToolUse": [], "UserPromptSubmit": [], "Stop": [], "SessionStart": [], "PreCompact": []}}, ensure_ascii=False, indent=2) + "\n")
                 subprocess.Popen(["open", "-t", str(f)])
                 self.send_json({"ok": True, "path": str(f)})
             except (OSError, ValueError) as e:
@@ -1866,6 +1866,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if ctx:
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + f"\n\n[Contexte ajouté par un hook de l'utilisateur]\n{ctx}")
+        if hk.get("SessionStart") and not body.get("history") and not body.get("_warm") and not body.get("_relaunched"):
+            import hooks as naim_hooks  # the first message of a conversation: the user's SessionStart hooks
+            _, msg, ctx = naim_hooks.run(hk, "SessionStart", {"source": "startup", "session_id": run_id}, helper.root)
+            if ctx or msg:
+                self.event({"type": "hook", "event": "SessionStart", "blocked": False, "text": msg or ctx})
+            if ctx:
+                messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + f"\n\n[Contexte ajouté au démarrage par un hook de l'utilisateur]\n{ctx}")
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
         prev_answer = next((str(m.get("content") or "") for m in reversed(body.get("history") or []) if m.get("role") == "assistant"), "")
         if not file_work and not plain and not pure_question(body["message"] or "") and any(

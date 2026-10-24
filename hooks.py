@@ -8,12 +8,16 @@ Files (same shape as the hooks of other coding agents, so they can be reused as 
      "PreToolUse":       [{"matcher": "run_command|Bash", "hooks": [{"type": "command", "command": "…", "timeout": 30}]}],
      "PostToolUse":      [{"matcher": "write_file|edit_file", "hooks": [{"type": "command", "command": "…"}]}],
      "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "…"}]}],
-     "Stop":             [{"hooks": [{"type": "command", "command": "…"}]}]
+     "Stop":             [{"hooks": [{"type": "command", "command": "…"}]}],
+     "SessionStart":     [{"hooks": [{"type": "command", "command": "…"}]}],
+     "PreCompact":       [{"hooks": [{"type": "command", "command": "…"}]}]
   }}
   (a group may also give "command" directly instead of "hooks").
 
 Each command receives a JSON on its standard input (hook_event_name, tool_name, tool_input, tool_response, prompt,
-last_answer, cwd, session_id) and runs in the project folder.
+last_answer, source, trigger, summary, cwd, session_id) and runs in the project folder.
+  SessionStart: at the first message of a conversation; what it prints is added to Naim's context from the start.
+  PreCompact:   just before Naim sums up its older steps; what it prints is kept in the summary.
   exit 0  → fine; what it prints is added to Naim's context (UserPromptSubmit) or shown with the step
   exit 2  → blocks: the action is not done (PreToolUse), the message is not sent (UserPromptSubmit), Naim goes back
             to work (Stop) or reads it as a remark (PostToolUse) — the text printed on stderr says why
@@ -27,7 +31,7 @@ from pathlib import Path
 
 import extensions as ext
 
-EVENTS = ("PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop")
+EVENTS = ("PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop", "SessionStart", "PreCompact")
 # the names other agents give to the same tools: their hooks work here unchanged
 ALIASES = {"run_command": "Bash", "write_file": "Write", "edit_file": "Edit", "multi_edit": "Edit", "read_file": "Read",
            "web_fetch": "WebFetch", "web_search": "WebSearch", "list_files": "LS", "search": "Grep", "find_files": "Glob",
