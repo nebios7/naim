@@ -4265,17 +4265,20 @@ const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span
 // the last piece of work in a reply (the live line at the bottom is not one)
 function lastWork(flow) { return [...flow.children].filter((c) => !c.classList.contains("liveline")).pop() || null; }
 const LDOTS = '<span class="bgdots" aria-hidden="true"><canvas></canvas></span>';
-// four dots in a square; every 0.6 s two opposite corners swap places, the other pair on the next turn. The vertical
-// motion leads and overshoots a little (a spring), the horizontal one follows smoothly, so the two dots pass along a
-// curve and the square becomes a slanted line for an instant before settling again. Drawn only while on screen.
+// four dots in a square; two opposite corners swap places, then the other two, one swap every 0.625 s with no pause
+// (each swap lasts 0.667 s, so the next one starts as the last settles). The curves are measured frame by frame: the
+// vertical motion leads and overshoots by 11 %, the horizontal one follows, so the two dots pass along a curve and the
+// square becomes a slanted line for an instant. Drawn only while on screen.
 const naimDots = (() => {
-  const PERIOD = 0.6, MOVE = 0.56, still = matchMedia("(prefers-reduced-motion: reduce)");
-  const smooth = (p) => (p >= 1 ? 1 : p * p * (3 - 2 * p));
-  const spring = (s) => {  // step response of a spring (w 8.5, damping 0.53), its last wobble faded out by the end
-    if (s >= MOVE) return 1;
-    const z = 0.53, w = 8.5, wd = w * Math.sqrt(1 - z * z);
-    const v = 1 - Math.exp(-z * w * s) * (Math.cos(wd * s) + (z / Math.sqrt(1 - z * z)) * Math.sin(wd * s));
-    return 1 + (v - 1) * (1 - smooth(Math.max(0, (s - 0.4) / (MOVE - 0.4))));
+  const PERIOD = 0.625, STEP = 1 / 30, still = matchMedia("(prefers-reduced-motion: reduce)");
+  const Y = [0, .05, .12, .19, .26, .37, .51, .68, .84, .96, 1.06, 1.1, 1.11, 1.1, 1.08, 1.05, 1.04, 1.02, 1.01, 1, 1];
+  const X = [0, .03, .05, .08, .11, .15, .21, .29, .38, .5, .6, .71, .79, .85, .9, .94, .97, .98, .99, 1, 1];
+  const DUR = (Y.length - 1) * STEP;
+  const curve = (k, s) => {  // Catmull-Rom through the measured points
+    if (s >= DUR) return 1;
+    const f = s / STEP, i = Math.floor(f), u = f - i, p = (j) => k[Math.max(0, Math.min(k.length - 1, j))];
+    const [a, b, c, d] = [p(i - 1), p(i), p(i + 1), p(i + 2)];
+    return b + 0.5 * u * (c - a + u * (2 * a - 5 * b + 4 * c - d + u * (3 * (b - c) + d - a)));
   };
   const CORNERS = [[0, 0], [1, 0], [1, 1], [0, 1]];  // top left, top right, bottom right, bottom left
   const dotColor = (c) => {  // the accent the user chose when it is a real colour; terracotta with the sober (grey) one
@@ -4288,17 +4291,17 @@ const naimDots = (() => {
   function frame(now) {
     const cvs = [...document.querySelectorAll(".bgdots canvas")].filter((c) => c.isConnected && c.offsetParent);
     if (!cvs.length) { running = false; return; }
-    const t = now / 1000, s = still.matches ? MOVE : t % PERIOD, pair = Math.floor(t / PERIOD) % 2;  // 0: TL and BR move
-    const pts = CORNERS.map(([x, y], k) => {
-      if (k % 2 !== pair || still.matches) return [x, y];
+    const t = now / 1000, n = Math.floor(t / PERIOD);
+    const pts = CORNERS.map(([x, y], k) => {  // pair 0 (TL, BR) swaps on even turns, pair 1 (TR, BL) on odd ones
+      const m = n - ((n - (k % 2)) % 2 + 2) % 2, s = still.matches ? DUR : t - m * PERIOD;
       const [ox, oy] = CORNERS[(k + 2) % 4];
-      return [x + (ox - x) * smooth(s / MOVE), y + (oy - y) * spring(s)];
+      return [x + (ox - x) * curve(X, s), y + (oy - y) * curve(Y, s)];
     });
     for (const c of cvs) {
       const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
       if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
       c._color ||= dotColor(c);
-      const g = c.getContext("2d"), r = w * 0.11, lo = w * 0.2, span = w * 0.6;
+      const g = c.getContext("2d"), r = w * 0.102, lo = w * 0.2, span = w * 0.6;  // dot radius: 0.17 of the square's side, as measured
       g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, w); g.fillStyle = c._color;
       for (const [x, y] of pts) { g.beginPath(); g.arc(lo + x * span, lo + y * span, r, 0, 6.2832); g.fill(); }
     }
