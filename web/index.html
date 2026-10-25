@@ -1521,7 +1521,9 @@ body { letter-spacing: -0.006em; }
 .md figure.mfig { margin: 12px 0 4px; display: inline-block; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .md figure.mfig img { display: block; max-width: min(100%, 560px); height: auto; }
 .md figure.mgraph { display: block; width: fit-content; max-width: 100%; }
-.md figure.mgraph svg { display: block; max-width: 100%; height: auto; }
+.md figure.mwait { display: flex; align-items: center; justify-content: center; width: min(100%, 546px); aspect-ratio: 546 / 393;
+  background: var(--code); color: var(--muted); font-size: 13px; }
+.md figure.mgraph svg { display: block; width: 520px; max-width: 100%; height: auto; }
 .md figure.mgraph figcaption { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font: 13px ui-monospace, Menlo, monospace; }
 .md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
 .turn.plugcard { align-items: flex-start; }
@@ -2187,6 +2189,9 @@ function userHtml(src) {
 }
 function codeBlock(lang, body, file = "", open = false) {
   if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }  // an operation « posée »: computed
+  if (open && /^(graphe|graph|courbe|fonction|svg|pose)$/i.test(lang || "")) {
+    return `<figure class="mfig mwait"><span>${/^pose$/i.test(lang) ? "Calcul posé" : /^svg$/i.test(lang) ? "Figure" : "Courbe"} en cours…</span></figure>`;
+  }
   if (/^(graphe|graph|courbe|fonction)$/i.test(lang || "") && !open) {  // a function's graph: computed and drawn
     try { const h = graphHtml(body); if (h) return h; } catch (e) { /* unreadable: shown as written */ }
   }
@@ -2236,9 +2241,27 @@ function imgOff(i) { i.onerror = null; i.classList.add("off"); i.src = OFF_IMG; 
 // ---- maths like in a textbook: formulas ($…$, $$…$$, \(…\), \[…\], ```math) drawn by KaTeX (downloaded once by
 // the server, then offline); they are put aside before the markdown so that * _ | inside them stay maths, never in code
 const MATH_RE = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(^|[^\\$\w])\$(?=[^\s$])([^$\n]+?)(?<=[^\s\\])\$(?![\w$])/g;
+const katexCache = new Map();  // a formula drawn once is reused while the answer is written (no flash, no jump)
+function katexNow(tex, display) {
+  if (!window.katex) return null;
+  const key = (display ? "D" : "I") + tex;
+  if (!katexCache.has(key)) {
+    try { katexCache.set(key, window.katex.renderToString(tex, { displayMode: display, throwOnError: false, strict: "ignore" })); }
+    catch (e) { katexCache.set(key, null); }
+    if (katexCache.size > 800) katexCache.delete(katexCache.keys().next().value);
+  }
+  return katexCache.get(key);
+}
 function md(src) {
   const math = [];
-  const keep = (tex, display) => `\u0001${math.push({ tex: tex.trim(), display }) - 1}\u0001`;
+  if (mdLive) {  // being written: a formula not closed yet stays hidden until it is (it would show as raw text, then jump)
+    src = String(src || "");
+    if (((src.match(/\$\$/g) || []).length) % 2) src = src.slice(0, src.lastIndexOf("$$"));
+    const last = src.slice(src.lastIndexOf("\n") + 1).replace(/\$\$/g, "");
+    if (!/^\s*```/.test(last) && ((last.match(/(?<!\\)\$/g) || []).length) % 2) src = src.slice(0, src.length - last.length + last.lastIndexOf("$"));
+  }
+  // « 3,37 » written the French way: a decimal comma (KaTeX would show « 3, 37 » as a list)
+  const keep = (tex, display) => `\u0001${math.push({ tex: tex.trim().replace(/(\d),(?=\d)/g, "$1{,}"), display }) - 1}\u0001`;
   const aside = (text) => text.split(/(`[^`\n]*`)/).map((part, i) => (i % 2 ? part : part.replace(MATH_RE, (m, dd, bd, pi, pre, si) =>
     dd !== undefined ? keep(dd, true) : bd !== undefined ? keep(bd, true) : pi !== undefined ? keep(pi, false) : pre + keep(si, false)))).join("");
   // a code block opens only with ``` at the start of a line (« des blocs ```pose » in a sentence is not one): code stays
@@ -2261,7 +2284,10 @@ function md(src) {
   if (!math.length) return html;
   const put = (n) => {
     const x = math[+n], tag = x?.display ? "div" : "span";
-    return x ? `<${tag} class="mathx${x.display ? " d" : ""}" data-tex="${esc(x.tex)}">${esc(x.tex)}</${tag}>` : "";
+    if (!x) return "";
+    const drawn = katexNow(x.tex, x.display);
+    return drawn ? `<${tag} class="mathx${x.display ? " d" : ""}" data-tex="${esc(x.tex)}" data-drawn="1">${drawn}</${tag}>`
+      : `<${tag} class="mathx${x.display ? " d" : ""}" data-tex="${esc(x.tex)}">${esc(x.tex)}</${tag}>`;
   };
   return html.replace(/<p>\u0001(\d+)\u0001<\/p>/g, (m, n) => put(n)).replace(/\u0001(\d+)\u0001/g, (m, n) => put(n));
 }
@@ -2283,6 +2309,7 @@ function drawMath() {
   })).catch(() => {});
 }
 new MutationObserver(drawMath).observe(document.body, { childList: true, subtree: true });
+setTimeout(() => loadKatex().catch(() => {}), 2500);
 
 // ---- an operation « posée » (```pose  234,56 × 12,3): the steps are computed here, exactly, never left to the model;
 // digits stay in their columns (the comma takes no column, as on paper), additions line up on the comma
@@ -2368,10 +2395,11 @@ function poseHtml(src) {
 // nothing is evaluated as code
 function mathFn(src) {
   const s = String(src).toLowerCase().replace(/\s+/g, "").replace(/(\d),(\d)/g, "$1.$2").replace(/[×·]/g, "*")
-    .replace(/[−–]/g, "-").replace(/÷/g, "/").replace(/²/g, "^2").replace(/³/g, "^3").replace(/π/g, "pi").replace(/√/g, "sqrt");
+    .replace(/[−–]/g, "-").replace(/÷/g, "/").replace(/²/g, "^2").replace(/³/g, "^3").replace(/π/g, "pi").replace(/√/g, "sqrt")
+    .replace(/log_?\{?2\}?/g, "ldeux").replace(/log_?\{?10\}?/g, "log").replace(/\\/g, "");
   let i = 0;
   const FN = { sin: Math.sin, cos: Math.cos, tan: Math.tan, exp: Math.exp, ln: Math.log, log: Math.log10, sqrt: Math.sqrt,
-    racine: Math.sqrt, abs: Math.abs, arctan: Math.atan, arcsin: Math.asin, arccos: Math.acos };
+    racine: Math.sqrt, abs: Math.abs, arctan: Math.atan, arcsin: Math.asin, arccos: Math.acos, ldeux: Math.log2 };
   const fail = () => { throw new Error("expression illisible : " + src); };
   const startsAtom = () => /[\d.(a-z]/.test(s[i] || "");
   function expr() {
@@ -2432,11 +2460,16 @@ function graphHtml(src) {
     if ((m = l.match(/^([xy])\s*(?::|∈|dans)\s*\[?\s*(.+?)\s*(?:\.\.|;|à)\s*(.+?)\s*\]?$/i))) {
       const r = [mathFn(m[2])(0), mathFn(m[3])(0)].sort((a, b) => a - b);  // bounds may be computed: -2pi, pi/2, sqrt(2)
       if (m[1].toLowerCase() === "x") xr = r; else yr = r;
-    } else if ((m = l.match(/^([A-Z]['’]?)\s*\(\s*(-?[\d.,]+)\s*[;|]\s*(-?[\d.,]+)\s*\)$/))) {
-      points.push({ name: m[1], x: +m[2].replace(",", "."), y: +m[3].replace(",", ".") });
+    } else if ((m = l.match(/^([A-Z]\w?['’]?)\s*\(\s*([^)]+?)\s*\)\s*$/))) {
+      // A(1;2), A(1 ; -2,5), A(0,-8), A(0,5 ; -7,75): « ; » separates, or a lone comma when there is no « ; »
+      const inside = m[2], parts = inside.includes(";") || inside.includes("|") ? inside.split(/[;|]/)
+        : (inside.match(/,/g) || []).length === 1 ? inside.split(",") : inside.split(/,\s+|\s+/);
+      if (parts.length !== 2) continue;
+      const [px, py] = parts.map((v) => mathFn(v.trim())(0));
+      if (Number.isFinite(px) && Number.isFinite(py)) points.push({ name: m[1], x: px, y: py });
     } else if ((m = l.match(/^(?:([a-zA-Z]\w*)\s*\(\s*x\s*\)|y)\s*=\s*(.+)$/))) {
-      curves.push({ name: m[1] || "y", text: m[2], f: mathFn(m[2]) });
-    } else return null;
+      try { curves.push({ name: m[1] || "y", text: m[2], f: mathFn(m[2]) }); } catch (e) { /* one curve unreadable: the others are drawn */ }
+    }  // any other line (a comment, a title): ignored, the graph is still drawn
   }
   if (!curves.length && !points.length) return null;
   xr ||= points.length ? [Math.min(-1, ...points.map((p) => p.x)) - 1, Math.max(1, ...points.map((p) => p.x)) + 1] : [-5, 5];
