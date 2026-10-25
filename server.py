@@ -801,11 +801,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"pages": int(n) if n.isdigit() and int(n) > 0 else None})
             except (ValueError, OSError, subprocess.SubprocessError):
                 self.send_json({"pages": None})
-        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js") or path.startswith("/vendor/katex/"):
+        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js") or path.startswith(("/vendor/katex/", "/vendor/fonts/")):
             try:
                 if path == "/vendor/mermaid.min.js":
                     import diagrams
                     f, ctype = diagrams.mermaid_js(), "text/javascript"
+                elif path.startswith("/vendor/fonts/"):  # the text font (Inter), downloaded once, then offline
+                    import diagrams
+                    f, ctype = diagrams.font_file(path[len("/vendor/fonts/"):]), "font/woff2"
                 elif path.startswith("/vendor/katex/"):  # formulas: KaTeX, downloaded once, then offline
                     import diagrams
                     f = diagrams.katex_file(path[len("/vendor/katex/"):])

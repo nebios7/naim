@@ -77,6 +77,36 @@ def katex_file(name):
     return f
 
 
+FONTS_DIR = VENDOR / "fonts"
+INTER_URL = "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.3.0.tgz"
+FONT_FILE_RE = re.compile(r"inter-latin(-ext)?-wght-(normal|italic)\.woff2")
+
+
+def font_file(name):
+    """Naim's text font (Inter, SIL OFL licence), downloaded once from npm then read from the Mac: only its woff2 files
+    for Latin and Latin Extended (French and its accents), upright and italic, all weights in one variable file."""
+    if not FONT_FILE_RE.fullmatch(name or ""):
+        raise DiagramError("police inconnue")
+    f = FONTS_DIR / name
+    if not f.is_file():
+        import io
+        import tarfile
+        try:
+            with urllib.request.urlopen(INTER_URL, timeout=60) as r:
+                data = r.read(30_000_000)
+        except OSError as e:
+            raise DiagramError(f"téléchargement de la police impossible ({e})")
+        FONTS_DIR.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            for m in tar.getmembers():
+                n = m.name.rsplit("/", 1)[-1]
+                if m.isfile() and m.name.startswith("package/files/") and FONT_FILE_RE.fullmatch(n):
+                    (FONTS_DIR / n).write_bytes(tar.extractfile(m).read())
+        if not f.is_file():
+            raise DiagramError("police absente de l'archive")
+    return f
+
+
 def _clean(code):
     code = str(code or "").strip()
     if code.startswith("```"):  # a fenced block pasted as is

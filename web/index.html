@@ -247,7 +247,7 @@ body .chip { display: flex; gap: 12px; align-items: flex-start; text-align: left
 .group.folder.drop { background: var(--hover); border-radius: 6px; }
 @media (max-width: 760px) { #rail { display: none; } #params { position: fixed; inset: 0 0 0 auto; z-index: 16; box-shadow: var(--shadow); } }
 html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--text); font: var(--fs)/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; display: flex; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font: var(--fs)/1.55 "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; display: flex; overflow: hidden; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
@@ -922,7 +922,7 @@ body.haslive .working .wtime { display: none; }
     --robot: #b9bcc4; --robot-d: #131417; --robot-eye: #e8e9ed;
   }
 }
-body { font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { font-family: "Inter", -apple-system, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 h1, h2, h3 { letter-spacing: -0.015em; }
 ::selection { background: var(--brand-soft); }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--r-s); }
@@ -1495,6 +1495,12 @@ body { letter-spacing: -0.006em; }
 .turn + .turn { margin-top: 6px; }
 .turn.user .bubble { border-radius: 18px !important; padding: 9px 15px !important; }
 /* code in your own message shown as code, as in Naim's answers: a block in its language, `inline` in monospace */
+/* Naim's text font: Inter (free licence), downloaded once by the server; code keeps its monospace, formulas KaTeX's */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/vendor/fonts/inter-latin-wght-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/vendor/fonts/inter-latin-ext-wght-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Inter"; font-style: italic; font-weight: 100 900; font-display: swap; src: url("/vendor/fonts/inter-latin-wght-italic.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Inter"; font-style: italic; font-weight: 100 900; font-display: swap; src: url("/vendor/fonts/inter-latin-ext-wght-italic.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
 /* maths: formulas (KaTeX), an operation « posée » on squared paper, a figure on a white sheet */
 .md .mathx.d { display: block; margin: 10px 0; overflow-x: auto; overflow-y: hidden; }
 .md .mathx .katex { font-size: 1.08em; }
@@ -1692,7 +1698,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
   --c-chat: #faf9f5; --send: #faf9f5; --send-t: #1b1b1a; --robot-d: #141413; --robot-eye: #faf9f5;
   --shadow: 0 1px 2px rgb(0 0 0 / .5), 0 16px 40px rgb(0 0 0 / .55);
 }
-:root[data-theme="dark"] body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: auto; }
+:root[data-theme="dark"] body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: auto; }
 :root[data-theme="dark"] .md { color: #f2f1ec; letter-spacing: .005em; }
 :root[data-theme="dark"] .md strong, :root[data-theme="dark"] .md b, :root[data-theme="dark"] .md h1, :root[data-theme="dark"] .md h2, :root[data-theme="dark"] .md h3 { color: #ffffff; }
 
