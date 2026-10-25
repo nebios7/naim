@@ -40,6 +40,43 @@ def mermaid_js():
     return MERMAID_JS
 
 
+KATEX_DIR = VENDOR / "katex"
+KATEX_URL = "https://registry.npmjs.org/katex/-/katex-0.16.11.tgz"
+KATEX_FILE_RE = re.compile(r"(katex\.min\.(js|css)|fonts/KaTeX_[A-Za-z0-9_-]+\.woff2)")
+
+
+def katex_file(name):
+    """A file of KaTeX (formulas drawn like in a maths book), downloaded once from npm then read from the Mac: only
+    katex.min.js, katex.min.css and its woff2 fonts are kept and served."""
+    if not KATEX_FILE_RE.fullmatch(name or ""):
+        raise DiagramError("fichier KaTeX inconnu")
+    if not (KATEX_DIR / "katex.min.js").exists():
+        import io
+        import tarfile
+        try:
+            with urllib.request.urlopen(KATEX_URL, timeout=60) as r:
+                data = r.read(20_000_000)
+        except OSError as e:
+            raise DiagramError(f"téléchargement de KaTeX impossible ({e}) : connexion internet nécessaire la première fois")
+        tmp = KATEX_DIR.with_name("katex.part")
+        shutil.rmtree(tmp, ignore_errors=True)
+        (tmp / "fonts").mkdir(parents=True)
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            for m in tar.getmembers():
+                rel = m.name.removeprefix("package/dist/")
+                if m.isfile() and rel != m.name and KATEX_FILE_RE.fullmatch(rel):
+                    (tmp / rel).write_bytes(tar.extractfile(m).read())
+        if not (tmp / "katex.min.js").exists():
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise DiagramError("archive KaTeX incomplète")
+        shutil.rmtree(KATEX_DIR, ignore_errors=True)
+        tmp.replace(KATEX_DIR)
+    f = KATEX_DIR / name
+    if not f.is_file():
+        raise DiagramError("fichier KaTeX absent")
+    return f
+
+
 def _clean(code):
     code = str(code or "").strip()
     if code.startswith("```"):  # a fenced block pasted as is

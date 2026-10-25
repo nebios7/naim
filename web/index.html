@@ -1495,6 +1495,32 @@ body { letter-spacing: -0.006em; }
 .turn + .turn { margin-top: 6px; }
 .turn.user .bubble { border-radius: 18px !important; padding: 9px 15px !important; }
 /* code in your own message shown as code, as in Naim's answers: a block in its language, `inline` in monospace */
+/* maths: formulas (KaTeX), an operation « posée » on squared paper, a figure on a white sheet */
+.md .mathx.d { display: block; margin: 10px 0; overflow-x: auto; overflow-y: hidden; }
+.md .mathx .katex { font-size: 1.08em; }
+.md figure.pose { margin: 12px 0; display: flex; width: fit-content; max-width: 100%; flex-direction: column; gap: 8px; padding: 14px 20px 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--code); }
+.md figure.pose table { border-collapse: collapse; margin: 0; font: 500 19px/1.55 ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums; color: var(--text); border: 0; background: none; width: auto; }
+.md figure.pose tr, .md figure.pose td { border: 0 !important; background: none !important; }
+.md figure.pose td { padding: 1px 0 !important; }
+.md figure.pose td.po { color: var(--muted); padding-right: 14px !important; text-align: left; }
+.md figure.pose td.pn { text-align: right; white-space: pre; }
+.md figure.pose tr.sum td.pn { border-top: 1.5px solid var(--text) !important; padding-top: 4px !important; }
+.md figure.pose i.dg { display: inline-block; width: 1.3ch; text-align: center; }
+.md figure.pose i { font-style: normal; padding: 0 !important; margin: 0 !important; line-height: inherit; }
+.md figure.pose i.pc { display: inline-block; width: 0; position: relative; left: -.32ch; color: #d97757; font-weight: 700; }
+.md figure.pose i.ph { visibility: hidden; }
+.md figure.pose i.pz { color: var(--muted); opacity: .45; }
+.md figure.pose table.pdiv td.pdl { text-align: left; white-space: pre; padding-right: 14px !important; vertical-align: top; }
+.md figure.pose table.pdiv td > div { margin: 0; padding: 0; line-height: 1.5; }
+.md figure.pose table.pdiv td.pdr { border-left: 1.5px solid var(--text) !important; vertical-align: top; padding-left: 12px !important; text-align: left; }
+.md figure.pose .pdd { border-bottom: 1.5px solid var(--text); padding-right: 6px; }
+.md figure.pose figcaption { font-size: 14px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; max-width: 46ch; }
+.md figure.pose figcaption b { color: var(--text); }
+.md figure.mfig { margin: 12px 0 4px; display: inline-block; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.md figure.mfig img { display: block; max-width: min(100%, 560px); height: auto; }
+.md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
 .bubble pre.ucode { margin: 6px 0; padding: 9px 12px; background: var(--code); border: 1px solid var(--line); border-radius: 10px;
   white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.55 ui-monospace, "SF Mono", Menlo, monospace; }
 .bubble code.uinline { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; background: var(--code);
@@ -2154,6 +2180,11 @@ function userHtml(src) {
   return out.join("");
 }
 function codeBlock(lang, body, file = "", open = false) {
+  if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }  // an operation « posée »: computed
+  if (/^svg$/i.test(lang || "") && !open && /^\s*<svg[\s>]/i.test(body)) {  // a figure: drawn as an image (no script runs)
+    return `<figure class="mfig"><img alt="figure" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(body)}"></figure>`
+      + `<details class="mfigcode"><summary>Code de la figure</summary>${codeBlockRaw("svg", body, file, open)}</details>`;
+  }
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
   return codeBlockRaw(lang, body, file, open);
 }
@@ -2193,7 +2224,121 @@ let mdLive = false;  // true while a reply is being written (its last code block
 // a photo that cannot be shown keeps its place (nothing below moves): a quiet frame that says so
 const OFF_IMG = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="168" height="128"><rect width="168" height="128" fill="#1f1e1d"/><text x="84" y="68" font-family="-apple-system,sans-serif" font-size="11" fill="#908e88" text-anchor="middle">Photo indisponible</text></svg>');
 function imgOff(i) { i.onerror = null; i.classList.add("off"); i.src = OFF_IMG; }
+// ---- maths like in a textbook: formulas ($…$, $$…$$, \(…\), \[…\], ```math) drawn by KaTeX (downloaded once by
+// the server, then offline); they are put aside before the markdown so that * _ | inside them stay maths, never in code
+const MATH_RE = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(^|[^\\$\w])\$(?=[^\s$])([^$\n]+?)(?<=[^\s\\])\$(?![\w$])/g;
 function md(src) {
+  const math = [];
+  const keep = (tex, display) => `\u0001${math.push({ tex: tex.trim(), display }) - 1}\u0001`;
+  src = String(src || "").split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/).map((part, i) => {
+    if (i % 2) {  // code stays code, except a ```math block
+      const f = part.match(/^```\s*(math|latex|tex|katex)\s*\n([\s\S]*?)```$/i);
+      return f ? "\n" + keep(f[2], true) + "\n" : part;
+    }
+    return part.replace(MATH_RE, (m, dd, bd, pi, pre, si) =>
+      dd !== undefined ? keep(dd, true) : bd !== undefined ? keep(bd, true) : pi !== undefined ? keep(pi, false) : pre + keep(si, false));
+  }).join("");
+  const html = mdBlocks(src);
+  if (!math.length) return html;
+  const put = (n) => {
+    const x = math[+n], tag = x?.display ? "div" : "span";
+    return x ? `<${tag} class="mathx${x.display ? " d" : ""}" data-tex="${esc(x.tex)}">${esc(x.tex)}</${tag}>` : "";
+  };
+  return html.replace(/<p>\u0001(\d+)\u0001<\/p>/g, (m, n) => put(n)).replace(/\u0001(\d+)\u0001/g, (m, n) => put(n));
+}
+let katexReady = null;
+function loadKatex() {
+  return katexReady ||= new Promise((ok, ko) => {
+    const l = document.createElement("link"); l.rel = "stylesheet"; l.href = "/vendor/katex/katex.min.css"; document.head.append(l);
+    const sc = document.createElement("script"); sc.src = "/vendor/katex/katex.min.js";
+    sc.onload = () => ok(window.katex); sc.onerror = () => { katexReady = null; ko(new Error("KaTeX indisponible")); };
+    document.head.append(sc);
+  });
+}
+function drawMath() {
+  const todo = document.querySelectorAll(".mathx:not([data-drawn])");
+  if (todo.length) loadKatex().then((k) => todo.forEach((el) => {
+    if (el.dataset.drawn) return;
+    el.dataset.drawn = "1";
+    try { k.render(el.dataset.tex, el, { displayMode: el.classList.contains("d"), throwOnError: false, strict: "ignore" }); } catch (e) { /* stays as written */ }
+  })).catch(() => {});
+}
+new MutationObserver(drawMath).observe(document.body, { childList: true, subtree: true });
+
+// ---- an operation « posée » (```pose  234,56 × 12,3): the steps are computed here, exactly, never left to the model;
+// digits stay in their columns (the comma takes no column, as on paper), additions line up on the comma
+function poseParse(s) {
+  const m = String(s).trim().replace(/[   ]+/g, " ").match(/^([\d., ]+?)\s*([+\-−×x*÷:/])\s*([\d., ]+?)\s*(?:=.*)?$/);
+  if (!m) return null;
+  const num = (x) => {
+    x = x.replace(/\s/g, "").replace(".", ",");
+    if (!/^\d+(,\d+)?$/.test(x)) return null;
+    const [i, d = ""] = x.split(",");
+    return { v: BigInt(i + d), dec: d.length, txt: x };
+  };
+  const a = num(m[1]), b = num(m[3]), op = { "+": "+", "-": "−", "−": "−", "×": "×", x: "×", "*": "×", "÷": "÷", ":": "÷", "/": "÷" }[m[2]];
+  return a && b && op && !(op === "÷" && b.v === 0n) ? { a, b, op } : null;
+}
+function poseFmt(v, dec) {  // 2885088 with 3 decimals → « 2885,088 »
+  const neg = v < 0n, s = (neg ? -v : v).toString().padStart(dec + 1, "0");
+  return (neg ? "−" : "") + (dec ? s.slice(0, -dec) + "," + s.slice(-dec) : s);
+}
+const poseTrim = (s) => (s.includes(",") ? s.replace(/0+$/, "").replace(/,$/, "") : s);
+const poseDigits = (s) => [...String(s)].map((c) => (c === "," ? '<i class="pc">,</i>' : `<i class="dg">${esc(c)}</i>`)).join("");
+function poseCells(s, pad = 0, shift = 0) {  // one box per digit; the comma in the gap between two; hidden zeros keep columns
+  return poseDigits(s) + '<i class="dg ph">0</i>'.repeat(pad) + '<i class="dg pz">0</i>'.repeat(shift);
+}
+function poseHtml(src) {
+  const p = poseParse(src);
+  if (!p) return null;
+  const { a, b, op } = p, row = (o, cells, cls = "") => `<tr class="${cls}"><td class="po">${o}</td><td class="pn">${cells}</td></tr>`;
+  let rows = "", result, note = "";
+  if (op === "+" || op === "−") {
+    const d = Math.max(a.dec, b.dec), A = a.v * 10n ** BigInt(d - a.dec), B = b.v * 10n ** BigInt(d - b.dec);
+    const pad = (x) => (d && !x.dec ? 1 : 0) + d - x.dec;  // a whole number gets an invisible « ,00 »
+    const R = op === "+" ? A + B : A - B;
+    rows = row("", poseCells(a.txt, pad(a))) + row(op, poseCells(b.txt, pad(b))) + row("", poseCells(poseFmt(R, d)), "sum");
+    result = poseTrim(poseFmt(R, d));
+  } else if (op === "×") {
+    rows = row("", poseCells(a.txt)) + row("×", poseCells(b.txt));
+    const parts = b.v.toString().split("").reverse().map((x, k) => ({ k, p: a.v * BigInt(x) })).filter((x) => x.p !== 0n);
+    if (parts.length > 1) parts.forEach((x, n) => (rows += row(n ? "+" : "", poseCells(x.p.toString(), 0, x.k), n ? "" : "sum")));
+    const R = a.v * b.v, dec = a.dec + b.dec;
+    rows += row("", poseCells(poseFmt(R, dec)), "sum");
+    result = poseTrim(poseFmt(R, dec));
+    if (dec) note = `On multiplie sans les virgules, puis on place ${dec} chiffre${dec > 1 ? "s" : ""} après la virgule (${a.dec} + ${b.dec}).`;
+  } else {  // long division, French layout: the dividend and what remains on the left, the divisor and quotient on the right
+    const N = b.v, ddec = a.dec - b.dec;
+    const D = ddec >= 0 ? { v: a.v, dec: ddec } : { v: a.v * 10n ** BigInt(-ddec), dec: 0 };
+    if (b.dec) note = `On rend le diviseur entier : ${a.txt} : ${b.txt} = ${poseFmt(D.v, D.dec)} : ${N}.`;
+    const digits = D.v.toString().padStart(D.dec + 1, "0"), intLen = digits.length - D.dec, MAXDEC = 3;
+    let cur = 0n, q = "", last = 0;
+    const lines = [];
+    for (let i = 0; ; i++) {
+      cur = cur * 10n + BigInt(i < digits.length ? digits[i] : "0");
+      const qd = cur / N; cur %= N;
+      if (q || qd || i >= intLen - 1) q += qd.toString();
+      if (q) lines.push({ end: i, rem: cur });
+      last = i;
+      if ((i >= digits.length - 1 && i >= intLen - 1 && cur === 0n) || i - intLen + 1 >= MAXDEC) break;
+    }
+    const qdec = Math.max(0, last - intLen + 1), quotient = poseFmt(BigInt(q), qdec), exact = cur === 0n;
+    const extra = Math.max(0, last + 1 - digits.length);
+    const lineAt = (s, end) => '<i class="dg ph">0</i>'.repeat(Math.max(0, end + 1 - s.length)) + poseDigits(s);
+    let left = `<div>${poseCells(poseFmt(BigInt(digits), D.dec))}${extra ? (D.dec ? "" : '<i class="pc">,</i>') + '<i class="dg pz">0</i>'.repeat(extra) : ""}</div>`;
+    lines.forEach((l, n) => {  // what remains, with the next digit brought down beside it (the last line: the remainder)
+      const next = n < lines.length - 1 ? (l.end + 1 < digits.length ? digits[l.end + 1] : "0") : "";
+      left += `<div>${lineAt(l.rem.toString() + next, l.end + (next ? 1 : 0))}</div>`;
+    });
+    result = poseTrim(quotient) + (exact ? "" : "…");
+    rows = `<tr><td class="pdl">${left}</td><td class="pdr"><div class="pdd">${esc(N.toString())}</div><div class="pdq">${poseCells(quotient)}${exact ? "" : "…"}</div></td></tr>`;
+    if (!exact) note += (note ? " " : "") + `Le reste n'est jamais nul : on s'arrête à ${MAXDEC} décimales.`;
+  }
+  return `<figure class="pose"><table class="${op === "÷" ? "pdiv" : ""}">${rows}</table>`
+    + `<figcaption><div>${esc(a.txt)} ${op === "÷" ? ":" : op} ${esc(b.txt)} = <b>${esc(result)}</b></div>${note ? `<span>${esc(note)}</span>` : ""}</figcaption></figure>`;
+}
+
+function mdBlocks(src) {
   // while Naim writes, a photo line not finished yet (« ![Sony…](https://… ») stays hidden until it is complete:
   // otherwise it shows as raw text for a moment, then turns into a thumbnail and the answer jumps
   if (mdLive) src = src.replace(/(^|\n)!\[[^\n]*$/, (m, nl) => (/\)\s*$/.test(m) ? m : nl));

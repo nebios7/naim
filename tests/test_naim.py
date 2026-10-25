@@ -325,6 +325,24 @@ class ChatOrAgent(unittest.TestCase):
             self.assertIsNone(self.work(t), t)
 
 
+class MathsInTheConversation(unittest.TestCase):
+    """« Corrige en posant les calculs » is maths answered in the conversation (formulas, operations drawn there),
+    not a file to correct; a named file or a PDF still is file work."""
+
+    def file_work(self, m):
+        import server as s
+        return bool(s.FILE_WORK_RE.search(m)) and not (s.MATH_ASK_RE.search(m) and not s.FILE_NAMED_RE.search(m))
+
+    def test_maths_stays_an_answer(self):
+        for m in ("Corrige en posant les calculs : 234,56 × 12,3 et 789,01 : 9,2",
+                  "je veux l'énoncé complet puis la correction complète des maths"):
+            self.assertFalse(self.file_work(m), m)
+
+    def test_files_stay_files(self):
+        for m in ("corrige le bug de mon app", "corrige le fichier calcul.py", "crée un pdf du corrigé de l'exercice"):
+            self.assertTrue(self.file_work(m), m)
+
+
 class SessionMemory(unittest.TestCase):
     """naim-mem: the hook keeps what was done, the MCP server finds it."""
 

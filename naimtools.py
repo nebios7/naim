@@ -109,7 +109,15 @@ WRITING_STYLE = (
     "- Titres (##) seulement pour une longue réponse ; liste seulement pour 3 éléments ou plus de même nature ; "
     "tableau pour comparer ; code toujours dans un bloc avec son langage.\n"
     "- Gras rare : seulement le mot ou le chiffre important.\n"
-    "- Pas de résumé final qui répète, pas de liste de questions à la fin : au plus une proposition de suite utile.")
+    "- Pas de résumé final qui répète, pas de liste de questions à la fin : au plus une proposition de suite utile.\n"
+    "- Aucun emoji, ni dans les titres ni dans le texte.\n"
+    "- Maths : chaque formule en LaTeX, $…$ dans la phrase et $$…$$ seule sur sa ligne (virgule décimale : 0{,}5 ; unités "
+    "avec \\text{cm}). Jamais de formule ni de calcul dans un bloc de code.\n"
+    "- Opération posée (addition, soustraction, multiplication, division) : un bloc ```pose qui contient SEULEMENT "
+    "l'opération, par exemple ```pose puis 234,56 × 12,3 puis ``` : l'application calcule et dessine elle-même les étapes "
+    "exactes, alignées. N'écris jamais ces étapes toi-même (pas de tirets, pas de colonnes à la main).\n"
+    "- Figure de géométrie : un bloc ```svg avec un dessin net (viewBox, noms des points, longueurs, angle droit marqué), "
+    "affiché comme une figure.")
 
 
 # MCP on demand, like a tool search: the tool list never changes during a task (the engine keeps what it read),

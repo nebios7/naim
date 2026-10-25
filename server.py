@@ -108,6 +108,14 @@ MAKE_RE = re.compile(r"\b(cr[ée]e[rz]?|fais|faire|fait|g[ée]n[èe]re[rz]?|dess
 FILE_WORK_RE = re.compile(r"\b(?:r?ajout\w*|chang\w*|remplac\w*|rectifi\w*|refai\w*|retouch\w*|corrig\w*)\b|images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
                           r"installe|lance|ex[ée]cute|teste|" + MAC_ACTION, re.I)  # a file name alone (« un exemple chronometre.py ») is a question
+# a maths request (« corrige l'exercice », « pose la multiplication ») is answered in the conversation, with formulas and
+# operations drawn there — not made into a file, unless a file is named
+MATH_ASK_RE = re.compile(r"\b(calculs?|calcule[rz]?|exercices?|op[ée]rations?|pos[ée]e?s?|pose[rz]?|multiplications?|divisions?|"
+                         r"additions?|soustractions?|[ée]quations?|fractions?|pourcentages?|conversions?|convertis|convertir|aires?|"
+                         r"p[ée]rim[èe]tres?|volumes?|g[ée]om[ée]trie|triangles?|cercles?|th[ée]or[èe]me|maths?|math[ée]matiques?|"
+                         r"proportionnalit[ée]|r[èe]gle de trois)\b", re.I)
+FILE_NAMED_RE = re.compile(r"fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|\.(py|js|html|txt|md|csv)\b|enregistr|sauvegard|"
+                           r"t[ée]l[ée]charg|imprim|projet|dossier|\bcode\b", re.I)
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay
 d'accord dac super génial genial parfait top cool nickel très tres bonne nuit à a demain plus bientôt bientot bye ciao naim
 mohamed et encore c'est cool ça ca marche non nan""".split())
@@ -777,11 +785,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"pages": int(n) if n.isdigit() and int(n) > 0 else None})
             except (ValueError, OSError, subprocess.SubprocessError):
                 self.send_json({"pages": None})
-        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js"):
+        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js") or path.startswith("/vendor/katex/"):
             try:
                 if path == "/vendor/mermaid.min.js":
                     import diagrams
                     f, ctype = diagrams.mermaid_js(), "text/javascript"
+                elif path.startswith("/vendor/katex/"):  # formulas: KaTeX, downloaded once, then offline
+                    import diagrams
+                    f = diagrams.katex_file(path[len("/vendor/katex/"):])
+                    ctype = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2"}[f.suffix]
                 else:
                     _, f = project_path(q.get("root", ""), q.get("path", ""))
                     if path == "/api/thumb":
@@ -1874,6 +1886,8 @@ class Handler(BaseHTTPRequestHandler):
             if ctx:
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + f"\n\n[Contexte ajouté au démarrage par un hook de l'utilisateur]\n{ctx}")
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
+        if file_work and MATH_ASK_RE.search(body["message"] or "") and not FILE_NAMED_RE.search(body["message"] or ""):
+            file_work = False  # « corrige l'exercice » is maths to answer here, not a file to correct
         prev_answer = next((str(m.get("content") or "") for m in reversed(body.get("history") or []) if m.get("role") == "assistant"), "")
         if not file_work and not plain and not pure_question(body["message"] or "") and any(
                 ANNOUNCE_RE.search(x) for x in re.split(r"(?<=[.!?…])\s+", prev_answer.strip()[-600:]) if x):
