@@ -1,0 +1,17 @@
+{
+  "name": "mathematiques",
+  "version": "1.0",
+  "description": "Maths comme dans un manuel : formules en LaTeX, opérations posées dessinées et calculées par l'application, figures de géométrie, énoncé puis corrigé (concours, IFSI, brevet, exercices).",
+  "skills": "skills",
+  "triggers": {
+    "maths-affichage": "\\b(calculs? pos[ée]s?|pose[rz]?|op[ée]rations?|multiplications?|divisions?|additions?|soustractions?|[ée]quations?|fractions?|pourcentages?|conversions?|convertis|proportionnalit[ée]|r[èe]gle de trois|aires?|p[ée]rim[èe]tres?|volumes?|g[ée]om[ée]trie|triangles?|cercles?|rectangles?|th[ée]or[èe]me|pythagore|thal[èe]s|maths?|math[ée]matiques?|exercices? de (maths?|calcul)|concours|ifsi|brevet|corrig[ée] (de|des) (maths?|calculs?|exercices?))\\b"
+  },
+  "commands": [
+    {
+      "cmd": "/maths",
+      "arg": "<l'exercice>",
+      "description": "Résoudre un exercice de maths : énoncé, opérations posées, formules, figure",
+      "prompt": "Résous cet exercice de maths avec le skill maths-affichage (énoncé, puis corrigé : formules en LaTeX, opérations dans des blocs pose, figure en svg si c'est de la géométrie) :"
+    }
+  ]
+}

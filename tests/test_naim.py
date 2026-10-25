@@ -298,6 +298,11 @@ class SkillRouting(unittest.TestCase):
     def test_typographic_apostrophe(self):
         self.assertEqual(self.name("qu’est-ce que j’avais demandé hier ?"), "mem-search")
 
+    def test_maths(self):
+        for t in ("Corrige en posant les calculs : 234,56 × 12,3", "les sujets de maths du concours IFSI avec la correction",
+                  "calcule le périmètre d'un cercle de rayon 3 cm"):
+            self.assertEqual(self.name(t), "maths-affichage", t)
+
     def test_memory(self):
         self.assertEqual(self.name("la dernière fois on avait corrigé la facture, tu te souviens ?"), "mem-search")
 

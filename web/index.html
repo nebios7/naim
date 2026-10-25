@@ -2268,6 +2268,12 @@ new MutationObserver(drawMath).observe(document.body, { childList: true, subtree
 // ---- an operation « posée » (```pose  234,56 × 12,3): the steps are computed here, exactly, never left to the model;
 // digits stay in their columns (the comma takes no column, as on paper), additions line up on the comma
 function poseParse(s) {
+  // written on several lines (« 234,56 » then « × 12,3 », and maybe steps after them): only the operation is kept,
+  // everything below is computed again here
+  const ls = String(s).split("\n").map((l) => l.replace(/\(.*?\)/g, "").trim()).filter((l) => l && !/^[-_=—]+$/.test(l));
+  const two = ls.length > 1 && ls[0].match(/^[\d., ]+$/) && ls[1].match(/^([+\-−×x*÷:/])\s*([\d., ]+)$/);
+  if (two) s = `${ls[0]} ${two[1]} ${two[2]}`;
+  else if (ls.length) s = ls[0];
   const m = String(s).trim().replace(/[   ]+/g, " ").match(/^([\d., ]+?)\s*([+\-−×x*÷:/])\s*([\d., ]+?)\s*(?:=.*)?$/);
   if (!m) return null;
   const num = (x) => {
