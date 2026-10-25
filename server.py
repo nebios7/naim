@@ -1957,6 +1957,7 @@ class Handler(BaseHTTPRequestHandler):
                     # a remark on the work under way (« tu n'as pas respecté le style ») keeps that work's skill
                     found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k][:1]
                 sk = (next((k for k in found if k["name"] != "application-web"), None) or (found[0] if found else None)
+                      or ext.design_follow_up(m_, " ".join(str(m.get("content") or "")[:2000] for m in (body.get("history") or [])[-6:]))
                       or ext.match_skill(body["message"], helper.root, helper.disabled_skills))  # nothing under way: the generic one
             if acting_only and sk and sk["name"] != "mac":
                 sk = None  # acting on an existing file (« imprime mon CV ») needs no skill — except the Mac recipes

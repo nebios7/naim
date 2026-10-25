@@ -304,6 +304,45 @@ print("You extend yourself" in a.messages[0]["content"], "install_plugin" in {t[
             self.assertEqual(out[2], "True True")
 
 
+class OneServerPerProject(unittest.TestCase):
+    """A new server of a project replaces the one already running there (it once left four servers running);
+    another project's server is never touched; replace=false keeps a second, different one."""
+
+    def test_replace(self):
+        from naimtools import PROCESSES
+        srv = lambda port: f"python3 -c \"print('Running on http://127.0.0.1:{port}', flush=True); import time; time.sleep(30)\""  # noqa: E731
+        with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
+            a = naimtools.Agent(d1, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            b = naimtools.Agent(d2, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            try:
+                p1 = a.start_process(srv(5050), "site", keep=True).split()[1]
+                other = b.start_process(srv(7000), "autre", keep=True).split()[1]
+                r = a.start_process(srv(5051), "site v2", keep=True)
+                self.assertIn(f"stopped first (replaced by this one): {p1}", r)
+                api = a.start_process(srv(8000), "api", keep=True, replace=False)
+                running = {p.id for p in PROCESSES.procs.values() if p.proc.poll() is None}
+                self.assertNotIn(p1, running)
+                self.assertIn(other, running)
+                self.assertIn(api.splitlines()[0].split()[1], running)
+            finally:
+                for p in list(a.started) + list(b.started):
+                    PROCESSES.stop(p.id)
+
+
+class DesignFollowUp(unittest.TestCase):
+    """« c'est pas enrichi », « le site n'a pas changé » right after work on a site keep the design skill."""
+
+    def test_follow_up(self):
+        import extensions as ext
+        if not any(s["name"] == "frontend-design" for s in ext.list_skills()):
+            self.skipTest("frontend-design n'est pas installé sur ce Mac")
+        recent = "lance le serveur et le site. Le serveur est lancé sur http://127.0.0.1:5050"
+        for t in ("c'est pas enrichi du tout !!!", "Le site na pas changé !", "améliore plus le css"):
+            self.assertEqual((ext.design_follow_up(t, recent) or {}).get("name"), "frontend-design", t)
+        self.assertIsNone(ext.design_follow_up("merci", recent))
+        self.assertIsNone(ext.design_follow_up("c'est pas enrichi du tout", "explique la boucle for"))
+
+
 class LiveProgress(unittest.TestCase):
     """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
 

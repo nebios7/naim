@@ -511,6 +511,23 @@ try:  # detailed, field-tested versions (override the short ones)
     BUILTIN_SKILLS.update(_PRO)
 except ImportError:
     pass
+# a remark on how a site looks (« c'est pas enrichi », « le site n'a pas changé », « améliore le css »), right after
+# work on a site, keeps the design skill — a remark otherwise loads no skill at all
+LOOK_RE = re.compile(r"\b(enrichi\w*|moches?|laid\w*|fades?|nul(le)?|ridicule|merdique|pas beau|pas jolie?|plus beau|plus jolie?|"
+                     r"design|css|style|couleurs?|rendu|mise en page|apparence|esth[ée]tique|look|ui|interface|pro(fessionnel)?|"
+                     r"am[ée]lior\w* (le|la|les|ton|ta|tes) (site|page|css|design|style|rendu|affichage)|pas chang[ée]|"
+                     r"(site|page) (est )?(vide|simple|basique|pauvre))\b", re.I)
+WEB_CONTEXT_RE = re.compile(r"\b(site|page web|pages?|html|css|flask|serveur|localhost|127\.0\.0\.1|navigateur|"
+                            r"templates?|landing|front)\b|\.(html|css|js)\b", re.I)
+
+
+def design_follow_up(text, recent=""):
+    """The design skill for a remark on how the site under way looks (None when it is not one)."""
+    if not (LOOK_RE.search(text or "") and WEB_CONTEXT_RE.search(f"{text} {recent}")):
+        return None
+    return next((s for s in list_skills() if s["name"] == "frontend-design" and s["enabled"]), None)
+
+
 # built-in skills rewritten in skills_pro: an older unedited copy is upgraded once (backed up in skills/.anciens)
 UPGRADED = {"react-app", "ci-cd", "projet-existant", "debug", "application-web", "api-rest", "ios-swiftui",
             "veille-email", "controle-ecran", "tri-emails", "node-typescript", "pdf", "word", "excel", "presentation", "analyse-donnees"}
@@ -983,7 +1000,8 @@ def last_traceback(text, max_lines=12):
 # ============================================================================ automatic skill choice
 SKILL_TRIGGERS = {
     # making a web app (« ouvre le site de la CAF », « imprime la page 2 » are not)
-    "application-web": r"\b(cr[ée]\w*|fai[st]|faire|d[ée]velopp\w*|code[rz]?|construi\w*|programme[rz]?)\b[^.?!]{0,50}\b(appli(cation)?s?|app|site|page web|"
+    "application-web": r"\b(lance[rz]?|d[ée]marre[rz]?)\b[^.?!]{0,30}\b(le|un|mon|ton) (serveur|site)\b[^.?!]{0,40}\b(site|cours|pages?|voir)\b|"
+                       r"\b(cr[ée]\w*|fai[st]|faire|d[ée]velopp\w*|code[rz]?|construi\w*|programme[rz]?)\b[^.?!]{0,50}\b(appli(cation)?s?|app|site|page web|"
                        r"logiciel)\b|\b(flask|fastapi|django)\b",
     "api-rest": r"\b(api|rest|endpoint|crud)\b",
     "tests-unitaires": r"\b(tests?|unitaires?|pytest|jest|junit)\b",

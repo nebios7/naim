@@ -1793,7 +1793,11 @@ class Agent:
                      "project's files to work around this.)")
         return f"exit code {proc.returncode}\n{out}{hint}"
 
-    def start_process(self, command, name="", keep=False, notify=False):
+    def _servers_here(self):
+        """The servers (a URL, still running) Naim started in this project."""
+        return [p for p in list(PROCESSES.procs.values()) if p.proc.poll() is None and p.url and Path(p.cwd) == self.root]
+
+    def start_process(self, command, name="", keep=False, notify=False, replace=True):
         if err := self._check_blocked(command) or self._check_env(command) or self._guard_own_command(command):
             return err
         if not self.approve("Lancer en arrière-plan", f"$ {command}", kind="command"):
@@ -1801,7 +1805,24 @@ class Agent:
         # the user asked for a background job (« en tâche de fond, préviens-moi »): the report comes back by itself,
         # whatever the model chose (servers and apps that keep running are not « jobs »)
         notify = bool(notify) or (getattr(self, "_bg_intent", False) and not keep and not self.SERVER_RE.search(command.strip()))
+        # one server per project, as a developer does: the new version replaces the one already running here (the
+        # user would otherwise see the old site, or two on different ports); replace=false keeps both (an API + a front)
+        replaced = []
+        if replace and not notify:
+            for q in self._servers_here():
+                PROCESSES.stop(q.id)
+                replaced.append(f"{q.id} ({q.url})")
         p = PROCESSES.start(command, self.root, name)
+        for _ in range(30):  # the port still held by a server started outside this task: freed once, then again
+            time.sleep(0.1)
+            if p.proc.poll() is not None:
+                break
+        if p.proc.poll() is not None and re.search(r"address already in use|port \d+ is in use|EADDRINUSE|errno 48", p.tail(40), re.I):
+            for q in [q for q in self._servers_here() if q is not p]:  # only this project's servers, never another one's
+                PROCESSES.stop(q.id)
+                replaced.append(f"{q.id} ({q.url})")
+            if replaced:
+                p = PROCESSES.start(command, self.root, name)
         p.keep = bool(keep) or bool(notify)  # a background job outlives this task
         if notify:
             p.notify = {"conv": getattr(self, "conv_id", None), "label": name or command[:60]}
@@ -1816,7 +1837,9 @@ class Agent:
             time.sleep(0.5)
         info = p.info()
         status = "running" if info["running"] else f"exited with code {info['exit_code']}"
-        return (f"process {p.id} ({p.name}) {status}, pid {info['pid']}"
+        self._last_started = p.id
+        return ((f"stopped first (replaced by this one): {', '.join(replaced)}\n" if replaced else "")
+                + f"process {p.id} ({p.name}) {status}, pid {info['pid']}"
                 + (f", url {p.url}" if p.url else "") + f"\nfirst output:\n{p.tail(30).strip() or '(none yet)'}"
                 + ("\nBackground job: you will be told automatically when it ends, and you will report then. Now tell the "
                    "user in one sentence what you started and that you will come back with the result, then FINISH this "
@@ -1824,6 +1847,7 @@ class Agent:
 
     def wait(self, until, id=None, url=None, path=None, text=None, timeout=120):
         timeout = max(1, min(int(timeout or 120), 900))
+        id = id or (getattr(self, "_last_started", None) if until in ("process_exit", "output") else None)  # the last one
         t0, p = time.time(), PROCESSES.get(id) if id else None
         if until in ("process_exit", "output") and not p:
             return f"error: unknown process {id} (see list_processes)"
@@ -3343,8 +3367,11 @@ class Agent:
                     "que tu as compris. Puis corrige seulement ce qu'elle demande (par exemple supprimer les fichiers en "
                     "trop) ; ne refais pas la tâche et ne répète pas ton résumé précédent. Si tu n'es pas sûr de ce "
                     "qu'il veut, pose une seule question.]")
-        if (self.features["skills"] and self.auto_skill and not self.plan and not feedback
-                and (sk := ext.match_skill(self._task_words if self.CONTINUE_RE.search(task) else task, self.root, self.disabled_skills))):
+        recent = " ".join(str(m.get("content") or "")[:2000] for m in self.messages[-6:])
+        look = ext.design_follow_up(task, recent) if self.features["skills"] and self.auto_skill and not self.plan else None
+        if (self.features["skills"] and self.auto_skill and not self.plan and (not feedback or look)
+                and (sk := (None if feedback else ext.match_skill(self._task_words if self.CONTINUE_RE.search(task) else task,
+                                                                   self.root, self.disabled_skills)) or look)):
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
             task = f"{task}\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
