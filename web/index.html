@@ -4163,6 +4163,7 @@ async function send(textArg, attsArg, opts = {}) {
   const text = (textArg ?? $("#input").value).trim();
   const atts = attsArg ?? pending;
   if (textArg === undefined && text.startsWith("/") && runSlash(text)) return;
+  if (textArg === undefined && skillsAddCmd(text)) return;
   if (textArg === undefined && approvalAnswer(text)) return;
   const live = curRun();
   if (live && text && textArg === undefined) {  // Naim is working: guide it without stopping it
@@ -5973,6 +5974,39 @@ async function pluginCmd(arg) {
     }
   } catch (e) { toast("Plugin : " + e.message); pluginCard(`**Plugin : erreur** — ${e.message}`); }
 }
+// « npx skills add owner/repo » (the skills.sh command, also « owner/repo@skill » or « --skill nom ») typed in the chat:
+// the skills are really installed by the app — never left to the model, which could say it did without doing it
+function skillsAddCmd(text) {
+  const m = text.match(/^\s*(?:npx|bunx|pnpm dlx)\s+(?:-y\s+)?skills(?:@[\w.-]+)?\s+(?:add|install|i)\s+(\S+)((?:\s+(?:--skill|-s)\s+\S+)*)\s*$/i);
+  if (!m) return false;
+  let url = m[1].replace(/^https?:\/\/skills\.sh\//, ""), names = [...m[2].matchAll(/(?:--skill|-s)\s+(\S+)/g)].map((x) => x[1]);
+  const at = url.match(/^([\w.-]+\/[\w.-]+)@([\w.-]+)$/);
+  if (at) { url = at[1]; names.push(at[2]); }
+  $("#input").value = ""; autoGrow();
+  (async () => {
+    toast(`Installation des skills de ${url}…`);
+    try {
+      const found = await api("/api/skills/browse", { method: "POST", body: { url } });
+      if (found.error) throw new Error(found.error);
+      const chosen = names.length ? found.skills.filter((s) => names.includes(s.name) || names.includes(s.folder)) : found.skills;
+      if (!chosen.length) throw new Error(`aucun skill « ${names.join(", ")} » dans ${url} (il y a : ${found.skills.map((s) => s.name).join(", ")})`);
+      let r = await api("/api/skills/install", { method: "POST", body: { url, names: chosen.map((s) => s.name), scope: "utilisateur" } });
+      while (r.job) {  // a big batch: followed until done
+        await new Promise((ok) => setTimeout(ok, 1500));
+        const st = await api("/api/skills/install-status", { method: "POST", body: { job: r.job } });
+        if (st.error) throw new Error(st.error);
+        if (st.installed) r = { installed: st.installed, moved_to_library: r.moved_to_library };
+      }
+      if (r.error) throw new Error(r.error);
+      const where = r.moved_to_library ? "dans la **bibliothèque** (beaucoup d'un coup : trouvés quand une tâche en a besoin)" : "en **skills actives** (lues à chaque conversation)";
+      pluginCard(`**${r.installed.length} skill${r.installed.length > 1 ? "s" : ""} installé${r.installed.length > 1 ? "s" : ""}** depuis \`${url}\`, ${where} :\n\n`
+        + chosen.filter((s) => r.installed.includes(s.name) || r.installed.includes(ext_slug(s.name))).map((s) => `- \`${s.name}\` — ${s.description}`).join("\n")
+        + `\n\nPour t'en servir : écris ta demande normalement, ou « utilise le skill ${r.installed[0]} pour … ».`);
+    } catch (e) { pluginCard(`**Installation impossible** — ${e.message}`); }
+  })();
+  return true;
+}
+const ext_slug = (s) => String(s).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 // the « / » commands brought by the plugins that are on: each sends its prompt (plus what follows the command)
 async function loadPluginCommands() {
   const { commands } = await api("/api/plugins").catch(() => ({ commands: [] }));

@@ -108,6 +108,20 @@ MAKE_RE = re.compile(r"\b(cr[ée]e[rz]?|fais|faire|fait|g[ée]n[èe]re[rz]?|dess
 FILE_WORK_RE = re.compile(r"\b(?:r?ajout\w*|chang\w*|remplac\w*|rectifi\w*|refai\w*|retouch\w*|corrig\w*)\b|images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
                           r"installe|lance|ex[ée]cute|teste|" + MAC_ACTION, re.I)  # a file name alone (« un exemple chronometre.py ») is a question
+# « J'ai installé / ajouté / créé / envoyé… », « c'est installé », « installé avec succès »: a reply that says an action
+# was done — checked against the tools really used in that reply
+DONE_CLAIM_RE = re.compile(r"\bj'ai (?:bien |maintenant |d[ée]j[àa] )?(?:install[ée]|ajout[ée]|cr[ée]{2}|envoy[ée]|supprim[ée]|"
+                           r"modifi[ée]|enregistr[ée]|t[ée]l[ée]charg[ée]|lanc[ée]|imprim[ée]|configur[ée]|mis [àa] jour|"
+                           r"activ[ée]|d[ée]plac[ée]|renomm[ée]|copi[ée])\b|\b(?:est|sont|a [ée]t[ée]|ont [ée]t[ée]) "
+                           r"(?:maintenant |bien )?(?:install[ée]e?s?|ajout[ée]e?s?|cr[ée]{2}e?s?|envoy[ée]e?s?|activ[ée]e?s?)\b|"
+                           r"\bavec succ[èe]s\b", re.I)
+
+
+def claims_done(text):
+    """A sentence (not a question) saying an action was done."""
+    return any(DONE_CLAIM_RE.search(s) for s in re.split(r"(?<=[.!?…])\s+|\n+", text or "") if s.strip() and not s.strip().endswith("?"))
+
+
 # a maths request (« corrige l'exercice », « pose la multiplication ») is answered in the conversation, with formulas and
 # operations drawn there — not made into a file, unless a file is named
 MATH_ASK_RE = re.compile(r"\b(calculs?|calcule[rz]?|exercices?|op[ée]rations?|pos[ée]e?s?|pose[rz]?|multiplications?|divisions?|"
@@ -2122,6 +2136,18 @@ class Handler(BaseHTTPRequestHandler):
                 force_tool = bool(content.strip())  # it announced: the next step is the action itself
                 if content.strip():
                     self.event({"type": "token", "text": "\n\n"})
+                continue
+            if not calls and not stop.is_set() and not used_tools and nudges < 2 and claims_done(content):
+                # « J'ai installé le skill » with no tool used in this reply: nothing was done — it does it now, or
+                # says plainly that it was not done (the false sentence is corrected first)
+                nudges += 1
+                messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": (
+                    "Attention : tu dis que c'est fait, mais tu n'as utilisé AUCUN outil dans cette réponse, donc rien n'a "
+                    "été fait. Commence par corriger en une phrase (« En fait, ce n'était pas encore fait. »), puis fais-le "
+                    "vraiment avec tes outils et donne le résultat réel. Si tu ne peux pas, dis-le honnêtement.")})
+                force_tool = True
+                self.event({"type": "token", "text": "\n\n"})
                 continue
             asked = [w for w, rx in (("l'imprimer", r"imprim"), ("envoyer le SMS / message", r"\bsms\b|texto|imessage|message"),
                                       ("passer l'appel", r"appell?e|appeler|appel\b")) if re.search(rx, body["message"] or "", re.I)]

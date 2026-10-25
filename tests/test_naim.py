@@ -381,6 +381,19 @@ class ChatOrAgent(unittest.TestCase):
             self.assertIsNone(self.work(t), t)
 
 
+class NoFalseClaims(unittest.TestCase):
+    """« J'ai installé le skill » with no tool used is caught (it said so once and nothing was installed); a question
+    or a plain answer is not."""
+
+    def test_claims(self):
+        import server
+        for t in ("J'ai installé le skill Leonxlnx/unlazy. Ce skill ajoute…", "Le skill est maintenant installé.",
+                  "Installé avec succès !", "J'ai ajouté le hook à ton projet."):
+            self.assertTrue(server.claims_done(t), t)
+        for t in ("J'ai compris ta question.", "Voici un code Python qui crée un anneau.", "Le fichier a été créé hier par toi ?"):
+            self.assertFalse(server.claims_done(t), t)
+
+
 class MathsInTheConversation(unittest.TestCase):
     """« Corrige en posant les calculs » is maths answered in the conversation (formulas, operations drawn there),
     not a file to correct; a named file or a PDF still is file work."""
