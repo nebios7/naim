@@ -343,6 +343,29 @@ class DesignFollowUp(unittest.TestCase):
         self.assertIsNone(ext.design_follow_up("c'est pas enrichi du tout", "explique la boucle for"))
 
 
+class LocalSkill(unittest.TestCase):
+    """« installe ce skill ~/Downloads/SKILL.md »: a skill from a file of this Mac, active at once."""
+
+    SCRIPT = """
+import sys, tempfile
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import naimtools, extensions as ext
+f = Path(tempfile.mkdtemp()) / "SKILL.md"
+f.write_text("---\\nname: style-test\\ndescription: Un style de test\\n---\\n\\n# Style\\nBordures noires.")
+a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+print(a.install_skill(str(f)).split(":")[0])
+print([s["name"] for s in ext.list_skills() if s["name"] == "style-test" and s["enabled"]])
+print(a.install_skill(str(f)).split(":")[0], (ext.HOME / "skills" / ".anciens").is_dir())  # again: the old one kept aside
+"""
+
+    def test_local_file(self):
+        with tempfile.TemporaryDirectory() as home:
+            r = subprocess.run([sys.executable, "-c", self.SCRIPT, str(ROOT)], capture_output=True, text=True,
+                               env={**os.environ, "NAIM_HOME": home}, timeout=60)
+            self.assertEqual(r.stdout.splitlines(), ["ok", "['style-test']", "ok True"], r.stderr[-600:])
+
+
 class LiveProgress(unittest.TestCase):
     """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
 

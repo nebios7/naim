@@ -1000,6 +1000,11 @@ def last_traceback(text, max_lines=12):
 # ============================================================================ automatic skill choice
 SKILL_TRIGGERS = {
     # making a web app (« ouvre le site de la CAF », « imprime la page 2 » are not)
+    # the néo-brutaliste style: its template for a CV or a letter, the full guide for any other interface
+    "design-style-gitingest": r"\b(gitingest|n[ée]o-?brutal\w*|neu-?brutal\w*)\b[^.?!]{0,60}\b(cv|curriculum|lettre)\b|"
+                              r"\b(cv|curriculum|lettre)\b[^.?!]{0,60}\b(gitingest|n[ée]o-?brutal\w*|neu-?brutal\w*)\b",
+    "neobrutalism-ui": r"\b(n[ée]o-?brutal\w*|neu-?brutal\w*|gitingest|brutalis\w*)\b|bordures? noires?[^.?!]{0,40}ombres?|"
+                       r"ombres? (dures?|d[ée]cal[ée]es?)",
     "application-web": r"\b(lance[rz]?|d[ée]marre[rz]?)\b[^.?!]{0,30}\b(le|un|mon|ton) (serveur|site)\b[^.?!]{0,40}\b(site|cours|pages?|voir)\b|"
                        r"\b(cr[ée]\w*|fai[st]|faire|d[ée]velopp\w*|code[rz]?|construi\w*|programme[rz]?)\b[^.?!]{0,50}\b(appli(cation)?s?|app|site|page web|"
                        r"logiciel)\b|\b(flask|fastapi|django)\b",
@@ -1085,7 +1090,7 @@ def match_skill(task, root=None, disabled=()):
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
-    first = ("cv-lettre", "plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
+    first = ("design-style-gitingest", "neobrutalism-ui", "cv-lettre", "plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     triggers = dict(SKILL_TRIGGERS)
     priority = []
     try:  # words that pick a plugin's skill (« arduino », « cobol »…), checked before the broad generic skills

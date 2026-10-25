@@ -2017,6 +2017,9 @@ class Agent:
 
     def install_skill(self, url, names=None):
         url = str(url or "").strip()
+        local = Path(os.path.expanduser(url))
+        if url and not re.match(r"https?://", url) and (local.is_file() or (local / "SKILL.md").is_file()):
+            return self._install_local_skill(local)
         m = re.fullmatch(r"(?:https?://skills\.sh/)?([\w.-]+)/([\w.-]+)(?:@|/)([\w.-]+)", url)
         if m and not url.startswith("https://github.com"):  # « owner/repo@skill » (the skills search) or skills.sh/owner/repo/skill
             url, names = f"{m.group(1)}/{m.group(2)}", [m.group(3)]
@@ -2661,6 +2664,33 @@ class Agent:
         self.mcp_lookup.update(lookup)
         return (f"ok: tools of the MCP server {server} (call one with use_mcp(server=\"{server}\", tool=…, arguments={{…}})):\n"
                 + text)
+
+    def _install_local_skill(self, src):
+        """A skill from this Mac: a SKILL.md file (« ~/Downloads/SKILL.md ») or its folder (with its other files)."""
+        folder = src if src.is_dir() else None
+        f = (src / "SKILL.md") if folder else src
+        try:
+            meta, body = ext.parse_frontmatter(f.read_text(errors="replace"))
+        except OSError as e:
+            return f"error: {e}"
+        if not body.strip():
+            return "error: this file has no instructions (empty SKILL.md)"
+        name = ext.slugify(str((meta or {}).get("name") or (folder.name if folder else f.stem)))
+        dst = ext.HOME / "skills" / name
+        if not self.approve(f"Installer le skill « {name} »", f"{f}\n\n{str((meta or {}).get('description') or '')[:300]}"):
+            return "denied by the user"
+        if dst.exists():  # an older version: kept aside, never lost
+            back = ext.HOME / "skills" / ".anciens" / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}"
+            back.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(dst), str(back))
+        if folder:
+            shutil.copytree(folder, dst, ignore=shutil.ignore_patterns(".git", "node_modules", ".DS_Store"))
+        else:
+            dst.mkdir(parents=True)
+            shutil.copy(f, dst / "SKILL.md")
+        self.emit({"type": "skill_created", "name": name, "path": str(dst / "SKILL.md")})
+        return (f"ok: skill {name} installed from {f} into the active skills ({dst}). It is read with the others from "
+                f"the next message; load it now with use_skill(\"{name}\") if the task needs it.")
 
     def install_mcp(self, name, command=None, args=None, env=None, url=None, description=None):
         import mcp_catalog

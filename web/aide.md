@@ -162,6 +162,8 @@ Un clic : elle continue derrière sans être coupée, Naim passe à la suite et 
 
 - **Ajouter** : Personnaliser › Skills › lien GitHub › Parcourir › Installer (ou **Tout installer**), en choisissant
   « Installer dans ». Plus de 30 d'un coup en actives : elles vont d'office dans la bibliothèque.
+- **Depuis un fichier de ton Mac** : « installe ce skill ~/Downloads/SKILL.md » (ou le dossier qui le contient) : il
+  devient une skill active (ex. `neobrutalism-ui`, le style néo-brutaliste).
 - **Depuis le chat** : colle la commande du site skills.sh, par exemple `npx skills add Leonxlnx/unlazy`
   (ou `npx skills add owner/repo --skill nom`, `owner/repo@nom`). Naim installe vraiment les skills et affiche la liste.
 - **Automatique** : à chaque tâche sans skill active, Naim reçoit les 3 skills les plus proches de la bibliothèque
