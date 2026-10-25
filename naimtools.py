@@ -175,6 +175,15 @@ ADD_HOOK_TOOL = {"type": "function", "function": {"name": "add_hook", "descripti
         "scope": {"type": "string", "enum": ["project", "global"]},
         "timeout": {"type": "integer", "description": "seconds, 60 by default"}}, "required": ["event", "command"]}}}
 
+INSTALL_PLUGIN_TOOL = {"type": "function", "function": {"name": "install_plugin", "description": (
+    "Install a plugin (a bundle of skills, commands, MCP servers and hooks) when the user asks for one, with a link to "
+    "its GitHub repository or marketplace (also « /plugin marketplace add <link> » then « /plugin install <name> » "
+    "written by the user). Plugins made for other coding agents are translated. It returns what was really installed."),
+    "parameters": {"type": "object", "properties": {
+        "source": {"type": "string", "description": "link of the repository or marketplace (https://github.com/owner/repo or owner/repo)"},
+        "name": {"type": "string", "description": "the plugin to install from it, when it holds several"}},
+        "required": ["source"]}}}
+
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
     "Find the user's own files anywhere on the Mac (Bureau, Documents, Téléchargements…), like the Finder: by words in "
     "the file NAME and in the CONTENT of documents, programs' code left out, newest first. Use it whenever the user "
@@ -682,6 +691,7 @@ class Agent:
                 tools.append(MCP_SEARCH_TOOL)
                 tools.append(INSTALL_MCP_TOOL)
             tools.append(ADD_HOOK_TOOL)
+            tools.append(INSTALL_PLUGIN_TOOL)
             if self.external.get("on"):
                 tools.append(EXTERNAL_TOOL)
         if self.features["simulator"] and not self.subagent:
@@ -826,6 +836,13 @@ class Agent:
             if n:
                 parts.append(f"Skills library: {n} more skills, not listed here. When no skill above covers the task, "
                              "call chercher_skill with a few words of the task, then use_skill with the one you pick.")
+            if not self.subagent:
+                parts.append(
+                    "You extend yourself: when the user asks for a skill, an MCP server, a hook or a plugin, or when a task "
+                    "needs a capability you lack, install it yourself — install_skill (also what « npx skills add owner/repo » "
+                    "means), create_skill, install_mcp, add_hook, install_plugin — then check it works and use it. Never "
+                    "answer that you cannot or that something is missing before trying these tools; never say it is done "
+                    "before the tool's result says so. If a tool really fails, give its exact error and try another way.")
         if self.mcp_lookup:
             servers = sorted({v[0] for v in self.mcp_lookup.values()})
             parts.append("External tools from MCP servers are available (names start with mcp__): " + ", ".join(servers))
@@ -2665,6 +2682,29 @@ class Agent:
         self.emit({"type": "event", "icon": "🔌", "text": f"Serveur MCP installé : {name}"})
         return f"ok: MCP server {name} installed and working. Its tools (call with use_mcp(server=\"{name}\", tool=…, arguments={{…}})):\n{text}"
 
+    def install_plugin(self, source, name=None):
+        import plugins
+        if not self.approve("Installer un plugin", f"{source}{f' · {name}' if name else ''}\n\nSes skills, commandes, "
+                            "serveurs MCP et hooks (les hooks restent éteints : /plugin hooks <nom> on).", kind="command"):
+            return "denied by the user"
+        self.emit({"type": "status", "text": f"Naim récupère le plugin {name or source}…"})
+        try:
+            market = plugins.marketplace_add(source)
+            names = [p["name"] for p in market["plugins"]]
+            if name and name not in names:
+                return f"error: no plugin « {name} » in {source}. It holds: {', '.join(names)}"
+            if not name and len(names) > 1:
+                return f"Marketplace {market['name']} added. It holds several plugins: {', '.join(names)}. Call install_plugin again with name=…"
+            r = plugins.install_from_market(f"{name or names[0]}@{market['name']}")
+        except plugins.PluginError as e:
+            return f"error: {e}"
+        self.emit({"type": "event", "icon": "🔌", "text": f"Plugin installé : {r['name']}"})
+        return (f"ok: plugin {r['name']} installed and on: {r['skills']} skills"
+                + (f" and {r['agents']} agents as skills" if r["agents"] else "")
+                + (" (in the skills library: chercher_skill finds them)" if r["library"] else "")
+                + f", {r['commands']} commands /{r['name']}:…, {r['mcp']} MCP servers, {r['hooks']} hooks (off until the user "
+                f"types /plugin hooks {r['name']} on). They work from the next message.")
+
     def add_hook(self, event, command, matcher="", scope="project", timeout=60):
         if event not in naim_hooks.EVENTS:
             return f"error: unknown event « {event} ». One of: {', '.join(naim_hooks.EVENTS)}"
@@ -2749,7 +2789,7 @@ class Agent:
               "web_search": self.web_search, "web_fetch": self.web_fetch, "remember": self.remember, "forget": self.forget,
               "use_skill": self.use_skill, "create_skill": self.create_skill, "install_skill": self.install_skill,
               "use_mcp": self.use_mcp, "use_tools": self.use_tools, "delegate": self.delegate,
-              "install_mcp": self.install_mcp, "add_hook": self.add_hook,
+              "install_mcp": self.install_mcp, "add_hook": self.add_hook, "install_plugin": self.install_plugin,
               "update_todos": self.update_todos, "computer": self.computer, "simulator": self.simulator,
               "send_email": self.send_email, "chercher_contact": self.chercher_contact, "mail_inbox": self.mail_inbox, "mail_draft_reply": self.mail_draft_reply,
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,

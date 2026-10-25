@@ -273,6 +273,37 @@ print(plugins.mcp_servers()["revue-docs"]["command"].endswith("/plugins/revue/sr
             self.assertEqual(out[5], "True")
 
 
+class SelfExtend(unittest.TestCase):
+    """Naim installs a plugin itself (install_plugin) and its instructions tell it to extend itself instead of saying it
+    cannot."""
+
+    SCRIPT = """
+import json, shutil, sys, tempfile
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import plugins, naimtools
+src = Path(tempfile.mkdtemp()) / "depot"
+(src / ".agent-plugin").mkdir(parents=True)
+(src / ".agent-plugin/plugin.json").write_text(json.dumps({"name": "outils-revue", "version": "1.0"}))
+(src / "commands").mkdir()
+(src / "commands/relire.md").write_text("---\\ndescription: Relire\\n---\\nRelis : $ARGUMENTS")
+plugins._clone = lambda url, dst: shutil.copytree(src, dst)  # offline: the « repository » is a local folder
+a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+print(a.install_plugin("https://github.com/exemple/outils-revue").split(":")[0])
+print([c["cmd"] for c in plugins.commands() if c["plugin"] == "outils-revue"])
+print("You extend yourself" in a.messages[0]["content"], "install_plugin" in {t["function"]["name"] for t in a.tools})
+"""
+
+    def test_install_plugin(self):
+        with tempfile.TemporaryDirectory() as home:
+            r = subprocess.run([sys.executable, "-c", self.SCRIPT, str(ROOT)], capture_output=True, text=True,
+                               env={**os.environ, "NAIM_HOME": home}, timeout=60)
+            out = r.stdout.splitlines()
+            self.assertEqual(out[0], "ok", r.stderr[-800:])
+            self.assertEqual(out[1], "['/outils-revue:relire']")
+            self.assertEqual(out[2], "True True")
+
+
 class LiveProgress(unittest.TestCase):
     """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
 

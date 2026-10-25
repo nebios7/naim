@@ -2144,8 +2144,10 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "assistant", "content": content})
                 messages.append({"role": "user", "content": (
                     "Attention : tu dis que c'est fait, mais tu n'as utilisé AUCUN outil dans cette réponse, donc rien n'a "
-                    "été fait. Commence par corriger en une phrase (« En fait, ce n'était pas encore fait. »), puis fais-le "
-                    "vraiment avec tes outils et donne le résultat réel. Si tu ne peux pas, dis-le honnêtement.")})
+                    "été fait. Commence par corriger en une phrase (« En fait, ce n'était pas encore fait. »), puis FAIS-LE "
+                    "maintenant : tu en as les outils (install_skill pour un skill ou « npx skills add », install_mcp, "
+                    "add_hook, install_plugin, run_command, write_file…). Vérifie que c'est vraiment fait, puis donne le "
+                    "résultat réel. Seulement si l'outil échoue, donne son erreur exacte et essaie autrement.")})
                 force_tool = True
                 self.event({"type": "token", "text": "\n\n"})
                 continue
