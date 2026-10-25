@@ -113,7 +113,9 @@ FILE_WORK_RE = re.compile(r"\b(?:r?ajout\w*|chang\w*|remplac\w*|rectifi\w*|refai
 MATH_ASK_RE = re.compile(r"\b(calculs?|calcule[rz]?|exercices?|op[ée]rations?|pos[ée]e?s?|pose[rz]?|multiplications?|divisions?|"
                          r"additions?|soustractions?|[ée]quations?|fractions?|pourcentages?|conversions?|convertis|convertir|aires?|"
                          r"p[ée]rim[èe]tres?|volumes?|g[ée]om[ée]trie|triangles?|cercles?|th[ée]or[èe]me|maths?|math[ée]matiques?|"
-                         r"proportionnalit[ée]|r[èe]gle de trois)\b", re.I)
+                         r"proportionnalit[ée]|r[èe]gle de trois|matrices?|d[ée]terminant|vecteurs?|fonctions? (affine|lin[ée]aire|carr[ée]e|"
+                         r"inverse|exponentielle|logarithme)|courbes?|d[ée]riv[ée]e?s?|int[ée]grales?|primitives?|limites?|"
+                         r"probabilit[ée]s?|statistiques?|trigonom[ée]trie|discriminant|second degr[ée]|polyn[ôo]mes?)\b", re.I)
 FILE_NAMED_RE = re.compile(r"fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|\.(py|js|html|txt|md|csv)\b|enregistr|sauvegard|"
                            r"t[ée]l[ée]charg|imprim|projet|dossier|\bcode\b", re.I)
 TRIVIAL_WORDS = set("""salut bonjour bonsoir bonsoire coucou hello hey hi yo re merci thanks thank you beaucoup bien ok okay

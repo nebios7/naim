@@ -179,8 +179,9 @@ Un clic : elle continue derrière sans être coupée, Naim passe à la suite et 
 Un plugin (`~/.naim/plugins/<nom>/plugin.json`) apporte d'un coup des skills, des serveurs MCP, des commandes `/`,
 des hooks et la liste de ses outils Homebrew. Personnaliser › Plugins : activer, installer les outils, ajouter depuis
 GitHub ou un dossier, retirer (Corbeille). Fournis : **électronique** (Arduino, Raspberry Pi), **mainframe** (COBOL
-vérifié par un hook, JCL, DB2, REXX, PL/I), **algorithmique** (pseudo-code), **mathematiques** (formules, opérations
-posées calculées par Naim, figures de géométrie, énoncé puis corrigé), **naim-mem** (la mémoire des sessions : des hooks
+vérifié par un hook, JCL, DB2, REXX, PL/I), **algorithmique** (pseudo-code), **mathematiques** (formules : algèbre,
+matrices, vecteurs, dérivées, intégrales, probabilités… ; opérations posées et courbes de fonctions calculées par Naim ;
+figures de géométrie ; énoncé puis corrigé), **naim-mem** (la mémoire des sessions : des hooks
 gardent ce qui est fait, un serveur MCP le retrouve ; « on avait corrigé quoi la dernière fois ? »).
 
 #### Installer un plugin depuis une marketplace (dans le chat)

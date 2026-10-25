@@ -350,7 +350,8 @@ class SkillRouting(unittest.TestCase):
 
     def test_maths(self):
         for t in ("Corrige en posant les calculs : 234,56 × 12,3", "les sujets de maths du concours IFSI avec la correction",
-                  "calcule le périmètre d'un cercle de rayon 3 cm"):
+                  "calcule le périmètre d'un cercle de rayon 3 cm", "calcule le déterminant de cette matrice",
+                  "trace la courbe de f(x) = x^2 - 3", "dérivée de ln(x)", "probabilité de tirer deux as"):
             self.assertEqual(self.name(t), "maths-affichage", t)
 
     def test_memory(self):

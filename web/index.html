@@ -1520,6 +1520,9 @@ body { letter-spacing: -0.006em; }
 .md figure.pose figcaption b { color: var(--text); }
 .md figure.mfig { margin: 12px 0 4px; display: inline-block; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .md figure.mfig img { display: block; max-width: min(100%, 560px); height: auto; }
+.md figure.mgraph { display: block; width: fit-content; max-width: 100%; }
+.md figure.mgraph svg { display: block; max-width: 100%; height: auto; }
+.md figure.mgraph figcaption { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font: 13px ui-monospace, Menlo, monospace; }
 .md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
 .turn.plugcard { align-items: flex-start; }
 .turn.plugcard .md { min-width: 0; }
@@ -2184,6 +2187,9 @@ function userHtml(src) {
 }
 function codeBlock(lang, body, file = "", open = false) {
   if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }  // an operation « posée »: computed
+  if (/^(graphe|graph|courbe|fonction)$/i.test(lang || "") && !open) {  // a function's graph: computed and drawn
+    try { const h = graphHtml(body); if (h) return h; } catch (e) { /* unreadable: shown as written */ }
+  }
   if (/^svg$/i.test(lang || "") && !open && /^\s*<svg[\s>]/i.test(body)) {  // a figure: drawn as an image (no script runs)
     return `<figure class="mfig"><img alt="figure" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(body)}"></figure>`
       + `<details class="mfigcode"><summary>Code de la figure</summary>${codeBlockRaw("svg", body, file, open)}</details>`;
@@ -2355,6 +2361,131 @@ function poseHtml(src) {
   }
   return `<figure class="pose"><table class="${op === "÷" ? "pdiv" : ""}">${rows}</table>`
     + `<figcaption><div>${esc(a.txt)} ${op === "÷" ? ":" : op} ${esc(b.txt)} = <b>${esc(result)}</b></div>${note ? `<span>${esc(note)}</span>` : ""}</figcaption></figure>`;
+}
+
+// ---- a graph (```graphe  f(x) = x^2 - 2x + 1 · g(x) = 2x - 3 · x : -2..4 · A(1;0)): the curves are computed and drawn
+// here, exactly; the expression is read by a small parser (numbers, x, + − × ÷ ^, sin cos tan exp ln log √ abs, π, e),
+// nothing is evaluated as code
+function mathFn(src) {
+  const s = String(src).toLowerCase().replace(/\s+/g, "").replace(/(\d),(\d)/g, "$1.$2").replace(/[×·]/g, "*")
+    .replace(/[−–]/g, "-").replace(/÷/g, "/").replace(/²/g, "^2").replace(/³/g, "^3").replace(/π/g, "pi").replace(/√/g, "sqrt");
+  let i = 0;
+  const FN = { sin: Math.sin, cos: Math.cos, tan: Math.tan, exp: Math.exp, ln: Math.log, log: Math.log10, sqrt: Math.sqrt,
+    racine: Math.sqrt, abs: Math.abs, arctan: Math.atan, arcsin: Math.asin, arccos: Math.acos };
+  const fail = () => { throw new Error("expression illisible : " + src); };
+  const startsAtom = () => /[\d.(a-z]/.test(s[i] || "");
+  function expr() {
+    let f = term();
+    while (s[i] === "+" || s[i] === "-") { const op = s[i++], a = f, b = term(); f = op === "+" ? (x) => a(x) + b(x) : (x) => a(x) - b(x); }
+    return f;
+  }
+  function term() {
+    let f = power();
+    for (;;) {
+      if (s[i] === "*" || s[i] === "/") { const op = s[i++], a = f, b = power(); f = op === "*" ? (x) => a(x) * b(x) : (x) => a(x) / b(x); }
+      else if (startsAtom()) { const a = f, b = power(); f = (x) => a(x) * b(x); }  // 2x, 3(x+1), x sin(x)
+      else return f;
+    }
+  }
+  function power() {
+    if (s[i] === "-") { i++; const a = power(); return (x) => -a(x); }
+    if (s[i] === "+") { i++; return power(); }
+    const base = atom();
+    if (s[i] === "^") { i++; const e = power(); return (x) => Math.pow(base(x), e(x)); }
+    return base;
+  }
+  function atom() {
+    const n = s.slice(i).match(/^\d*\.?\d+/);
+    if (n) { i += n[0].length; const v = +n[0]; return () => v; }
+    if (s[i] === "(") { i++; const f = expr(); if (s[i++] !== ")") fail(); return f; }
+    const w = s.slice(i).match(/^[a-z]+/);
+    if (!w) fail();
+    for (const name of Object.keys(FN).sort((a, b) => b.length - a.length)) {
+      if (w[0].startsWith(name)) {
+        i += name.length;
+        const g = FN[name], a = s[i] === "(" ? atom() : power();
+        return (x) => g(a(x));
+      }
+    }
+    if (w[0].startsWith("pi")) { i += 2; return () => Math.PI; }
+    if (w[0][0] === "x") { i += 1; return (x) => x; }
+    if (w[0][0] === "e") { i += 1; return () => Math.E; }
+    return fail();
+  }
+  const f = expr();
+  if (i !== s.length) fail();
+  return f;
+}
+function niceStep(span) {  // 1, 2 or 5 × 10^k, about 8 graduations
+  const raw = span / 8, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p;
+  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
+const frNum = (v) => String(+v.toFixed(6)).replace(".", ",").replace("-", "−");
+let graphSeq = 0;
+function graphHtml(src) {
+  const curves = [], points = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
+  let xr = null, yr = null;
+  for (const raw of String(src).split("\n")) {
+    const l = raw.trim();
+    if (!l) continue;
+    let m;
+    if ((m = l.match(/^([xy])\s*(?::|∈|dans)\s*\[?\s*(.+?)\s*(?:\.\.|;|à)\s*(.+?)\s*\]?$/i))) {
+      const r = [mathFn(m[2])(0), mathFn(m[3])(0)].sort((a, b) => a - b);  // bounds may be computed: -2pi, pi/2, sqrt(2)
+      if (m[1].toLowerCase() === "x") xr = r; else yr = r;
+    } else if ((m = l.match(/^([A-Z]['’]?)\s*\(\s*(-?[\d.,]+)\s*[;|]\s*(-?[\d.,]+)\s*\)$/))) {
+      points.push({ name: m[1], x: +m[2].replace(",", "."), y: +m[3].replace(",", ".") });
+    } else if ((m = l.match(/^(?:([a-zA-Z]\w*)\s*\(\s*x\s*\)|y)\s*=\s*(.+)$/))) {
+      curves.push({ name: m[1] || "y", text: m[2], f: mathFn(m[2]) });
+    } else return null;
+  }
+  if (!curves.length && !points.length) return null;
+  xr ||= points.length ? [Math.min(-1, ...points.map((p) => p.x)) - 1, Math.max(1, ...points.map((p) => p.x)) + 1] : [-5, 5];
+  const N = 480, samples = curves.map((c) => Array.from({ length: N + 1 }, (_, k) => { const x = xr[0] + (xr[1] - xr[0]) * k / N, y = c.f(x); return [x, Number.isFinite(y) ? y : NaN]; }));
+  if (!yr) {  // what the curves show, without their far ends (an asymptote does not crush the rest)
+    const ys = samples.flat().map((p) => p[1]).filter(Number.isFinite).concat(points.map((p) => p.y)).sort((a, b) => a - b);
+    const lo = ys.length ? ys[Math.floor(ys.length * 0.03)] : -5, hi = ys.length ? ys[Math.ceil(ys.length * 0.97) - 1] : 5;
+    const pad = Math.max(0.5, (hi - lo) * 0.1);
+    yr = [Math.min(lo - pad, 0), Math.max(hi + pad, 0)];
+    if (yr[1] - yr[0] < 1) yr = [yr[0] - 1, yr[1] + 1];
+  }
+  const W = 520, H = 340, L = 40, R = 16, T = 14, B = 30;
+  const X = (x) => L + (x - xr[0]) / (xr[1] - xr[0]) * (W - L - R), Y = (y) => T + (yr[1] - y) / (yr[1] - yr[0]) * (H - T - B);
+  const sx = niceStep(xr[1] - xr[0]), sy = niceStep(yr[1] - yr[0]);
+  let g = "";
+  for (let v = Math.ceil(xr[0] / sx) * sx; v <= xr[1] + 1e-9; v += sx) {
+    g += `<line x1="${X(v)}" y1="${T}" x2="${X(v)}" y2="${H - B}" stroke="#e6e2da"/>`;
+    if (Math.abs(v) > 1e-9) g += `<text x="${X(v)}" y="${Math.min(H - B, Math.max(T, Y(0))) + 14}" text-anchor="middle">${frNum(v)}</text>`;
+  }
+  for (let v = Math.ceil(yr[0] / sy) * sy; v <= yr[1] + 1e-9; v += sy) {
+    g += `<line x1="${L}" y1="${Y(v)}" x2="${W - R}" y2="${Y(v)}" stroke="#e6e2da"/>`;
+    if (Math.abs(v) > 1e-9) g += `<text x="${Math.min(W - R, Math.max(L, X(0))) - 5}" y="${Y(v) + 4}" text-anchor="end">${frNum(v)}</text>`;
+  }
+  const ax = Math.min(H - B, Math.max(T, Y(0))), ay = Math.min(W - R, Math.max(L, X(0)));
+  g += `<line x1="${L}" y1="${ax}" x2="${W - R}" y2="${ax}" stroke="#555" stroke-width="1.2" marker-end="url(#${id}f)"/>`
+    + `<line x1="${ay}" y1="${H - B}" x2="${ay}" y2="${T}" stroke="#555" stroke-width="1.2" marker-end="url(#${id}f)"/>`
+    + `<text x="${W - R - 2}" y="${ax - 6}" text-anchor="end" font-style="italic">x</text><text x="${ay + 6}" y="${T + 10}" font-style="italic">y</text>`
+    + `<text x="${ay - 5}" y="${ax + 14}" text-anchor="end">0</text>`;
+  const COLORS = ["#c4553a", "#3d7cc9", "#2f9a6f", "#9a5cc9", "#c98a1f"];
+  curves.forEach((c, n) => {
+    let d = "", prev = null;
+    for (const [x, y] of samples[n]) {
+      const inside = Number.isFinite(y) && y >= yr[0] - (yr[1] - yr[0]) && y <= yr[1] + (yr[1] - yr[0]);
+      const jump = prev && Number.isFinite(prev) && Math.abs(y - prev) > (yr[1] - yr[0]) * 0.8;  // an asymptote: the curve is cut
+      d += inside ? `${d && !jump && Number.isFinite(prev) ? "L" : "M"}${X(x).toFixed(1)},${Y(y).toFixed(1)}` : "";
+      prev = inside ? y : NaN;
+    }
+    g += `<path d="${d}" fill="none" stroke="${COLORS[n % COLORS.length]}" stroke-width="2.2" clip-path="url(#${id}z)"/>`;
+    const lab = samples[n].filter(([, y]) => Number.isFinite(y) && y > yr[0] && y < yr[1]).at(-Math.round(N * 0.06) || -1);
+    if (lab) g += `<text x="${X(lab[0]) - 4}" y="${Y(lab[1]) - 8}" text-anchor="end" fill="${COLORS[n % COLORS.length]}" font-weight="600" font-style="italic">${esc(c.name === "y" ? "" : "C" + c.name)}</text>`;
+  });
+  points.forEach((pt) => {
+    g += `<circle cx="${X(pt.x)}" cy="${Y(pt.y)}" r="3.6" fill="#222"/><text x="${X(pt.x) + 6}" y="${Y(pt.y) - 6}" font-weight="600">${esc(pt.name)}</text>`;
+  });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" font-family="Helvetica, Arial" font-size="11" fill="#333">`
+    + `<defs><marker id="${id}f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>`
+    + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}</svg>`;
+  const legend = curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join("");
+  return `<figure class="mfig mgraph">${svg}<figcaption>${legend}</figcaption></figure>`;
 }
 
 function mdBlocks(src) {
