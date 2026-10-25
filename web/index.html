@@ -2233,14 +2233,24 @@ const MATH_RE = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(^|[^\
 function md(src) {
   const math = [];
   const keep = (tex, display) => `\u0001${math.push({ tex: tex.trim(), display }) - 1}\u0001`;
-  src = String(src || "").split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/).map((part, i) => {
-    if (i % 2) {  // code stays code, except a ```math block
-      const f = part.match(/^```\s*(math|latex|tex|katex)\s*\n([\s\S]*?)```$/i);
-      return f ? "\n" + keep(f[2], true) + "\n" : part;
+  const aside = (text) => text.split(/(`[^`\n]*`)/).map((part, i) => (i % 2 ? part : part.replace(MATH_RE, (m, dd, bd, pi, pre, si) =>
+    dd !== undefined ? keep(dd, true) : bd !== undefined ? keep(bd, true) : pi !== undefined ? keep(pi, false) : pre + keep(si, false)))).join("");
+  // a code block opens only with ``` at the start of a line (« des blocs ```pose » in a sentence is not one): code stays
+  // code, a ```math block becomes a formula, everything else has its formulas put aside
+  const out = [];
+  let buf = [], fence = null;
+  for (const l of String(src || "").split("\n")) {
+    const f = !fence && l.match(/^\s*```\s*([\w+#.-]*)/);
+    if (f) { out.push(aside(buf.join("\n"))); buf = []; fence = { lang: f[1], lines: [l] }; continue; }
+    if (fence && /^\s*```\s*$/.test(l)) {
+      out.push(/^(math|latex|tex|katex)$/i.test(fence.lang) ? keep(fence.lines.slice(1).join("\n"), true) : [...fence.lines, l].join("\n"));
+      fence = null; continue;
     }
-    return part.replace(MATH_RE, (m, dd, bd, pi, pre, si) =>
-      dd !== undefined ? keep(dd, true) : bd !== undefined ? keep(bd, true) : pi !== undefined ? keep(pi, false) : pre + keep(si, false));
-  }).join("");
+    (fence ? fence.lines : buf).push(l);
+  }
+  if (fence) out.push(fence.lines.join("\n"));  // a block still being written
+  out.push(aside(buf.join("\n")));
+  src = out.join("\n");
   const html = mdBlocks(src);
   if (!math.length) return html;
   const put = (n) => {
