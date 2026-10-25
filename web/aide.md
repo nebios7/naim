@@ -43,10 +43,15 @@ le disque** : aux ouvertures suivantes, elles sont rechargées en une seconde.
 | `/new` | Nouvelle conversation |
 | `/compact` | Résumer le début de la conversation (plus rapide) |
 | `/git` · `/mcp` · `/skills` · `/memory` | Ouvrir le panneau correspondant |
+| `/plugin marketplace add <lien>` | Ajouter une marketplace de plugins (un dépôt GitHub) |
+| `/plugin install <nom>` | Installer un plugin de cette marketplace (voir **4. Plugins**) |
+| `/plugin hooks <nom> on` · `off` | Allumer ou éteindre les hooks d'un plugin |
+| `/plugin` | Voir les plugins installés et les marketplaces |
 | `/planifier <demande>` | Programmer une tâche récurrente ou à une heure précise |
 | `/help` | Toutes les commandes et raccourcis |
 
-Les **plugins** ajoutent leurs propres commandes (ex. `/cartes`, `/televerser`, `/cobol`, `/algo`, `/anime`).
+Les **plugins** ajoutent leurs propres commandes (ex. `/cartes`, `/televerser`, `/cobol`, `/algo`, `/anime`, `/maths`).
+Ceux installés avec `/plugin install` ont le nom du plugin devant : `/ecc:plan`, `/ecc:evolve`…
 
 ### Raccourcis clavier
 
@@ -174,14 +179,51 @@ Un clic : elle continue derrière sans être coupée, Naim passe à la suite et 
 Un plugin (`~/.naim/plugins/<nom>/plugin.json`) apporte d'un coup des skills, des serveurs MCP, des commandes `/`,
 des hooks et la liste de ses outils Homebrew. Personnaliser › Plugins : activer, installer les outils, ajouter depuis
 GitHub ou un dossier, retirer (Corbeille). Fournis : **électronique** (Arduino, Raspberry Pi), **mainframe** (COBOL
-vérifié par un hook, JCL, DB2, REXX, PL/I), **algorithmique** (pseudo-code), **naim-mem** (la mémoire des sessions : des hooks gardent ce qui
-est fait, un serveur MCP le retrouve ; « on avait corrigé quoi la dernière fois ? »).
+vérifié par un hook, JCL, DB2, REXX, PL/I), **algorithmique** (pseudo-code), **mathematiques** (formules, opérations
+posées calculées par Naim, figures de géométrie, énoncé puis corrigé), **naim-mem** (la mémoire des sessions : des hooks
+gardent ce qui est fait, un serveur MCP le retrouve ; « on avait corrigé quoi la dernière fois ? »).
+
+#### Installer un plugin depuis une marketplace (dans le chat)
+
+Une marketplace est un dépôt GitHub qui contient un ou plusieurs plugins. Naim comprend aussi les plugins faits pour
+d'autres agents de code (un dossier `.<agent>-plugin/` avec `plugin.json` ou `marketplace.json`) et les traduit pour lui.
+Exemple avec **ECC** :
+
+```bash
+/plugin marketplace add https://github.com/affaan-m/ECC
+```
+
+Naim récupère le dépôt et affiche les plugins qu'il contient. Puis :
+
+```bash
+/plugin install ecc
+```
+
+Attention à l'orthographe : c'est `/plugin`, pas `/plungin`. Ce que Naim fait à l'installation (rien n'est exécuté) :
+
+| Partie du plugin | Dans Naim |
+|---|---|
+| **Skills** | actives s'il y en a peu ; au-delà de 12, dans la **bibliothèque** (trouvées au besoin, les instructions de Naim restent légères) |
+| **Agents** | deviennent des skills `agent-<nom>` |
+| **Commandes** | commandes `/<plugin>:<commande>` (ex. `/ecc:plan`), ce que tu tapes après prend la place de `$ARGUMENTS` |
+| **Serveurs MCP** | ajoutés avec le plugin |
+| **Hooks** | installés **éteints** (écrits pour un autre outil, ils pourraient ralentir ou bloquer) : `/plugin hooks ecc on` pour les essayer, `off` pour revenir |
+
+Pour ECC : 311 skills et 71 agents en bibliothèque, 97 commandes `/ecc:…`, 27 hooks éteints, environ 58 Mo. Réinstaller
+un plugin met l'ancienne version de côté (`~/.naim/plugins.anciens`), elle n'est jamais perdue. Retirer un plugin :
+Personnaliser › Plugins (il va dans la Corbeille).
 
 ### Hooks (automatismes)
 
 Des commandes lancées à des moments précis : `~/.naim/hooks.json` (tous les projets), `<projet>/.naim/hooks.json`,
-ou un plugin. Événements : `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. La commande reçoit un JSON sur
-son entrée ; code de sortie **2** = bloquer (ou renvoyer une remarque à Naim).
+ou un plugin. Événements : `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, `SessionStart` (premier message
+d'une conversation : ce que la commande affiche est ajouté au contexte) et `PreCompact` (juste avant que Naim résume ses
+anciennes étapes : ce qu'elle affiche est gardé dans le résumé). La commande reçoit un JSON sur son entrée ; code de
+sortie **2** = bloquer (ou renvoyer une remarque à Naim).
+
+Tu peux aussi simplement **demander à Naim** : « ajoute un hook qui lance les tests après chaque modification »
+(il l'écrit lui-même, outil `add_hook`) ou « installe le serveur MCP `npx -y @scope/serveur` » (outil `install_mcp` : il le
+démarre une fois pour vérifier qu'il marche, sinon il ne garde rien).
 
 ```json
 {"hooks": {"PostToolUse": [{"matcher": "write_file|edit_file",
