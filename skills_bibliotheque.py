@@ -53,12 +53,20 @@ def _words(s):
     return [w for w in re.findall(r"[a-z0-9][a-z0-9+#.-]{1,}", _plain(s)) if w not in STOP and len(w) > 1]
 
 
+def _roots():
+    """The library itself, then the skill folders of the big plugins that are on (hundreds of skills, found on demand)."""
+    try:
+        import plugins
+        extra = [d for d in plugins.library_dirs() if d.is_dir()]
+    except Exception:  # noqa: BLE001 — a broken plugin never hides the library
+        extra = []
+    return ([LIB] if LIB.is_dir() else []) + extra
+
+
 def _stamp():
     """Changes when a skill is added, removed or edited (only the folders' times: cheap even for thousands)."""
-    if not LIB.is_dir():
-        return ""
-    dirs = [d for d in LIB.iterdir() if d.is_dir() and not d.name.startswith(".")]  # never its own index file
-    return f"{len(dirs)}:{sum(int(d.stat().st_mtime_ns // 1000) for d in dirs)}"
+    dirs = [d for r in _roots() for d in r.iterdir() if d.is_dir() and not d.name.startswith(".")]  # never its own index
+    return f"{len(_roots())}:{len(dirs)}:{sum(int(d.stat().st_mtime_ns // 1000) for d in dirs)}" if dirs else ""
 
 
 def index():
@@ -71,7 +79,7 @@ def index():
     except (OSError, ValueError):
         pass
     out = []
-    for d in sorted(LIB.iterdir()) if LIB.is_dir() else []:
+    for d in [d for r in _roots() for d in sorted(r.iterdir())]:
         f = d / "SKILL.md"
         if not (d.is_dir() and f.is_file()):
             continue
@@ -85,8 +93,8 @@ def index():
                     "head": re.sub(r"\s+", " ", body)[:1200],
                     "scripts": sorted({p.suffix for p in files if p.suffix.lower() in SCRIPT_EXTS}),
                     "files": len(files)})
-    if LIB.is_dir():
-        INDEX.write_text(json.dumps({"stamp": stamp, "skills": out}, ensure_ascii=False))
+    LIB.mkdir(parents=True, exist_ok=True)
+    INDEX.write_text(json.dumps({"stamp": stamp, "skills": out}, ensure_ascii=False))
     return out
 
 

@@ -1521,6 +1521,9 @@ body { letter-spacing: -0.006em; }
 .md figure.mfig { margin: 12px 0 4px; display: inline-block; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .md figure.mfig img { display: block; max-width: min(100%, 560px); height: auto; }
 .md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
+.turn.plugcard { align-items: flex-start; }
+.turn.plugcard .md { min-width: 0; }
+.turn.plugcard .md p:last-child { margin-bottom: 0; }
 .bubble pre.ucode { margin: 6px 0; padding: 9px 12px; background: var(--code); border: 1px solid var(--line); border-radius: 10px;
   white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.55 ui-monospace, "SF Mono", Menlo, monospace; }
 .bubble code.uinline { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; background: var(--code);
@@ -4612,6 +4615,7 @@ const SLASH = [
   ["/compact", "", "Résumer le début de la conversation (plus rapide)", () => compactNow()],
   ["/git", "", "Ouvrir le panneau Git", () => naimCmd("git")],
   ["/mcp", "", "Gérer les serveurs MCP", () => naimCmd("mcp")],
+  ["/plugin", "marketplace add <lien> | install <nom> | hooks <nom> on|off", "Ajouter une marketplace de plugins et installer un plugin (aussi ceux faits pour d'autres agents de code)", (a) => pluginCmd(a)],
   ["/skills", "", "Gérer les skills", () => naimCmd("skills")],
   ["/memory", "", "Voir la mémoire de Naim", () => naimCmd("memory")],
   ["/planifier", "<demande>", "Programmer une tâche récurrente ou à une heure précise", (a) => { schEdit = a ? { prompt: a } : null; setView("schedules"); }],
@@ -4675,7 +4679,7 @@ function updateSlash() {
 }
 function pickSlash(i) { $("#input").value = slashItems[i][0] + " "; $("#slash").hidden = true; $("#input").focus(); autoGrow(); }
 function runSlash(text) {
-  const m = text.match(/^(\/\w+)\s*([\s\S]*)$/);
+  const m = text.match(/^(\/[\w-]+(?::[\w-]+)?)\s*([\s\S]*)$/);
   const cmd = m && SLASH.find(([c]) => c === m[1]);
   if (!cmd) return false;
   $("#input").value = ""; autoGrow(); $("#slash").hidden = true;
@@ -5754,7 +5758,7 @@ async function loadPlugins() {
       <div style="display:flex;align-items:center;gap:8px"><b style="flex:1"><span class="attic">${svgI("layers")}</span>${esc(p.name)}</b>${p.version ? `<span class="lang">v${esc(p.version)}</span>` : ""}
         <label class="switch" title="Naim peut s'en servir"><input type="checkbox" ${p.enabled ? "checked" : ""}><span></span></label></div>
       <small style="color:var(--muted)">${esc(p.description)}</small>
-      ${chips("Skills", p.skills)}${chips("MCP", p.mcp)}${chips("Commandes", p.commands.map((x) => x.cmd))}${chips("Hooks", p.hooks || [])}
+      ${chips("Skills", p.skills)}${p.library_skills ? chips("Bibliothèque", [`${p.library_skills} skills`]) : ""}${chips("MCP", p.mcp)}${chips("Commandes", p.commands.map((x) => x.cmd))}${chips("Hooks", p.hooks || [])}
       ${p.tools.length ? `<small style="color:var(--muted)"><b style="font-weight:500;color:var(--text)">Outils</b> ${p.tools.map((t) => `<span title="${esc(t.why || "")}" style="color:${t.ok ? "var(--ok, #5cb85c)" : "var(--warn, #e0a43c)"}">${t.ok ? "✓" : "✗"} ${esc(t.cmd)}</span>`).join(" · ")}</small>` : ""}
       <div style="display:flex;gap:6px;align-items:center;margin-top:auto"><div class="spacer"></div>
         ${missing.length ? `<button class="btn primary" data-tools>Installer les outils (${missing.length})</button>` : ""}
@@ -5787,13 +5791,54 @@ async function loadPlugins() {
   $("#plgAdd").onclick = add;
   $("#plgSrc").onkeydown = (e) => { if (e.key === "Enter") add(); };
 }
+// « /plugin marketplace add <lien> », « /plugin install <nom> », « /plugin hooks <nom> on|off », « /plugin » alone: the
+// list. What it did is shown in a card of the conversation
+function pluginCard(markdown) {
+  if (view !== "chat") setView("chat");
+  const d = document.createElement("div"); d.className = "turn bgnote plugcard";
+  d.innerHTML = `<span class="bgic">${svgI("layers")}</span><div class="md">${md(markdown)}</div>`;
+  $("#thread").appendChild(d); d.scrollIntoView({ block: "nearest" });
+}
+async function pluginCmd(arg) {
+  const w = String(arg || "").trim().split(/\s+/), [a0, a1, a2] = w;
+  const call = (body) => api("/api/plugins/market", { method: "POST", body });
+  try {
+    if (a0 === "marketplace" && a1 === "add" && a2) {
+      toast("Récupération de la marketplace…");
+      const r = await call({ action: "add", url: a2 });
+      if (r.error) throw new Error(r.error);
+      pluginCard(`**Marketplace « ${r.name} » ajoutée** · ${r.plugins.length} plugin${r.plugins.length > 1 ? "s" : ""} :\n\n`
+        + r.plugins.map((x) => `- \`${x.name}\`${x.version ? " " + x.version : ""} — ${x.description}`).join("\n")
+        + `\n\nPour l'installer : \`/plugin install ${r.plugins[0].name}\``);
+    } else if (a0 === "install" && a1) {
+      toast(`Installation de ${a1}…`);
+      const r = await call({ action: "install", name: a1 });
+      if (r.error) throw new Error(r.error);
+      pluginCard(`**Plugin « ${r.name} » installé et activé** (depuis ${r.marketplace})\n\n`
+        + `- ${r.skills} skills${r.agents ? ` et ${r.agents} agents (devenus des skills)` : ""}${r.library ? " — dans la bibliothèque : Naim les trouve quand une tâche en a besoin, ses instructions restent légères" : ""}\n`
+        + `- ${r.commands} commandes : tape \`/${r.name}:\` pour les voir\n- ${r.mcp} serveur${r.mcp > 1 ? "s" : ""} MCP\n`
+        + (r.hooks ? `- ${r.hooks} hooks, **éteints** : ils ont été écrits pour un autre outil. Pour les essayer : \`/plugin hooks ${r.name} on\`` : "- aucun hook"));
+      loadPluginCommands();
+    } else if (a0 === "hooks" && a1 && /^(on|off)$/.test(a2 || "")) {
+      const r = await call({ action: "hooks", name: a1, on: a2 === "on" });
+      if (r.error) throw new Error(r.error);
+      toast(`Hooks de ${a1} ${r.on ? "allumés" : "éteints"} (${r.hooks})`);
+    } else {
+      const r = await call({ action: "list" });
+      const mine = (r.plugins || []).map((x) => `- \`${x.name}\` ${x.version || ""}${x.enabled ? "" : " (désactivé)"}${x.library_skills ? ` · ${x.library_skills} skills en bibliothèque` : x.skills.length ? ` · ${x.skills.length} skills` : ""}${x.commands.length ? ` · ${x.commands.length} commandes` : ""}${x.hooks.length ? ` · hooks ${x.hooks_off ? "éteints" : "allumés"}` : ""}`).join("\n");
+      const mk = (r.marketplaces || []).map((m) => `- **${m.name}** : ${m.plugins.map((x) => "`" + x.name + "`").join(", ")}`).join("\n");
+      pluginCard(`**Plugins installés**\n\n${mine || "aucun"}\n\n**Marketplaces**\n\n${mk || "aucune — `/plugin marketplace add <lien GitHub>`"}\n\n`
+        + "Commandes : `/plugin marketplace add <lien>` · `/plugin install <nom>` · `/plugin hooks <nom> on|off`");
+    }
+  } catch (e) { toast("Plugin : " + e.message); pluginCard(`**Plugin : erreur** — ${e.message}`); }
+}
 // the « / » commands brought by the plugins that are on: each sends its prompt (plus what follows the command)
 async function loadPluginCommands() {
   const { commands } = await api("/api/plugins").catch(() => ({ commands: [] }));
   for (let i = SLASH.length - 1; i >= 0; i--) if (SLASH[i].plugin) SLASH.splice(i, 1);
   for (const c of commands || []) {
     if (SLASH.some((x) => x[0] === c.cmd)) continue;
-    const entry = [c.cmd, c.arg || "", `${c.description || ""} (plugin ${c.plugin})`, (a) => { if (c.mode === "agent") setMode("agent"); send(c.prompt + (a ? "\n\n" + a : "")); }];
+    const entry = [c.cmd, c.arg || "", `${c.description || ""} (plugin ${c.plugin})`, (a) => { if (c.mode === "agent") setMode("agent"); send(/\$ARGUMENTS/.test(c.prompt) ? c.prompt.replace(/\$ARGUMENTS/g, a || "") : c.prompt + (a ? "\n\n" + a : "")); }];
     entry.plugin = c.plugin; SLASH.push(entry);
   }
 }

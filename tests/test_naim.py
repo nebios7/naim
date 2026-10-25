@@ -223,6 +223,56 @@ print(a.call_tool("write_file", {"path": "x.py", "content": "print(1)"}).splitli
             self.assertEqual(out[4], "[Hook après write_file] vu par le hook")
 
 
+class PluginMarketplace(unittest.TestCase):
+    """« /plugin install » of a plugin made for another coding agent: skills, agents, commands, MCP and hooks (off)
+    translated for Naim."""
+
+    SCRIPT = """
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import plugins, hooks, skills_bibliotheque as lib
+mk = plugins.MARKETS / "outils"
+(mk / ".agent-plugin").mkdir(parents=True)
+(mk / ".agent-plugin/marketplace.json").write_text(json.dumps({"name": "outils", "plugins": [{"name": "revue", "source": "./revue"}]}))
+pl = mk / "revue"
+(pl / ".agent-plugin").mkdir(parents=True)
+(pl / ".agent-plugin/plugin.json").write_text(json.dumps({"name": "revue", "version": "1.2"}))
+(pl / "skills/relire").mkdir(parents=True)
+(pl / "skills/relire/SKILL.md").write_text("---\\nname: relire\\ndescription: Relire du code\\n---\\nLis le diff.")
+(pl / "agents").mkdir()
+(pl / "agents/critique.md").write_text("---\\nname: critique\\ndescription: Un relecteur sévère\\n---\\nSois exigeant.")
+(pl / "commands").mkdir()
+(pl / "commands/plan.md").write_text("---\\ndescription: Planifier\\nargument-hint: <tâche>\\n---\\nPlanifie : $ARGUMENTS")
+(pl / "hooks").mkdir()
+(pl / "hooks/hooks.json").write_text(json.dumps({"hooks": {"PostToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "echo ${AGENT_PLUGIN_ROOT} $AGENT_PLUGIN_ROOT"}]}]}}))
+(pl / ".mcp.json").write_text(json.dumps({"mcpServers": {"docs": {"command": "${AGENT_PLUGIN_ROOT}/srv"}}}))
+r = plugins.install_from_market("revue")
+print(r["skills"], r["agents"], r["commands"], r["mcp"], r["hooks"], r["library"])
+c = [x for x in plugins.commands() if x["plugin"] == "revue"][0]
+print(c["cmd"], c["prompt"])
+print(sorted(s for s in plugins.skill_dirs() if "revue" in s[0]) != [])
+print(sum(1 for h in hooks.load(".").get("PostToolUse", []) if "revue" in h["source"]))
+plugins.set_hooks("revue", True)
+h = [h for h in hooks.load(".").get("PostToolUse", []) if "revue" in h["source"]][0]
+print("/plugins/revue $AGENT" in h["command"], h["root"].endswith("/plugins/revue"),
+      hooks.run({"PostToolUse": [h]}, "PostToolUse", {}, ".", "Write")[2].count("/plugins/revue"))
+print(plugins.mcp_servers()["revue-docs"]["command"].endswith("/plugins/revue/srv"))
+"""
+
+    def test_install_translates(self):
+        with tempfile.TemporaryDirectory() as home:
+            r = subprocess.run([sys.executable, "-c", self.SCRIPT, str(ROOT)], capture_output=True, text=True,
+                               env={**os.environ, "NAIM_HOME": home}, timeout=60)
+            out = r.stdout.splitlines()
+            self.assertEqual(out[0], "1 1 1 1 1 False", r.stderr[-800:])
+            self.assertEqual(out[1], "/revue:plan Planifie : $ARGUMENTS")
+            self.assertEqual(out[2], "True")   # a small plugin: its skills are listed like Naim's own
+            self.assertEqual(out[3], "0")      # its hooks come turned off
+            self.assertEqual(out[4], "True True 2")  # the folder in the command and in $AGENT_PLUGIN_ROOT
+            self.assertEqual(out[5], "True")
+
+
 class LiveProgress(unittest.TestCase):
     """While a long file is written or Naim thinks, the live line says how far it got (lines, tokens)."""
 

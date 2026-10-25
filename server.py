@@ -1309,6 +1309,21 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/detach":  # « Exécuter en arrière-plan » on the command running now
             agent = _agents.get(self.read_json().get("run_id", ""))
             self.send_json({"ok": bool(agent and agent.request_detach())})
+        elif path == "/api/plugins/market":  # « /plugin marketplace add », « /plugin install », hooks on/off
+            b = self.read_json()
+            try:
+                import plugins
+                act = b.get("action")
+                if act == "add":
+                    self.send_json(plugins.marketplace_add(b.get("url", "")))
+                elif act == "install":
+                    self.send_json(plugins.install_from_market(b.get("name", "")))
+                elif act == "hooks":
+                    self.send_json(plugins.set_hooks(b.get("name", ""), bool(b.get("on"))))
+                else:
+                    self.send_json({"marketplaces": plugins.marketplaces(), "plugins": plugins.all_plugins()})
+            except (plugins.PluginError, OSError, subprocess.SubprocessError) as e:
+                self.send_json({"error": str(e)}, 400)
         elif path in ("/api/plugins/toggle", "/api/plugins/tools", "/api/plugins/add", "/api/plugins/remove"):
             import plugins
             b = self.read_json()

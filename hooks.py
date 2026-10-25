@@ -57,6 +57,7 @@ def load(root):
     except Exception:  # noqa: BLE001 — a broken plugin never stops the user's own hooks
         pass
     for f, data in sources:
+        root = str(data.get("root") or "")  # a plugin's hooks: its folder, in PLUGIN_DIR and the *_PLUGIN_ROOT they read
         for event, groups in (data.get("hooks") or {}).items():
             if event not in EVENTS or not isinstance(groups, list):
                 continue
@@ -67,7 +68,7 @@ def load(root):
                 for h in hs:
                     if isinstance(h, dict) and h.get("command"):
                         out.setdefault(event, []).append({"matcher": str(g.get("matcher") or ""), "command": str(h["command"]),
-                                                          "timeout": float(h.get("timeout") or 60), "source": str(f)})
+                                                          "timeout": float(h.get("timeout") or 60), "source": str(f), "root": root})
     return out
 
 
@@ -90,7 +91,9 @@ def run(hooks, event, payload, root, tool=""):
         try:
             r = subprocess.run(h["command"], shell=True, cwd=str(root), input=json.dumps(data, ensure_ascii=False, default=str),
                                capture_output=True, text=True, timeout=h["timeout"],
-                               env={**os.environ, "NAIM_HOOK_EVENT": event, "NAIM_PROJECT": str(root)})
+                               env={**os.environ, "NAIM_HOOK_EVENT": event, "NAIM_PROJECT": str(root),
+                                    **({v: h["root"] for v in {"PLUGIN_DIR", *re.findall(r"\b([A-Z]+_PLUGIN_ROOT)\b", h["command"])}}
+                                       if h.get("root") else {})})
         except subprocess.TimeoutExpired:
             msgs.append(f"hook « {h['command'][:60]} » trop long ({h['timeout']:.0f} s) : ignoré")
             continue
