@@ -2912,7 +2912,7 @@ const MENU_ICONS = { "🪝": "bolt", "↻": "refresh", "🔔": "bell", "📄": "
   "⭐": "star", "★": "star", "🚫": "ban", "✅": "check", "✓": "check", "✗": "x", "✕": "x", "👁": "eye", "⚡": "bolt", "✋": "hand",
   "🧑": "user", "🤖": "robot", "⚠": "warn", "⚠️": "warn", "▾": "chevd", "▸": "chevr", "⌂": "home", "🗺": "map", "❓": "help",
   "📍": "pin", "◇": "art", "📁": "folder", "⚙": "settings", "⚙︎": "settings", "📘": "book", "🧠": "brain", "🔎": "search", "💬": "chat", "✉️": "mail2", "✉": "mail2", "🗜": "compress", "✎": "edit", "📌": "pin", "⧉": "copy", "#": "tag", "▢": "folder", "📂": "folder", "↓": "download", "⬇": "download",
-  "🗑": "trash", "▶": "play", "↗": "ext", "＋": "plus", "+": "plus", "↶": "undo", "✨": "spark", "⌘": "cmd",
+  "📎": "clip", "⁄": "slash", "🧩": "apps", "🔗": "plug", "🗑": "trash", "▶": "play", "↗": "ext", "＋": "plus", "+": "plus", "↶": "undo", "✨": "spark", "⌘": "cmd",
   ">_": "term", "↩": "undo", "⇤": "sidebar", "−": "minus", "⌨︎": "keyboard", "⎘": "copy", "⏏": "eject", "▣": "models", "◐": "moon",
   "◻︎": "target", "⤓": "download" };
 function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()]; return k && RICON[k] ? svgI(k) : esc(ic || ""); }
@@ -5038,15 +5038,15 @@ document.addEventListener("keydown", (e) => {
 });
 function plusMenu(anchor) {
   showMenu(anchor, [
-    { icon: "📄", label: "Ajouter des fichiers ou des photos", key: "⌘U", run: () => $("#fileInput").click() },
+    { icon: "📎", label: "Ajouter des fichiers ou des photos", key: "⌘U", run: () => $("#fileInput").click() },
     { icon: "📁", label: "Ajouter un dossier", run: async () => {
       const r = await api("/api/pick-folder").catch(() => ({}));
       if (r.path) { S.project = r.path; saveSettings(); applySettings(); toast(`Dossier de travail : ${r.path.split("/").pop()}`); }
     } },
-    { icon: "⌘", label: "Commandes slash", run: () => { const i = $("#input"); i.value = "/"; i.focus(); i.dispatchEvent(new Event("input")); } },
+    { icon: "⁄", label: "Commandes slash", run: () => { const i = $("#input"); i.value = "/"; i.focus(); i.dispatchEvent(new Event("input")); } },
     "-",
-    { icon: "🔌", label: "Connecteurs ›", run: () => setTimeout(() => connectorsMenu(anchor), 0) },
-    { icon: "🛠", label: "Plugins ›", run: () => setTimeout(() => pluginsMenu(anchor), 0) },
+    { icon: "🧩", label: "Connecteurs ›", run: () => setTimeout(() => connectorsMenu(anchor), 0) },
+    { icon: "🔗", label: "Plugins ›", run: () => setTimeout(() => pluginsMenu(anchor), 0) },
   ]);
 }
 async function connectorsMenu(anchor) {
@@ -7064,6 +7064,10 @@ async function checkStatus() {
 
 // ======================================================================= UI v3: rail, model picker, parameters panel, folders
 const RICON = {
+  clip: '<path d="M20.5 11.2l-8.4 8.4a5 5 0 0 1-7.1-7.1l8.4-8.4a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.7-7.7"/>',
+  slash: '<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M14.5 7.5l-5 9"/>',
+  apps: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/><circle cx="16.75" cy="7.25" r="3.25"/>',
+  plug: '<path d="M9 3.5v4M15 3.5v4"/><path d="M6.5 7.5h11v3.5a5.5 5.5 0 0 1-11 0z"/><path d="M12 16.5v4"/>',
   minus: '<path d="M5 12h14"/>',
   sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
   keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M8 14h8"/>',
