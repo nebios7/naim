@@ -345,6 +345,19 @@ STOP_WORDS_RE = re.compile(r"^\s*(?:(?:non|bon|ok|mais|attends)[ ,!.]*)*(stop|st
                            r"|\bstop\b|\barr[eê]te[- ]toi\b", re.I)
 
 
+# « écris directement dans la session chat », « ici », « pas de fichier »: the answer is written in the conversation,
+# whatever its length — never turned into files (it once made 8 files twice despite it)
+IN_CHAT_RE = re.compile(r"\b(?:dans|sur|en)\s+(?:la |le |cette |ce |notre |ma |mon )?(?:se{1,2}s{1,3}io?n(?: chat)?|conversation|"
+                        r"chat|discussion|messagerie)\b|\b(?:directement|juste|tout)\s+ici\b|\bici m[êe]me\b|"
+                        r"\b(?:pas|sans|aucun|jamais)\s+(?:de |d'|le |les |des )?fichiers?\b|\bne (?:cr[ée]e|fais|[ée]cris)\s+"
+                        r"(?:pas|aucun|jamais)\b[^.?!]{0,25}\bfichiers?\b", re.I)
+
+
+def answer_here(*texts):
+    """The user asked for the answer in the conversation, not in files (in this message or a recent one)."""
+    return any(IN_CHAT_RE.search(str(t or "")) for t in texts)
+
+
 def writing_text(w):
     """« Naim écrit index.html · 120 lignes »: what a long tool call is writing, while it is written; « Naim réfléchit ·
     2,1k jetons » while it thinks."""
@@ -2923,6 +2936,9 @@ class Agent:
         return self._hk
 
     def _dispatch(self, name, args, fn):
+        if getattr(self, "_answer_here", False) and name in ("write_file", "creer_fichier", "multi_edit", "edit_file",
+                                                             "notebook_edit", "convert_document", "make_diagram"):
+            return 'refused: the user asked for the answer HERE, in the conversation — no file. Write the full content in your reply instead (long is fine: part after part, with titles), not in a file.'
         if name in self.mcp_lookup:
             return self.call_mcp(name, args)
         allowed = {t["function"]["name"] for t in self.tools}
@@ -3358,7 +3374,12 @@ class Agent:
     def _run(self, task, images=None):
         self._bg_intent = bool(self.BG_INTENT_RE.search(str(task or "")))  # « en tâche de fond, préviens-moi »
         self._task_words, self._started_at = task, time.strftime("%Y-%m-%d %H:%M")
-        if (prev := self._notebook_resume(task)):
+        recent_user = [str(m.get("content") or "") for m in self.messages if m.get("role") == "user"][-3:]
+        self._answer_here = answer_here(task, *recent_user)
+        if self._answer_here:  # written in the conversation: the answer itself, never files
+            task = (f"{task}\n\n[L'utilisateur veut la réponse ICI, dans la conversation : n'écris AUCUN fichier. Rédige "
+                    "tout le contenu dans ta réponse, même long (partie après partie, avec des titres), jusqu'au bout.]")
+        if not self._answer_here and (prev := self._notebook_resume(task)):
             self.emit({"type": "note", "text": "Reprise de la tâche inachevée (carnet .naim/tache.md)."})
             task = (f"{task}\n\n[Carnet de la tâche précédente, restée inachevée : reprends là où elle s'est arrêtée, "
                     f"sans refaire ce qui est coché. Vérifie d'abord l'état des fichiers listés.]\n{prev}")

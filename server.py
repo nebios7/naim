@@ -61,7 +61,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import (ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+from naimtools import (answer_here, ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
@@ -1733,6 +1733,8 @@ class Handler(BaseHTTPRequestHandler):
                 or trivial_message(msg) or pure_question(msg) or s.get("chat_tools", True) is False):
             return None
         recent = " ".join([msg] + [str(m.get("content") or "")[:1500] for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
+        if answer_here(msg, *[m.get("content") for m in (body.get("history") or [])[-6:] if m.get("role") == "user"]):
+            return None  # « écris-le ici, dans le chat »: an answer in the conversation, however long, not files
         sk = ext.match_skill(msg)
         follow = bool(re.search(r"\b(continue|reprends|corrige|r[ée]pare|relance|encore|toujours|code erreur|erreur)\b", msg, re.I))
         if re.match(r"\s*(comment|pourquoi|c'?est quoi|qu'?est[- ]ce|est[- ]ce que|quel\w*|o[uù])\b", msg, re.I) and msg.rstrip().endswith("?"):
@@ -1920,6 +1922,9 @@ class Handler(BaseHTTPRequestHandler):
             if ctx:
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + f"\n\n[Contexte ajouté au démarrage par un hook de l'utilisateur]\n{ctx}")
         file_work = bool(FILE_WORK_RE.search(asked)) and not body.get("_question")  # a pure question: nothing is changed
+        in_chat = answer_here(body["message"], *[m.get("content") for m in (body.get("history") or [])[-6:] if m.get("role") == "user"])
+        if in_chat:
+            file_work = False  # « écris directement dans la session chat »: the answer here, never files
         if file_work and MATH_ASK_RE.search(body["message"] or "") and not FILE_NAMED_RE.search(body["message"] or ""):
             file_work = False  # « corrige l'exercice » is maths to answer here, not a file to correct
         prev_answer = next((str(m.get("content") or "") for m in reversed(body.get("history") or []) if m.get("role") == "assistant"), "")
@@ -2225,7 +2230,9 @@ class Handler(BaseHTTPRequestHandler):
                                       + "\nFiles:\n" + helper.list_files(".")[:3000])
                     elif name == "creer_fichier":
                         here = helper.root if helper.root.resolve() != chatfiles.OUT.resolve() else None
-                        if (why := chatfiles.missing(args)):
+                        if in_chat:
+                            result, info = 'refused: the user asked for the answer HERE, in the conversation — no file. Write the full content in your reply instead (long is fine: part after part, with titles), not in a file.', None
+                        elif (why := chatfiles.missing(args)):
                             result, info = why, None
                         else:
                             result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"), here)

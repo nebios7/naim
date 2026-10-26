@@ -524,6 +524,36 @@ class MathsInTheConversation(unittest.TestCase):
             self.assertTrue(self.file_work(m), m)
 
 
+class AnswerHere(unittest.TestCase):
+    """« écris directement dans la session chat »: no switch to the Agent, no file — even for a long course (it once
+    wrote 8 files twice despite it); « test » of maths is not a code test."""
+
+    MSG = ("faite moi une révision pour les equiations compexe avec la géométrie, cours test et excercie et leur "
+           "correction ecrit directement dans la sesssion chat")
+
+    def test_detected(self):
+        for t in (self.MSG, "écris-le ici, pas de fichier", "ne crée aucun fichier", "dans le chat"):
+            self.assertTrue(naimtools.answer_here(t), t)
+        for t in ("fais-moi un site flask", "crée le fichier app.py", "une session de sport à 18h ?"):
+            self.assertFalse(naimtools.answer_here(t), t)
+
+    def test_no_agent_no_file(self):
+        import server
+        h = server.Handler.__new__(server.Handler)
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(h.big_work({"message": self.MSG, "settings": {"project": d}, "history": []}))
+            self.assertIsNone(h.big_work({"message": "continue", "settings": {"project": d},
+                                          "history": [{"role": "user", "content": self.MSG}]}))
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            a._answer_here = True
+            self.assertTrue(a._dispatch("write_file", {"path": "x.md", "content": "a"}, None).startswith("refused"))
+
+    def test_maths_not_code_tests(self):
+        import extensions as ext
+        self.assertNotEqual((ext.match_skill(self.MSG) or {}).get("name"), "tests-unitaires")
+        self.assertEqual(ext.match_skill("ajoute des tests unitaires au projet")["name"], "tests-unitaires")
+
+
 class SessionMemory(unittest.TestCase):
     """naim-mem: the hook keeps what was done, the MCP server finds it."""
 

@@ -1009,7 +1009,9 @@ SKILL_TRIGGERS = {
                        r"\b(cr[ée]\w*|fai[st]|faire|d[ée]velopp\w*|code[rz]?|construi\w*|programme[rz]?)\b[^.?!]{0,50}\b(appli(cation)?s?|app|site|page web|"
                        r"logiciel)\b|\b(flask|fastapi|django)\b",
     "api-rest": r"\b(api|rest|endpoint|crud)\b",
-    "tests-unitaires": r"\b(tests?|unitaires?|pytest|jest|junit)\b",
+    "tests-unitaires": r"\b(pytest|jest|junit|vitest|unittest|xctest|phpunit|tests? unitaires?|tests? d'int[ée]gration|couverture de tests?)\b|"
+                       r"\b(ajoute|[ée]cri[st]|lance|fai[st]|cr[ée]e|corrige)\w*\b[^.?!]{0,25}\btests?\b[^.?!]{0,40}\b(code|projet|"
+                       r"programme|appli\w*|fonctions?|api|modules?|classes?|scripts?)\b",
     # code that fails (« corrige les fautes de ce texte » is proofreading, not debugging)
     "debug": r"\b(bugs?|error|plante|crash|debug|traceback|exception)\b|\b(erreur|marche pas|fonctionne pas)\b[^.?!]{0,40}\b(code|script|programme|appli\w*|site|commande|fichier \w+\.\w+)\b|"
              r"\bcorrige\b[^.?!]{0,30}\b(code|script|programme|bug|erreur|appli\w*|fonction|\w+\.(py|js|ts|html|css|php|swift|java))\b",
