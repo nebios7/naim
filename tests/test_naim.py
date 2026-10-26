@@ -645,5 +645,26 @@ class SkillScripts(unittest.TestCase):
             self.assertIn(".carte{border:2px solid}", out)
 
 
+
+class FinishTheWork(unittest.TestCase):
+    def test_write_it_here(self):
+        self.assertTrue(naimtools.answer_here("ecrit le cv ici"))
+        self.assertFalse(naimtools.answer_here("viens ici demain ?"))
+
+    def test_ends_announcing(self):
+        import server
+        self.assertTrue(server.ends_announcing("J'ai lu le CV. Je vais maintenant le reformuler."))
+        self.assertFalse(server.ends_announcing("Je vais bien, merci !"))
+        self.assertFalse(server.ends_announcing("Voici ton CV complet."))
+
+    def test_broken_quote_hint(self):
+        """« Je l'ai » inside osascript -e '…' cuts the command: Naim is told to pass the text apart, not to type input."""
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            r = a.run_command("echo 'Je l'ai fini'")
+            self.assertIn("APART", r)
+            self.assertNotIn("keyboard input", r)
+
+
 if __name__ == "__main__":
     unittest.main()

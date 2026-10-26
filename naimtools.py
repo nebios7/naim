@@ -334,6 +334,7 @@ STOP_WORDS_RE = re.compile(r"^\s*(?:(?:non|bon|ok|mais|attends)[ ,!.]*)*(stop|st
 # whatever its length — never turned into files (it once made 8 files twice despite it)
 IN_CHAT_RE = re.compile(r"\b(?:dans|sur|en)\s+(?:la |le |cette |ce |notre |ma |mon )?(?:se{1,2}s{1,3}io?n(?: chat)?|conversation|"
                         r"chat|discussion|messagerie)\b|\b(?:directement|juste|tout)\s+ici\b|\bici m[êe]me\b|"
+                        r"\b[ée]cri[st]?\w*\b[^.?!]{0,30}\bici\b|"
                         r"\b(?:pas|sans|aucun|jamais)\s+(?:de |d'|le |les |des )?fichiers?\b|\bne (?:cr[ée]e|fais|[ée]cris)\s+"
                         r"(?:pas|aucun|jamais)\b[^.?!]{0,25}\bfichiers?\b", re.I)
 
@@ -1775,12 +1776,18 @@ class Agent:
             return (f"error: command timed out after {timeout} s (if it is a server or a long-running program, "
                     f"use start_process; if it waits for keyboard input, pass it in stdin)\n{out}")
         hint = ""
-        if proc.returncode and not stdin and re.search(r"NoSuchElementException|EOFError|EOF when reading|end of file", out):
+        quote_broken = bool(re.search(r"unexpected EOF while looking for matching|syntax error: unexpected end of file", out))
+        if proc.returncode and not stdin and not quote_broken and re.search(r"NoSuchElementException|EOFError|EOF when reading|end of file", out):
             hint = "\n(hint: the program expected keyboard input; run it again with the answers in `stdin`)"
         if re.search(r"\blpstat\b", command) and re.search(r"\b(inactive|idle)\b", out, re.I):
             # French CUPS: « inactive, mais activée » means idle = ready, not switched off
             hint += ("\n(note: « inactive » / « idle » here means the printer is ready and waiting: print now with "
                      "`lp -d <printer> <file>`. Only « désactivée » / « disabled » means it is stopped.)")
+        if proc.returncode and quote_broken and not re.search(r"python3?\S*\s+-c\s", command):
+            # a quote of the text (« l'ai », « c'est ») closed the command's own quotes: the text must go apart
+            hint += ("\n(hint: an apostrophe or a quote in your text closed the command's quotes. Pass the text APART: for "
+                     "osascript, `osascript - \"<arg1>\" \"<text>\" <<'EOF'` then `on run argv … (item 2 of argv) … end run` "
+                     "and `EOF`; for a script, a heredoc. Run it again NOW that way.)")
         if proc.returncode and re.search(r"python3?\S*\s+-c\s", command) and re.search(
                 r"unexpected EOF while looking for matching|syntax error near unexpected token|name '__file__' is not defined", out):
             # a script squeezed into python -c "…": the shell cut it at a quote, or __file__ does not exist there

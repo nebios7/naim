@@ -132,6 +132,16 @@ def shorten_used_results(messages):
             m["content"] = c[:USED_RESULT_KEEP] + SHORTENED
 
 
+LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, ]+)?je (?:vais(?!\s+(?:bien|mal|mieux|tr[èe]s))|m'en occupe|lance|cr[ée]e|"
+                              r"[ée]cris|envoie|renvoie|corrige|r[ée]essaie|m'occupe|passe|commence)\b", re.I)
+
+
+def ends_announcing(text):
+    """The answer ends on what it is going to do (« Je vais maintenant le reformuler… »): the work is not done."""
+    last = [s for s in re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip()) if s.strip()][-1:]
+    return bool(last) and bool(LATE_ANNOUNCE_RE.search(last[0])) and len(text) < 1500
+
+
 def claims_done(text):
     """A sentence (not a question) saying an action was done."""
     return any(DONE_CLAIM_RE.search(s) for s in re.split(r"(?<=[.!?…])\s+|\n+", text or "") if s.strip() and not s.strip().endswith("?"))
@@ -2211,7 +2221,7 @@ class Handler(BaseHTTPRequestHandler):
                 helper._spoke = True
             content = clean
             if not calls and not stop.is_set() and nudges < 2 and (
-                    not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400)):
+                    not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400) or ends_announcing(content)):
                 # « Je vais envoyer l'e-mail… » without doing it, or an empty reply: do it now
                 nudges += 1
                 if content.strip():

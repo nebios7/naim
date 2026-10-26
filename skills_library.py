@@ -391,14 +391,27 @@ se couper), envoyer, appeler. Jamais : vider la Corbeille, effacer un disque, `r
 - Numéro au format international : +33 6 12 34 56 78 → `+33612345678`.
 
 ## SMS / iMessage
+Le numéro et le texte sont passés À PART (arguments) : les apostrophes du français (« l'ai », « c'est ») ne cassent
+jamais la commande. Ne mets jamais le texte entre apostrophes dans `osascript -e '…'`.
 ```bash
-osascript -e 'tell application "Messages" to send "TEXTE" to participant "+33612345678"'
+osascript - "+33612345678" "Bonjour, je t'envoie le CV dont on a parlé." <<'EOF'
+on run argv
+  tell application "Messages" to send (item 2 of argv) to participant (item 1 of argv)
+end run
+EOF
 ```
-- Un guillemet dans le texte : remplace-le par ’ (apostrophe typographique). Pas de retour à la ligne dans le texte.
-- Envoyer un FICHIER (PDF, photo, document) : le fichier EXISTANT que l'utilisateur a désigné, avec son chemin complet
-  (trouvé par find_files ou donné par lui) ; n'en crée jamais un nouveau :
-  `osascript -e 'tell application "Messages" to send (POSIX file "/Users/…/CV.pdf") to participant "+33612345678"'`
+- Dans le texte, entre guillemets doubles : un " s'écrit \" et un $ s'écrit \$. Les apostrophes restent telles quelles.
+- Envoyer un FICHIER (PDF, photo, document) : le fichier EXISTANT, avec son chemin complet (trouvé par find_files ou
+  donné par l'utilisateur, ou celui que tu viens de créer pour lui) :
+```bash
+osascript - "+33612345678" "/Users/…/CV.pdf" <<'EOF'
+on run argv
+  tell application "Messages" to send (POSIX file (item 2 of argv)) to participant (item 1 of argv)
+end run
+EOF
+```
   Un texte avec : envoie d'abord le texte, puis le fichier (deux commandes).
+- Si la commande échoue, lis l'erreur, corrige et RELANCE-la tout de suite : ne t'arrête jamais sur un « je vais renvoyer ».
 - iMessage si la personne en a, sinon SMS via l'iPhone (le Mac le choisit seul).
 
 ## Appel téléphonique / FaceTime
