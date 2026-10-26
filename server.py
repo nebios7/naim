@@ -1700,6 +1700,11 @@ class Handler(BaseHTTPRequestHandler):
             self.event({"type": "escalate", "project": str(where)})
             self.event({"type": "project", "path": str(where)})
             return self.run_agent({**body, "mode": "agent", "project": str(where), "_from_chat": True}, stop)
+        if (options.get("backend") == "llamacpp" and s.get("fast_answers", True) is not False
+                and self.quick_answer(body, files, web, email, wants_schedule, choice)):
+            # explain, write, revise, maths…: answered like a plain chat app — short instructions, no tools to read
+            # (about 7,000 tokens less before the first word), in its own slot
+            return self.chat_fast(body, messages, options, stop)
         if options.get("backend") == "llamacpp" and s.get("chat_tools", True) is not False and not body.get("images"):
             # Chat with every tool, like an assistant that talks AND acts: answers stream as usual; when a tool is
             # needed, it is used in the same reply, then the answer goes on
@@ -1724,6 +1729,59 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "stats", "tokens": chunk.get("eval_count", 0),
                             "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
                             "prompt": chunk.get("prompt_eval_count", 0), "reason": chunk.get("done_reason")})
+        self.event({"type": "done"})
+
+    QUICK_RE = re.compile(r"\b(expliqu\w*|explique-moi|r[ée]sum\w*|r[ée]dig\w*|[ée]cri[st]|raconte\w*|traduis\w*|"
+                          r"tradui\w*|reformul\w*|corrige (l'|mon |ce |cette )?(orthographe|texte|phrase|lettre|paragraphe)|"
+                          r"d[ée]finis\w*|d[ée]finition|compare\w*|donne[- ]moi|propose\w*|conseil\w*|id[ée]es?|"
+                          r"r[ée]vision|cours|le[çc]ons?|exercices?|corrig[ée]s?|qcm|quiz|calcul\w*|r[ée]sou\w*|d[ée]montr\w*|"
+                          r"po[eè]me|histoire|blague|lettre de|discours)\b", re.I)
+    TOOL_NEED_RE = re.compile(r"\b(fichiers?|dossiers?|projet|code source|d[ée]p[ôo]t|github|lance\w*|ex[ée]cute\w*|installe\w*|"
+                              r"ouvre\w*|imprime\w*|envoie\w*|t[ée]l[ée]charg\w*|cherche\w*|recherche\w*|internet|web|"
+                              r"site|en ligne|m[ée]t[ée]o|actualit\w*|prix|serveur|terminal|commande|capture|[ée]cran|"
+                              r"rappel\w*|agenda|calendrier|note[sz]?|contacts?|photos?|images?|pdf|word|excel)\b|"
+                              r"[\w-]+\.(py|js|ts|html|css|json|md|txt|csv|pdf|docx|xlsx|sql|swift|java)\b|[~/]\w+/", re.I)
+
+    def quick_answer(self, body, files, web, email, schedule, choice):
+        """An answer that needs no tool (explain, write, revise, maths…): served like a plain chat app."""
+        msg = body.get("message") or ""
+        if (files or web or email or schedule or choice or body.get("images") or body.get("voice") or body.get("_warm")
+                or body.get("_relaunched") or MAC_ACTION_RE.search(msg) or self.TOOL_NEED_RE.search(msg)):
+            return False
+        if answer_here(msg, *[m.get("content") for m in (body.get("history") or [])[-6:] if m.get("role") == "user"]):
+            return True  # « écris-le ici » : the answer itself, written right away
+        sk = ext.match_skill(msg)
+        if sk and sk["name"] not in ("maths-affichage", "pseudo-code"):
+            return False  # a skill that works with tools (a CV, a plan, the Mac…): the usual way
+        return bool(pure_question(msg) or trivial_message(msg) or self.QUICK_RE.search(msg) or (sk and sk["name"] == "maths-affichage"))
+
+    def chat_fast(self, body, messages, options, stop):
+        """The answer streamed with the Chat's instructions and no tools, in its own slot (the method of a matching
+        skill, if any, joined to the message): seconds before the first word instead of minutes."""
+        options = {**options, "slot": llamacpp.fast_slot()}
+        sk = ext.match_skill(body.get("message") or "")
+        if sk:  # its method joins the instructions (not the message): read once, kept while the subject stays the same
+            _, method = ext.parse_skill(Path(sk["path"]))
+            self.event({"type": "skill", "name": sk["name"]})
+            messages = [{**messages[0], "content": f"{messages[0]['content']}\n\n[Méthode à suivre (skill « {sk['name']} »)]\n{method.strip()}"}] + messages[1:]
+        # only the words of the conversation: tool calls and their results are not needed to answer here
+        messages = [m for m in messages if m.get("role") in ("system", "user", "assistant") and not m.get("tool_calls")]
+        think = bool(body.get("think")) and not trivial_message(body["message"])
+        t0, first = time.time(), None
+        for chunk in ollama_chat(body.get("model", "naim"), messages, think=think, stream=True, options=options):
+            if stop.is_set():
+                self.event({"type": "stopped"})
+                break
+            msg = chunk.get("message", {})
+            if msg.get("thinking"):
+                self.event({"type": "thinking_token", "text": msg["thinking"]})
+            if msg.get("content"):
+                first = first or time.time()
+                self.event({"type": "token", "text": msg["content"]})
+            if chunk.get("done") and chunk.get("eval_duration"):
+                self.event({"type": "stats", "tokens": chunk.get("eval_count", 0),
+                            "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
+                            "prompt": chunk.get("prompt_eval_count", 0), "reason": chunk.get("done_reason"), "fast": True})
         self.event({"type": "done"})
 
     def big_work(self, body):

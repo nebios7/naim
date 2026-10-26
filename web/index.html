@@ -6839,6 +6839,8 @@ $("#input").addEventListener("keydown", (e) => {  // ⇧⇥ : next mode (agent o
 });
 let homeDir = "";
 api("/api/status").then((st) => { homeDir = st.home || ""; showProjectPath(); }).catch(() => {});
+// a temporary folder (tests, system temp) is never offered as a project
+const TEMP_DIR_RE = /^\/(private\/)?(tmp|var\/folders)\/|\/scratchpad\//;
 function renderFolderPill() {
   const b = $("#folderPill"); if (!b) return;
   try { svgI; } catch { return; }  // icons are defined further down: drawn again once they exist
@@ -6847,7 +6849,7 @@ function renderFolderPill() {
   b.innerHTML = `${svgI("folder")}<span class="fpn">${esc(name || "Choisir un dossier")}</span>${svgI("chevd").replace("<svg", '<svg class="fpc"')}`;
 }
 async function folderMenuPill(anchor) {
-  const recent = [...new Set([S.project, ...list.map((c) => c.project)].filter(Boolean))].slice(0, 6);
+  const recent = [...new Set([S.project, ...list.map((c) => c.project)].filter((p) => p && !TEMP_DIR_RE.test(p)))].slice(0, 6);
   const info = S.project ? await api(`/api/project-info?root=${encodeURIComponent(S.project)}`).catch(() => ({})) : {};
   const short = (p) => homeDir && p.startsWith(homeDir + "/") ? "~" + p.slice(homeDir.length) : p;
   const go = (p) => { S.project = p; saveSettings(); applySettings(); openDirs = new Set([""]); knownFiles = new Set(); refreshTreeSoon(); };

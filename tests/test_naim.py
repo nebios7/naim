@@ -554,6 +554,22 @@ class AnswerHere(unittest.TestCase):
         self.assertEqual(ext.match_skill("ajoute des tests unitaires au projet")["name"], "tests-unitaires")
 
 
+class QuickAnswers(unittest.TestCase):
+    """Explain, write, revise, maths: answered like a plain chat app (no tools, seconds before the first word);
+    files, the web, a mail, a server, the Mac keep the tools."""
+
+    def test_routing(self):
+        import server
+        h = server.Handler.__new__(server.Handler)
+        q = lambda m: h.quick_answer({"message": m, "history": []}, False, bool(server.WEB_NEED_RE.search(m)), False, False, "")  # noqa: E731
+        for m in ("explique-moi les nombres complexes", "Pose et calcule 234,56 × 12,3", "c'est quoi une boucle for ?",
+                  "rédige un poème sur la mer", "salut"):
+            self.assertTrue(q(m), m)
+        for m in ("cherche sur internet le prix du bitcoin", "crée le fichier app.py", "lance le serveur", "envoie un mail à Paul",
+                  "fais ma lettre de motivation en pdf", "corrige le bug de mon app"):
+            self.assertFalse(q(m), m)
+
+
 class SessionMemory(unittest.TestCase):
     """naim-mem: the hook keeps what was done, the MCP server finds it."""
 

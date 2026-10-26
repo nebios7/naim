@@ -244,7 +244,8 @@ class Server:
                 # its own slot for each kind of work, so that none overwrites what another has already read:
                 # 0 = Chat, 1 = Agent (their instructions and tools differ: ~6k and ~10k tokens to read), last =
                 # background jobs (memory, summaries). Sub-agents get the slots in between.
-                slots = max(slots, 3)
+                # 2 = quick answers without tools (explain, write, maths), as fast as a plain chat app
+                slots = max(slots, 4)
             cmd = [exe, "-m", str(gguf), "--host", "127.0.0.1", "--port", str(self.port), "-c", str(ctx * slots),
                    # a checkpoint every 2048 tokens (default 8192): a new task re-reads only what follows Naim's fixed
                    # instructions (~7k tokens shared by every task), not the whole prompt; 16 kept (50 MB each)
@@ -327,7 +328,7 @@ def _vision_reaper():
 
 
 threading.Thread(target=_vision_reaper, daemon=True, name="naim-vision-reaper").start()
-SLOT_CHAT, SLOT_AGENT = 0, 1
+SLOT_CHAT, SLOT_AGENT, SLOT_FAST = 0, 1, 2  # the quick answers (no tools) keep their own slot: Chat and Agent stay read
 _slots_seen = {"n": 0, "at": 0.0}
 
 
@@ -362,6 +363,11 @@ def slot_ctx():
 
 class ContextFull(Exception):
     """The conversation no longer fits in the engine's room: the caller shortens it and asks again."""
+
+
+def fast_slot():
+    """The slot of the quick answers (no tools): its own when the engine has 4 or more, else the background one."""
+    return SLOT_FAST if total_slots() >= 4 else bg_slot()
 
 
 def bg_slot():
