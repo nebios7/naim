@@ -275,7 +275,7 @@ print(sum(1 for h in hooks.load(".").get("PostToolUse", []) if "revue" in h["sou
 plugins.set_hooks("revue", True)
 h = [h for h in hooks.load(".").get("PostToolUse", []) if "revue" in h["source"]][0]
 print("/plugins/revue $AGENT" in h["command"], h["root"].endswith("/plugins/revue"),
-      hooks.run({"PostToolUse": [h]}, "PostToolUse", {}, ".", "Write")[2].count("/plugins/revue"))
+      hooks.run({"UserPromptSubmit": [h]}, "UserPromptSubmit", {}, ".")[2].count("/plugins/revue"))  # printed: read there
 print(plugins.mcp_servers()["revue-docs"]["command"].endswith("/plugins/revue/srv"))
 """
 
@@ -664,6 +664,53 @@ class FinishTheWork(unittest.TestCase):
             r = a.run_command("echo 'Je l'ai fini'")
             self.assertIn("APART", r)
             self.assertNotIn("keyboard input", r)
+
+
+
+class HooksOfOtherAgents(unittest.TestCase):
+    """A plugin's hooks written for another agent: its names, its JSON answers, its background hooks."""
+
+    def run_hook(self, cmd, event="PreToolUse", foreign=True, payload=None, **h):
+        import hooks
+        hk = {event: [{"matcher": "", "command": cmd, "timeout": 10, "source": "t", "root": "", "foreign": foreign, **h}]}
+        with tempfile.TemporaryDirectory() as d:
+            return hooks.run(hk, event, payload or {"tool_name": "write_file", "tool_input": {"path": "a.py", "content": "x"}},
+                             d, tool="write_file"), d
+
+    def test_their_names(self):
+        (b, m, c), d = self.run_hook('python3 -c "import json,sys; d=json.load(sys.stdin); '
+                                     'print(json.dumps({\'additionalContext\': d[\'tool_name\'] + \' \' + d[\'tool_input\'][\'file_path\']}))"')
+        self.assertTrue(c.startswith("Write ") and c.endswith("/a.py"), c)
+
+    def test_deny_and_quiet_stdout(self):
+        (b, m, c), _ = self.run_hook('echo \'{"hookSpecificOutput": {"permissionDecision": "deny", "permissionDecisionReason": "non"}}\'')
+        self.assertTrue(b)
+        self.assertEqual(m, "non")
+        (b, m, c), _ = self.run_hook("echo bavard", event="PostToolUse")
+        self.assertEqual((b, m, c), (False, "", ""))  # what it prints after an action does not fill Naim's memory
+        (b, m, c), _ = self.run_hook("echo vu", event="PostToolUse", foreign=False)
+        self.assertEqual(c, "vu")  # Naim's own hooks: read as before
+        (b, m, c), _ = self.run_hook("echo contexte", event="UserPromptSubmit", payload={"prompt": "x"})
+        self.assertEqual(c, "contexte")
+
+    def test_async_does_not_wait(self):
+        import time
+        t = time.time()
+        (b, m, c), _ = self.run_hook("sleep 3", **{"async": True})
+        self.assertLess(time.time() - t, 1)
+
+    def test_settings_given(self):
+        (b, m, c), _ = self.run_hook('python3 -c "import os,json; print(json.dumps({\'additionalContext\': os.environ[\'ECC_GATEGUARD\']}))"',
+                                     env={"ECC_GATEGUARD": "off"})
+        self.assertEqual(c, "off")
+
+
+class RewriteForReal(unittest.TestCase):
+    def test_same_text_again(self):
+        import server
+        old = "Profil. " + "Programmeur titulaire d'un Master MIAGE, expert en bases de donnees. " * 6
+        self.assertTrue(server.same_again("ecrit le ici avec du style", "Voici. " + old, [old]))
+        self.assertFalse(server.same_again("ajoute mon permis B", "Voici. " + old, [old]))
 
 
 if __name__ == "__main__":

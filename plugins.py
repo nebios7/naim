@@ -12,6 +12,7 @@ A plugin lives in ~/.naim/plugins/<name>/ with a plugin.json:
      "library": "skills",                                  instead of "skills": a big set of skills, found on demand in
                                                            the skills library (chercher_skill), never listed in the prompt
      "hooks_off": true                                     hooks brought but not run until the user turns them on
+     "hooks_env": {"NOM": "valeur"}                        settings given to its hooks (e.g. a check they can turn off)
 Plugins made for other coding agents (a .<agent>-plugin/ folder with plugin.json, a marketplace.json) are translated at
 install: see the end.
 Plugins shipped with Naim (plugins_builtin/) are copied once; ~/.naim/plugins.json keeps which are on, and which the
@@ -165,10 +166,21 @@ def hook_sets():
     for p in _enabled():
         d = Path(p["path"])
         m = _manifest(d) or {}
+        if m.get("hooks_off"):
+            continue
         h = m.get("hooks")
-        if isinstance(h, dict) and h and not m.get("hooks_off"):
+        if not isinstance(h, dict):  # a plugin made for another agent: its hooks file (hooks/hooks.json by default)
+            for f in ([h] if isinstance(h, str) else []) + ["hooks/hooks.json"]:
+                try:
+                    h = json.loads((d / f).read_text()).get("hooks")
+                    break
+                except (OSError, ValueError, AttributeError):
+                    h = None
+        if isinstance(h, dict) and h:
             data = json.loads(json.dumps({"hooks": h}).replace("${PLUGIN_DIR}", str(d).replace("\\", "\\\\")))
-            out.append((f"plugin {p['name']}", {**data, "root": str(d)}))
+            foreign = any(x.name.startswith(".") and x.name.endswith("-plugin") for x in d.iterdir())
+            env = {str(k): str(v) for k, v in (m.get("hooks_env") or {}).items()} if isinstance(m.get("hooks_env"), dict) else {}
+            out.append((f"plugin {p['name']}", {**data, "root": str(d), "foreign": foreign, "env": env}))
     return out
 
 

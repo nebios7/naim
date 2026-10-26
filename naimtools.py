@@ -109,6 +109,10 @@ WRITING_STYLE = (
     "- Titres (##) seulement pour une longue réponse ; liste seulement pour 3 éléments ou plus de même nature ; "
     "tableau pour comparer ; code toujours dans un bloc avec son langage.\n"
     "- Gras rare : seulement le mot ou le chiffre important.\n"
+    "- Document rédigé ici (CV, lettre, compte rendu, fiche) : en Markdown structuré, # pour le titre ou le nom, ## pour "
+    "chaque section, listes à puces pour les éléments. Jamais une ligne en gras à la place d'un titre.\n"
+    "- « Réécris », « améliore », « avec du style » : change vraiment le texte (structure, formulations, mise en forme). "
+    "Ne renvoie jamais la même version.\n"
     "- Pas de résumé final qui répète, pas de liste de questions à la fin : au plus une proposition de suite utile.\n"
     "- Aucun emoji, ni dans les titres ni dans le texte.\n"
     "- Maths : chaque formule en LaTeX, $…$ dans la phrase et $$…$$ seule sur sa ligne (virgule décimale : 0{,}5 ; unités "
@@ -2892,6 +2896,10 @@ class Agent:
         if self.hooks and name in ("write_file", "edit_file") and str(result).startswith("ok") and args.get("path"):
             if h := self._run_hooks(args["path"]):
                 result += "\n" + h
+        failed = re.match(r"(error|denied|blocked|refused|stopped|exit code [1-9])", str(result))
+        if failed and hk.get("PostToolUseFailure") and name != "update_todos":
+            naim_hooks.run(hk, "PostToolUseFailure", {"tool_name": name, "tool_input": args, "error": str(result)[:4000],
+                                                      "session_id": self.run_id}, self.root, tool=name)
         if hk.get("PostToolUse") and name != "update_todos":
             blocked, msg, ctx = naim_hooks.run(hk, "PostToolUse", {"tool_name": name, "tool_input": args, "tool_response": str(result)[:20000],
                                                                     "session_id": self.run_id}, self.root, tool=name)
@@ -3596,6 +3604,8 @@ class Agent:
                         self.messages.append({"role": "user", "content": f"(Vérification de fin, par un hook de l'utilisateur) {msg}\n"
                                               "Corrige cela maintenant avec tes outils, puis donne ta réponse finale."})
                         continue
+                if hk.get("SessionEnd") and not self.subagent:
+                    naim_hooks.run(hk, "SessionEnd", {"reason": "other", "session_id": self.run_id}, self.root)
                 self.emit({"type": "answer", "text": content})
                 return content
             if content:

@@ -6040,6 +6040,12 @@ async function loadPlugins() {
   $("#plgAdd").onclick = add;
   $("#plgSrc").onkeydown = (e) => { if (e.key === "Enter") add(); };
 }
+// a block of actions opened: each command shows its terminal card ($ command and output) at once, without a second click
+document.addEventListener("toggle", (e) => {
+  const g = e.target; if (!(g instanceof HTMLDetailsElement) || !g.classList.contains("agroup") || !g.open) return;
+  g.querySelectorAll(".arow .aout").forEach((p) => { if (p.querySelector(".cmdline")) p.hidden = false; });
+}, true);
+
 // « /plugin marketplace add <lien> », « /plugin install <nom> », « /plugin hooks <nom> on|off », « /plugin » alone: the
 // list. What it did is shown in a card of the conversation
 function pluginCard(markdown) {

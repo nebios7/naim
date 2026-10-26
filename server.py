@@ -132,6 +132,18 @@ def shorten_used_results(messages):
             m["content"] = c[:USED_RESULT_KEEP] + SHORTENED
 
 
+REWRITE_RE = re.compile(r"\b(?:r[ée]{1,2}cri[st]?|reformule|am[ée]liore|retravaille|avec (?:du|plus de|un) style|plus (?:beau|joli|pro"
+                        r"|professionnel|styl[ée])|mets?[- ]le en forme|mise en forme|autrement|une autre version)\b", re.I)
+
+
+def same_again(asked, answer, earlier):
+    """A rewrite was asked (« avec du style ») and the answer is, nearly word for word, one of the earlier ones."""
+    import difflib
+    if not REWRITE_RE.search(asked or "") or len(answer) < 300:
+        return False
+    return any(difflib.SequenceMatcher(None, answer, e, autojunk=False).ratio() > 0.9 for e in earlier[-2:] if len(e) > 300)
+
+
 LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, ]+)?je (?:vais(?!\s+(?:bien|mal|mieux|tr[èe]s))|m'en occupe|lance|cr[ée]e|"
                               r"[ée]cris|envoie|renvoie|corrige|r[ée]essaie|m'occupe|passe|commence)\b", re.I)
 
@@ -1980,7 +1992,7 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = 0
+        copies = rewrites = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2216,6 +2228,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
                 continue
             clean = content.split("<tool_call")[0]
+            if not calls and not stop.is_set() and not rewrites and same_again(body["message"], flat(clean), earlier):
+                # « avec du style », « réécris » answered with the same text again: taken back, and written anew
+                self.event({"type": "retract", "chars": shown})
+                helper._spoke, rewrites = False, rewrites + 1
+                messages.append({"role": "user", "content": "(Ta réponse est presque identique à ta version précédente. Je veux une "
+                                 "version vraiment différente : autre structure (# titre, ## sections, listes), d'autres "
+                                 "formulations, une meilleure mise en forme. Écris-la maintenant, en entier.)"})
+                continue
             if not calls and len(clean) > shown:  # end of a plain answer: the characters held back
                 self.event({"type": "token", "text": clean[shown:]})
                 helper._spoke = True
