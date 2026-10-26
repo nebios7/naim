@@ -1802,7 +1802,9 @@ class Handler(BaseHTTPRequestHandler):
     def big_work(self, body):
         """The folder to work in when this Chat message is a real piece of work for the Agent (else None)."""
         s, msg = body.get("settings") or {}, body.get("message") or ""
-        if (body.get("_question") or body.get("_warm") or body.get("voice") or body.get("images") or s.get("auto_agent") is False
+        # the Chat has every tool and does the work itself, in the conversation (as an assistant that talks AND acts):
+        # it no longer hands a « long » task to the Agent unless the user turned that on (settings: auto_agent)
+        if (body.get("_question") or body.get("_warm") or body.get("voice") or body.get("images") or s.get("auto_agent") is not True
                 or trivial_message(msg) or pure_question(msg) or s.get("chat_tools", True) is False):
             return None
         recent = " ".join([msg] + [str(m.get("content") or "")[:1500] for m in (body.get("history") or [])[-4:] if m.get("role") == "user"])
@@ -2080,7 +2082,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Mac : imprimer = `lpstat -p -d` pour voir les imprimantes (« inactive » veut dire prête, au repos) puis `lp -d <imprimante> <fichier>` (un fichier à moi qui n'est pas dans le dossier : find_files le cherche sur tout le Mac ; s'il y en a plusieurs ou si le nom ne correspond pas, demande-moi lequel et attends ma réponse, n'imprime jamais un autre fichier) ; ouvrir = "
                 "`open` ; réglages = `osascript` ; appeler = `open \"tel:+33…\"` (l'appel passe par l'iPhone) ; SMS ou iMessage = `osascript -e 'tell application \"Messages\" to send \"texte\" to participant \"+33…\"'` (trouve le numéro avec chercher_contact). Ce qui est sensible m'est demandé avant, c'est normal. Ne dis jamais que tu ne "
                 "peux pas avant d'avoir essayé ; si ça échoue, dis exactement pourquoi.)"))
-        limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 60))
+        limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 200))  # a long task done here too
         for step in range(limit):
             if stop.is_set():
                 self.event({"type": "stopped"})

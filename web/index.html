@@ -1866,7 +1866,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
           <textarea id="input" rows="1" placeholder="Écris à Naim…"></textarea>
           <!-- inside the box, like a coding assistant's composer: attach, voice, send; the settings go below it -->
           <div class="cin">
-            <button class="icon" id="attach" title="Joindre des fichiers">＋</button>
+            <button class="icon" id="attach" title="Ajouter : fichiers, dossier, commandes, connecteurs, plugins">＋</button>
             <div class="spacer"></div>
             <button class="icon" id="micBtn" title="Dicter (parle, Naim écrit)" hidden></button>
             <button class="icon" id="talkBtn" title="Conversation à voix haute : tu parles, Naim répond avec sa voix" hidden></button>
@@ -5031,7 +5031,45 @@ function renderPending() {
   const box = $("#pending"); box.innerHTML = attChips(pending, true);
   $$("[data-rm]", box).forEach((b) => (b.onclick = () => { pending.splice(+b.dataset.rm, 1); renderPending(); updateCtx(); }));
 }
-$("#attach").onclick = () => $("#fileInput").click();
+// « + » as in a pro assistant: files or photos, a folder, the « / » commands, the connectors (MCP) and the plugins
+$("#attach").onclick = (e) => { e.stopPropagation(); plusMenu(e.currentTarget); };  // the click must not close it at once
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "u") { e.preventDefault(); $("#fileInput").click(); }
+});
+function plusMenu(anchor) {
+  showMenu(anchor, [
+    { icon: "📄", label: "Ajouter des fichiers ou des photos", key: "⌘U", run: () => $("#fileInput").click() },
+    { icon: "📁", label: "Ajouter un dossier", run: async () => {
+      const r = await api("/api/pick-folder").catch(() => ({}));
+      if (r.path) { S.project = r.path; saveSettings(); applySettings(); toast(`Dossier de travail : ${r.path.split("/").pop()}`); }
+    } },
+    { icon: "⌘", label: "Commandes slash", run: () => { const i = $("#input"); i.value = "/"; i.focus(); i.dispatchEvent(new Event("input")); } },
+    "-",
+    { icon: "🔌", label: "Connecteurs ›", run: () => setTimeout(() => connectorsMenu(anchor), 0) },
+    { icon: "🛠", label: "Plugins ›", run: () => setTimeout(() => pluginsMenu(anchor), 0) },
+  ]);
+}
+async function connectorsMenu(anchor) {
+  const { servers = [] } = await api("/api/mcp").catch(() => ({}));
+  showMenu(anchor, [
+    ...servers.slice(0, 12).map((m) => ({ icon: m.enabled === false ? "◻︎" : "✓", label: m.name, title: m.description || "",
+                                           run: () => naimCmd("mcp") })),
+    ...(servers.length ? ["-"] : []),
+    { icon: "⚙", label: "Gérer les connecteurs", run: () => naimCmd("mcp") },
+  ]);
+}
+async function pluginsMenu(anchor) {
+  const { plugins = [] } = await api("/api/plugins").catch(() => ({}));
+  showMenu(anchor, [
+    ...plugins.map((p) => ({ icon: p.enabled ? "✓" : "◻︎", label: p.name, title: p.description || "", run: async () => {
+      await api("/api/plugins/toggle", { method: "POST", body: { name: p.name, on: !p.enabled } });
+      toast(`${p.name} ${p.enabled ? "désactivé" : "activé"}`); loadPluginCommands();
+    } })),
+    ...(plugins.length ? ["-"] : []),
+    { icon: "⚙", label: "Gérer les plugins", run: () => { setView("settings"); showSettingsTab("plugins"); } },
+    { icon: "＋", label: "Ajouter une marketplace…", run: () => { const i = $("#input"); i.value = "/plugin marketplace add "; i.focus(); autoGrow(); } },
+  ]);
+}
 $("#fileInput").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
 let dragDepth = 0;
 document.addEventListener("dragenter", (e) => { if (e.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });

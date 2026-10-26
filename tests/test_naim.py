@@ -479,8 +479,12 @@ class ChatOrAgent(unittest.TestCase):
         cls.h = server.Handler.__new__(server.Handler)
         cls.dir = tempfile.mkdtemp()
 
-    def work(self, text):
-        return self.h.big_work({"message": text, "settings": {"project": self.dir}, "history": []})
+    def work(self, text):  # the hand-over to the Agent, when the user turned it on (off by default: the Chat works itself)
+        return self.h.big_work({"message": text, "settings": {"project": self.dir, "auto_agent": True}, "history": []})
+
+    def test_off_by_default(self):
+        self.assertIsNone(self.h.big_work({"message": "Écris DDL.sql, RETRAIT.cbl puis RETRAIT.jcl",
+                                           "settings": {"project": self.dir}, "history": []}))
 
     def test_project_goes_to_agent(self):
         for t in ("lance toi le test et corrige si une erreur", "toujours code erreur 1 $ dotnet test",
