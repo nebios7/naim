@@ -67,6 +67,25 @@ class EngineSlots(unittest.TestCase):
         self.assertEqual(self.slot([{"role": "system", "content": "s"}], {}), 2)
 
 
+class EngineGrowsOnly(unittest.TestCase):
+    """A smaller request is served by the bigger context already there: no restart (a periodic 8k check once shrank the
+    engine under a running answer — « Connection refused », 6 restarts in 2 minutes). Only a bigger one restarts it."""
+
+    def test_no_shrink(self):
+        s = llamacpp.Server(port=1)
+        s.proc = type("Running", (), {"poll": lambda self: None})()  # an engine that runs
+        s.ctx, s.cfg = 32768, dict(llamacpp.CONFIG)
+        s.healthy = lambda: True
+        stops = []
+        s.stop = lambda: stops.append(1) or (_ for _ in ()).throw(RuntimeError("restart"))
+        s.ensure(8192)
+        s.ensure(32768)
+        self.assertEqual(stops, [])
+        with self.assertRaises(RuntimeError):
+            s.ensure(65536)  # bigger: it restarts
+        self.assertEqual(stops, [1])
+
+
 class Compaction(unittest.TestCase):
     """A compaction re-reads the whole prompt: it must free real room (down to ~40%), keep calls before their results
     and leave the last step whole."""

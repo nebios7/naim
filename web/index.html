@@ -237,7 +237,7 @@ body .chip { display: flex; gap: 12px; align-items: flex-start; text-align: left
 .botname { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); margin: 0 0 6px; }
 .botname .robot { width: 20px; height: 20px; }
 .botname b { color: var(--text); font-weight: 600; }
-.todos { border-left: 3px solid var(--brand) !important; }
+.todos { border-left: 1px solid var(--line) !important; }
 .arow .alabel code { color: var(--text); }
 @media (max-width: 760px) { body .chips { grid-template-columns: 1fr; } }
 
@@ -1535,6 +1535,28 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .turn.plugcard { align-items: flex-start; }
 .turn.plugcard .md { min-width: 0; }
 .turn.plugcard .md p:last-child { margin-bottom: 0; }
+/* the task list (update_todos): line icons, a thin progress bar, done ones greyed — no stripe, no strike-through */
+.todos { border: 1px solid var(--line) !important; border-radius: 12px; background: var(--panel); padding: 10px 14px 8px; }
+.todos .th { display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }
+.todos .th span:first-child { color: var(--text); font-weight: 600; }
+.todos .tbar { height: 2px; border-radius: 2px; background: var(--line); margin: 0 0 8px; overflow: hidden; }
+.todos .tbar i { display: block; height: 100%; background: #d97757; transition: width .4s ease; }
+.todos .ti { display: flex; gap: 10px; align-items: flex-start; padding: 3px 0; font-size: 14px; line-height: 1.45; }
+.todos .ti .tm { width: 16px; height: 16px; flex: none; margin-top: 2px; animation: none !important; }
+.todos .ti .tm svg { width: 16px; height: 16px; display: block; overflow: visible; }
+.todos .tm .o { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.todos .tm .o.d { stroke-dasharray: 2.2 2.2; opacity: .7; }
+.todos .tm .a { fill: none; stroke: #d97757; stroke-width: 1.8; stroke-linecap: round; }
+.todos .tm .f { fill: #d97757; }
+.todos .tm .k { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.todos .ti.in_progress .tm svg { animation: todoSpin 1s linear infinite; }
+.todos.finished .ti.in_progress .tm svg { animation: none; }
+@keyframes todoSpin { to { transform: rotate(360deg); } }
+.todos .ti span:last-child { color: var(--text); text-decoration: none !important; }
+.todos .ti.in_progress span:last-child { font-weight: 600; }
+.todos .ti.done span:last-child, .todos .ti.skipped span:last-child { color: var(--muted); }
+.todos .ti.skipped span:last-child::after { content: none !important; }
+@media (prefers-reduced-motion: reduce) { .todos .ti.in_progress .tm svg { animation: none; } }
 .bubble pre.ucode { margin: 6px 0; padding: 9px 12px; background: var(--code); border: 1px solid var(--line); border-radius: 10px;
   white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.55 ui-monospace, "SF Mono", Menlo, monospace; }
 .bubble code.uinline { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; background: var(--code);
@@ -3798,8 +3820,16 @@ function addBot(m, idx) {
       const done = list.filter((t) => t.status === "done").length;
       v._plan = [done, list.length]; v._prog();
       box.hidden = false;
-      box.innerHTML = `<div class="th"><span>Plan de travail</span><span>${done}/${list.length}</span></div>` +
-        list.map((t) => `<div class="ti ${t.status}"><span class="tm">${{ done: "✓", in_progress: "◐", skipped: "⊘" }[t.status] || "○"}</span><span>${esc(t.text)}</span></div>`).join("");
+      // a task list as in a pro tool: line icons (to do, under way, done), done ones greyed (not struck through), a thin
+      // progress bar; a task left by a stop keeps a dashed circle, the stop is said once in the header
+      const stopped = list.some((t) => t.status === "skipped");
+      const ICON = { done: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" class="f"/><path d="M4.8 8.2l2.1 2.1 4.3-4.6" class="k"/></svg>',
+        in_progress: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" class="o"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" class="a"/></svg>',
+        skipped: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" class="o d"/></svg>' };
+      const todo = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" class="o"/></svg>';
+      box.innerHTML = `<div class="th"><span>Tâches</span><span>${done} sur ${list.length}${stopped ? " · arrêté" : ""}</span></div>`
+        + `<div class="tbar"><i style="width:${Math.round(100 * done / list.length)}%"></i></div>`
+        + list.map((t) => `<div class="ti ${t.status}"><span class="tm">${ICON[t.status] || todo}</span><span>${esc(t.text)}</span></div>`).join("");
     },
     verify(ev) {
       const bad = ev.failures.length;

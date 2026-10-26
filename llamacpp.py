@@ -214,7 +214,10 @@ class Server:
                 raise RuntimeError(msg)
         with self.lock:
             cfg = dict(CONFIG)
-            if self.running and self.ctx == ctx and self.cfg == cfg and self.healthy():
+            # a request that fits in the context already there is served by it: the engine only restarts to GROW. A small
+            # side request (a summary, a title: 8k) once shrank it under the conversation, which grew it back, and each
+            # restart cut the answer being written (« Connection refused »: 6 restarts in 2 minutes)
+            if self.running and self.ctx and self.ctx >= ctx and self.cfg == cfg and self.healthy():
                 return
             if not self.running and self.healthy():
                 # another Naim process (the app, the web UI, a script) already runs llama-server: share it
