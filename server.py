@@ -117,6 +117,21 @@ DONE_CLAIM_RE = re.compile(r"\bj'ai (?:bien |maintenant |d[ée]j[àa] )?(?:insta
                            r"\bavec succ[èe]s\b", re.I)
 
 
+USED_RESULT_KEEP = 1500  # characters kept of a tool result once a later step used it
+SHORTENED = "\n… (raccourci : déjà lu et utilisé plus haut)"
+
+
+def shorten_used_results(messages):
+    """The results of tools already used by a later step (a web page read, a file…) keep only their beginning: the
+    conversation stays light (it reached 42,000 tokens after a few searches, each word then written at 6/s instead of 15),
+    the newest result stays whole for the step that reads it."""
+    last_call = max((i for i, m in enumerate(messages) if m.get("role") == "assistant" and m.get("tool_calls")), default=-1)
+    for i, m in enumerate(messages):
+        c = str(m.get("content") or "")
+        if m.get("role") == "tool" and i < last_call and len(c) > USED_RESULT_KEEP + 200 and not c.endswith(SHORTENED):
+            m["content"] = c[:USED_RESULT_KEEP] + SHORTENED
+
+
 def claims_done(text):
     """A sentence (not a question) saying an action was done."""
     return any(DONE_CLAIM_RE.search(s) for s in re.split(r"(?<=[.!?…])\s+|\n+", text or "") if s.strip() and not s.strip().endswith("?"))
@@ -2104,6 +2119,7 @@ class Handler(BaseHTTPRequestHandler):
             # after « Fais-le maintenant » the next step MUST be a tool call: announcing it again is no longer possible
             opts = dict(options, tool_choice="required") if ((files and step == 0) or force_tool) and tools else options
             force_tool = False
+            shorten_used_results(messages)  # pages and files already used: their beginning only, the conversation stays light
             content, calls, shown, thinking_text, copied = "", [], 0, "", False
             try:
                 stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
@@ -2325,7 +2341,7 @@ class Handler(BaseHTTPRequestHandler):
                 if helper._same_error(name, result):
                     result += ("\n\n[STOP: same error twice. Do not call it again. Tell the user the exact error, your "
                                "hypothesis about its cause and what would fix it.]")
-                messages.append({"role": "tool", "tool_name": name, "content": result[:12000]})
+                messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
             # a screenshot or an image looked at: Naim SEES it (only the latest one stays, older ones are dropped)
             imgs, helper._pending_images = getattr(helper, "_pending_images", []), []
             looked, helper._looked = getattr(helper, "_looked", False), False
@@ -2494,7 +2510,7 @@ class Handler(BaseHTTPRequestHandler):
                     result += ("\n\n[STOP: this tool failed twice with the SAME error. Do not call it again. Tell the user "
                                "the exact error message, your hypothesis about its cause and what would fix it. Never "
                                "invent a vague cause like « formatting problem ».]")
-                messages.append({"role": "tool", "tool_name": name, "content": result[:12000]})
+                messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
         if used and not answered and not stop.is_set():
             # attempts used up (or an empty answer): always say what was done or what blocks, never stay silent
             msg = ollama_chat(body.get("model", "naim"), messages + [{"role": "user", "content": (

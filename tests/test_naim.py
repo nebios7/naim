@@ -570,6 +570,23 @@ class QuickAnswers(unittest.TestCase):
             self.assertFalse(q(m), m)
 
 
+class LightConversation(unittest.TestCase):
+    """Pages and files already used keep only their beginning (a few web searches once made 42,000 tokens to read
+    again, each word then written at 6/s): the newest result stays whole for the step that reads it."""
+
+    def test_shorten(self):
+        import server
+        msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": "cherche"},
+                {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "web_fetch"}}]}, {"role": "tool", "content": "A" * 9000},
+                {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "web_fetch"}}]}, {"role": "tool", "content": "B" * 9000}]
+        server.shorten_used_results(msgs)
+        sizes = [len(m["content"]) for m in msgs if m["role"] == "tool"]
+        self.assertLess(sizes[0], 1600)
+        self.assertEqual(sizes[1], 9000)
+        server.shorten_used_results(msgs)
+        self.assertEqual([len(m["content"]) for m in msgs if m["role"] == "tool"], sizes)
+
+
 class SessionMemory(unittest.TestCase):
     """naim-mem: the hook keeps what was done, the MCP server finds it."""
 

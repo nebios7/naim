@@ -149,40 +149,25 @@ MCP_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_mcp", "des
 # Naim adds to its own library what the user asks for, like an assistant that installs the tool it lacks: any MCP
 # server (not only the catalogue's) and the user's hooks; install_skill does the same for skills
 INSTALL_MCP_TOOL = {"type": "function", "function": {"name": "install_mcp", "description": (
-    "Install a new MCP server in your library when the user asks for one that chercher_mcp does not find: a command "
-    "that starts it (npx, uvx, python, node… with its arguments, e.g. command=\"npx\", args=[\"-y\", \"@scope/server\"]) "
-    "or the URL of a remote server. It is started once to check it works and list its tools; then use_mcp(server) as "
-    "usual. Put API keys the user gave you in env, never in args."),
+    "Install an MCP server the user asks for and chercher_mcp does not find: a command (npx, uvx, python… + args) or a "
+    "URL. Started once to check it; then use_mcp(server). API keys go in env."),
     "parameters": {"type": "object", "properties": {
-        "name": {"type": "string", "description": "short name, e.g. « github », « postgres »"},
-        "command": {"type": "string", "description": "program that starts the server: npx, uvx, python3, node…"},
-        "args": {"type": "array", "items": {"type": "string"}, "description": "its arguments"},
-        "env": {"type": "object", "description": "environment variables (API keys…)"},
-        "url": {"type": "string", "description": "for a remote server: its http(s) URL, instead of command"},
-        "description": {"type": "string", "description": "what it is for, in a few words"}}, "required": ["name"]}}}
+        "name": {"type": "string"}, "command": {"type": "string"}, "args": {"type": "array", "items": {"type": "string"}},
+        "env": {"type": "object"}, "url": {"type": "string"}, "description": {"type": "string"}}, "required": ["name"]}}}
 
 ADD_HOOK_TOOL = {"type": "function", "function": {"name": "add_hook", "description": (
-    "Add a hook the user asks for: a shell command that runs by itself at a moment of your work. Events: PreToolUse "
-    "(before a tool; exit 2 blocks it), PostToolUse (after a tool), UserPromptSubmit (when a message is sent; what it "
-    "prints is added to your context), Stop (when you finish; exit 2 sends you back to work), SessionStart (first "
-    "message of a conversation), PreCompact (before you sum up older steps). The command receives a JSON on stdin "
-    "(tool_name, tool_input, tool_response, prompt…). matcher: tool names for PreToolUse/PostToolUse, e.g. "
-    "\"write_file|edit_file\". scope: \"project\" (this folder) or \"global\" (every project)."),
+    "Add a hook the user asks for: a shell command run by itself at an event. It gets a JSON on stdin (tool_name, "
+    "tool_input, prompt…); exit 2 blocks (PreToolUse) or sends you back to work (Stop)."),
     "parameters": {"type": "object", "properties": {
         "event": {"type": "string", "enum": ["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop", "SessionStart", "PreCompact"]},
-        "command": {"type": "string", "description": "the shell command"},
-        "matcher": {"type": "string", "description": "tools it applies to (regex), for PreToolUse / PostToolUse"},
-        "scope": {"type": "string", "enum": ["project", "global"]},
-        "timeout": {"type": "integer", "description": "seconds, 60 by default"}}, "required": ["event", "command"]}}}
+        "command": {"type": "string"}, "matcher": {"type": "string", "description": "tools it applies to (regex)"},
+        "scope": {"type": "string", "enum": ["project", "global"]}, "timeout": {"type": "integer"}}, "required": ["event", "command"]}}}
 
 INSTALL_PLUGIN_TOOL = {"type": "function", "function": {"name": "install_plugin", "description": (
-    "Install a plugin (a bundle of skills, commands, MCP servers and hooks) when the user asks for one, with a link to "
-    "its GitHub repository or marketplace (also « /plugin marketplace add <link> » then « /plugin install <name> » "
-    "written by the user). Plugins made for other coding agents are translated. It returns what was really installed."),
+    "Install a plugin (skills, commands, MCP servers, hooks) from its GitHub repository or marketplace link."),
     "parameters": {"type": "object", "properties": {
-        "source": {"type": "string", "description": "link of the repository or marketplace (https://github.com/owner/repo or owner/repo)"},
-        "name": {"type": "string", "description": "the plugin to install from it, when it holds several"}},
-        "required": ["source"]}}}
+        "source": {"type": "string", "description": "https://github.com/owner/repo or owner/repo"},
+        "name": {"type": "string", "description": "the plugin, when the marketplace holds several"}}, "required": ["source"]}}}
 
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
     "Find the user's own files anywhere on the Mac (Bureau, Documents, Téléchargements…), like the Finder: by words in "
@@ -3198,7 +3183,7 @@ class Agent:
         """When the conversation nears the context size, shorten old tool results and arguments.
         The system prompt, the user's task and the recent steps are kept intact, so the model never loses the task.
         force: the engine said it no longer fits — shortened now, keeping fewer recent steps."""
-        budget = int(self._room() * 0.6)
+        budget = min(int(self._room() * 0.6), 32000)  # past ~32k tokens each word is written slower: summed up before
         if not force and self._ctx_tokens() < budget:
             return
         # compact down to ~40% so this (cache-invalidating) pass happens rarely
@@ -3240,7 +3225,7 @@ class Agent:
         self.messages = self.messages[:task_idx + 1] + [summary] + self.messages[keep_from:]
         # every pass re-reads the whole prompt (minutes): it must free real room, down to ~40%, so that it stays rare —
         # the big outputs kept (a whole file read, a long log) are cut first, except the last step's, then fewer steps
-        target = int(self._room() * 0.4)
+        target = min(int(self._room() * 0.4), 20000)
         for limit in ((4000, 2000) if not force else (2000,)):
             if self._ctx_tokens() < target and not force:
                 break
