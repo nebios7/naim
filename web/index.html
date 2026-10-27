@@ -467,7 +467,23 @@ footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #fold
 .ctx .ctxbtn { border: 1px solid var(--line); background: none; color: var(--text); font: inherit; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; cursor: pointer; }
 .ctx .ctxbtn:hover { border-color: var(--muted); }
 .hint { max-width: var(--w); margin: 6px auto 0; font-size: 12px; color: var(--muted); text-align: center; }
-.dropzone { position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 2px dashed var(--accent); border-radius: 14px; display: none; place-items: center; font-size: 17px; color: var(--accent); z-index: 5; pointer-events: none; }
+.dropzone { position: absolute; inset: 0; display: none; place-items: center; z-index: 5; pointer-events: none; }
+.dropcard { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 34px; border-radius: 16px; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); box-shadow: 0 12px 40px rgba(0,0,0,.28); color: #4a9eff; backdrop-filter: blur(6px); animation: dropin .16s ease-out; }
+.dropcard .dicons { display: flex; gap: 14px; align-items: flex-end; }
+.dropcard .dicons svg { width: 30px; height: 30px; }
+.dropcard .dicons span:nth-child(1) { transform: rotate(-10deg); } .dropcard .dicons span:nth-child(3) { transform: rotate(10deg); }
+.dropcard b { font-weight: 500; font-size: 15px; }
+@keyframes dropin { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+/* files waiting to be sent: a picture shows itself, a document is a small card with its format */
+#pending .ptile { position: relative; flex: none; }
+#pending .ptile img { display: block; width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+#pending .pcard { width: 150px; height: 64px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 7px 9px; display: flex; flex-direction: column; justify-content: space-between; font-size: 12px; }
+#pending .pcard .pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pending .pcard .pext { align-self: flex-start; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+#pending .ptile .prm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--muted); display: none; place-items: center; padding: 0; }
+#pending .ptile:hover .prm { display: grid; }
+#pending .ptile .prm svg { width: 11px; height: 11px; }
+#pending .ptile .ploading { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 10px; font-size: 11px; color: var(--muted); }
 body.dragging .dropzone { display: grid; }
 
 /* ================= terminal */
@@ -694,7 +710,10 @@ body.vnarrow #panel.show { margin: 0; inset: 0 !important; width: auto !importan
 .chhead { display: flex; align-items: center; gap: 8px; padding: 7px 10px; }
 .chhead .aic svg { width: 15px; height: 15px; }
 .chhead .btn { padding: 3px 10px; font-size: 12.5px; }
-.chrow { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 33px; border-top: 1px solid var(--border); color: var(--muted); }
+.chrow { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-top: 1px solid var(--border); color: var(--muted); }
+.chrow .aic svg { width: 15px; height: 15px; }
+.chrow.chtotal .chpath { font-family: inherit; font-size: 13px; }
+.chhead { padding: 10px 12px !important; }
 .chcard .cbadge { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--hover); color: var(--muted); }
 .chcard .cbadge.new { background: var(--add); color: var(--add-t); } .chcard .cbadge.del { background: var(--del); color: var(--del-t); }
 .chpath { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text); }
@@ -1156,6 +1175,21 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .agroup.live > summary .gchev { order: 2; }
 .liveline { display: flex; align-items: center; gap: 8px; font-size: 13.5px; padding: 2px 0; }
 .liveline .ltxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the live icon follows what Naim does: a quill while it writes, three dots in a wave while it reads, the turning
+   dots while it thinks — the same terracotta as the dots */
+.licon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: #d97757; }
+.lfeather svg { width: 16px; height: 16px; transform-origin: 18% 88%; animation: quill 1.1s ease-in-out infinite; }
+@keyframes quill { 0%, 100% { transform: rotate(-9deg) translate(0, 0); } 35% { transform: rotate(4deg) translate(1px, -0.5px); } 70% { transform: rotate(-3deg) translate(2px, 0); } }
+.lread { gap: 2.5px; }
+.lread i { width: 3.5px; height: 3.5px; border-radius: 50%; background: currentColor; animation: rdot 0.9s ease-in-out infinite; }
+.lread i:nth-child(2) { animation-delay: .15s; } .lread i:nth-child(3) { animation-delay: .3s; }
+@keyframes rdot { 0%, 100% { transform: translateY(1px); opacity: .45; } 50% { transform: translateY(-2.5px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lfeather svg, .lread i { animation: none; } }
+/* a block of actions: the lines written (+72, green) and the images it looked at, small, on the right */
+.agroup > summary .gadd { color: var(--add-t); font-variant-numeric: tabular-nums; margin-left: 6px; }
+.agroup > summary .gthumbs { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding-left: 10px; flex: none; }
+.agroup > summary .gthumbs img { height: 26px; max-width: 48px; object-fit: cover; border-radius: 5px; border: 1px solid var(--line); background: var(--panel); }
+.agroup > summary .gthumbs .gmore { color: var(--muted); font-size: 12px; }
 
 /* shell colours (as in the code blocks) and the opened command as a panel: a title, the coloured command, the output */
 .hv { color: #e5a35c; } .ho { color: inherit; } .hflag { color: var(--muted); }
@@ -1885,7 +1919,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
         <div class="hint" id="hint"></div>
         <div id="homeBelow" hidden></div>
       </footer>
-      <div class="dropzone">Dépose tes fichiers ici</div>
+      <div class="dropzone"><div class="dropcard"><div class="dicons"><span data-ic="image"></span><span data-ic="docs"></span><span data-ic="folder"></span></div><b>Déposez les fichiers ici</b></div></div>
       <input type="file" id="fileInput" multiple hidden>
       <section id="term" hidden>
         <div class="thead"><span>TERMINAL</span><span class="mono" id="termCwd"></span><div class="spacer"></div>
@@ -3548,6 +3582,25 @@ function stepIcon(name, kind) {
   if (/^(list_files|aller_dans_dossier)$/.test(name)) return svgI("folder");
   return svgI(STEP_ICON[kind] || "tool");
 }
+function groupPlus(group, n) {  // the lines written in this block, in green: « +72 »
+  const sum = $(":scope > summary", group); let s = $(".gadd", sum);
+  if (!s) { s = document.createElement("span"); s.className = "gadd"; $(".gsum", sum).after(s); }
+  s.textContent = "+" + n;
+}
+function groupThumb(group, path, page) {  // the images and pages it looked at, small, at the right of the block
+  const sum = $(":scope > summary", group); let box = $(".gthumbs", sum);
+  if (!box) { box = document.createElement("span"); box.className = "gthumbs"; sum.appendChild(box); }
+  if (box.dataset.paths?.split("\n").includes(path)) return;
+  box.dataset.paths = (box.dataset.paths ? box.dataset.paths + "\n" : "") + path;
+  const imgs = $$("img", box);
+  if (imgs.length >= 3) {
+    let more = $(".gmore", box); if (!more) { more = document.createElement("span"); more.className = "gmore"; box.prepend(more); }
+    more.textContent = "+" + (box.dataset.paths.split("\n").length - 3); return;
+  }
+  const img = new Image(); img.loading = "lazy"; img.alt = "";
+  img.src = `/api/thumb?root=${encodeURIComponent(S.project || "")}&path=${encodeURIComponent(path)}&w=120${page ? "&page=" + page : ""}`;
+  img.onerror = () => img.remove(); box.appendChild(img);
+}
 function groupSummary(counts) {  // what was done, said like a person: « Lu 2 fichiers, exécuté 3 commandes »
   const n = (k) => counts[k] || 0, pl = (k, one, many) => `${n(k)} ${n(k) > 1 ? many : one}`;
   const parts = [];
@@ -3733,6 +3786,11 @@ function addBot(m, idx) {
       const info = actionInfo(name, args.added != null || !/^(edit_file|multi_edit)$/.test(name) ? args : { ...args, ...toolMeta(name, args) });  // live: +/− counted now
       counts[info.kind] = (counts[info.kind] || 0) + 1;
       $(".gsum", group).textContent = groupSummary(counts);
+      const meta = args.lines != null || args.added != null ? args : toolMeta(name, args);
+      const plus = name === "write_file" ? (meta.lines || 0) : /^(edit_file|multi_edit)$/.test(name) ? (meta.added || 0) : 0;
+      if (plus) { counts.plus = (counts.plus || 0) + plus; groupPlus(group, counts.plus); }
+      const seen = /^(read_file|look_at)$/.test(name) && /\.(png|jpe?g|gif|webp|svg|pdf)$/i.test(String(args.path || "")) ? String(args.path) : "";
+      if (seen) groupThumb(group, seen, args.page);
       const row = document.createElement("div"); row.className = "arow run"; row.dataset.tool = "1";
       row.innerHTML = `<div class="aline"><span class="aic">${stepIcon(name, info.kind)}</span>${sub ? `<span class="subtag">${esc(sub)}</span>` : ""}<span class="alabel">${info.label}</span></div><pre class="aout" hidden></pre>`;
       const pre = $(".aout", row);
@@ -3886,9 +3944,11 @@ function addBot(m, idx) {
       if (r.changes?.length) {  // what this turn changed in the files, at the end of the turn (details in « Modifs »)
         const add = r.changes.reduce((a, c) => a + (c.added || 0), 0), rem = r.changes.reduce((a, c) => a + (c.removed || 0), 0);
         const card = document.createElement("div"); card.className = "chcard";
-        card.innerHTML = `<div class="chhead"><span class="aic">${svgI("file")}</span><b>${r.changes.length} fichier${r.changes.length > 1 ? "s" : ""} modifié${r.changes.length > 1 ? "s" : ""}</b><span class="add">+${add}</span><span class="del">−${rem}</span><span class="spacer"></span><button class="btn" data-see>Voir les modifs</button></div>`
-          + r.changes.slice(0, 8).map((c) => `<div class="chrow"><span class="chpath" title="${esc(c.path)}">${esc(c.path)}</span>${c.created ? '<span class="cbadge new">nouveau</span>' : c.deleted ? '<span class="cbadge del">supprimé</span>' : ""}<span class="add">+${c.added || 0}</span><span class="del">−${c.removed || 0}</span></div>`).join("")
-          + (r.changes.length > 8 ? `<div class="chrow muted">… ${r.changes.length - 8} de plus</div>` : "");
+        const n = r.changes.length, s = n > 1 ? "s" : "", verb = r.changes.every((c) => c.created) ? "créé" : r.changes.every((c) => c.deleted) ? "supprimé" : "modifié";
+        card.innerHTML = `<div class="chhead"><b>${n} fichier${s} ${verb}${s}</b><span class="spacer"></span><button class="btn" data-see>Voir les modifs</button></div>`
+          + r.changes.slice(0, 8).map((c) => `<div class="chrow"><span class="aic">${svgI(/\.(py|js|ts|jsx|tsx|json|html|css|swift|sh|go|rs|java|c|cpp|h|rb|php|sql|yml|yaml|toml)$/i.test(c.path) ? "cmd" : "file")}</span><span class="chpath" title="${esc(c.path)}">${esc(c.path)}</span>${c.created ? '<span class="cbadge new">nouveau</span>' : c.deleted ? '<span class="cbadge del">supprimé</span>' : ""}<span class="add">+${c.added || 0}</span><span class="del">−${c.removed || 0}</span></div>`).join("")
+          + (r.changes.length > 8 ? `<div class="chrow muted">… ${r.changes.length - 8} de plus</div>` : "")
+          + `<div class="chrow chtotal"><span class="chpath">Total</span><span class="add">+${add}</span><span class="del">−${rem}</span></div>`;
         $("[data-see]", card).onclick = () => showPanel("changes");
         d.insertBefore(card, $(".msgacts", d));
       }
@@ -4666,6 +4726,15 @@ const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span
 // the last piece of work in a reply (the live line at the bottom is not one)
 function lastWork(flow) { return [...flow.children].filter((c) => !c.classList.contains("liveline")).pop() || null; }
 const LDOTS = '<span class="bgdots" aria-hidden="true"><canvas></canvas></span>';
+// what Naim does right now, from the words of its status: writes (a quill), reads (dots in a wave), thinks or works
+// (the turning dots)
+function liveKind(label) {
+  if (/^(Naim )?(écrit|modifie|crée|rédige)\b/i.test(label)) return "write";
+  if (/^(Naim )?(lit|regarde|explore|cherche|consulte|charge|parcourt)\b/i.test(label)) return "read";
+  return "think";
+}
+const liveIcon = (k) => k === "write" ? `<span class="licon lfeather">${svgI("feather")}</span>`
+  : k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>' : LDOTS;
 // four dots in a square; two opposite corners swap places, then the other two, one swap every 0.625 s with no pause
 // (each swap lasts 0.667 s, so the next one starts as the last settles). The curves are measured frame by frame: the
 // vertical motion leads and overshoots by 11 %, the horizontal one follows, so the two dots pass along a curve and the
@@ -4726,7 +4795,8 @@ function liveInThread(r, label, step, time) {
     $(".liveline", flow)?.remove();
     last.classList.add("live");
     const sum = $(":scope > summary", last);
-    if (!$(".glive", sum)) { const gl = document.createElement("span"); gl.className = "glive"; gl.innerHTML = LDOTS; sum.prepend(gl); }
+    let gl = $(".glive", sum); if (!gl) { gl = document.createElement("span"); gl.className = "glive"; sum.prepend(gl); }
+    const kind = liveKind(label); if (gl.dataset.k !== kind) { gl.dataset.k = kind; gl.innerHTML = liveIcon(kind); }
     // the title says what is being done right now (« Lit index.html », the command's own description), then the
     // time and the chevron; the tally (« Lu 2 fichiers… ») comes back once the work is done
     let now = $(".gnow", sum); if (!now) { now = document.createElement("span"); now.className = "gnow"; $(".gsum", sum).after(now); }
@@ -4738,7 +4808,8 @@ function liveInThread(r, label, step, time) {
     $(".liveline", flow)?.remove();  // it is writing its answer: the words themselves show it works
   } else {
     let l = $(".liveline", flow);
-    if (!l) { l = document.createElement("div"); l.className = "liveline"; l.innerHTML = LDOTS + '<span class="ltxt"></span><span class="ltm"></span>'; }
+    if (!l) { l = document.createElement("div"); l.className = "liveline"; l.innerHTML = '<span class="lic"></span><span class="ltxt"></span><span class="ltm"></span>'; }
+    const kind = liveKind(label), lic = $(".lic", l); if (lic.dataset.k !== kind) { lic.dataset.k = kind; lic.innerHTML = liveIcon(kind); }
     if (l !== flow.lastElementChild) flow.appendChild(l);
     const txt = (step ? step + " · " : "") + label + "…";
     if ($(".ltxt", l).textContent !== txt) $(".ltxt", l).textContent = txt;
@@ -5028,7 +5099,13 @@ async function addFiles(files) {
   renderPending(); updateCtx();
 }
 function renderPending() {
-  const box = $("#pending"); box.innerHTML = attChips(pending, true);
+  const box = $("#pending");
+  box.innerHTML = pending.map((a, i) => {
+    const ext = (String(a.name || "").split(".").pop() || "").toUpperCase().slice(0, 6);
+    const body = a.kind === "image" && a.data ? `<img src="data:${a.mime};base64,${a.data}" alt="${esc(a.name)}">`
+      : `<div class="pcard"><span class="pname" title="${esc(a.name)}">${esc(a.name)}</span><span class="pext">${esc(ext || "FICHIER")}</span></div>`;
+    return `<span class="ptile" title="${esc(a.name)}${a.size ? " · " + fmtSize(a.size) : ""}">${body}${a.loading ? '<span class="ploading">…</span>' : ""}<button class="prm" data-rm="${i}" title="Retirer">${svgI("x")}</button></span>`;
+  }).join("");
   $$("[data-rm]", box).forEach((b) => (b.onclick = () => { pending.splice(+b.dataset.rm, 1); renderPending(); updateCtx(); }));
 }
 // « + » as in a pro assistant: files or photos, a folder, the « / » commands, the connectors (MCP) and the plugins
@@ -7070,6 +7147,9 @@ async function checkStatus() {
 
 // ======================================================================= UI v3: rail, model picker, parameters panel, folders
 const RICON = {
+  feather: '<path d="M20.2 3.8c-5.6.3-10.4 3.6-12.2 9.6L6.6 18"/><path d="M20.2 3.8c-.4 5.8-4 10.3-9.7 11.7"/><path d="M8.6 15.4l5.1-5.1"/><path d="M6.6 18L4 20.6"/>',
+  image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5-8.5 8.5"/>',
+  docs: '<path d="M8 7.5V5.5A1.5 1.5 0 0 1 9.5 4h6l4 4v9.5a1.5 1.5 0 0 1-1.5 1.5H16"/><rect x="4" y="7.5" width="12" height="13" rx="1.5"/><path d="M7 12h6M7 15h6"/>',
   clip: '<path d="M20.5 11.2l-8.4 8.4a5 5 0 0 1-7.1-7.1l8.4-8.4a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.7-7.7"/>',
   slash: '<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M14.5 7.5l-5 9"/>',
   apps: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/><circle cx="16.75" cy="7.25" r="3.25"/>',
@@ -7150,6 +7230,7 @@ const RICON = {
   auto: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 000 16z" fill="currentColor"/>',
 };
 const svgI = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${RICON[k]}</svg>`;
+document.querySelectorAll("[data-ic]").forEach((e) => (e.innerHTML = svgI(e.dataset.ic)));  // the line icons of the page's fixed markup
 if (dictationAvailable()) { const m = $("#micBtn"); m.hidden = false; m.innerHTML = svgI("mic"); m.onclick = () => { if (talk.on) talkStop(); if (dictation.on) { earcon("off"); stopDictation(); } else { earcon("on"); startDictation(); } }; }
 api("/api/tts").then((r) => { if (!r.available || !dictationAvailable()) return;  // speaking needs both: dictation and Naim's voice
   const t = $("#talkBtn"); t.hidden = false; t.innerHTML = svgI("wave"); t.onclick = () => { earcon(talk.on ? "off" : "on"); talk.on ? talkStop() : talkStart(); }; }).catch(() => {});

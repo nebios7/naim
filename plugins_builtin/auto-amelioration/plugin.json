@@ -1,0 +1,17 @@
+{
+  "name": "auto-amelioration",
+  "version": "1.0",
+  "description": "Naim apprend ce qu'on lui montre (capture, lien, site, autre assistant) et le garde : il en fait un skill ou un plugin, le teste, puis s'en sert de lui-même.",
+  "skills": "skills",
+  "triggers": {
+    "s-ameliorer": "\\b(am[ée]liore[- ]toi|auto[- ]?am[ée]lior\\w*|apprends?\\b[^.?!]{0,40}\\b(comportement|affichage|style|fa[çc]on|m[ée]thode)|fais comme (ça|ca|lui|elle|ce site|cette app)|comme (sur|dans) (ce site|cette app|l'image|la capture)|copie (ce|cet|cette) (style|comportement|affichage|design)|deviens comme|cr[ée]e[- ]toi un (skill|plugin))\\b"
+  },
+  "commands": [
+    {
+      "cmd": "/apprendre",
+      "arg": "<ce que tu dois retenir, une capture ou un lien>",
+      "description": "Apprendre un comportement ou un affichage et le garder en skill",
+      "prompt": "Avec le skill s-ameliorer, apprends ceci et garde-le pour la suite (skill ou plugin, testé) :"
+    }
+  ]
+}
