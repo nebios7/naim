@@ -193,12 +193,12 @@ def etat(d):
     if left:
         print("à faire : " + ", ".join(map(str, left[:40])) + (" …" if len(left) > 40 else ""))
     figs = sorted(f.stem for f in (d / "figures").glob("p*.png"))
-    used = " ".join((d / "fr" / f"{s}.md").read_text() for s in figs if (d / "fr" / f"{s}.md").exists())
+    used = " ".join(f.read_text() for f in (d / "fr").glob("p*.md"))  # p010a.png, p010b.png: two drawings of page 10
     lost = [s for s in figs if f"figures/{s}.png" not in used]
     if lost:
         print("figures découpées mais pas placées dans leur page : " + ", ".join(lost))
     unseen = [p["n"] for p in inv["pages"] if p in done and p["look"] and not (d / "pages" / f"p{p['n']:03d}.png").exists()
-              and not (d / "figures" / f"p{p['n']:03d}.png").exists()]
+              and not any((d / "figures").glob(f"p{p['n']:03d}*.png"))]
     if unseen:
         print("pages à regarder traduites SANS avoir été regardées : " + ", ".join(map(str, unseen)))
 
@@ -237,7 +237,7 @@ def md_html(md):
                 if not all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
                     rows.append(cells)
                 i += 1
-            out.append("<table>" + "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>" for r in rows) + "</table>")
+            out.append("<table>" + "".join("<tr>" + "".join(f'<td{" class=nw" if len(c) <= 14 else ""}>{inline(c)}</td>' for c in r) + "</tr>" for r in rows) + "</table>")
             continue
         elif ln.startswith(">"):
             flush()
@@ -274,7 +274,8 @@ figure {{ margin: 6mm 0; text-align: center; page-break-inside: avoid; }}
 figure img {{ max-width: 100%; max-height: 225mm; }}
 figcaption {{ font-size: 9.5pt; font-style: italic; margin-top: 2mm; text-align: center; }}
 table {{ border-collapse: collapse; margin: 4mm auto; page-break-inside: avoid; }}
-td {{ padding: 1.2mm 4mm; border-bottom: 1px solid #ccc; text-align: left; }}
+td {{ padding: 1.2mm 3mm; border-bottom: 1px solid #ccc; text-align: left; font-size: 10pt; line-height: 1.35; }}
+td.nw {{ white-space: nowrap; }}
 blockquote {{ margin: 3mm 10mm; font-style: italic; }}
 .titre {{ text-align: center; margin-top: 70mm; }} .titre h1 {{ margin: 0; font-size: 26pt; page-break-before: avoid; }}
 </style></head><body>
