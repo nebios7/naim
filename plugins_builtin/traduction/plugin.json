@@ -1,0 +1,17 @@
+{
+  "name": "traduction",
+  "version": "1.0",
+  "description": "Traduire un livre ou un long PDF, même scanné, page par page : dessins découpés de l'original, tableaux refaits, symboles exacts, glossaire, PDF mis en page.",
+  "skills": "skills",
+  "triggers": {
+    "traduction-livre": "\\b(tradui\\w*|traduction|translate)\\b[^.?!]{0,80}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|chapitres?|book)\\b|\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|book)\\b[^.?!]{0,80}\\b(tradui\\w*|traduction)\\b"
+  },
+  "commands": [
+    {
+      "cmd": "/traduire-livre",
+      "arg": "<le livre joint, la langue>",
+      "description": "Traduire un livre entier en gardant dessins, tableaux et symboles",
+      "prompt": "Traduis ce livre en entier avec le skill traduction-livre (inventaire, pages regardées, figures gardées, glossaire, PDF) :"
+    }
+  ]
+}
