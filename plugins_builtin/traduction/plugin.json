@@ -1,6 +1,6 @@
 {
   "name": "traduction",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Traduire un livre ou un long PDF, même scanné, page par page : dessins découpés de l'original, tableaux refaits, symboles exacts, glossaire, PDF mis en page.",
   "skills": "skills",
   "triggers": {
@@ -13,5 +13,6 @@
       "description": "Traduire un livre entier en gardant dessins, tableaux et symboles",
       "prompt": "Traduis ce livre en entier avec le skill traduction-livre (inventaire, pages regardées, figures gardées, glossaire, PDF) :"
     }
-  ]
+  ],
+  "priority": true
 }
