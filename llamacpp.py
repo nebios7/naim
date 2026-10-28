@@ -221,7 +221,7 @@ class Server:
                 return
             if not self.running and self.healthy():
                 # another Naim process (the app, the web UI, a script) already runs llama-server: share it
-                self.ctx = self.ctx or ctx
+                self.ctx, self.shared = self.ctx or ctx, True
                 return
             self.stop()
             gguf, mmproj = model_files()
@@ -301,7 +301,11 @@ class Server:
                     os.killpg(self.proc.pid, 9)
                 except ProcessLookupError:
                     pass
-        self.proc = None
+        elif getattr(self, "shared", False):
+            # an engine shared but not started here: stopped at quit only if nobody owns it any more (an orphan
+            # left by a Naim that crashed) — the engine of another Naim still open stays
+            reap_orphans(self.port)
+        self.proc, self.shared = None, False
 
     def status(self):
         gguf, mmproj = model_files()
