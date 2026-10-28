@@ -234,6 +234,21 @@ def _tool_id(server, tool):
 class MCPManager:
     def __init__(self):
         self.servers, self.lock = {}, threading.Lock()
+        self.project = None  # the folder Naim works in: « ${PROJET} » in a server's args/env/cwd becomes it
+
+    def _with_project(self, cfg):
+        """The config with « ${PROJET} » (or « ${PROJECT} ») replaced by the current work folder: a server that analyses
+        a project (Serena…) follows the folder by itself; when the folder changes, the config differs, so it restarts."""
+        folder = str(self.project or Path.home())
+        def sub(v):
+            if isinstance(v, str):
+                return v.replace("${PROJET}", folder).replace("${PROJECT}", folder)
+            if isinstance(v, list):
+                return [sub(x) for x in v]
+            if isinstance(v, dict):
+                return {k: sub(x) for k, x in v.items()}
+            return v
+        return sub(cfg) if cfg else cfg
 
     @property
     def path(self):
@@ -288,6 +303,7 @@ class MCPManager:
                 cfg = None
         if not cfg or (cfg.get("enabled") is False and not on_demand):
             return None
+        cfg = self._with_project(cfg)
         with self.lock:
             srv = self.servers.get(name)
             if srv and srv.alive and srv.cfg == cfg:

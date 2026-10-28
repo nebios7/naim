@@ -707,6 +707,7 @@ class Agent:
         self._mcp_on_demand, self._mcp_deferred = [], []
         if self.features["mcp"]:
             try:
+                ext.MCP.project = str(self.root)  # « ${PROJET} » in a server's config: this task's folder
                 mcp_defs, lookup = ext.MCP.agent_tools()  # only the servers marked « toujours prêt » in full
                 tools += mcp_defs
                 self._mcp_deferred = ext.MCP.deferred()   # enabled servers: one line each, details on demand

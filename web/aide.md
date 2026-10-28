@@ -328,3 +328,10 @@ Des fichiers à côté (scripts, modèles) sont lisibles par Naim ; cite leur ch
 - Une **règle de routage** (mots-clés) se teste sur des phrases qui doivent ET qui ne doivent pas déclencher.
 - Interface : icônes au trait, pas d'emoji, pas d'information affichée deux fois.
 - Commentaires en anglais dans le code, textes en français pour l'utilisateur.
+
+### Un serveur MCP qui suit ton dossier de travail
+
+Dans `~/.naim/mcp.json`, écris `${PROJET}` à la place d'un dossier (dans `args`, `env` ou `cwd`) : Naim le remplace
+par le dossier où il travaille au moment où il démarre le serveur. Quand tu changes de dossier, le serveur repart tout
+seul sur le nouveau. Exemple (Serena) : `"args": ["--from", "serena-agent", "serena", "start-mcp-server", "--project", "${PROJET}"]`.
+

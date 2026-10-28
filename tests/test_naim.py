@@ -770,5 +770,19 @@ class WorkOutsideTheProject(unittest.TestCase):
                 naimtools.JOINTS = old
 
 
+
+class McpFollowsTheProject(unittest.TestCase):
+    def test_projet_placeholder(self):
+        import extensions as ext
+        m = ext.MCPManager()
+        cfg = {"command": "serena", "args": ["--project", "${PROJET}"], "env": {"ROOT": "${PROJECT}"}}
+        m.project = "/tmp/a"
+        self.assertEqual(m._with_project(cfg)["args"], ["--project", "/tmp/a"])
+        self.assertEqual(m._with_project(cfg)["env"], {"ROOT": "/tmp/a"})
+        m.project = "/tmp/b"  # another folder: another config, so the running server is restarted on it
+        self.assertNotEqual(m._with_project(cfg), {**cfg, "args": ["--project", "/tmp/a"], "env": {"ROOT": "/tmp/a"}})
+        self.assertEqual(cfg["args"], ["--project", "${PROJET}"])  # the saved config keeps its placeholder
+
+
 if __name__ == "__main__":
     unittest.main()
