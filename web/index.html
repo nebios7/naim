@@ -291,8 +291,12 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--mu
 .spacer { flex: 1; }
 
 /* ================= sidebar */
-aside#side { width: 272px; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 12px 10px 10px; gap: 2px; flex-shrink: 0; }
+aside#side { width: var(--sidew, 272px); position: relative; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 12px 10px 10px; gap: 2px; flex-shrink: 0; }
 body.noside aside#side { display: none; }
+/* the sessions list's right edge: drag it to widen or narrow the list (a blue line shows it), double click = default */
+.sidegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 7px; cursor: col-resize; z-index: 6; }
+.sidegrip:hover, .sidegrip.drag { background: linear-gradient(to right, transparent 2px, #4a9eff 2px, #4a9eff 4px, transparent 4px); }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 10px; }
 .logo { width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center; }
 .brand b { font-size: 17px; letter-spacing: -0.2px; }
@@ -2857,6 +2861,8 @@ function fitViewport() {
   const de = document.documentElement;
   if (z !== 1) { de.style.width = innerWidth / z + "px"; de.style.height = innerHeight / z + "px"; }
   else { de.style.width = ""; de.style.height = ""; }
+  // the Mac app centres its three buttons on the header: its height on screen (50 points at 100 %, 57.5 at 115 %…)
+  if (de.classList.contains("macapp")) window.webkit?.messageHandlers?.naimWindow?.postMessage("header:" + Math.round(50 * z * 10) / 10);
   const b = document.body;
   // the sessions list stays docked beside the conversation (like a coding assistant's sidebar) while the conversation
   // keeps ~540 points: 52 (rail) + 272 (list) + 540; below that it becomes a drawer over the conversation
@@ -2870,7 +2876,7 @@ addEventListener("resize", () => fitViewport());
 if (document.documentElement.classList.contains("macapp") && window.webkit?.messageHandlers?.naimWindow) {
   const bar = (e) => {
     const t = e.target;
-    if (t.closest("button, a, input, textarea, select, label, [contenteditable], .seg, .menu, #ctxmenu")) return false;
+    if (t.closest("button, a, input, textarea, select, label, [contenteditable], .seg, .menu, #ctxmenu, .sidegrip")) return false;
     if (t.closest("main > header, main > .pagebar")) return true;
     const z = parseFloat(document.documentElement.style.zoom) || 1;
     return !!t.closest("aside#side") && e.clientY * z < 52;  // the strip of the three buttons
@@ -7321,6 +7327,24 @@ function buildRail() {
   if ($("#sideWho")) { const nm = (S.user_name || "").trim(); $("#sideWho .avatar").textContent = (nm[0] || "N").toUpperCase(); $("#sideWho .wname").textContent = nm || "Naim"; }
   const foot = $("aside#side .sidefoot");
   if (foot && !$("#sideTheme")) foot.insertAdjacentHTML("beforeend", `<button class="icon" id="sideTheme" title="Thème : clair / sombre / automatique"></button><button class="icon" data-go="settings" id="sideSettings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`);
+  const asideEl = $("aside#side");
+  if (asideEl && !$(".sidegrip", asideEl)) {
+    const grip = document.createElement("div"); grip.className = "sidegrip"; grip.title = "Tirer pour élargir la liste · double-clic : taille d'origine";
+    asideEl.appendChild(grip);
+    const setW = (w) => document.documentElement.style.setProperty("--sidew", w + "px");
+    if (+S.side_width) setW(+S.side_width);
+    grip.addEventListener("mousedown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      // the width in the page's own pixels, the mouse moves in screen pixels: k converts (it differs with the zoom and
+      // between the Mac app's engine and a browser)
+      const w0 = parseFloat(getComputedStyle(asideEl).width), k = asideEl.getBoundingClientRect().width / w0 || 1, x0 = e.clientX;
+      let w = w0; grip.classList.add("drag"); document.body.classList.add("resizing");
+      const move = (ev) => { w = Math.round(Math.min(480, Math.max(220, w0 + (ev.clientX - x0) / k))); setW(w); };
+      const up = () => { removeEventListener("mousemove", move); removeEventListener("mouseup", up); grip.classList.remove("drag"); document.body.classList.remove("resizing"); S.side_width = w; saveSettings(); fitViewport(); };
+      addEventListener("mousemove", move); addEventListener("mouseup", up);
+    });
+    grip.addEventListener("dblclick", (e) => { e.stopPropagation(); S.side_width = 0; document.documentElement.style.removeProperty("--sidew"); saveSettings(); });
+  }
   $$("#rail [data-go], #sidenav [data-go], #sideSettings").forEach((b) => (b.onclick = () => {
     const g = b.dataset.go;
     // a second click on the page already open closes it and goes back to the conversation (a toggle)

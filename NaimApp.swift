@@ -24,15 +24,18 @@ final class NaimWebView: WKWebView {
 /// « drag » / « zoom » sent by the page: its header moves the window like a title bar (there is no title bar any more)
 final class WindowBridge: NSObject, WKScriptMessageHandler {
     weak var window: NSWindow?
+    var onHeader: ((CGFloat) -> Void)?  // « header:57.5 »: the page's header height, the three buttons centred on it
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let w = window, let what = message.body as? String else { return }
         if what == "drag", let e = NaimWebView.lastDown { w.performDrag(with: e) }
         else if what == "zoom" { w.zoom(nil) }
+        else if what.hasPrefix("header:"), let h = Double(what.dropFirst(7)), h >= 28, h <= 120 { onHeader?(CGFloat(h)) }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, NSWindowDelegate {
     let windowBridge = WindowBridge()
+    var headerHeight: CGFloat = 50
     var window: NSWindow!
     var web: WKWebView!
     let dictation = NaimDictation()  // the composer's microphone
@@ -93,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         windowBridge.window = window
+        windowBridge.onHeader = { [weak self] h in self?.headerHeight = h; self?.placeTrafficLights() }
         window.backgroundColor = NSColor(red: 0.086, green: 0.086, blue: 0.082, alpha: 1)
         window.minSize = NSSize(width: 720, height: 520)
         window.contentView = web
@@ -102,13 +106,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window.setFrameAutosaveName("NaimMainWindow")
         window.makeKeyAndOrderFront(nil)
         placeTrafficLights()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.placeTrafficLights() }  // after AppKit's first layout
     }
 
-    /// The window's three buttons centred in the page's 50-point header, 18 points from the edge.
+    /// The window's three buttons centred in the page's header (its height sent by the page), 18 points from the edge.
     func placeTrafficLights() {
         guard let close = window.standardWindowButton(.closeButton), let bar = close.superview,
               let container = bar.superview else { return }
-        let h: CGFloat = 50
+        let h = headerHeight
         var f = container.frame; f.size.height = h; f.origin.y = window.frame.height - h; container.frame = f
         bar.frame = NSRect(x: 0, y: 0, width: f.width, height: h)
         for (i, kind) in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].enumerated() {
@@ -119,6 +124,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
 
     func windowDidResize(_ notification: Notification) { placeTrafficLights() }
     func windowDidExitFullScreen(_ notification: Notification) { placeTrafficLights() }
+    // AppKit lays the title bar out again when the window gains or loses focus: the buttons are put back each time
+    func windowDidBecomeKey(_ notification: Notification) { placeTrafficLights() }
+    func windowDidResignKey(_ notification: Notification) { placeTrafficLights() }
 
     func showLoading(_ text: String, detail: String = "") {
         let busy = detail.isEmpty  // starting: a moving bar; a problem: the details instead
