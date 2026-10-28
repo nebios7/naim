@@ -2045,6 +2045,7 @@ class Handler(BaseHTTPRequestHandler):
         named = re.findall(r"[\w./-]+\.[a-z0-9]{1,6}\b", body["message"] or "", re.I) if body.get("_question") else []
         # « imprime mon CV PDF », « envoie le document »: acting on a file that exists is not making one, no skill
         acting_only = bool(MAC_ACTION_RE.search(body["message"] or "")) and not MAKE_RE.search(body["message"] or "")
+        sk = None
         if not plain and not body.get("_question") and helper.features.get("skills", True) and helper.auto_skill:
             # the same skills as the Agent (a house plan, a pro email…): their method and tools, not a drawing made up by hand
             recent = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
@@ -2117,6 +2118,12 @@ class Handler(BaseHTTPRequestHandler):
                 "`open` ; réglages = `osascript` ; appeler = `open \"tel:+33…\"` (l'appel passe par l'iPhone) ; SMS ou iMessage = `osascript -e 'tell application \"Messages\" to send \"texte\" to participant \"+33…\"'` (trouve le numéro avec chercher_contact). Ce qui est sensible m'est demandé avant, c'est normal. Ne dis jamais que tu ne "
                 "peux pas avant d'avoir essayé ; si ça échoue, dis exactement pourquoi.)"))
         limit = max(8, min(int((body.get("settings") or {}).get("max_steps") or 30), 200))  # a long task done here too
+        try:  # a skill marked « long » by its plugin (a whole book): as many steps as the Agent, in the Chat too
+            import plugins as _plugins
+            if sk and sk["name"] in _plugins.long_skills():
+                limit = 1000
+        except Exception:  # noqa: BLE001 — never a reason to fail the answer
+            pass
         for step in range(limit):
             if stop.is_set():
                 self.event({"type": "stopped"})

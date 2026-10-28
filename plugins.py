@@ -129,6 +129,13 @@ def library_dirs():
     return [Path(p["path"]) / m["library"] for p in _enabled() if (m := _manifest(Path(p["path"])) or {}).get("library")]
 
 
+def long_skills():
+    """Skills of the plugins marked « long » in their plugin.json (a whole book to translate…): their work takes hundreds
+    of steps, so the Chat gives them as many as the Agent."""
+    return {k for p in _enabled() for m in [(_manifest(Path(p["path"])) or {})] if m.get("long")
+            for k in (m.get("triggers") or {})}
+
+
 def priority_skills():
     """Skills of the plugins marked « priority » in their plugin.json: their words are checked before Naim's own."""
     return [k for p in _enabled() if (_manifest(Path(p["path"])) or {}).get("priority")

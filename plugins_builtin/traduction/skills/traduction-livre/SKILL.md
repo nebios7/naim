@@ -1,9 +1,12 @@
 ---
 name: traduction-livre
-description: Traduire fidèlement un livre ou un long PDF (même scanné) page par page, en gardant les dessins, les tableaux et les symboles de l'original, puis en faire un PDF mis en page.
+description: Traduire fidèlement un livre ou un long PDF (même scanné), de n'importe quelle langue vers n'importe quelle langue, page par page, en gardant les dessins, les tableaux et les symboles de l'original, puis en faire un PDF mis en page.
 ---
 
 # Traduire un livre en gardant ses dessins, tableaux et symboles
+
+Toutes les langues : la langue d'origine est celle du livre, la langue de la traduction est celle que l'utilisateur
+demande (sinon celle dans laquelle il t'écrit). Le dossier `fr/` contient la traduction, quelle que soit la langue.
 
 Le texte d'un PDF scanné vient d'une reconnaissance automatique (OCR) : les dessins y deviennent du charabia
 (`^äSBlÄ r§<W`), les tableaux des lignes en vrac, les symboles (☉ ♈ 🜂) des `■` ou `△`. Ne traduis donc jamais
@@ -39,6 +42,7 @@ Il donne la page suivante : son texte, la fin de la page d'avant, le glossaire, 
 - Écris la traduction COMPLÈTE de la page dans `fr/p<NNN>.md` (write_file) : rien de résumé, rien de sauté,
   *italique* et notes comme l'original, `#` pour un titre de chapitre, `##` pour une section.
 - Un terme qui revient (triplicities → triplicités) : ajoute-le à `glossaire.md`, et garde toujours la même traduction.
+- Arabe, hébreu, persan : écris normalement ; le code de langue passé à `assembler` met le livre de droite à gauche.
 - Relance `livre.py suivant` : page après page, jusqu'à « Toutes les pages sont traduites ».
   Le travail survit à un arrêt : chaque page est son fichier, `suivant` reprend à la première qui manque.
 - Ne t'arrête pas pour demander s'il faut continuer : un livre se traduit en entier.
@@ -46,8 +50,8 @@ Il donne la page suivante : son texte, la fin de la page d'avant, le glossaire, 
 ## 4. Vérifier, assembler, envoyer
 ```bash
 livre.py etat "<dossier>/livre"
-livre.py assembler "<dossier>/livre" "<Titre traduit>" livre_fr.html
-"$HOME/Library/Application Support/Naim/bin/naim-pdf" "<dossier>/livre/livre_fr.html" "<dossier>/livre/livre_fr.pdf" A4
+livre.py assembler "<dossier>/livre" "<Titre traduit>" livre_traduit.html <code de la langue : fr, en, ar, es…>
+"$HOME/Library/Application Support/Naim/bin/naim-pdf" "<dossier>/livre/livre_traduit.html" "<dossier>/livre/livre_traduit.pdf" A4
 ```
 `etat` doit dire que tout est traduit, sans figure oubliée. Puis look_at sur le PDF : la page de titre, une page
 avec dessin, une page avec tableau ou symboles. Copie le PDF final dans ~/Documents/Naim/Fichiers, puis

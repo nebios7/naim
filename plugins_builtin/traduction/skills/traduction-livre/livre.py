@@ -8,7 +8,8 @@ Run it with the venv of the work folder (pdfplumber brings pypdfium2, which rend
   livre.py figure <dossier> <n> [x0 y0 x1 y1]   the drawing of page n cut out (figures/p017.png); the box in fractions
                                                 of the page (0 0 1 1 = whole page), found by itself when not given
   livre.py etat <dossier>                       pages done, pages left, figures not placed
-  livre.py assembler <dossier> "<titre>" <sortie.html>   the translated pages in order → one book page, then PDF
+  livre.py assembler <dossier> "<titre>" <sortie.html> [langue]   the translated pages in order → one book page, then
+                                                PDF; langue = code of the translation (fr, en, ar, es…), ar/he: right to left
 The work survives a stop: each page is its own file (fr/p017.md), « suivant » gives the first one missing.
 """
 import html
@@ -22,13 +23,14 @@ from pathlib import Path
 # signs an OCR makes of a drawing or of a symbol it does not know (☉ ♈ 🜂 …)
 ODD = set("■□▪△▲▼♦◆●○◊¤¦§¿¡ÿÄÖÜäöüØø¬«»©®™€£¥|\\^~<>{}[]_=+*#@")
 LOOK_WORDS = re.compile(r"\b(fig\.|figure \d|plate\b|diagram|subjoined|(following|annexed|accompanying) (figure|table|"
-                        r"diagram|plate|scheme)|as (here )?(shown|figured|depicted))", re.I)
+                        r"diagram|plate|scheme)|as (here )?(shown|figured|depicted)|planche\b|sch[ée]ma ci|voir la figure|"
+                        r"tableau ci|abb\.|tafel\b)", re.I)
 
 
 def clean(text):
     """The text of a page as a reader sees it: words cut at the line end joined again."""
     text = (text or "").replace("\r", "")
-    text = re.sub(r"[\xad-]\n(?=[a-zà-ÿ])", "", text)  # « con-\ndensive » → « condensive »
+    text = re.sub(r"[\xad-]\n(?=[^\W\d_])", "", text)  # « con-\ndensive » → « condensive », in any alphabet
     return text.replace("\xad", "")
 
 
@@ -36,7 +38,7 @@ def odd_share(text):
     words = text.split()
     if not words:
         return 0.0
-    bad = sum(1 for w in words if any(c in ODD for c in w) or not re.search(r"[A-Za-zÀ-ÿ]{2}", w))
+    bad = sum(1 for w in words if any(c in ODD for c in w) or not re.search(r"[^\W\d_]{2}", w))  # letters of any language
     return bad / len(words)
 
 
@@ -95,7 +97,8 @@ def inventaire(pdf, d):
     (d / "inventaire.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))
     g = d / "glossaire.md"
     if not g.exists():
-        g.write_text("# Glossaire (anglais → français) — le même mot traduit toujours de la même façon\n\n")
+        g.write_text("# Glossaire (langue d'origine → langue de la traduction) — le même mot traduit toujours de la même "
+                     "façon\n\n")
     look = [p for p in out if p["look"]]
     print(f"{len(out)} pages ({'livre scanné : le texte vient d’une reconnaissance (OCR), à vérifier sur l’image' if meta['scan'] else 'texte natif'})")
     print(f"pages vides : {sum(p['empty'] for p in out)} · pages à REGARDER avant de traduire : {len(look)}")
@@ -258,7 +261,7 @@ def md_html(md):
     return "\n".join(out)
 
 
-def assembler(d, titre, sortie):
+def assembler(d, titre, sortie, langue="fr"):
     d, inv = folder(d)
     parts = []
     for p in inv["pages"]:
@@ -266,12 +269,14 @@ def assembler(d, titre, sortie):
         t = f.read_text().strip() if f.exists() else f"*[page {p['n']} non traduite]*"
         if not t:
             continue
-        if parts and not re.search(r"[.!?:;»”)\]…]\s*$", parts[-1]) and re.match(r"[a-zà-ÿ,;]", t):
+        if parts and not re.search(r"[.!?:;»”)\]…。！？؟]\s*$", parts[-1]) and (t[:1].islower() or t[:1] in ",;"):
             parts[-1] = parts[-1].rstrip() + " " + t  # a sentence cut by the page goes on in the same paragraph
         else:
             parts.append(t)
     body = md_html("\n\n".join(parts))
-    page = f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{html.escape(titre)}</title><style>
+    langue = re.sub(r"[^a-z-]", "", str(langue).lower())[:8] or "fr"
+    sens = "rtl" if langue.split("-")[0] in ("ar", "he", "fa", "ur", "ps", "yi") else "ltr"  # Arabic, Hebrew…: right to left
+    page = f"""<!doctype html><html lang="{langue}" dir="{sens}"><head><meta charset="utf-8"><title>{html.escape(titre)}</title><style>
 @page {{ size: A4; margin: 22mm 20mm; }}
 body {{ font-family: "Iowan Old Style", "Palatino", Georgia, "Apple Symbols", "Apple Color Emoji", serif;
   font-size: 11.5pt; line-height: 1.55; color: #1a1a1a; text-align: justify; hyphens: auto; }}
@@ -309,6 +314,8 @@ if __name__ == "__main__":
             "assembler": (assembler, 3)}
     if a and a[0] == "figure" and len(a) in (3, 7):
         figure(a[1], a[2], a[3:] or None)
+    elif a and a[0] == "assembler" and len(a) == 5:  # with the language of the translation: … livre_ar.html ar
+        assembler(*a[1:])
     elif a and a[0] in cmds and len(a) - 1 == cmds[a[0]][1]:
         cmds[a[0]][0](*a[1:])
     else:

@@ -1,10 +1,10 @@
 {
   "name": "traduction",
-  "version": "1.2",
-  "description": "Traduire un livre ou un long PDF, même scanné, page par page : dessins découpés de l'original, tableaux refaits, symboles exacts, glossaire, PDF mis en page.",
+  "version": "1.3",
+  "description": "Traduire un livre (toutes les langues) ou un long PDF, même scanné, page par page : dessins découpés de l'original, tableaux refaits, symboles exacts, glossaire, PDF mis en page.",
   "skills": "skills",
   "triggers": {
-    "traduction-livre": "\\b(tradui\\w*|traduction|translate)\\b[^.?!]{0,80}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|chapitres?|book)\\b|\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|book)\\b[^.?!]{0,80}\\b(tradui\\w*|traduction)\\b|\\b(mets?|passe[sz]?|transforme[sz]?|convertis)\\b[^.?!]{0,30}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|book)\\b[^.?!]{0,30}\\ben (fran[çc]ais|anglais|arabe|espagnol|allemand|italien|portugais|n[ée]erlandais|russe|chinois|japonais|turc)\\b|\\bversion (fran[çc]aise|anglaise|arabe|espagnole|allemande|italienne|portugaise|russe|chinoise|japonaise|turque)\\b[^.?!]{0,30}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|book)\\b"
+    "traduction-livre": "\\b(tradui\\w*|traduction|translate)\\b[^.?!]{0,80}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|chapitres?|book)\\b|\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|book)\\b[^.?!]{0,80}\\b(tradui\\w*|traduction)\\b|\\b(mets?|passe[sz]?|transforme[sz]?|convertis)\\b[^.?!]{0,30}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|book)\\b[^.?!]{0,30}\\ben (fran[çc]ais|anglais|arabe|espagnol|allemand|italien|portugais|n[ée]erlandais|russe|chinois|japonais|turc|kabyle|amazigh|berb[èe]re|h[ée]breu|persan|cor[ée]en|hindi|polonais|grec|roumain|ukrainien|vietnamien|latin|swahili)\\b|\\bversion (fran[çc]aise|anglaise|arabe|espagnole|allemande|italienne|portugaise|russe|chinoise|japonaise|turque|kabyle|amazighe|h[ée]bra[ïi]que|persane|cor[ée]enne|grecque|polonaise|roumaine|ukrainienne|latine)\\b[^.?!]{0,30}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|book)\\b"
   },
   "commands": [
     {
@@ -14,5 +14,6 @@
       "prompt": "Traduis ce livre en entier avec le skill traduction-livre (inventaire, pages regardées, figures gardées, glossaire, PDF) :"
     }
   ],
-  "priority": true
+  "priority": true,
+  "long": true
 }
