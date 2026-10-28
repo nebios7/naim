@@ -1056,7 +1056,8 @@ SKILL_TRIGGERS = {
     "rapport": r"\b(rapport(?! de bug| d'erreur)|dossier technique|cahier des charges|compte[- ]rendu|livre blanc|note de synth[eè]se)\b",
     "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|flyer|infographie|carte de visite)\b|\b(une|cette|mon|ma|ton|des|l['’]|d['’])\s?affiches?\b",  # « affiche-moi les photos » is not a poster
     "recherche-approfondie": r"\b(recherche approfondie|enqu[eê]te sur|[ée]tat de l'art|[ée]tude de march[ée]|analyse concurrentielle|recoupe|compare les sources|veille approfondie|deep research)\b",
-    "github": r"\b(pull[- ]?requests?|github|gh pr|branches?|merge|fusionne\w*|git push|pousse\w* (le code|sur|la branche))\b",
+    # « fusionne ces deux pdf » merges files, not branches: merge/fusionne counts only when no file kind follows
+    "github": r"\b(pull[- ]?requests?|github|gh pr|branches?|(?:merge|fusionne\w*)(?![^.?!]{0,40}\b(?:pdf|docx?|word|excel|xlsx|csv|fichiers?|documents?|images?|photos?|vid[ée]os?|tableaux?|pages?|listes?)\b)|git push|pousse\w* (le code|sur|la branche))\b",
     # a Mac application in SwiftUI (built without an Xcode project); an iPhone app stays ios-swiftui
     "app-macos": r"\b(swift ?ui|swift|uiswuift|ui ?swift)\b(?![^.?!]*\b(ios|iphone|ipad|simulateur)\b)"
                  r"|\bapp(lication)?s?\b[^.?!]{0,30}\b(mac|macos|pour le bureau)\b|\.app\b|dans (mes |le dossier )?applications",
