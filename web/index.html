@@ -38,20 +38,21 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 #rail { display: none !important; } /* its sections now sit at the top of the sessions list */
-#sidenav { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 8px; }
-#sidenav .snav { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; border: 0; background: none; color: var(--text); font-size: 13.5px; text-align: left; cursor: pointer; position: relative; }
+#sidenav { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 14px; }
+#sidenav .snav { display: flex; align-items: center; gap: 13px; padding: 8px 10px; border-radius: 9px; border: 0; background: none; color: var(--text); font-size: 14.5px; text-align: left; cursor: pointer; position: relative; }
 #sidenav .snav:hover { background: var(--hover); }
 #sidenav .snav.on { background: var(--hover); font-weight: 500; }
-#sidenav .sic { display: inline-flex; color: var(--muted); } #sidenav .sic svg { width: 16px; height: 16px; }
+#sidenav .sic { display: inline-flex; color: var(--text); opacity: .92; } #sidenav .sic svg { width: 19px; height: 19px; stroke-width: 1.6; }
+#sidenav .snav[data-act=new] .sic svg { width: 20px; height: 20px; stroke-width: 1.9; }  /* « + » big and plain, the first action */
 #sidenav .snav.on .sic { color: var(--text); }
 #sidenav .rdot { position: static; margin-left: auto; }
 /* the reference layout: « Accueil | Code » switch, then the list; search opens on demand; an account line at the bottom */
-#sidenav .segsw { display: flex; gap: 2px; padding: 3px; margin: 0 0 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; }
-#sidenav .seg { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13.5px; cursor: pointer; }
-#sidenav .seg svg { width: 15px; height: 15px; }
+#sidenav .segsw { display: flex; gap: 3px; padding: 3px; margin: 0 0 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+#sidenav .seg { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 8px; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 14.5px; cursor: pointer; }
+#sidenav .seg svg { width: 17px; height: 17px; }
 #sidenav .seg:hover { color: var(--text); }
 #sidenav .seg.on { background: var(--hover); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
-#sidenav .snav kbd { margin-left: auto; font: 11px ui-sans-serif, system-ui; color: var(--muted); border: 0; background: none; }
+#sidenav .snav kbd { margin-left: auto; font: 11.5px ui-sans-serif, system-ui; color: var(--muted); border: 0; background: none; }
 @media (min-width: 761px) {
   #side .nav[data-cmd=new], #newFolderBtn { display: none !important; }
   aside#side:not(.searching) .searchrow { display: none; }
