@@ -15,6 +15,7 @@ from xml.etree import ElementTree as ET
 import computer as cu
 
 MAX_CHARS = 60_000   # ~15k tokens: the rest is cut (the whole file stays available in the project in agent mode)
+ATTACH_HEAD = 12_000  # a document joined to a message that is longer than MAX_CHARS: only this beginning is pasted
 KINDS = {".pdf": "PDF", ".docx": "Word", ".doc": "Word", ".rtf": "RTF", ".odt": "OpenDocument", ".pages": "Pages",
          ".xlsx": "Excel", ".xlsm": "Excel", ".pptx": "PowerPoint", ".html": "HTML"}
 
@@ -147,6 +148,14 @@ def extract_bytes(name, data, project=None, keep=None):
             p = Path(tmp) / safe
             p.write_bytes(data)
             text, note = extract(p)
+    if saved and len(text) > MAX_CHARS:
+        # a book-sized document (cut anyway): only its beginning goes into the message. 60k characters pasted there
+        # were ~17k tokens read again at every step of the conversation (minutes each time); the whole file is saved,
+        # Naim reads the rest by pieces with its tools
+        text = (text[:ATTACH_HEAD] + f"\n\n[… seul le début du document est collé ici (il est bien plus long). Le document "
+                f"entier est enregistré : {saved}. Lis la suite par morceaux avec tes outils (read_file sur ce fichier, ou "
+                "run_command avec un script) ; pour traduire un livre, le skill traduction-livre.]")
+        note = re.sub(r"tronqué à \d+k caractères", f"début collé : {ATTACH_HEAD // 1000}k caractères", note)
     return {"text": text, "note": note, "kind": KINDS.get(Path(safe).suffix.lower(), "Document"), "saved": saved}
 
 
