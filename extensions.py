@@ -788,7 +788,11 @@ class Checkpoint:
         self.lock = threading.Lock()
 
     def save(self, path):
-        rel = str(Path(path).resolve().relative_to(self.root))
+        full = Path(path).resolve()
+        try:
+            rel = str(full.relative_to(self.root))
+        except ValueError:  # a work file outside the project (the attachments' folder): kept by its full path, the
+            rel = str(full)  # undo finds it the same way (root / "/full/path" is the full path)
         with self.lock:
             if rel in self.manifest["files"]:
                 return

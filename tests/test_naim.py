@@ -752,5 +752,23 @@ class SafeSavesAndEngines(unittest.TestCase):
             self.assertNotIn("NOT done", a.write_file("page_fr2.md", fr))
 
 
+
+class WorkOutsideTheProject(unittest.TestCase):
+    def test_write_in_attachments_folder_and_undo(self):
+        """The book's pages are written in the attachments' folder (not the project): the write works, the undo too."""
+        import extensions as ext
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as fake_joints:
+            old = naimtools.JOINTS
+            naimtools.JOINTS = Path(fake_joints)
+            try:
+                a = naimtools.Agent(proj, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+                f = Path(fake_joints) / "conv" / "fr" / "p001.md"
+                self.assertTrue(a.write_file(str(f), "# Titre\n\nTexte.\n").startswith("ok"))
+                self.assertEqual(ext.restore_checkpoint(a.run_id), [str(f.resolve())])
+                self.assertFalse(f.exists())
+            finally:
+                naimtools.JOINTS = old
+
+
 if __name__ == "__main__":
     unittest.main()
