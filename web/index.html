@@ -6923,7 +6923,7 @@ const PERM_MODES = [
   { id: "plan", icon: "☰", label: "Plan", desc: "Naim explore et propose un plan, sans rien modifier" },
 ];
 function permMode() {
-  if (S.planMode) return "plan";
+  if (S.planMode && S.mode === "agent") return "plan";  // the plan is the Agent's: in the Chat the other three apply
   if (S.autoYes) return "auto";
   if (S.auto_writes && !S.auto_commands) return "accept";
   if (!S.auto_writes && !S.auto_commands) return "manual";
@@ -6942,7 +6942,7 @@ function setPermMode(id) {
 }
 function updatePermPill() {
   const b = $("#permPill"); if (!b) return;
-  b.hidden = S.mode !== "agent";
+  b.hidden = false;  // the Chat writes files and runs commands too: the same modes (but the plan, which is the Agent's)
   const id = permMode(), m = PERM_MODES.find((x) => x.id === id);
   b.innerHTML = m ? `<span>${m.icon}</span><span class="pl">${esc(m.label)}</span>${id === "auto" && S.computer_power ? ' <span title="Contrôle étendu activé">🔴</span>' : ""}` : "⚙ Personnalisé";
   b.className = "pill perm " + id;
@@ -6952,12 +6952,13 @@ function updatePermPill() {
 $("#permPill").onclick = (e) => {
   e.stopPropagation();
   const cur = permMode();
-  showMenu(e.currentTarget, PERM_MODES.map((m, i) => ({ icon: m.id === cur ? "✓" : m.icon, label: m.label, title: m.desc, key: String(i + 1), run: () => setPermMode(m.id) })));
+  const modes = PERM_MODES.filter((m) => S.mode === "agent" || m.id !== "plan");
+  showMenu(e.currentTarget, modes.map((m, i) => ({ icon: m.id === cur ? "✓" : m.icon, label: m.label, title: m.desc, key: String(i + 1), run: () => setPermMode(m.id) })));
 };
 $("#input").addEventListener("keydown", (e) => {  // ⇧⇥ : next mode (agent only, not while a menu is open)
-  if (e.key !== "Tab" || !e.shiftKey || S.mode !== "agent" || !$("#slash").hidden) return;
+  if (e.key !== "Tab" || !e.shiftKey || !$("#slash").hidden) return;
   e.preventDefault();
-  const order = PERM_MODES.map((m) => m.id), i = order.indexOf(permMode());
+  const order = PERM_MODES.filter((m) => S.mode === "agent" || m.id !== "plan").map((m) => m.id), i = order.indexOf(permMode());
   setPermMode(order[(i + 1) % order.length]);
 });
 let homeDir = "";
