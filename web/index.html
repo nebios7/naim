@@ -4408,6 +4408,7 @@ async function stream(reply, v, message, hist, extra = {}) {
         const ev = JSON.parse(line);
         notifyConv = conv.id;  // approvals / questions of this run: their notification leads back here
         if (reply.ttft == null && /^(token|thinking_token|tool)$/.test(ev.type)) reply.ttft = (Date.now() - reply.time) / 1000;
+        if (ev.type === "token" || ev.type === "thinking_token") run.ntok = (run.ntok || 0) + 1;  // the words it produces, live
         switch (ev.type) {
           case "token": {
             reply.content += ev.text;
@@ -4835,7 +4836,9 @@ function updateLiveBar() {
   }
   const sec = Math.round((Date.now() - r.t0) / 1000);
   $(".ltime", bar).textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")}`;
-  liveInThread(view === "chat" ? r : null, label, step, $(".ltime", bar).textContent);
+  // « 2 min 43 · 1,4k jetons »: the time, and how much it has written or thought so far
+  const n = r.ntok || 0, words = n >= 1000 ? `${(n / 1000).toFixed(1).replace(".", ",")}k jetons` : n ? `${n} jetons` : "";
+  liveInThread(view === "chat" ? r : null, label, step, $(".ltime", bar).textContent + (words ? " · " + words : ""));
 }
 // the live line (dots, what is being done, time) is redrawn on the very frame an event arrives — a step starts or
 // ends, the answer begins — not up to a second later; the clock still ticks every second
@@ -6897,7 +6900,7 @@ function applySettings() {
   if (updateNaimMd.last !== S.mode + S.project) { updateNaimMd.last = S.mode + S.project; updateNaimMd(); }
   $("#input").placeholder = (agent ? "Décris une tâche à Naim" : "Écris à Naim") + (S.send_key === "mod" ? " · ⌘↩ pour envoyer" : " · ↩ pour envoyer, ⇧↩ pour aller à la ligne");
   if (typeof svgI === "function") {
-    $("#modePill").innerHTML = `${svgI(agent ? "agent" : "chat")}<span class="pl">${agent ? "Agent" : "Chat"}</span>`;
+    $("#modePill").innerHTML = `<span class="pl">${agent ? "Agent" : "Chat"}</span>`;  // the word alone, no symbol
     $("#tempPill").innerHTML = `${svgI("thermo")}<span class="pl">${(+S.temperature).toFixed(2)}</span>`;
   } else { $("#modePill").textContent = agent ? "Agent" : "Chat"; $("#tempPill").textContent = (+S.temperature).toFixed(2); }
   $("#modePill").className = "pill " + (agent ? "agent" : "chat");
