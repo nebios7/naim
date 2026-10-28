@@ -45,6 +45,22 @@
 #sidenav .sic { display: inline-flex; color: var(--muted); } #sidenav .sic svg { width: 16px; height: 16px; }
 #sidenav .snav.on .sic { color: var(--text); }
 #sidenav .rdot { position: static; margin-left: auto; }
+/* the reference layout: « Accueil | Code » switch, then the list; search opens on demand; an account line at the bottom */
+#sidenav .segsw { display: flex; gap: 2px; padding: 3px; margin: 0 0 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; }
+#sidenav .seg { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13.5px; cursor: pointer; }
+#sidenav .seg svg { width: 15px; height: 15px; }
+#sidenav .seg:hover { color: var(--text); }
+#sidenav .seg.on { background: var(--hover); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+#sidenav .snav kbd { margin-left: auto; font: 11px ui-sans-serif, system-ui; color: var(--muted); border: 0; background: none; }
+@media (min-width: 761px) {
+  #side .nav[data-cmd=new], #newFolderBtn { display: none !important; }
+  aside#side:not(.searching) .searchrow { display: none; }
+}
+#sideWho { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
+#sideWho .avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--hover); color: var(--text); font-size: 12.5px; font-weight: 600; }
+#sideWho .wtxt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+#sideWho .wname { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sideWho .status { font-size: 11.5px; color: var(--muted); padding: 0; }
 aside#side .sidefoot #sideTheme svg, aside#side .sidefoot #sideSettings svg { width: 16px; height: 16px; }
 #rail-old { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: var(--side); border-right: 1px solid var(--line); }
 #rail .spacer { flex: 1; }
@@ -247,6 +263,7 @@ body .chip { display: flex; gap: 12px; align-items: flex-start; text-align: left
 .group.folder.drop { background: var(--hover); border-radius: 6px; }
 @media (max-width: 760px) { #rail { display: none; } #params { position: fixed; inset: 0 0 0 auto; z-index: 16; box-shadow: var(--shadow); } }
 html, body { height: 100%; margin: 0; }
+html { background: var(--bg); overflow: hidden; }  /* never a white band around the page, whatever the zoom */
 body { background: var(--bg); color: var(--text); font: var(--fs)/1.55 "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; display: flex; overflow: hidden; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -2826,7 +2843,12 @@ document.addEventListener("click", (e) => { const b = e.target.closest("[data-cm
 
 // the page is zoomed with CSS zoom, which media queries ignore: the layout follows the width that is really available
 function fitViewport() {
-  const w = innerWidth / (parseFloat(document.documentElement.style.zoom) || S.zoom || 1);
+  const z = parseFloat(document.documentElement.style.zoom) || S.zoom || 1, w = innerWidth / z;
+  // the page's own size in pixels divided by the zoom: both engines scale pixels the same way, so at 85 % or 95 % the
+  // page fills the window exactly (with « 100 % » the Mac app's engine shrank it, a white band appeared and it slid)
+  const de = document.documentElement;
+  if (z !== 1) { de.style.width = innerWidth / z + "px"; de.style.height = innerHeight / z + "px"; }
+  else { de.style.width = ""; de.style.height = ""; }
   const b = document.body;
   // the sessions list stays docked beside the conversation (like a coding assistant's sidebar) while the conversation
   // keeps ~540 points: 52 (rail) + 272 (list) + 540; below that it becomes a drawer over the conversation
@@ -7256,7 +7278,26 @@ function buildRail() {
     + `<button class="rbtn" data-go="settings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`;
   // the same sections at the top of the sessions list (like a coding assistant's sidebar): the rail itself is hidden
   const side = $("#sidenav") || (() => { const d = document.createElement("div"); d.id = "sidenav"; $("aside#side .searchrow").before(d); return d; })();
-  side.innerHTML = items.map(([ic, go, t]) => `<button class="snav" data-go="${go}" title="${t}"><span class="sic">${svgI(ic)}</span><span>${{ agent: "Code" }[go] || t.split(" :")[0]}</span>${go === "schedules" ? '<span class="rdot" id="sideAsk" hidden></span>' : ""}</button>`).join("");
+  const listed = items.filter(([, go]) => go !== "chat" && go !== "agent");
+  side.innerHTML = `<div class="segsw"><button class="seg" data-go="chat">${svgI("home")}<span>Accueil</span></button>`
+    + `<button class="seg" data-go="agent">${svgI("agent")}<span>Code</span></button></div>`
+    + `<button class="snav" data-act="new"><span class="sic">${svgI("plus")}</span><span>Nouveau</span><kbd>⌘N</kbd></button>`
+    + `<button class="snav" data-act="search"><span class="sic">${svgI("search")}</span><span>Rechercher</span></button>`
+    + listed.map(([ic, go, t]) => `<button class="snav" data-go="${go}" title="${t}"><span class="sic">${svgI(ic)}</span><span>${t.split(" :")[0]}</span>${go === "schedules" ? '<span class="rdot" id="sideAsk" hidden></span>' : ""}</button>`).join("")
+    + `<button class="snav" data-go="settings"><span class="sic">${svgI("settings")}</span><span>Personnaliser</span><kbd>⌘,</kbd></button>`;
+  $("[data-act=new]", side).onclick = () => naimCmd("new");
+  $("[data-act=search]", side).onclick = () => {  // the search field opens under the list, as in the reference app
+    const a = $("aside#side"); a.classList.toggle("searching"); if (a.classList.contains("searching")) $("#search").focus();
+  };
+  const sb = $("#search"); if (sb && !sb.dataset.keep) { sb.dataset.keep = 1; sb.addEventListener("input", () => { if (sb.value) $("aside#side").classList.add("searching"); }); }
+  // at the bottom: who you are and how Naim is, like an account line
+  const sf = $("aside#side .sidefoot"), st = sf && $(".status", sf);
+  if (st && !$("#sideWho")) {
+    const who = document.createElement("div"); who.id = "sideWho";
+    who.innerHTML = `<span class="avatar"></span><span class="wtxt"><b class="wname"></b></span>`;
+    st.before(who); $(".wtxt", who).appendChild(st);
+  }
+  if ($("#sideWho")) { const nm = (S.user_name || "").trim(); $("#sideWho .avatar").textContent = (nm[0] || "N").toUpperCase(); $("#sideWho .wname").textContent = nm || "Naim"; }
   const foot = $("aside#side .sidefoot");
   if (foot && !$("#sideTheme")) foot.insertAdjacentHTML("beforeend", `<button class="icon" id="sideTheme" title="Thème : clair / sombre / automatique"></button><button class="icon" data-go="settings" id="sideSettings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`);
   $$("#rail [data-go], #sidenav [data-go], #sideSettings").forEach((b) => (b.onclick = () => {
