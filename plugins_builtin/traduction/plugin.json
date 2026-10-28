@@ -1,10 +1,10 @@
 {
   "name": "traduction",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Traduire un livre ou un long PDF, même scanné, page par page : dessins découpés de l'original, tableaux refaits, symboles exacts, glossaire, PDF mis en page.",
   "skills": "skills",
   "triggers": {
-    "traduction-livre": "\\b(tradui\\w*|traduction|translate)\\b[^.?!]{0,80}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|chapitres?|book)\\b|\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|book)\\b[^.?!]{0,80}\\b(tradui\\w*|traduction)\\b"
+    "traduction-livre": "\\b(tradui\\w*|traduction|translate)\\b[^.?!]{0,80}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|chapitres?|book)\\b|\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|book)\\b[^.?!]{0,80}\\b(tradui\\w*|traduction)\\b|\\b(mets?|passe[sz]?|transforme[sz]?|convertis)\\b[^.?!]{0,30}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|book)\\b[^.?!]{0,30}\\ben (fran[çc]ais|anglais|arabe|espagnol|allemand|italien|portugais|n[ée]erlandais|russe|chinois|japonais|turc)\\b|\\bversion (fran[çc]aise|anglaise|arabe|espagnole|allemande|italienne|portugaise|russe|chinoise|japonaise|turque)\\b[^.?!]{0,30}\\b(livres?|pdf|ouvrages?|bouquins?|romans?|manuels?|th[èe]ses?|book)\\b"
   },
   "commands": [
     {
