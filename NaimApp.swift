@@ -15,7 +15,24 @@ let port = ProcessInfo.processInfo.environment["NAIM_PORT"] ?? "8765"
 let baseURL = URL(string: "http://127.0.0.1:\(port)/")!
 let logPath = "\(home)/Library/Logs/Naim.log"
 
+/// The web view remembers the last mouse-down: the page asks to move the window from its header with it.
+final class NaimWebView: WKWebView {
+    static var lastDown: NSEvent?
+    override func mouseDown(with event: NSEvent) { NaimWebView.lastDown = event; super.mouseDown(with: event) }
+}
+
+/// « drag » / « zoom » sent by the page: its header moves the window like a title bar (there is no title bar any more)
+final class WindowBridge: NSObject, WKScriptMessageHandler {
+    weak var window: NSWindow?
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let w = window, let what = message.body as? String else { return }
+        if what == "drag", let e = NaimWebView.lastDown { w.performDrag(with: e) }
+        else if what == "zoom" { w.zoom(nil) }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, NSWindowDelegate {
+    let windowBridge = WindowBridge()
     var window: NSWindow!
     var web: WKWebView!
     let dictation = NaimDictation()  // the composer's microphone
@@ -55,7 +72,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         cfg.websiteDataStore = .default()
         cfg.preferences.javaScriptCanOpenWindowsAutomatically = true
         cfg.userContentController.add(dictation, name: "naimDictation")
-        web = WKWebView(frame: .zero, configuration: cfg)
+        cfg.userContentController.add(windowBridge, name: "naimWindow")
+        // the page knows it is in the Mac app: it leaves room for the window's three buttons in its header
+        cfg.userContentController.addUserScript(WKUserScript(source: "document.documentElement.classList.add('macapp')",
+                                                             injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        web = NaimWebView(frame: .zero, configuration: cfg)
         dictation.web = web
         web.uiDelegate = self
         web.navigationDelegate = self
@@ -65,9 +86,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         web.setValue(false, forKey: "drawsBackground")
 
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1240, height: 840),
-                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                           backing: .buffered, defer: false)
         window.title = "Naim"
+        // no title bar: the page reaches the top, the three buttons sit in its header row (like the reference app)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        windowBridge.window = window
         window.backgroundColor = NSColor(red: 0.086, green: 0.086, blue: 0.082, alpha: 1)
         window.minSize = NSSize(width: 720, height: 520)
         window.contentView = web
@@ -76,7 +101,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window.center()
         window.setFrameAutosaveName("NaimMainWindow")
         window.makeKeyAndOrderFront(nil)
+        placeTrafficLights()
     }
+
+    /// The window's three buttons centred in the page's 50-point header, 18 points from the edge.
+    func placeTrafficLights() {
+        guard let close = window.standardWindowButton(.closeButton), let bar = close.superview,
+              let container = bar.superview else { return }
+        let h: CGFloat = 50
+        var f = container.frame; f.size.height = h; f.origin.y = window.frame.height - h; container.frame = f
+        bar.frame = NSRect(x: 0, y: 0, width: f.width, height: h)
+        for (i, kind) in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].enumerated() {
+            guard let b = window.standardWindowButton(kind) else { continue }
+            b.setFrameOrigin(NSPoint(x: 18 + CGFloat(i) * 20, y: (h - b.frame.height) / 2))
+        }
+    }
+
+    func windowDidResize(_ notification: Notification) { placeTrafficLights() }
+    func windowDidExitFullScreen(_ notification: Notification) { placeTrafficLights() }
 
     func showLoading(_ text: String, detail: String = "") {
         let busy = detail.isEmpty  // starting: a moving bar; a problem: the details instead

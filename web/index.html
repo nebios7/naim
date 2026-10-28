@@ -264,6 +264,13 @@ body .chip { display: flex; gap: 12px; align-items: flex-start; text-align: left
 @media (max-width: 760px) { #rail { display: none; } #params { position: fixed; inset: 0 0 0 auto; z-index: 16; box-shadow: var(--shadow); } }
 html, body { height: 100%; margin: 0; }
 html { background: var(--bg); overflow: hidden; }  /* never a white band around the page, whatever the zoom */
+/* the Mac app has no title bar: the window's three buttons sit in the header row. Sessions list open: the buttons and
+   the list's button at its top, the « Accueil | Code » switch under them; closed: at the start of the header */
+html.macapp body.noside main > header#chatHeader, html.macapp body.noside main > .pagebar,
+html.macapp body.vnarrow:not(.sideopen) main > header#chatHeader, html.macapp body.vnarrow:not(.sideopen) main > .pagebar { padding-left: 86px; }
+html.macapp body:not(.vnarrow):not(.noside) aside#side, html.macapp body.vnarrow.sideopen aside#side { padding-top: 52px !important; }
+html.macapp body:not(.vnarrow):not(.noside) #chatHeader #sideBtn,
+html.macapp body:not(.vnarrow):not(.noside) main > .pagebar > [data-cmd=sidebar] { position: fixed; left: 84px; top: 9px; z-index: 40; }
 body { background: var(--bg); color: var(--text); font: var(--fs)/1.55 "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; display: flex; overflow: hidden; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -2858,6 +2865,18 @@ function fitViewport() {
   if ($("#sideBtn")) { $("#sideBtn").hidden = false; $("#sideBtn").classList.toggle("on", !hidden); }  // always at the top left, like a coding assistant's title bar
 }
 addEventListener("resize", () => fitViewport());
+// the Mac app: the header (and the top of the sessions list) moves the window like a title bar, a double click zooms it
+if (document.documentElement.classList.contains("macapp") && window.webkit?.messageHandlers?.naimWindow) {
+  const bar = (e) => {
+    const t = e.target;
+    if (t.closest("button, a, input, textarea, select, label, [contenteditable], .seg, .menu, #ctxmenu")) return false;
+    if (t.closest("main > header, main > .pagebar")) return true;
+    const z = parseFloat(document.documentElement.style.zoom) || 1;
+    return !!t.closest("aside#side") && e.clientY * z < 52;  // the strip of the three buttons
+  };
+  document.addEventListener("mousedown", (e) => { if (e.button === 0 && e.detail === 1 && bar(e)) webkit.messageHandlers.naimWindow.postMessage("drag"); }, true);
+  document.addEventListener("dblclick", (e) => { if (bar(e)) webkit.messageHandlers.naimWindow.postMessage("zoom"); }, true);
+}
 document.addEventListener("click", (e) => {  // the overlay sidebar closes when you click elsewhere or pick a conversation
   if (!document.body.classList.contains("sideopen")) return;
   if (!e.target.closest("aside#side") && !e.target.closest("#sideBtn") && !e.target.closest("[data-go], .rbtn")) { document.body.classList.remove("sideopen"); fitViewport(); }
