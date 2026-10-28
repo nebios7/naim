@@ -461,6 +461,7 @@ footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #fold
 .ctools .spacer { flex: 1; }
 .pill { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 4px 8px; border-radius: 7px; }
 .pill:hover { background: var(--hover); color: var(--text); }
+.pill:focus:not(:focus-visible) { outline: none; }  /* no ring after a click; the keyboard still shows where it is */
 #send { border: 0; background: var(--send); color: var(--send-t); width: 34px; height: 34px; border-radius: 10px; font-size: 16px; flex-shrink: 0; }
 .ctx { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
 .ctx .ring { width: 13px; height: 13px; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--line) 0); -webkit-mask: radial-gradient(circle, transparent 3.5px, #000 4px); mask: radial-gradient(circle, transparent 3.5px, #000 4px); }
@@ -6944,7 +6945,7 @@ function updatePermPill() {
   const b = $("#permPill"); if (!b) return;
   b.hidden = false;  // the Chat writes files and runs commands too: the same modes (but the plan, which is the Agent's)
   const id = permMode(), m = PERM_MODES.find((x) => x.id === id);
-  b.innerHTML = m ? `<span>${m.icon}</span><span class="pl">${esc(m.label)}</span>${id === "auto" && S.computer_power ? ' <span title="Contrôle étendu activé">🔴</span>' : ""}` : "⚙ Personnalisé";
+  b.innerHTML = m ? `<span class="pl">${esc(m.label)}</span>${id === "auto" && S.computer_power ? ' <span title="Contrôle étendu activé">🔴</span>' : ""}` : "Personnalisé";  // the word alone, no symbol
   b.className = "pill perm " + id;
   $("#autoYes").checked = !!S.autoYes; $("#planMode").checked = !!S.planMode;
   if (typeof fitComposer === "function") requestAnimationFrame(fitComposer);
@@ -6953,7 +6954,7 @@ $("#permPill").onclick = (e) => {
   e.stopPropagation();
   const cur = permMode();
   const modes = PERM_MODES.filter((m) => S.mode === "agent" || m.id !== "plan");
-  showMenu(e.currentTarget, modes.map((m, i) => ({ icon: m.id === cur ? "✓" : m.icon, label: m.label, title: m.desc, key: String(i + 1), run: () => setPermMode(m.id) })));
+  showMenu(e.currentTarget, modes.map((m, i) => ({ icon: m.id === cur ? "✓" : "", label: m.label, title: m.desc, key: String(i + 1), run: () => setPermMode(m.id) })));
 };
 $("#input").addEventListener("keydown", (e) => {  // ⇧⇥ : next mode (agent only, not while a menu is open)
   if (e.key !== "Tab" || !e.shiftKey || !$("#slash").hidden) return;
