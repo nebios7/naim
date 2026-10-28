@@ -201,6 +201,15 @@ def etat(d):
               and not any((d / "figures").glob(f"p{p['n']:03d}*.png"))]
     if unseen:
         print("pages à regarder traduites SANS avoir été regardées : " + ", ".join(map(str, unseen)))
+    same = []  # a « translated » page that is the original again (a title changed, the text left as it was)
+    for pg in done:
+        o = {x.strip() for x in (d / "orig" / f"p{pg['n']:03d}.txt").read_text().splitlines() if len(x.strip()) > 25}
+        f = [x.strip() for x in (d / "fr" / f"p{pg['n']:03d}.md").read_text().splitlines() if len(x.strip()) > 25]
+        if len(f) >= 3 and sum(x in o for x in f) >= 0.5 * len(f):
+            same.append(pg["n"])
+    if same:
+        print("pages NON traduites (le texte d'origine recopié) : " + ", ".join(map(str, same))
+              + " — traduis-les vraiment, phrase par phrase")
 
 
 def inline(s):

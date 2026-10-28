@@ -713,5 +713,44 @@ class RewriteForReal(unittest.TestCase):
         self.assertFalse(server.same_again("ajoute mon permis B", "Voici. " + old, [old]))
 
 
+
+class SafeSavesAndEngines(unittest.TestCase):
+    def test_whole_writes_never_mix(self):
+        import threading
+        import server
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "c.json"
+            texts = [json.dumps({"n": i, "pad": "x" * (5000 - i * 200)}) for i in range(20)]
+            ts = [threading.Thread(target=server.write_whole, args=(f, x)) for x in texts]
+            [x.start() for x in ts]
+            [x.join() for x in ts]
+            self.assertIn(f.read_text(), texts)  # one whole save, never the end of another left behind
+            self.assertEqual([x.name for x in Path(d).iterdir()], ["c.json"])
+
+    def test_only_orphans_on_this_port(self):
+        import llamacpp
+        from unittest import mock
+        ps = ("  101     1 /Users/u/.naim/models/llama-server-naim -m m.gguf --port 8081 -c 8\n"
+              "  102  4000 /Users/u/.naim/models/llama-server-naim -m m.gguf --port 8081 -c 8\n"
+              "  103     1 /Users/u/.naim/models/llama-server-naim -m m.gguf --port 8082 -c 8\n"
+              "  104     1 /usr/local/bin/llama-server --port 8081\n")
+        killed = []
+        with mock.patch.object(llamacpp.subprocess, "run", return_value=mock.Mock(stdout=ps)), \
+                mock.patch.object(llamacpp.os, "kill", side_effect=lambda pid, sig: killed.append(pid)):
+            self.assertEqual(llamacpp.reap_orphans(8081), 1)
+        self.assertEqual(killed, [101])  # not this Naim's engine (102), not the images one (103), not another program (104)
+
+    def test_copied_translation_is_flagged(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            src = "\n".join(f"This is the original English sentence number {i} of the old book." for i in range(12))
+            (Path(d) / "page.txt").write_text(src)
+            a.read_file("page.txt")
+            r = a.write_file("page_fr.md", "CHAPITRE I.\n" + src)
+            self.assertIn("NOT done", r)
+            fr = "\n".join(f"Ceci est la phrase française numéro {i} du vieux livre, enfin traduite." for i in range(12))
+            self.assertNotIn("NOT done", a.write_file("page_fr2.md", fr))
+
+
 if __name__ == "__main__":
     unittest.main()

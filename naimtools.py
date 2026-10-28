@@ -1029,6 +1029,27 @@ class Agent:
                     return "\n".join(out) + "\n... (truncated)"
         return "\n".join(out) or "(empty directory)"
 
+    def _remember_read(self, p, text):
+        """What it read lately, to see later when it writes the same text back as if it had transformed it."""
+        seen = getattr(self, "_read_texts", {})
+        seen[str(p)] = (text or "")[:200000]
+        while len(seen) > 40:
+            seen.pop(next(iter(seen)))
+        self._read_texts = seen
+
+    def _copied_from(self, content, target):
+        """The file read that this content repeats nearly line for line (70 % of its lines and more), or None."""
+        mine = [x.strip() for x in (content or "").splitlines() if len(x.strip()) > 25]
+        if len(mine) < 5:
+            return None
+        for src, text in getattr(self, "_read_texts", {}).items():
+            if src == str(target):
+                continue
+            theirs = {x.strip() for x in text.splitlines() if len(x.strip()) > 25}
+            if theirs and sum(x in theirs for x in mine) >= 0.7 * len(mine):
+                return src
+        return None
+
     def read_file(self, path):
         p = self.resolve(path, read=True)
         if not p.is_file():
@@ -1037,6 +1058,7 @@ class Agent:
             try:
                 text, note = docs.extract(p)
                 self._sources[self.rel(p)] = text[:8000]  # kept for the review, even after the history is compacted
+                self._remember_read(p, text)
                 return f"[texte extrait de {self.rel(p)} · {note}]\n\n{text}"
             except docs.DocError as e:
                 return f"error: cannot read {path}: {e}"
@@ -1050,7 +1072,9 @@ class Agent:
                 head = f.read(60000)
             return (head + f"\n\n[… {self.rel(p)} fait {size / 1048576:.1f} Mo : seul le début est montré. Pour le reste, "
                     f"run_command avec grep -n, sed -n 'A,Bp', tail, wc -l, ou un script Python qui le lit par morceaux.]")
-        return p.read_text(errors="replace")
+        text = p.read_text(errors="replace")
+        self._remember_read(p, text)
+        return text
 
     PLACEHOLDER_RE = re.compile(r"^\s*<(already written|\d+ lignes écrites)|\(ancien résultat raccourci\)|Résumé de mes étapes précédentes")
 
@@ -1078,6 +1102,7 @@ class Agent:
                     "file you have not written yet, then build and run the project.")
         self._rewrites = getattr(self, "_rewrites", {})
         self._rewrites[str(p)] = self._rewrites.get(str(p), 0) + (1 if p.exists() else 0)
+        copied = self._copied_from(content, p)
         if p.exists():
             old = p.read_text(errors="replace")
             detail = "".join(difflib.unified_diff(old.splitlines(True), content.splitlines(True),
@@ -1108,7 +1133,10 @@ class Agent:
                 f"do not write it again, move on to the next file or step.{long_note}{self._missing_packages(p, content)}"
                 + (f" NOTE: this is version {self._rewrites[str(p)] + 1} of this file. Stop rewriting the files already "
                    "done: write the ones still missing (and check that the entry file imports them), then build and run."
-                   if self._rewrites.get(str(p), 0) >= 2 else ""))
+                   if self._rewrites.get(str(p), 0) >= 2 else "")
+                + (f" WARNING: this content repeats, nearly line for line, {copied} that you read. If the task was to "
+                   "translate, rewrite or transform it, it is NOT done: write the real result (every sentence "
+                   "translated or changed), then check it." if copied else ""))
 
     NODE_BUILTINS = {"fs", "path", "os", "url", "http", "https", "crypto", "util", "events", "stream", "child_process",
                      "assert", "buffer", "zlib", "net", "readline", "process", "querystring", "worker_threads"}

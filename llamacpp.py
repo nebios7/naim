@@ -272,6 +272,8 @@ class Server:
                 SLOTS_DIR.mkdir(parents=True, exist_ok=True)
                 cmd += ["--slot-save-path", str(SLOTS_DIR)]  # what a slot has read, saved to disk (see warm_prefix)
             HOME.mkdir(parents=True, exist_ok=True)
+            if reap_orphans(self.port):
+                time.sleep(1)  # their memory comes back before the new engine takes its own
             log = open(LOG, "a")
             log.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} start: {' '.join(cmd)}\n")
             log.flush()
@@ -375,6 +377,28 @@ def bg_slot():
     n = total_slots()
     return n - 1 if n >= 3 else (1 if n == 2 else 0)
 atexit.register(SERVER.stop)
+atexit.register(VISION.stop)
+
+
+def reap_orphans(port):
+    """An engine left on this port by a Naim that did not quit cleanly (its parent is gone): it holds memory and the
+    graphics card for nothing, and the port. Only Naim's own engine binary, only orphans (parent 1), only this port —
+    never an engine of this Naim, never another one."""
+    try:
+        out = subprocess.run(["ps", "-axo", "pid=,ppid=,command="], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    n = 0
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if (len(parts) == 3 and parts[1] == "1" and "/.naim/models/llama-server-naim" in parts[2]
+                and re.search(rf"--port\s+{int(port)}(\s|$)", parts[2])):
+            try:
+                os.kill(int(parts[0]), 15)
+                n += 1
+            except (ProcessLookupError, PermissionError, ValueError):
+                pass
+    return n
 
 
 def _unload_from_ollama():

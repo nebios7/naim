@@ -529,6 +529,18 @@ def project_path(root, path=""):
     return base, p
 
 
+_WRITE_LOCK = threading.Lock()
+
+
+def write_whole(path, text):
+    """The file is replaced in one step (a temporary file, then a rename): never half written, never two saves mixed."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    with _WRITE_LOCK:
+        tmp.write_text(text)
+        os.replace(tmp, path)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "NaimServer/2.0"
 
@@ -964,7 +976,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
         elif path == "/api/settings":
             DATA.mkdir(parents=True, exist_ok=True)
-            SETTINGS.write_text(json.dumps(self.read_json(), ensure_ascii=False, indent=2))
+            write_whole(SETTINGS, json.dumps(self.read_json(), ensure_ascii=False, indent=2))
             self.send_json({"ok": True})
         elif path.startswith("/api/conversations/"):
             cid = path.rsplit("/", 1)[1]
@@ -976,7 +988,7 @@ class Handler(BaseHTTPRequestHandler):
             if not c.pop("keep_time", False) or "updated" not in c:
                 c["updated"] = time.time()
             CONVS.mkdir(parents=True, exist_ok=True)
-            (CONVS / f"{cid}.json").write_text(json.dumps(c, ensure_ascii=False))
+            write_whole(CONVS / f"{cid}.json", json.dumps(c, ensure_ascii=False))
             self.send_json({"ok": True})
         else:
             self.send_error(404)
@@ -3100,6 +3112,17 @@ def serve(port=8765):
 
 
 if __name__ == "__main__":
+    import signal
+    import sys
+    def _quit(*_):  # quitting the app (⌘Q sends SIGTERM): the engines go with it, then at once as before
+        for eng in (llamacpp.SERVER, llamacpp.VISION):
+            try:
+                eng.stop()
+            except Exception:  # noqa: BLE001 — quitting must never hang on an engine
+                pass
+        os._exit(0)
+    for _sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(_sig, _quit)
     s = serve()
     print("Naim UI sur http://127.0.0.1:8765")
     s.serve_forever()

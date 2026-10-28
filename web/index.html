@@ -4842,6 +4842,8 @@ let liveQueued = false;
 function liveSoon() { if (!liveQueued) { liveQueued = true; requestAnimationFrame(() => { liveQueued = false; updateLiveBar(); }); } }
 setInterval(() => {
   updateLiveBar();
+  // a long run is saved as it goes (every 20 s): quitting Naim or a crash no longer loses hours of steps
+  for (const r of Object.values(runs)) if (r.conv && Date.now() - (r.savedAt || 0) > 20000) { r.savedAt = Date.now(); saveConv(r.conv).catch(() => {}); }
   $$(".subgrid .subchip:not([data-t1])").forEach((c) => {  // running sub-agents: their clock keeps ticking
     const sec = Math.round((Date.now() - +c.dataset.t0) / 1000), t = $(".stime", c);
     if (t && curRun()) t.textContent = sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")}`;
