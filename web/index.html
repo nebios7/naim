@@ -59,8 +59,7 @@
 }
 #sideWho { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
 #sideWho .wtxt { display: flex; flex-direction: column; gap: 3px; min-width: 0; line-height: 1.25; padding: 4px 6px; }
-#sideWho .wname { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#sideWho .status { font-size: 11.5px; color: var(--muted); padding: 0; }
+#sideWho .status { font-size: 12.5px; color: var(--muted); padding: 0; }
 aside#side .sidefoot #sideTheme svg, aside#side .sidefoot #sideSettings svg { width: 16px; height: 16px; }
 #rail-old { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: var(--side); border-right: 1px solid var(--line); }
 #rail .spacer { flex: 1; }
@@ -7343,11 +7342,10 @@ function buildRail() {
   const sf = $("aside#side .sidefoot"), st = sf && $(".status", sf);
   if (st && !$("#sideWho")) {
     const who = document.createElement("div"); who.id = "sideWho";
-    who.innerHTML = `<span class="wtxt"><b class="wname"></b></span>`;  // no initial in a circle: the name and the state, airy
+    who.innerHTML = `<span class="wtxt"></span>`;  // only the state (no initial, no name): airy
     st.before(who); $(".wtxt", who).appendChild(st);
   }
-  if ($("#sideWho")) { const nm = (S.user_name || "").trim(); $("#sideWho .wname").textContent = nm || "Naim"; }
-  const foot = $("aside#side .sidefoot");
+    const foot = $("aside#side .sidefoot");
   if (foot && !$("#sideTheme")) foot.insertAdjacentHTML("beforeend", `<button class="icon" id="sideTheme" title="Thème : clair / sombre / automatique"></button><button class="icon" data-go="settings" id="sideSettings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`);
   const asideEl = $("aside#side");
   if (asideEl && !$(".sidegrip", asideEl)) {
