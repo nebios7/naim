@@ -25,6 +25,18 @@ toute seule. Il ne touche jamais au programme de Naim : pour l'enlever, l'utilis
   - `naim.send(texte)` : envoyer un message à Naim.
   - `naim.store.get(clé, défaut)` / `naim.store.set(clé, valeur)` : garder une valeur d'une ouverture à l'autre.
   - `fetch("/api/...")` marche pour lire ce que Naim sait déjà (ex. `/api/status`).
+  - `naim.panel(id, { title, icon })` : un onglet à lui dans le panneau de droite (à côté de Fichiers, Aperçu) ;
+    il renvoie la zone où mettre le contenu. `icon` : `"chart"`, `"shield"`, `"activity"`… `naim.show(id)` l'ouvre.
+  - `naim.chart` : des graphiques tout faits, aux couleurs de Naim, qui renvoient un élément à ajouter (`zone.append(…)`) :
+    `bars(données, { title })`, `line(données, { title })`, `donut(données, { title })` avec données =
+    `[{ label, value }]` ou `[[label, valeur]]` ; `stat("Messages", 42, { hint, tone })` (un grand chiffre) ;
+    `table(lignes, { head: [...] })`. Ne dessine jamais un graphique à la main : utilise-les.
+  - `await naim.stats(jours)` : les statistiques déjà calculées (rien n'est envoyé ailleurs) :
+    `jours` = `[{ jour, messages, reponses, outils, fichiers }]`, `conversations`, `modes` ({chat, agent}),
+    `outils` = `[[nom, nombre]]` (les plus utilisés), `temps_reponse_median_s`, `premier_mot_median_s`.
+  - `await naim.security()` : en lecture seule (un mod ne change JAMAIS la sécurité) : `permissions`
+    ({screen, accessibility} de l'app), `autorisations` (modes auto…), `commandes_interdites`, `plugins_hooks`
+    (`[{ nom, hooks_allumes }]`), `actions_30_jours` ({ bloquees, refusees, refusees_par_toi }).
 - `mod.css` (facultatif) : le style. Utilise les couleurs de Naim : `var(--text)`, `var(--muted)`, `var(--line)`,
   `var(--panel)`, `var(--hover)` ; elles suivent le thème clair ou sombre.
 
@@ -63,3 +75,33 @@ const show = () => {
 naim.on("send", () => { const c = show(); c.n++; naim.store.set("count", c); show(); });
 show();
 ```
+
+## Exemple complet : un panneau de statistiques et de sécurité
+
+`mod.js` :
+```js
+const zone = naim.panel("tableau", { title: "Statistiques", icon: "chart" });
+const fill = async () => {
+  const [st, sec] = await Promise.all([naim.stats(30), naim.security()]);
+  const total = (k) => st.jours.reduce((a, j) => a + j[k], 0);
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+  row.append(naim.chart.stat("Messages", total("messages"), { hint: "30 jours" }),
+             naim.chart.stat("Conversations", st.conversations),
+             naim.chart.stat("Réponse médiane", (st.temps_reponse_median_s ?? "–") + " s"));
+  const p = sec.permissions || {};
+  zone.replaceChildren(
+    row,
+    naim.chart.bars(st.jours.map((j) => [j.jour, j.messages]), { title: "Messages par jour" }),
+    naim.chart.donut(st.outils.slice(0, 6), { title: "Outils les plus utilisés" }),
+    naim.chart.table([
+      ["Enregistrement de l'écran", p.screen ? "oui" : "non"],
+      ["Accessibilité", p.accessibility ? "oui" : "non"],
+      ["Actions refusées (30 j)", (sec.actions_30_jours.refusees || 0) + (sec.actions_30_jours.bloquees || 0)],
+    ], { head: ["Sécurité", ""] }));
+};
+naim.on("reply", fill);
+fill();
+naim.button("ouvrir", { label: "Statistiques", onClick: () => naim.show("tableau") });
+```
+

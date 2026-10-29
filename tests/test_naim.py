@@ -948,5 +948,33 @@ class ChangeAContactNumber(unittest.TestCase):
             with self.assertRaises(mailer.MailError):
                 mailer.set_contact_phone("Jean", "", "+33652909662")  # two people: the exact name is asked
 
+
+class ModsStatsAndSecurity(unittest.TestCase):
+    """naim.stats() and naim.security(): computed from the saved conversations, read only."""
+
+    def test_counts(self):
+        import mods
+        import time
+        now = time.time() * 1000
+        with tempfile.TemporaryDirectory() as d:
+            conv = {"mode": "agent", "messages": [
+                {"role": "user", "content": "x", "time": now},
+                {"role": "assistant", "content": "y", "time": now + 1, "ttft": 2.0, "stats": {"total": 10},
+                 "changes": [{"path": "a"}], "steps": [{"type": "tool", "name": "run_command", "result": "refused: no"},
+                                                       {"type": "tool", "name": "run_command", "result": "denied by the user"}]},
+                {"role": "user", "content": "old", "time": now - 90 * 86400 * 1000}]}
+            (Path(d) / "c.json").write_text(json.dumps(conv))
+            s = mods.stats(Path(d), 30)
+            today = s["jours"][-1]
+            self.assertEqual((today["messages"], today["reponses"], today["outils"], today["fichiers"]), (1, 1, 2, 1))
+            self.assertEqual(sum(j["messages"] for j in s["jours"]), 1)  # the old one is out of the 30 days
+            self.assertEqual(s["outils"], [("run_command", 2)])
+            self.assertEqual((s["conversations"], s["modes"], s["temps_reponse_median_s"]), (1, {"agent": 1}, 10))
+            sec = mods.security({"auto_yes": True, "blocked": ["rm"]}, Path(d),
+                                [{"name": "ecc", "hooks": ["x"], "hooks_off": False}], {"screen": True})
+            self.assertEqual(sec["actions_30_jours"], {"refusees": 1, "refusees_par_toi": 1})
+            self.assertEqual((sec["autorisations"], sec["commandes_interdites"]), ({"auto_yes": True}, 1))
+            self.assertEqual(sec["plugins_hooks"], [{"nom": "ecc", "hooks_allumes": True}])
+
 if __name__ == "__main__":
     unittest.main()

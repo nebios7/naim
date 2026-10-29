@@ -46,3 +46,79 @@ def switch(name, enabled):
     DIR.mkdir(parents=True, exist_ok=True)
     OFF.write_text(json.dumps(sorted(off)))
     return {"ok": True, "name": name, "enabled": enabled}
+
+
+def stats(convs, days=30):
+    """Ready-made statistics for a mod to show (read from the saved conversations, nothing sent anywhere):
+    per day, the messages, answers, tools and files changed; the most used tools; the answer times."""
+    import collections
+    import time
+    since = (time.time() - days * 86400) * 1000
+    day = lambda ms: time.strftime("%Y-%m-%d", time.localtime(ms / 1000))
+    per = collections.OrderedDict((day((time.time() - k * 86400) * 1000), {"messages": 0, "reponses": 0, "outils": 0, "fichiers": 0})
+                                  for k in range(days - 1, -1, -1))
+    tools, modes, times, ttft, convs_n = collections.Counter(), collections.Counter(), [], [], 0
+    for f in convs.glob("*.json") if convs.is_dir() else []:
+        try:
+            c = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        seen = False
+        for m in c.get("messages") or []:
+            t = m.get("time") or 0
+            if t < since or m.get("_greet"):
+                continue
+            d = per.get(day(t))
+            if d is None:
+                continue
+            seen = True
+            if m.get("role") == "user":
+                d["messages"] += 1
+                continue
+            d["reponses"] += 1
+            for s in m.get("steps") or []:
+                if s.get("type") == "tool":
+                    d["outils"] += 1
+                    tools[s.get("name") or "?"] += 1
+            d["fichiers"] += len(m.get("changes") or [])
+            st = m.get("stats") or {}
+            if st.get("total"):
+                times.append(st["total"])
+            if m.get("ttft") is not None:
+                ttft.append(m["ttft"])
+        if seen:
+            convs_n += 1
+            modes[c.get("mode") or "chat"] += 1
+    mid = lambda xs: round(sorted(xs)[len(xs) // 2], 1) if xs else None
+    return {"jours": [{"jour": k, **v} for k, v in per.items()], "conversations": convs_n, "modes": dict(modes),
+            "outils": tools.most_common(12), "temps_reponse_median_s": mid(times), "premier_mot_median_s": mid(ttft),
+            "periode_jours": days}
+
+
+def security(settings, convs, plugin_list, perms):
+    """What protects this Mac, for a mod to show (read only: a mod never changes any of it): the app's macOS
+    permissions, the approval modes, the plugins whose hooks run, and the actions refused or asked in 30 days."""
+    import collections
+    import time
+    since = (time.time() - 30 * 86400) * 1000
+    seen = collections.Counter()
+    for f in convs.glob("*.json") if convs.is_dir() else []:
+        try:
+            c = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        for m in c.get("messages") or []:
+            if (m.get("time") or 0) < since:
+                continue
+            for s in m.get("steps") or []:
+                r = str(s.get("result") or "")
+                kind = ("bloquees" if r.startswith("blocked") else "refusees" if r.startswith("refused") else
+                        "refusees_par_toi" if r.startswith("denied") else None)
+                if kind:
+                    seen[kind] += 1
+    keys = ("auto_yes", "auto_writes", "auto_commands", "auto_mcp", "auto_computer", "power")
+    return {"permissions": perms, "autorisations": {k: bool(settings.get(k)) for k in keys if k in settings},
+            "commandes_interdites": len(settings.get("blocked") or []),
+            "plugins_hooks": [{"nom": p.get("name"), "hooks_allumes": not p.get("hooks_off")} for p in plugin_list
+                              if p.get("hooks") and p.get("enabled", True)],
+            "actions_30_jours": dict(seen)}

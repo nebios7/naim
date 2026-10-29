@@ -681,6 +681,18 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/mods":
             import mods
             self.send_json({"mods": mods.listing(with_code=q.get("code") == "1"), "dir": str(mods.DIR)})
+        elif path == "/api/mods/stats":
+            import mods
+            self.send_json(mods.stats(CONVS, max(1, min(365, int(q.get("days") or 30)))))
+        elif path == "/api/mods/security":
+            import mods
+            import plugins
+            try:
+                perms = cu.permissions()
+            except Exception:  # noqa: BLE001 — without the native app: unknown, not an error for the mod
+                perms = {}
+            settings = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
+            self.send_json(mods.security(settings, CONVS, plugins.all_plugins(), perms))
         elif path == "/api/libs":
             import libs
             self.send_json({"libs": libs.listing()})

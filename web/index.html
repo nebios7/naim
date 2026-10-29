@@ -504,6 +504,21 @@ footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #fold
 .modband .mhide:hover { background: var(--hover); color: var(--text); }
 .modband[data-tone="ok"] .mbody { color: #4a9b6e; }
 .modband[data-tone="warn"] .mbody { color: #c08a2b; }
+/* mods' panels: big numbers, charts and tables in Naim's colours */
+.pbody.modpanel { overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+.pbody.modpanel[hidden] { display: none; }
+.modstat { display: inline-flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 96px; }
+.modstat b { font-size: 22px; font-weight: 500; color: var(--text); } .modstat span { font-size: 12px; color: var(--muted); } .modstat small { font-size: 11px; color: var(--muted); opacity: .8; }
+.modstat.ok b { color: #4a9b6e; } .modstat.warn b { color: #c08a2b; } .modstat.alert b { color: #c4554d; }
+.modchartbox { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.modchartbox .mct { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+.modchart { width: 100%; height: auto; max-height: 220px; display: block; } .modchart text { font-size: 15px; fill: var(--muted); }
+.modchart.donut { width: 130px; max-height: 130px; }
+.modchartbox:has(.donut) { display: grid; grid-template-columns: 130px 1fr; column-gap: 14px; align-items: center; } .modchartbox:has(.donut) .mct { grid-column: 1 / -1; }
+.mclegend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.mclegend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; } .mclegend b { color: var(--text); font-weight: 500; }
+.modtable { width: 100%; border-collapse: collapse; font-size: 12.5px; } .modtable th { text-align: left; color: var(--muted); font-weight: 500; }
+.modtable th, .modtable td { padding: 5px 6px; border-bottom: 1px solid var(--line); }
 .modband[data-tone="alert"] { border-color: #c4554d66; } .modband[data-tone="alert"] .mbody { color: #c4554d; }
 /* a coloured word or number inside a band: <b class="ok">11 %</b>, like the limits of a coding assistant */
 .modband .mbody .ok { color: #4a9b6e !important; } .modband .mbody .warn { color: #c08a2b !important; } .modband .mbody .alert { color: #c4554d !important; }
@@ -5356,6 +5371,7 @@ function showPanel(tab) {
   $("#pSim").hidden = tab !== "sim"; if (tab === "sim") simLive();
   $("#pFiles").hidden = tab !== "files"; $("#pPreview").hidden = tab !== "preview"; $("#pProcs").hidden = tab !== "procs"; $("#pGit").hidden = tab !== "git"; $("#pChanges").hidden = tab !== "changes";
   $("#refreshTree").hidden = tab !== "files";
+  $$(".pbody.modpanel").forEach((p) => (p.hidden = p.dataset.tab !== tab));
   $("#filesBtn").classList.toggle("on", tab === "files");
   $("#procBtn").classList.toggle("on", tab === "procs");
   if (tab === "files") loadTree();
@@ -7245,6 +7261,8 @@ const RICON = {
   tool: '<path d="M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/>',
   calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  chart: '<path d="M4 20h16"/><path d="M7 16v-5"/><path d="M12 16V7"/><path d="M17 16v-8"/>',
+  shield: '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
   unlock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
   columns: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 4v16"/>',
   star: '<path d="M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6 9.6 9z"/>',
@@ -7813,6 +7831,64 @@ async function openDeepLink() {
 // above the message box, a button next to the settings, a toast, a reaction to each message. /mods lists them,
 // /mods off <nom> switches one off (its files stay), /mods reload reloads them after a change.
 const MODS = { on: { send: [], reply: [] }, names: [] };
+// small charts for mods, in Naim's colours (SVG, no library): each returns an element to put in a panel or a band
+const MOD_COLORS = ["#d97757", "#6a9bcc", "#788c5d", "#c08a2b", "#9b87c9", "#c4554d", "#4a9b6e", "#a3a19b"];
+const MOD_CHART = (() => {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = (w, h) => { const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", `0 0 ${w} ${h}`); s.setAttribute("class", "modchart"); return s; };
+  const add = (p, tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; p.append(e); return e; };
+  const norm = (data) => (data || []).map((d, i) => Array.isArray(d) ? { label: String(d[0]), value: +d[1] || 0 } : { label: String(d.label ?? i), value: +d.value || 0, color: d.color });
+  const wrap = (title, el) => { const box = document.createElement("div"); box.className = "modchartbox"; if (title) { const h = document.createElement("div"); h.className = "mct"; h.textContent = title; box.append(h); } box.append(el); return box; };
+  return {
+    // bars([{label, value}] or [[label, value]], { title, color, height })
+    bars(data, o = {}) {
+      const d = norm(data), W = 640, H = o.height || 150, max = Math.max(1, ...d.map((x) => x.value)), bw = W / Math.max(1, d.length);
+      const s = svg(W, H + 22);
+      d.forEach((x, i) => {
+        const h = Math.round((x.value / max) * (H - 14));
+        const r = add(s, "rect", { x: i * bw + bw * 0.15, y: H - h, width: Math.max(1, bw * 0.7), height: h, rx: 2, fill: x.color || o.color || MOD_COLORS[0] });
+        add(r, "title", {}, `${x.label} : ${x.value}`);
+        if (d.length <= 12 || i === d.length - 1 || (i % Math.ceil(d.length / 8) === 0 && i < d.length - 3)) add(s, "text", { x: i === 0 ? 0 : i === d.length - 1 ? W : i * bw + bw / 2, y: H + 16, "text-anchor": i === 0 ? "start" : i === d.length - 1 ? "end" : "middle" }, x.label.length > 6 ? x.label.slice(-5) : x.label);
+      });
+      return wrap(o.title, s);
+    },
+    // line([{label, value}], { title, color, height })
+    line(data, o = {}) {
+      const d = norm(data), W = 640, H = o.height || 150, max = Math.max(1, ...d.map((x) => x.value)), step = W / Math.max(1, d.length - 1);
+      const s = svg(W, H + 18), pts = d.map((x, i) => [i * step, H - 4 - (x.value / max) * (H - 14)]);
+      add(s, "polyline", { points: pts.map((p) => p.join(",")).join(" "), fill: "none", stroke: o.color || MOD_COLORS[1], "stroke-width": 2, "stroke-linejoin": "round" });
+      pts.forEach((p, i) => add(add(s, "circle", { cx: p[0], cy: p[1], r: 2.5, fill: o.color || MOD_COLORS[1] }), "title", {}, `${d[i].label} : ${d[i].value}`));
+      [0, d.length - 1].forEach((i) => d[i] && add(s, "text", { x: pts[i][0], y: H + 16, "text-anchor": i ? "end" : "start" }, d[i].label.slice(-5)));
+      return wrap(o.title, s);
+    },
+    // donut([{label, value}], { title }): with its legend
+    donut(data, o = {}) {
+      const d = norm(data).filter((x) => x.value > 0), total = d.reduce((a, x) => a + x.value, 0) || 1, s = svg(120, 120); s.classList.add("donut");
+      let a0 = -Math.PI / 2;
+      d.forEach((x, i) => {
+        const a1 = a0 + (x.value / total) * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0, P = (a, r) => `${60 + r * Math.cos(a)} ${60 + r * Math.sin(a)}`;
+        const path = d.length === 1 ? `M60 6 A54 54 0 1 1 59.99 6 L59.99 26 A34 34 0 1 0 60 26 Z`
+          : `M${P(a0, 54)} A54 54 0 ${big} 1 ${P(a1, 54)} L${P(a1, 34)} A34 34 0 ${big} 0 ${P(a0, 34)} Z`;
+        add(add(s, "path", { d: path, fill: x.color || MOD_COLORS[i % MOD_COLORS.length] }), "title", {}, `${x.label} : ${x.value}`);
+        a0 = a1;
+      });
+      const box = wrap(o.title, s), leg = document.createElement("div"); leg.className = "mclegend";
+      leg.innerHTML = d.map((x, i) => `<span><i style="background:${x.color || MOD_COLORS[i % MOD_COLORS.length]}"></i>${esc(x.label)} <b>${x.value}</b></span>`).join("");
+      box.append(leg); return box;
+    },
+    // stat("Messages", 42, { hint: "30 jours", tone: "ok" }): a big number with its name
+    stat(label, value, o = {}) {
+      const e = document.createElement("div"); e.className = "modstat" + (o.tone ? " " + o.tone : "");
+      e.innerHTML = `<b>${esc(String(value))}</b><span>${esc(label)}</span>${o.hint ? `<small>${esc(o.hint)}</small>` : ""}`; return e;
+    },
+    // table([[col1, col2…], …], { head: [...] })
+    table(rows, o = {}) {
+      const e = document.createElement("table"); e.className = "modtable";
+      e.innerHTML = (o.head ? `<tr>${o.head.map((h) => `<th>${esc(String(h))}</th>`).join("")}</tr>` : "") + (rows || []).map((r) => `<tr>${r.map((c) => `<td>${esc(String(c))}</td>`).join("")}</tr>`).join("");
+      return e;
+    },
+  };
+})();
 function modApi(name) {
   const key = (id) => `mod-${name}-${String(id).replace(/[^\w-]/g, "")}`;
   return {
@@ -7841,6 +7917,23 @@ function modApi(name) {
       if (!el) { el = document.createElement("button"); el.id = key(id); el.className = "pill modbtn"; $(".ctools .spacer").before(el); }
       el.textContent = label; el.title = title; el.onclick = onClick || null; return el;
     },
+    panel(id, opts) {  // a tab of its own in the side panel (next to Fichiers, Aperçu…): { title, icon }; null removes it
+      const tab = key(id);
+      let b = $(`.ptab[data-tab="${tab}"]`), body = document.getElementById(`p-${tab}`);
+      if (opts == null) { b?.remove(); body?.remove(); return null; }
+      if (!b) {
+        b = document.createElement("button"); b.className = "ptab"; b.dataset.tab = tab; b.dataset.mod = name;
+        b.onclick = () => showPanel(tab); $(".ptabs .spacer").before(b);
+        body = document.createElement("div"); body.className = "pbody modpanel"; body.id = `p-${tab}`; body.dataset.mod = name; body.dataset.tab = tab; body.hidden = true;
+        $("#panel").append(body);
+      }
+      b.textContent = opts.title || name; b.title = opts.title || name; PTAB_ICON[tab] = opts.icon || "chart"; decoratePanelTabs();
+      return body;
+    },
+    show(id) { showPanel(key(id)); },  // open the mod's tab
+    chart: MOD_CHART,
+    stats: (days = 30) => api(`/api/mods/stats?days=${days}`),  // per day: messages, answers, tools, files; top tools; times
+    security: () => api("/api/mods/security"),  // macOS permissions, approval modes, plugins' hooks, refused actions (read only)
     toast: (text) => toast(String(text)),
     on(event, fn) { (MODS.on[event] || []).push({ name, fn }); },  // "send" (text) · "reply" (text of the answer)
     send: (text) => send(String(text)),
@@ -7860,7 +7953,7 @@ function modsFire(event, arg) {
   for (const h of MODS.on[event] || []) { try { h.fn(arg); } catch (e) { console.error(`mod ${h.name}`, e); } }
 }
 async function loadMods() {
-  $$(".modband, .modbtn, style[data-mod]").forEach((el) => el.remove());
+  $$(".modband, .modbtn, style[data-mod], .ptab[data-mod], .pbody.modpanel").forEach((el) => el.remove());
   MODS.on = { send: [], reply: [] }; MODS.names = [];
   const { mods = [] } = await api("/api/mods?code=1").catch(() => ({}));
   for (const m of mods.filter((x) => x.enabled)) {
