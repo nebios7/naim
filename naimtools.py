@@ -949,6 +949,10 @@ class Agent:
             joints = JOINTS.resolve()
             if joints in p.parents:  # the attached files and the work on them, in their conversation's folder
                 return p
+            # its own extensions, where its skills say to put them: mods of its window, skills, plugins (its program
+            # and settings stay protected: they are not in these folders)
+            if any(d in p.parents for d in ((ext.HOME / x).resolve() for x in ("mods", "skills", "plugins"))):
+                return p
             raise ValueError(f"path outside the project: {path}")
         return p
 

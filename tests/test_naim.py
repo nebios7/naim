@@ -1001,5 +1001,19 @@ class PdfPro(unittest.TestCase):
             self.assertTrue(svg.startswith("<svg") and svg.endswith("</svg>"))
         self.assertIn("#c96442", self.p.bars([["a", 1]]))
 
+
+class WritesItsOwnExtensions(unittest.TestCase):
+    """A mod, a skill, a plugin go in ~/.naim/mods|skills|plugins from any project; the rest of ~/.naim stays closed."""
+
+    def test_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim")
+            home = naimtools.ext.HOME
+            for rel in ("mods/x/mod.js", "skills/y/SKILL.md", "plugins/z/plugin.json"):
+                self.assertEqual(a.resolve(str(home / rel)), (home / rel).resolve())
+            for rel in ("settings.json", "mcp.json", "models/m.gguf"):
+                with self.assertRaises(ValueError):
+                    a.resolve(str(home / rel))
+
 if __name__ == "__main__":
     unittest.main()
