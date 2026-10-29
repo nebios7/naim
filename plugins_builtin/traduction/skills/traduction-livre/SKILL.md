@@ -54,5 +54,5 @@ livre.py assembler "<dossier>/livre" "<Titre traduit>" livre_traduit.html <code 
 "$HOME/Library/Application Support/Naim/bin/naim-pdf" "<dossier>/livre/livre_traduit.html" "<dossier>/livre/livre_traduit.pdf" A4
 ```
 `etat` doit dire que tout est traduit, sans figure oubliée. Puis look_at sur le PDF : la page de titre, une page
-avec dessin, une page avec tableau ou symboles. Copie le PDF final dans ~/Documents/Naim/Fichiers, puis
+avec dessin, une page avec tableau ou symboles. Copie le PDF final dans le dossier du projet ouvert (`cp … .`) et donne ce chemin-là, puis
 envoie-le si on te l'a demandé (mail, SMS).

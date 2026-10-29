@@ -171,7 +171,9 @@ def next_step(d, left):
     return ("Suite (à lancer maintenant, dans cet ordre ; le PDF se fait avec CES commandes, jamais à partir des images "
             f"des pages) :\n  1. {me} assembler \"{d}\" \"<titre traduit>\" livre_traduit.html <code langue : fr, en, ar…>\n"
             f"  2. \"{pdf}\" \"{d}/livre_traduit.html\" \"{d}/livre_traduit.pdf\" A4\n"
-            "  3. look_at sur le PDF (titre, une page avec dessin), puis copie-le dans ~/Documents/Naim/Fichiers")
+            "  3. look_at sur le PDF (titre, une page avec dessin)\n"
+            f"  4. cp \"{d}/livre_traduit.pdf\" .   (dans le dossier du projet ouvert : l'utilisateur le voit là ; "
+            "donne ce chemin-là dans ta réponse)")
 
 
 def suivant(d):
