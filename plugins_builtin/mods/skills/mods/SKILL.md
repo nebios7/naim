@@ -48,6 +48,9 @@ les couleurs de Naim, et donne-leur toujours un bouton « Masquer » (ou une cro
 
 ## Règles
 
+- Un mod se fait TOUJOURS dans `~/.naim/mods/<nom>/` (mod.json, mod.js), jamais comme une page HTML à part ni avec
+  creer_fichier : le panneau, les graphiques (`naim.chart`) et les couleurs de Naim sont déjà là, ne refais pas de design.
+
 - Icônes en traits fins (SVG `stroke="currentColor"`), jamais d'emoji. Pas de doublon d'une info déjà affichée.
 - Pas de `setInterval` plus fréquent qu'une fois par seconde ; pas de réseau vers l'extérieur sans que l'utilisateur
   l'ait demandé.

@@ -1151,6 +1151,11 @@ def match_skill(task, root=None, disabled=()):
     if "mac" in ordered:
         ordered.remove("mac")
         ordered.insert(min(ordered.index(n) for n in ("controle-ecran", "tests-unitaires") if n in ordered), "mac")
+    # among the plugins that come first, what the request names first is what is asked: « un mod … avec la sécurité »
+    # is a mod (its content comes after), « un audit de sécurité » is security
+    hits = [(m.start(), k, n) for k, n in enumerate(priority) if n in by_name and (m := re.search(triggers[n], text))]
+    if hits:
+        return by_name[min(hits)[2]]
     for name in ordered:
         if name in by_name and re.search(triggers[name], text):
             return by_name[name]
