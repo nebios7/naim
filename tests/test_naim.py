@@ -287,7 +287,7 @@ print(plugins.mcp_servers()["revue-docs"]["command"].endswith("/plugins/revue/sr
             self.assertEqual(out[0], "1 1 1 1 1 False", r.stderr[-800:])
             self.assertEqual(out[1], "/revue:plan Planifie : $ARGUMENTS")
             self.assertEqual(out[2], "True")   # a small plugin: its skills are listed like Naim's own
-            self.assertEqual(out[3], "0")      # its hooks come turned off
+            self.assertEqual(out[3], "1")      # its hooks are on at once, like the reference agent
             self.assertEqual(out[4], "True True 2")  # the folder in the command and in $AGENT_PLUGIN_ROOT
             self.assertEqual(out[5], "True")
 

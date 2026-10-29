@@ -212,7 +212,7 @@ Attention à l'orthographe : c'est `/plugin`, pas `/plungin`. Ce que Naim fait �
 | **Agents** | deviennent des skills `agent-<nom>` |
 | **Commandes** | commandes `/<plugin>:<commande>` (ex. `/ecc:plan`), ce que tu tapes après prend la place de `$ARGUMENTS` |
 | **Serveurs MCP** | ajoutés avec le plugin |
-| **Hooks** | installés **éteints** (écrits pour un autre outil, ils pourraient ralentir ou bloquer) : `/plugin hooks ecc on` pour les essayer, `off` pour revenir. Naim leur parle leur langage (noms des outils, `file_path`, réponses JSON, hooks en arrière-plan) ; leurs réglages se mettent dans `hooks_env` du `plugin.json` du plugin |
+| **Hooks** | **allumés dès l'installation**, ils se déclenchent tout seuls selon la situation ; `/plugin hooks <nom> off` pour les éteindre. Naim leur parle leur langage (noms des outils, `file_path`, réponses JSON, hooks en arrière-plan) ; leurs réglages se mettent dans `hooks_env` du `plugin.json` du plugin |
 
 Pour ECC : 311 skills et 71 agents en bibliothèque, 97 commandes `/ecc:…`, 27 hooks éteints, environ 58 Mo. Réinstaller
 un plugin met l'ancienne version de côté (`~/.naim/plugins.anciens`), elle n'est jamais perdue. Retirer un plugin :

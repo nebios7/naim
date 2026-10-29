@@ -6203,7 +6203,7 @@ async function pluginCmd(arg) {
       pluginCard(`**Plugin « ${r.name} » installé et activé** (depuis ${r.marketplace})\n\n`
         + `- ${r.skills} skills${r.agents ? ` et ${r.agents} agents (devenus des skills)` : ""}${r.library ? " — dans la bibliothèque : Naim les trouve quand une tâche en a besoin, ses instructions restent légères" : ""}\n`
         + `- ${r.commands} commandes : tape \`/${r.name}:\` pour les voir\n- ${r.mcp} serveur${r.mcp > 1 ? "s" : ""} MCP\n`
-        + (r.hooks ? `- ${r.hooks} hooks, **éteints** : ils ont été écrits pour un autre outil. Pour les essayer : \`/plugin hooks ${r.name} on\`` : "- aucun hook"));
+        + (r.hooks ? `- ${r.hooks} hooks, **allumés** : ils se déclenchent tout seuls selon la situation (\`/plugin hooks ${r.name} off\` pour les éteindre)` : "- aucun hook"));
       loadPluginCommands();
     } else if (a0 === "hooks" && a1 && /^(on|off)$/.test(a2 || "")) {
       const r = await call({ action: "hooks", name: a1, on: a2 === "on" });

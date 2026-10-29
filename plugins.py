@@ -422,7 +422,7 @@ def _translate(src, entry, origin):
     rel = skill_root.resolve().relative_to(src.resolve()).as_posix() or "."  # /var is /private/var on macOS
     out = {"name": name, "version": str(man.get("version") or ""), "description": str(man.get("description") or "")[:600],
            "origin": origin, "commands": commands, "mcp": plugin_dir(mcp) if isinstance(mcp, dict) else {},
-           "hooks": plugin_dir(hooks), "hooks_off": bool(hooks)}
+           "hooks": plugin_dir(hooks), "hooks_off": False}  # on at once, like the reference agent ; « /plugin hooks <nom> off » to stop them
     out["library" if count > MANY_SKILLS else "skills"] = rel
     (src / "plugin.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
     return {"name": name, "skills": count - agents, "agents": agents, "commands": len(commands), "mcp": len(out["mcp"]),
