@@ -714,6 +714,28 @@ class FollowThePlan(unittest.TestCase):
         a, _ = self.run_pages(8)
         self.assertEqual([t["status"] for t in a.todos], ["done"] * 8)
 
+    def test_announces_then_does(self):
+        """After a restart its list is empty: « 6 pages à traiter. Je continue avec la page 188. » is not an end."""
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            pages = []
+
+            def fake(model, messages, **kw):
+                last = str(messages[-1].get("content") or "")
+                if len(pages) >= 6:
+                    return {"role": "assistant", "content": "Les 193 pages sont traduites."}
+                if last.startswith("ok: wrote") or "Fais-le maintenant" in last or "traduis" in last:
+                    if "Fais-le" in last or "traduis" in last:
+                        pages.append(188 + len(pages))
+                        return {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "write_file",
+                                "arguments": {"path": f"p{pages[-1]}.md", "content": f"Page {pages[-1]} traduite en entier."}}}]}
+                return {"role": "assistant", "content": f"{6 - len(pages)} pages à traiter. Je continue avec la page {188 + len(pages)}."}
+
+            with mock.patch.object(naimtools, "chat_watched", fake):
+                a.run("continue : traduis les pages 188 à 193")
+            self.assertEqual(pages, list(range(188, 194)))
+
     def test_stops_when_nothing_moves(self):
         _, n = self.run_pages(8, progress=False)
         self.assertLess(n, 10)

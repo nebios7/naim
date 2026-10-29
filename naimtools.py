@@ -319,7 +319,7 @@ def repeating(text):
 
 # a reply that only announces an action (« Je vais envoyer… ») instead of doing it
 ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
-                         r"envoie|prépare|regarde|vérifie|imprime|appelle)\b|(?:je vais|laisse-moi|je dois|il (?:me )?faut|je commence par|commençons par)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
+                         r"envoie|prépare|regarde|vérifie|imprime|appelle|continue|reprends|traduis|passe (?:à|au|aux))\b|(?:je vais|laisse-moi|je dois|il (?:me )?faut|je commence par|commençons par)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
                          r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim|"
                          r"ajout|rajout|mett|chang|corrig|refai|dessin|termin|complét|rectifi|remplac|retouch|réécri|recré|"
                          r"continu|repren|tradui))",
@@ -3514,7 +3514,7 @@ class Agent:
         self.messages.append({"role": "user", "content": task + now_note(), **({"images": images} if images else {})})
         self._task_idx = len(self.messages) - 1
         self._stall_pushbacks = 0
-        self._todo_push_at = -1
+        self._todo_push_at = self._announce_push_at = -1
         self._reviewed = False
         # a budget of progress, not a fixed count: while files are written, steps ticked off and commands pass, it
         # goes on (the setting is a checkpoint: +50 each time it is still advancing, 1000 at most); it stops when
@@ -3652,8 +3652,11 @@ class Agent:
                     sentences = [x for x in re.split(r"(?<=[.!?…])\s+", content.strip()) if x]
                     announced = ANNOUNCE_RE.search(content) or (sentences and ANNOUNCE_RE.search(sentences[-1]))
                     if (announced and len(content) < 600 and not self.plan
-                            and self._stall_pushbacks < 3):  # « Je vais supprimer les fichiers… » without doing it
+                            and (self._stall_pushbacks < 3 or self._announce_push_at < self._last_progress)):
+                        # « Je vais supprimer les fichiers… », « Je continue avec la page 188. » without doing it;
+                        # past three times, again only if it moved forward since the last time (never in a circle)
                         self._stall_pushbacks += 1
+                        self._announce_push_at = self._last_progress
                         self.emit({"type": "note", "text": content})  # what it said it will do stays shown
                         self.messages.append({"role": "assistant", "content": content})
                         self.messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), puis dis-moi le résultat."})
