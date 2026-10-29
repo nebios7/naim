@@ -46,6 +46,7 @@ le disque** : aux ouvertures suivantes, elles sont rechargées en une seconde.
 | `/plugin marketplace add <lien>` | Ajouter une marketplace de plugins (un dépôt GitHub) |
 | `/plugin install <nom>` | Installer un plugin de cette marketplace (voir **4. Plugins**) |
 | `/plugin hooks <nom> off` · `on` | Éteindre les hooks d'un plugin trop bavard (ils sont allumés dès l'installation), ou les rallumer |
+| `/mods` · `/mods hide <nom>` · `show` · `off` · `on` · `reload` | Les mods de la fenêtre (un bandeau avec « Masquer », un bouton…) : demande à Naim en mode Agent « fais-moi un mod qui … », il l'écrit dans `~/.naim/mods/<nom>/`. `off` l'enlève (ses fichiers restent), `reload` recharge après une modification |
 | `/plugin` | Voir les plugins installés et les marketplaces |
 | `/planifier <demande>` | Programmer une tâche récurrente ou à une heure précise |
 | `/help` | Toutes les commandes et raccourcis |

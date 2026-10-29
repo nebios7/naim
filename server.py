@@ -678,6 +678,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/plugins":
             import plugins
             self.send_json({"plugins": plugins.all_plugins(), "commands": plugins.commands()})
+        elif path == "/api/mods":
+            import mods
+            self.send_json({"mods": mods.listing(with_code=q.get("code") == "1"), "dir": str(mods.DIR)})
         elif path == "/api/libs":
             import libs
             self.send_json({"libs": libs.listing()})
@@ -1377,6 +1380,10 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/detach":  # « Exécuter en arrière-plan » on the command running now
             agent = _agents.get(self.read_json().get("run_id", ""))
             self.send_json({"ok": bool(agent and agent.request_detach())})
+        elif path == "/api/mods":  # « /mods on|off <nom> »
+            import mods
+            b = self.read_json()
+            self.send_json(mods.switch(b.get("name", ""), bool(b.get("enabled"))))
         elif path == "/api/plugins/market":  # « /plugin marketplace add », « /plugin install », hooks on/off
             b = self.read_json()
             try:

@@ -892,5 +892,35 @@ class OwnToolIsNotSelfChange(unittest.TestCase):
         self.assertTrue(t('cp x.py "/Users/x/Library/Application Support/Naim/app/naimtools.py"'))
         self.assertTrue(t('naim-pdf a.html "/Users/x/Library/Application Support/Naim/app/out.pdf"'))
 
+
+class Mods(unittest.TestCase):
+    """~/.naim/mods/<nom>/: listed with their code when on; /mods off keeps the files and stops loading the code."""
+
+    def test_list_and_switch(self):
+        import mods
+        with tempfile.TemporaryDirectory() as d:
+            old = mods.DIR, mods.OFF
+            mods.DIR, mods.OFF = Path(d), Path(d) / ".eteints.json"
+            try:
+                m = Path(d) / "compteur"
+                m.mkdir()
+                (m / "mod.json").write_text('{"description": "compte"}')
+                (m / "mod.js").write_text("naim.band('x', 'ok');")
+                (Path(d) / "vide").mkdir()  # no code: not a mod
+                got = mods.listing(with_code=True)
+                self.assertEqual([x["name"] for x in got], ["compteur"])
+                self.assertEqual(got[0]["js"], "naim.band('x', 'ok');")
+                self.assertTrue(mods.switch("compteur", False)["ok"])
+                got = mods.listing(with_code=True)[0]
+                self.assertFalse(got["enabled"])
+                self.assertNotIn("js", got)
+                self.assertTrue((m / "mod.js").exists())
+                self.assertTrue(mods.listing()[0]["description"] == "compte")
+                self.assertIn("error", mods.switch("../x", True))
+                mods.switch("compteur", True)
+                self.assertTrue(mods.listing()[0]["enabled"])
+            finally:
+                mods.DIR, mods.OFF = old
+
 if __name__ == "__main__":
     unittest.main()

@@ -491,6 +491,15 @@ footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #fold
 .pill { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 4px 8px; border-radius: 7px; }
 .pill:hover { background: var(--hover); color: var(--text); }
 .pill:focus:not(:focus-visible) { outline: none; }  /* no ring after a click; the keyboard still shows where it is */
+/* mods: a band written by a mod sits above the message box, like the live bar */
+.modband { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; color: var(--muted); background: var(--panel); }
+.modband[hidden] { display: none; }
+.modband .mbody { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modband .mhide { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 3px 8px; border-radius: 6px; }
+.modband .mhide:hover { background: var(--hover); color: var(--text); }
+.modband[data-tone="ok"] .mbody { color: #4a9b6e; }
+.modband[data-tone="warn"] .mbody { color: #c08a2b; }
+.modband[data-tone="alert"] { border-color: #c4554d66; } .modband[data-tone="alert"] .mbody { color: #c4554d; }
 #send { border: 0; background: var(--send); color: var(--send-t); width: 34px; height: 34px; border-radius: 10px; font-size: 16px; flex-shrink: 0; }
 .ctx { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
 .ctx .ring { width: 13px; height: 13px; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--line) 0); -webkit-mask: radial-gradient(circle, transparent 3.5px, #000 4px); mask: radial-gradient(circle, transparent 3.5px, #000 4px); }
@@ -4343,6 +4352,7 @@ async function send(textArg, attsArg, opts = {}) {
   if (textArg === undefined && text.startsWith("/") && runSlash(text)) return;
   if (textArg === undefined && skillsAddCmd(text)) return;
   if (textArg === undefined && approvalAnswer(text)) return;
+  if (text) modsFire("send", text);
   const live = curRun();
   if (live && text && textArg === undefined) {  // Naim is working: guide it without stopping it
     $("#input").value = ""; autoGrow(); updateSendBtn();
@@ -4582,6 +4592,7 @@ async function stream(reply, v, message, hist, extra = {}) {
     setTimeout(() => { const boxes = $$(".delivbox"); boxes[boxes.length - 1]?.querySelector("[data-dopen]")?.click(); }, 300);
   }
   if (current === conv) { setBusy(false); updateCtx(); }
+  modsFire("reply", reply.content || "");
   await saveConv(conv); loadList();
   mentionFiles = null;  // files may have been created: the @ list is rebuilt next time
   if (run.queue?.length && current === conv) setTimeout(() => send(run.queue.join("\n\n")), 300);
@@ -4952,6 +4963,7 @@ const SLASH = [
   ["/git", "", "Ouvrir le panneau Git", () => naimCmd("git")],
   ["/mcp", "", "Gérer les serveurs MCP", () => naimCmd("mcp")],
   ["/plugin", "marketplace add <lien> | install <nom> | hooks <nom> on|off", "Ajouter une marketplace de plugins et installer un plugin (aussi ceux faits pour d'autres agents de code)", (a) => pluginCmd(a)],
+  ["/mods", "show|hide|on|off <nom> | reload", "Les mods de la fenêtre de Naim : les lister, en éteindre un, les recharger", (a) => modsCmd(a)],
   ["/skills", "", "Gérer les skills", () => naimCmd("skills")],
   ["/memory", "", "Voir la mémoire de Naim", () => naimCmd("memory")],
   ["/planifier", "<demande>", "Programmer une tâche récurrente ou à une heure précise", (a) => { schEdit = a ? { prompt: a } : null; setView("schedules"); }],
@@ -7786,6 +7798,88 @@ async function openDeepLink() {
     c.style.setProperty("--mx", `${e.clientX - r.left}px`); c.style.setProperty("--my", `${e.clientY - r.top}px`);
   }, { passive: true });
 })();
+// ======================================================================= Mods
+// Small changes to Naim's own window, written in ~/.naim/mods/<nom>/ (mod.js, mod.css) by the user or by Naim: a band
+// above the message box, a button next to the settings, a toast, a reaction to each message. /mods lists them,
+// /mods off <nom> switches one off (its files stay), /mods reload reloads them after a change.
+const MODS = { on: { send: [], reply: [] }, names: [] };
+function modApi(name) {
+  const key = (id) => `mod-${name}-${String(id).replace(/[^\w-]/g, "")}`;
+  return {
+    name,
+    band(id, html, opts = {}) {  // a band above the message box, with « Masquer » on its right; null removes it
+      // opts.tone: "ok" | "warn" | "alert" (the band's colour), opts.hideable: false to have no « Masquer »
+      let el = document.getElementById(key(id));
+      if (html == null) { el?.remove(); return null; }
+      if (!el) {
+        el = document.createElement("div"); el.id = key(id); el.className = "modband"; el.dataset.mod = name;
+        el.innerHTML = '<div class="mbody"></div><button class="mhide" title="Masquer ce bandeau (/mods show pour le revoir)">Masquer</button>';
+        el.querySelector(".mhide").onclick = () => { modHidden(key(id), true); el.hidden = true; toast(`Bandeau masqué · /mods show ${name} pour le revoir`); };
+        $(".composer").before(el);
+      }
+      el.querySelector(".mbody").innerHTML = html;
+      el.querySelector(".mhide").hidden = opts.hideable === false;
+      el.dataset.tone = opts.tone || "";
+      el.hidden = opts.hideable !== false && modHidden(key(id));
+      return el.querySelector(".mbody");
+    },
+    button(id, opts) {  // a button in the row under the message box: { label, title, onClick }; null removes it
+      let el = document.getElementById(key(id));
+      if (opts == null) { el?.remove(); return null; }
+      const { label = "", title = "", onClick } = opts;
+      if (!el) { el = document.createElement("button"); el.id = key(id); el.className = "pill modbtn"; $(".ctools .spacer").before(el); }
+      el.textContent = label; el.title = title; el.onclick = onClick || null; return el;
+    },
+    toast: (text) => toast(String(text)),
+    on(event, fn) { (MODS.on[event] || []).push({ name, fn }); },  // "send" (text) · "reply" (text of the answer)
+    send: (text) => send(String(text)),
+    store: {
+      get(k, d) { try { const v = localStorage.getItem(key(k)); return v == null ? d : JSON.parse(v); } catch { return d; } },
+      set(k, v) { try { localStorage.setItem(key(k), JSON.stringify(v)); } catch {} },
+    },
+  };
+}
+function modHidden(k, v) {  // the bands the user hid, kept from one opening to the next
+  let s; try { s = JSON.parse(localStorage.getItem("naim-mods-hidden") || "[]"); } catch { s = []; }
+  if (v === undefined) return s.includes(k);
+  s = v ? [...new Set([...s, k])] : s.filter((x) => !x.startsWith(k));
+  try { localStorage.setItem("naim-mods-hidden", JSON.stringify(s)); } catch {}
+}
+function modsFire(event, arg) {
+  for (const h of MODS.on[event] || []) { try { h.fn(arg); } catch (e) { console.error(`mod ${h.name}`, e); } }
+}
+async function loadMods() {
+  $$(".modband, .modbtn, style[data-mod]").forEach((el) => el.remove());
+  MODS.on = { send: [], reply: [] }; MODS.names = [];
+  const { mods = [] } = await api("/api/mods?code=1").catch(() => ({}));
+  for (const m of mods.filter((x) => x.enabled)) {
+    if (m.css) { const s = document.createElement("style"); s.dataset.mod = m.name; s.textContent = m.css; document.head.append(s); }
+    try { if (m.js) new Function("naim", `"use strict";\n${m.js}\n//# sourceURL=mod-${m.name}.js`)(modApi(m.name)); MODS.names.push(m.name); }
+    catch (e) { toast(`Mod « ${m.name} » : ${e.message}`); console.error(`mod ${m.name}`, e); }
+  }
+}
+async function modsCmd(arg) {
+  const [a0, a1] = String(arg || "").trim().split(/\s+/);
+  if ((a0 === "on" || a0 === "off") && a1) {
+    const r = await api("/api/mods", { method: "POST", body: { name: a1, enabled: a0 === "on" } });
+    if (r.error) return toast(r.error);
+    await loadMods(); return toast(`Mod « ${a1} » ${a0 === "on" ? "allumé" : "éteint"}`);
+  }
+  if (a0 === "show" || a0 === "hide") {  // « Masquer » and back, without switching the mod off
+    const bands = $$(".modband").filter((b) => !a1 || b.dataset.mod === a1);
+    if (!bands.length) return toast(a1 ? `Aucun bandeau du mod « ${a1} »` : "Aucun bandeau de mod");
+    bands.forEach((b) => { modHidden(b.id, a0 === "hide"); b.hidden = a0 === "hide"; });
+    return toast(a0 === "show" ? "Bandeau affiché" : "Bandeau masqué");
+  }
+  if (a0 === "reload") { await loadMods(); return toast(`Mods rechargés (${MODS.names.length})`); }
+  const { mods = [], dir = "~/.naim/mods" } = await api("/api/mods").catch(() => ({}));
+  pluginCard(mods.length
+    ? `**Mods** (dans \`${dir}\`) :\n\n` + mods.map((m) => `- \`${m.name}\` ${m.enabled ? "allumé" : "éteint"}${m.description ? " — " + m.description : ""}`).join("\n")
+      + "\n\n`/mods hide <nom>` / `/mods show <nom>` pour masquer ou revoir son bandeau, `/mods off <nom>` pour l'enlever (ses fichiers restent), `/mods on <nom>` pour le remettre, `/mods reload` après une modification."
+    : `Aucun mod pour l'instant. Demande à Naim, en mode Agent : « fais-moi un mod qui … » (un bandeau, un bouton…). Il l'écrit dans \`${dir}\`.`);
+}
+loadMods();
+
 </script>
 </body>
 </html>
