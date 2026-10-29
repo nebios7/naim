@@ -1,0 +1,101 @@
+<section class="cover">
+  <div>
+    <div class="kicker">Cours · Niveau intermédiaire</div>
+    <h1>Python pour l'analyse de données</h1>
+    <div class="subtitle">Des listes aux statistiques : structures, fonctions, complexité et un premier modèle de régression.</div>
+    <div class="band"></div>
+  </div>
+  <div class="meta">
+    <div><b>Auteur</b>Naim</div>
+    <div><b>Date</b>30 octobre 2026</div>
+    <div><b>Durée</b>3 séances de 2 h</div>
+  </div>
+</section>
+
+<section class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#c1">Les structures de données</a></li>
+    <li><a href="#c2">Fonctions et complexité</a></li>
+    <li><a href="#c3">Statistiques et régression</a></li>
+  </ol>
+</section>
+
+<section class="chapter" id="c1">
+  <h2><span class="num">01</span>Les structures de données</h2>
+  <p class="lead">Choisir la bonne structure, c'est déjà résoudre la moitié du problème : une recherche dans un dictionnaire est presque instantanée, dans une liste elle parcourt tout.</p>
+
+  <h3>Listes, dictionnaires, ensembles</h3>
+  <table>
+    <thead><tr><th>Structure</th><th>Exemple</th><th class="num">Recherche</th><th>Usage</th></tr></thead>
+    <tbody>
+      <tr><td><strong>list</strong></td><td><code>[3, 1, 4]</code></td><td class="num"><span class="tex">O(n)</span></td><td>Une suite ordonnée</td></tr>
+      <tr><td><strong>dict</strong></td><td><code>{"a": 1}</code></td><td class="num"><span class="tex">O(1)</span></td><td>Retrouver par une clé</td></tr>
+      <tr><td><strong>set</strong></td><td><code>{1, 2, 3}</code></td><td class="num"><span class="tex">O(1)</span></td><td>Éliminer les doublons</td></tr>
+      <tr><td><strong>tuple</strong></td><td><code>(48.8, 2.3)</code></td><td class="num"><span class="tex">O(n)</span></td><td>Une valeur figée</td></tr>
+    </tbody>
+    <caption>Tableau 1 — Les quatre structures de base et le coût d'une recherche.</caption>
+  </table>
+
+  <pre class="code python"><span class="file">compter.py</span>from collections import Counter
+
+def mots_frequents(texte, n=3):
+    """Les n mots les plus fréquents d'un texte."""
+    mots = texte.lower().split()
+    return Counter(mots).most_common(n)
+
+print(mots_frequents("le chat et le chien et le lapin"))  # [('le', 3), ('et', 2), ('chat', 1)]</pre>
+
+  <div class="callout">
+    <div class="title">À retenir</div>
+    <p>Pour savoir si un élément est présent, convertissez la liste en <code>set</code> une fois : chaque test devient immédiat.</p>
+  </div>
+</section>
+
+<section class="chapter" id="c2">
+  <h2><span class="num">02</span>Fonctions et complexité</h2>
+  <p>Le coût d'un algorithme se mesure en nombre d'opérations selon la taille <span class="tex">n</span> des données. Trier par fusion coûte</p>
+  <div class="tex-block">T(n) = 2\,T\!\left(\frac{n}{2}\right) + O(n) \;\Longrightarrow\; T(n) = O(n \log n)</div>
+
+  <figure>
+    <img src="complexite.svg">
+    <figcaption><b>Figure 1</b> — Nombre d'opérations pour trier <span class="tex">n</span> éléments.</figcaption>
+  </figure>
+
+  <figure class="half">
+    <svg viewBox="0 0 520 150" font-family="-apple-system, Helvetica, Arial" font-size="13">
+      <defs><marker id="fl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b6a65"/></marker></defs>
+      <rect x="4" y="50" width="130" height="50" rx="8" fill="#f6f2ea" stroke="#c96442"/><text x="69" y="80" text-anchor="middle" fill="#1f1e1d">Données brutes</text>
+      <rect x="195" y="50" width="130" height="50" rx="8" fill="#e5edf5" stroke="#4f7fae"/><text x="260" y="80" text-anchor="middle" fill="#1f1e1d">Nettoyage</text>
+      <rect x="386" y="50" width="130" height="50" rx="8" fill="#e9eee0" stroke="#6f8452"/><text x="451" y="80" text-anchor="middle" fill="#1f1e1d">Analyse</text>
+      <line x1="136" y1="75" x2="192" y2="75" stroke="#6b6a65" stroke-width="1.5" marker-end="url(#fl)"/>
+      <line x1="327" y1="75" x2="383" y2="75" stroke="#6b6a65" stroke-width="1.5" marker-end="url(#fl)"/>
+    </svg>
+    <figcaption><b>Figure 2</b> — Les trois étapes d'un traitement de données.</figcaption>
+  </figure>
+
+  <div class="callout warn">
+    <div class="title">Attention</div>
+    <p>Une boucle dans une boucle sur la même liste coûte <span class="tex">O(n^2)</span> : à 100 000 éléments, c'est dix milliards d'opérations.</p>
+  </div>
+</section>
+
+<section class="chapter" id="c3">
+  <h2><span class="num">03</span>Statistiques et régression</h2>
+  <div class="kpis">
+    <div class="kpi"><b>1 240</b><span>observations</span></div>
+    <div class="kpi accent"><b>0,87</b><span>corrélation r</span></div>
+    <div class="kpi up"><b>+12 %</b><span>sur un an</span></div>
+    <div class="kpi"><b>3</b><span>variables</span></div>
+  </div>
+  <p>La droite des moindres carrés <span class="tex">y = a x + b</span> minimise la somme des écarts au carré ; sa pente vaut</p>
+  <div class="tex-block">a = \frac{\sum_{i=1}^{n} (x_i - \bar{x})(y_i - \bar{y})}{\sum_{i=1}^{n} (x_i - \bar{x})^2}</div>
+  <div class="grid2">
+    <figure><img src="ventes.svg"><figcaption><b>Figure 3</b> — Ventes mensuelles (k€).</figcaption></figure>
+    <figure><img src="repartition.svg"><figcaption><b>Figure 4</b> — Répartition par canal.</figcaption></figure>
+  </div>
+  <div class="callout ok">
+    <div class="title">Exercice</div>
+    <p>Écrivez <code>pente(xs, ys)</code> sans bibliothèque, puis vérifiez le résultat avec <code>statistics.linear_regression</code>.</p>
+  </div>
+</section>

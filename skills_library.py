@@ -163,6 +163,8 @@ Le chemin du document, ce qu'il contient en 2 lignes, et ce que tu as vérifié 
    Vérifier chaque graphique avec `look_at`.
 5. Livrer : script `analyse.py` + graphiques + résumé en 5 points avec les chiffres clés.
    Rapport demandé : suivre le skill rapport (page HTML avec les graphiques, puis PDF).
+
+Pour livrer l'analyse en PDF : skill pdf-pro (même style que tous les PDF de Naim, graphiques avec `pdfpro.py chart`).
 """),
     "schemas": ("Dessiner, modifier et expliquer un schéma (PNG/SVG/PDF) : architecture, flux, séquence, base de données, organigramme, Gantt.", r"""# Schémas (Mermaid → fichier)
 
@@ -284,16 +286,11 @@ du rapport (chemin relatif à la page), puis convert_document.
 1. Rassembler le fond : lire les fichiers / documents fournis (read_file lit aussi .docx, .pdf, .xlsx), chercher sur le
    web si besoin (web_search puis web_fetch, citer les sources). Ne rien inventer : chiffres et faits vérifiés seulement.
 2. Plan avec update_todos : page de titre, sommaire, 4 à 8 sections, conclusion / recommandations, annexes.
-3. Visuels d'abord : schémas avec make_diagram (PNG), graphiques de données avec matplotlib (PNG, dans un venv),
-   enregistrés dans `rapport/img/`.
-4. Écrire `rapport/rapport.html` (une seule page HTML, CSS dans `<style>`) :
-   - `@page { size: A4; margin: 18mm 16mm }`, police `-apple-system, Helvetica, Arial` 10.5pt, interligne 1.45.
-   - Page de titre : `<section class="cover" style="page-break-after: always">` (titre, sous-titre, auteur, date).
-   - Sommaire : liste des sections avec leurs numéros.
-   - Chaque grande section : `<h2 style="page-break-before: always">` ; titres en couleur, tableaux à bordures fines,
-     en-têtes de tableau sur fond clair, `<figure><img src="img/x.png" style="width:100%"><figcaption>…</figcaption></figure>`.
-   - Encadrés « À retenir » : `<div style="background:#eef4fb;border-left:4px solid #1f5fa8;padding:8px 12px">`.
-5. `convert_document` source=`rapport/rapport.html` output=`rapport/rapport.pdf`.
+3. Le style est déjà fait : suivre le skill pdf-pro (use_skill pdf-pro) et imiter son modèle
+   `~/.naim/plugins/pdf-pro/skills/pdf-pro/exemples/cours.html` (couverture, sommaire, chapitres, encadrés, chiffres clés).
+   Graphiques : `pdfpro.py chart bars|line|donut données.json x.svg` (rien à installer) ; schémas : make_diagram ou un SVG.
+4. Écrire `rapport/page.html` : seulement le contenu, avec les classes du thème (pas de `<style>`, pas de couleur à soi).
+5. `python3 ~/.naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py render rapport/page.html rapport/rapport.pdf`.
 6. `look_at` page 1 puis une page avec schéma / tableau : rien de coupé, images nettes, pas de page presque vide.
    Corriger le HTML et reconvertir si besoin.
 7. Réponse : nombre de pages, plan en une ligne par section, fichiers produits. Mail demandé → send_email avec le PDF.

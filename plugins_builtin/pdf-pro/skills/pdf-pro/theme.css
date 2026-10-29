@@ -1,0 +1,99 @@
+/* pdf-pro: one look for every PDF Naim makes (courses, analyses, reports, plans). Warm, airy, made for print:
+   A4, nothing cut between two pages, the same colours in the text, the tables, the charts and the diagrams. */
+:root {
+  --ink: #1f1e1d; --muted: #6b6a65; --line: #e6e2d8; --paper: #ffffff; --cream: #f6f2ea; --sand: #efe9dd;
+  --clay: #c96442; --clay-soft: #f4e3db; --blue: #4f7fae; --blue-soft: #e5edf5; --olive: #6f8452; --olive-soft: #e9eee0;
+  --gold: #b7862b; --gold-soft: #f5ecd9; --red: #b4473f; --red-soft: #f6e1df;
+  --serif: "Iowan Old Style", "Charter", "Palatino", Georgia, serif;
+  --sans: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: "SF Mono", Menlo, Monaco, monospace;
+}
+@page { size: A4; margin: 20mm 18mm 20mm 18mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--paper); }
+body { font-family: var(--sans); font-size: 10.5pt; line-height: 1.55; color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+/* ---------- cover */
+.cover { height: 232mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
+.cover .kicker { font-size: 9pt; letter-spacing: .14em; text-transform: uppercase; color: var(--clay); font-weight: 600; }
+.cover h1 { font-family: var(--serif); font-weight: 500; font-size: 34pt; line-height: 1.12; margin: 14mm 0 6mm; letter-spacing: -.01em; }
+.cover .subtitle { font-size: 13pt; color: var(--muted); max-width: 140mm; }
+.cover .band { height: 3px; width: 46mm; background: var(--clay); margin-top: 10mm; border-radius: 2px; }
+.cover .meta { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 4mm 14mm; font-size: 9.5pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 5mm; }
+.cover .meta b { display: block; color: var(--ink); font-weight: 500; }
+
+/* ---------- table of contents */
+.toc { page-break-after: always; }
+.toc h2 { margin-top: 0; }
+.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+.toc li { counter-increment: toc; display: flex; gap: 4mm; padding: 2.6mm 0; border-bottom: 1px solid var(--line); font-size: 11pt; }
+.toc li::before { content: counter(toc, decimal-leading-zero); color: var(--clay); font-variant-numeric: tabular-nums; width: 8mm; }
+.toc a { color: inherit; text-decoration: none; }
+
+/* ---------- titles and text */
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 500; color: var(--ink); page-break-after: avoid; break-after: avoid; }
+h2 { font-size: 20pt; line-height: 1.2; margin: 0 0 5mm; padding-top: 2mm; }
+h2 .num { color: var(--clay); margin-right: 3mm; font-variant-numeric: tabular-nums; }
+section.chapter { page-break-before: always; }
+section.chapter:first-of-type { page-break-before: auto; }
+h3 { font-size: 13.5pt; margin: 7mm 0 2.5mm; }
+h4 { font-family: var(--sans); font-size: 10.5pt; font-weight: 600; margin: 5mm 0 1.5mm; }
+p { margin: 0 0 3mm; orphans: 3; widows: 3; }
+.lead { font-size: 12pt; color: var(--muted); line-height: 1.5; margin-bottom: 6mm; }
+ul, ol { margin: 0 0 3mm; padding-left: 6mm; } li { margin: 1mm 0; }
+a { color: var(--blue); text-decoration: none; }
+strong { font-weight: 600; }
+.muted { color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 6mm 0; }
+
+/* ---------- callouts (À retenir, Attention, Astuce, Définition) */
+.callout { border-radius: 6px; padding: 3.5mm 4.5mm; margin: 4mm 0; background: var(--cream); border-left: 3px solid var(--clay); page-break-inside: avoid; break-inside: avoid; }
+.callout > .title { font-size: 8.5pt; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--clay); margin-bottom: 1.5mm; }
+.callout p:last-child { margin-bottom: 0; }
+.callout.info { background: var(--blue-soft); border-color: var(--blue); } .callout.info > .title { color: var(--blue); }
+.callout.ok { background: var(--olive-soft); border-color: var(--olive); } .callout.ok > .title { color: var(--olive); }
+.callout.warn { background: var(--gold-soft); border-color: var(--gold); } .callout.warn > .title { color: var(--gold); }
+.callout.danger { background: var(--red-soft); border-color: var(--red); } .callout.danger > .title { color: var(--red); }
+
+/* ---------- key figures */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(36mm, 1fr)); gap: 3.5mm; margin: 4mm 0 6mm; page-break-inside: avoid; }
+.kpi { border: 1px solid var(--line); border-radius: 6px; padding: 3.5mm 4mm; background: var(--paper); }
+.kpi b { display: block; font-family: var(--serif); font-size: 20pt; font-weight: 500; line-height: 1.1; color: var(--ink); }
+.kpi span { font-size: 8.5pt; color: var(--muted); }
+.kpi.up b { color: var(--olive); } .kpi.down b { color: var(--red); } .kpi.accent b { color: var(--clay); }
+
+/* ---------- tables */
+table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 9.5pt; page-break-inside: avoid; break-inside: avoid; }
+thead th { text-align: left; font-weight: 600; font-size: 8.5pt; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-bottom: 1.5px solid var(--ink); padding: 2mm 2.5mm; }
+td { padding: 2.2mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:nth-child(even) td { background: #fbf9f5; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table caption { caption-side: bottom; text-align: left; font-size: 8.5pt; color: var(--muted); padding-top: 2mm; }
+.tag { display: inline-block; font-size: 8pt; padding: .3mm 2mm; border-radius: 10px; background: var(--sand); color: var(--ink); }
+.tag.ok { background: var(--olive-soft); color: var(--olive); } .tag.warn { background: var(--gold-soft); color: var(--gold); }
+.tag.danger { background: var(--red-soft); color: var(--red); } .tag.info { background: var(--blue-soft); color: var(--blue); }
+
+/* ---------- figures (charts, diagrams, plans) */
+figure { margin: 5mm 0; page-break-inside: avoid; break-inside: avoid; }
+figure img, figure svg { width: 100%; height: auto; display: block; }
+figure.half { width: 60%; margin-left: auto; margin-right: auto; }
+figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 2mm; }
+figcaption b { color: var(--ink); font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; page-break-inside: avoid; }
+
+/* ---------- code */
+pre { font-family: var(--mono); font-size: 8.6pt; line-height: 1.5; background: #faf8f4; border: 1px solid var(--line); border-radius: 6px; padding: 3.5mm 4mm; margin: 3mm 0 5mm; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; break-inside: avoid; }
+pre .file { display: block; font-family: var(--sans); font-size: 8pt; color: var(--muted); margin: -1mm 0 2mm; }
+code { font-family: var(--mono); font-size: .9em; background: var(--sand); padding: .2mm 1.2mm; border-radius: 3px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+.k { color: #9a3f8e; } .s { color: #5e7d3a; } .c { color: #9b968c; font-style: italic; } .n { color: #b7672b; } .f { color: #2f6aa6; } .b { color: #b4473f; }
+
+/* ---------- mathematics (KaTeX, from the Mac: no internet) */
+.tex-block { margin: 4mm 0; text-align: center; page-break-inside: avoid; }
+.katex { font-size: 1.08em; }
+
+/* ---------- small things */
+.two-col { columns: 2; column-gap: 8mm; }
+.footer-note { font-size: 8pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 2mm; margin-top: 8mm; }
+.avoid-break { page-break-inside: avoid; break-inside: avoid; }
+.page-break { page-break-after: always; }

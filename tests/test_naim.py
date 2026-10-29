@@ -976,5 +976,30 @@ class ModsStatsAndSecurity(unittest.TestCase):
             self.assertEqual((sec["autorisations"], sec["commandes_interdites"]), ({"auto_yes": True}, 1))
             self.assertEqual(sec["plugins_hooks"], [{"nom": "ecc", "hooks_allumes": True}])
 
+
+class PdfPro(unittest.TestCase):
+    """pdf-pro: the theme joins the content, code is coloured, charts come out as SVG, the right requests pick it."""
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pdfpro", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        self.p = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.p)
+
+    def test_page_and_code(self):
+        out = self.p.page('<h1>Cours</h1><pre class="code python"><span class="file">a.py</span>def f(x):\n    return "ok"  # fin</pre>')
+        self.assertIn("<title>Cours</title>", out)
+        self.assertIn("@page { size: A4", out)
+        self.assertIn('<span class="file">a.py</span>', out)
+        self.assertIn('<span class="k">def</span>', out)
+        self.assertIn('<span class="s">&quot;ok&quot;</span>', out)
+        self.assertIn('<span class="c"># fin</span>', out)
+
+    def test_charts(self):
+        for svg in (self.p.bars([["a", 1], ["b", 3]], "T"), self.p.bars({"a": 2}, horizontal=True),
+                    self.p.line({"series": {"x": [["1", 1], ["2", 4]], "y": [["1", 2], ["2", 3]]}}), self.p.donut([["a", 1], ["b", 1]])):
+            self.assertTrue(svg.startswith("<svg") and svg.endswith("</svg>"))
+        self.assertIn("#c96442", self.p.bars([["a", 1]]))
+
 if __name__ == "__main__":
     unittest.main()
