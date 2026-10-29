@@ -136,9 +136,11 @@ def long_skills():
             for k in (m.get("triggers") or {})}
 
 
-def priority_skills():
-    """Skills of the plugins marked « priority » in their plugin.json: their words are checked before Naim's own."""
-    return [k for p in _enabled() if (_manifest(Path(p["path"])) or {}).get("priority")
+def priority_skills(level=True):
+    """Skills of the plugins marked « priority » in their plugin.json: their words are checked before Naim's own.
+    level="after-specific": a broad one (a style for every PDF) checked right after Naim's specialised skills
+    (a CV, a report, a plan), which then use it themselves, and before the general ones."""
+    return [k for p in _enabled() if ((_manifest(Path(p["path"])) or {}).get("priority") or False) == level
             for k in ((_manifest(Path(p["path"])) or {}).get("triggers") or {})]
 
 

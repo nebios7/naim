@@ -39,7 +39,8 @@ Quand une demande revient ou demande un vrai savoir-faire (des PDF soignés, un 
 4. **Le SKILL.md** : QUAND s'en servir (la description), les commandes EXACTES avec leurs chemins, la méthode en
    étapes numérotées, les règles. Court et concret.
 5. **Le plugin.json** : `name`, `version`, `description`, `"skills": "skills"`, `triggers` (les mots qui le
-   choisissent, une expression régulière), `"priority": true` s'il doit passer avant les skills généraux.
+   choisissent, une expression régulière), `"priority": true` s'il doit passer avant les skills généraux, `"priority": "after-specific"` s'il est large
+   (un style pour tous les PDF) : il passe alors après les skills spécialisés (CV, rapport, plan), qui s'en servent.
 6. **Vérifier qui est choisi** : `python3 ~/.naim/plugins/auto-amelioration/skills/s-ameliorer/verifier_skill.py
    --attendu <nom> "phrase 1" "phrase 2"`, avec 3 phrases qui doivent le choisir ET 2 proches qui ne doivent pas
    (sans `--attendu`, elles affichent le skill qu'elles prennent). Ajuster les mots jusqu'à ce que tout soit juste.
