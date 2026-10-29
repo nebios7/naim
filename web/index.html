@@ -269,6 +269,9 @@ html { background: var(--bg); overflow: hidden; }  /* never a white band around 
    the list's button at its top, the « Accueil | Code » switch under them; closed: at the start of the header */
 html.macapp body.noside main > header#chatHeader, html.macapp body.noside main > .pagebar,
 html.macapp body.vnarrow:not(.sideopen) main > header#chatHeader, html.macapp body.vnarrow:not(.sideopen) main > .pagebar { padding-left: 86px; }
+/* the panel covering the window (narrow window): its tabs start after the Mac buttons (close, minimise, zoom), like the header */
+html.macapp body.vnarrow #panel.show .ptabs { padding-left: 86px; }
+@media (max-width: 900px) { html.macapp #panel.show .ptabs { padding-left: 86px; } }
 html.macapp body:not(.vnarrow):not(.noside) aside#side, html.macapp body.vnarrow.sideopen aside#side { padding-top: 52px !important; }
 html.macapp body:not(.vnarrow):not(.noside) #chatHeader #sideBtn,
 html.macapp body:not(.vnarrow):not(.noside) main > .pagebar > [data-cmd=sidebar] { position: fixed; left: 84px; top: 9px; z-index: 40; }
