@@ -15,7 +15,8 @@ toute seule. Il ne touche jamais au programme de Naim : pour l'enlever, l'utilis
   - `naim.band(id, html, { tone })` : un bandeau d'une ligne au-dessus de la zone de message, avec un bouton
     « Masquer » à droite (déjà fourni : ne le refais pas). `tone` : `"ok"` (vert), `"warn"` (orange), `"alert"` (rouge),
     rien = gris. Rappelle-le pour le mettre à jour ; `null` l'enlève ; `{ hideable: false }` sans « Masquer ».
-    Il renvoie la zone du texte, pour y attacher des clics. Sépare les infos par ` · ` (ex. `Limites 5 h 42 % · 7 jours 18 %`).
+    Donne-lui du texte sur une ligne (des `<span>`, pas de `<div>` ni de style de cadre : le bandeau a déjà le sien,
+    à la largeur de la zone de message). Il renvoie la zone du texte, pour y attacher des clics. Sépare les infos par ` · ` (ex. `Limites 5 h 42 % · 7 jours 18 %`).
   - `naim.button(id, { label, title, onClick })` : un bouton dans la ligne sous la zone de message (`null` l'enlève).
   - `naim.toast(texte)` : un court message en bas de la fenêtre.
   - `naim.on("send", (texte) => …)` : à chaque message envoyé ; `naim.on("reply", (texte) => …)` : à chaque réponse finie.

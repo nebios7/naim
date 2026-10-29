@@ -492,9 +492,13 @@ footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #fold
 .pill:hover { background: var(--hover); color: var(--text); }
 .pill:focus:not(:focus-visible) { outline: none; }  /* no ring after a click; the keyboard still shows where it is */
 /* mods: a band written by a mod sits above the message box, like the live bar */
-.modband { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; color: var(--muted); background: var(--panel); }
+.modband { display: flex; align-items: center; gap: 10px; max-width: min(var(--w), 100%); box-sizing: border-box; margin: 0 auto 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; color: var(--muted); background: var(--panel); }
 .modband[hidden] { display: none; }
 .modband .mbody { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* one line, like the bands of a coding assistant, whatever blocks the mod puts in it: its parts follow each other with « · » */
+.modband .mbody, .modband .mbody * { text-align: left !important; }
+.modband .mbody > *, .modband .mbody > * > * { display: inline !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; }
+.modband .mbody > * + *::before { content: " · "; color: var(--muted); }
 .modband .mhide { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 3px 8px; border-radius: 6px; }
 .modband .mhide:hover { background: var(--hover); color: var(--text); }
 .modband[data-tone="ok"] .mbody { color: #4a9b6e; }
@@ -1374,6 +1378,7 @@ body.home #toBottom, body.home #liveBar { display: none !important; }
 body.home #thread { padding-bottom: 0; }
 body.home footer { padding-bottom: 6vh; }
 body.home .composer { max-width: min(var(--w), 720px); box-shadow: 0 6px 24px rgb(0 0 0 / .10); }
+body.home .modband { max-width: min(var(--w), 720px); }  /* the same width as the message box on the home screen */
 body.home footer > .ctools { max-width: min(var(--w), 720px, 100%); }  /* the settings row: exactly as wide as the box above it */
 body.home .empty { margin: 0 auto 22px; }
 .empty .hero { display: flex; align-items: center; justify-content: center; gap: 14px; }

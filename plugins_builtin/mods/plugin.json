@@ -1,6 +1,6 @@
 {
   "name": "mods",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Créer des mods : de petits changements de la fenêtre de Naim (un bandeau au-dessus de la zone de message, un bouton, une réaction à chaque réponse), écrits dans ~/.naim/mods.",
   "skills": "skills",
   "triggers": {
