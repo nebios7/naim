@@ -3653,7 +3653,7 @@ class Agent:
                     announced = ANNOUNCE_RE.search(content) or (sentences and ANNOUNCE_RE.search(sentences[-1]))
                     if (announced and len(content) < 600 and not self.plan
                             and (self._stall_pushbacks < 3 or self._announce_push_at < self._last_progress)):
-                        # « Je vais supprimer les fichiers… », « Je continue avec la page 188. » without doing it;
+                        # « Je vais supprimer les fichiers… », « Je continue avec l'étape suivante. » without doing it;
                         # past three times, again only if it moved forward since the last time (never in a circle)
                         self._stall_pushbacks += 1
                         self._announce_push_at = self._last_progress
