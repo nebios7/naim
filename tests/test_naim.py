@@ -215,6 +215,23 @@ class ScriptsInCommands(unittest.TestCase):
             self.assertEqual(a.run_command(good), "exit code 0\nL'apprentissage")
 
 
+class ReadARange(unittest.TestCase):
+    """The middle or the end of a long file, without reading all of it: lines numbered, and where to go on."""
+
+    def test_offset_and_limit(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "log.txt").write_text("".join(f"ligne {i}\n" for i in range(1, 1001)))
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            r = a.call_tool("read_file", {"path": "log.txt", "offset": 998, "limit": 10})
+            self.assertTrue(r.startswith("[log.txt · lignes 998–1000 sur 1000. (fin du fichier)]"), r)
+            self.assertIn("   999\tligne 999", r)
+            r = a.read_file("log.txt", offset=10, limit=2)
+            self.assertIn("Suite : offset=12.", r)
+            self.assertNotIn("ligne 12", r)
+            self.assertTrue(a.read_file("log.txt", offset=5000).startswith("error:"))
+            self.assertEqual(a.read_file("log.txt").count("\n"), 1000)  # without a range: the whole file, as before
+
+
 class SelfInstall(unittest.TestCase):
     """Asked to, Naim adds to its own library any MCP server (checked by starting it) and the user's hooks."""
 

@@ -1051,7 +1051,23 @@ class Agent:
                 return src
         return None
 
-    def read_file(self, path):
+    def _read_lines(self, p, offset, limit):
+        """Lines offset… of a text file (1 = the first), numbered like « cat -n »; read as a stream, so a log of
+        several Go costs only the lines asked for."""
+        start = max(1, int(offset or 1))
+        count = max(1, min(int(limit or 400), 2000))
+        out, n = [], 0
+        with open(p, errors="replace") as f:
+            for n, line in enumerate(f, 1):
+                if start <= n < start + count:
+                    out.append(f"{n:>6}\t{line.rstrip(chr(10))[:2000]}")
+        if not out:
+            return f"error: {self.rel(p)} has {n} lines; line {start} does not exist."
+        end = start + len(out) - 1
+        more = f" Suite : offset={end + 1}." if end < n else " (fin du fichier)"
+        return f"[{self.rel(p)} · lignes {start}–{end} sur {n}.{more}]\n" + "\n".join(out)
+
+    def read_file(self, path, offset=None, limit=None):
         p = self.resolve(path, read=True)
         if not p.is_file():
             return f"error: file not found: {path}"
@@ -1067,12 +1083,18 @@ class Agent:
             if b"\0" in f.read(8192):
                 return (f"error: {path} is a binary file ({p.stat().st_size} bytes), not text. Use a tool or a "
                         f"Python script suited to this format (run_command).")
+        if offset or limit:  # a range of lines, like the reference agent: the middle or the end of a long file
+            try:
+                return self._read_lines(p, offset, limit)
+            except ValueError:
+                return "error: offset and limit are line numbers (offset=1 is the first line)."
         size = p.stat().st_size
         if size > 1024 * 1024:  # a big file (log, CSV, dump…): its beginning, then read the rest by pieces
             with open(p, errors="replace") as f:
                 head = f.read(60000)
-            return (head + f"\n\n[… {self.rel(p)} fait {size / 1048576:.1f} Mo : seul le début est montré. Pour le reste, "
-                    f"run_command avec grep -n, sed -n 'A,Bp', tail, wc -l, ou un script Python qui le lit par morceaux.]")
+            return (head + f"\n\n[… {self.rel(p)} fait {size / 1048576:.1f} Mo : seul le début est montré. Pour le reste : "
+                    f"read_file avec offset (première ligne) et limit (nombre de lignes), ou run_command avec grep -n "
+                    f"pour trouver la ligne d'abord.]")
         text = p.read_text(errors="replace")
         self._remember_read(p, text)
         return text
