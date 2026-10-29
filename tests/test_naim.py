@@ -738,9 +738,11 @@ class FollowThePlan(unittest.TestCase):
 
     def test_what_is_an_announcement(self):
         for s in ("Je la traduis maintenant.", "Je l'écris maintenant.", "J'écris la suite.", "Je continue avec l'étape suivante.",
-                  "Je reprends là où j'en étais.", "Je vais continuer."):
+                  "Je reprends là où j'en étais.", "Je vais continuer.", "Je vais traiter les 4 étapes restantes.",
+                  "Je l'assemble maintenant.", "Je vais l'assembler."):
             self.assertTrue(naimtools.ANNOUNCE_RE.search(s), s)
-        for s in ("Tout est fini : le fichier est dans Fichiers.", "Si tu veux, je continue demain.", "Je te l'envoie si tu veux."):
+        for s in ("Tout est fini : le fichier est dans Fichiers.", "Si tu veux, je continue demain.", "Je te l'envoie si tu veux.",
+                  "Je vais bien, merci !", "Voici le fichier.", "Dis-moi si je dois continuer."):
             self.assertFalse(naimtools.ANNOUNCE_RE.search(s), s)
 
     def test_stops_when_nothing_moves(self):
@@ -877,6 +879,18 @@ class NoCopyLoop(unittest.TestCase):
             self.assertTrue(r[2].startswith("refused"))
             self.assertFalse((Path(d) / "fr/p003.md").exists())
 
+
+
+class OwnToolIsNotSelfChange(unittest.TestCase):
+    """Running Naim's own tool (naim-pdf) to make a user's PDF is not changing Naim: no « modifie Naim » question."""
+
+    def test_own_tool(self):
+        t = naimtools.touches_own_text
+        self.assertFalse(t('/Users/x/Library/Application\\ Support/Naim/bin/naim-pdf /Users/x/Documents/l.html /Users/x/Documents/l.pdf A4'))
+        self.assertFalse(t('"/Users/x/Library/Application Support/Naim/bin/naim-pdf" a.html b.pdf'))
+        self.assertTrue(t('"/Users/x/Library/Application Support/Naim/.venv/bin/pip" install requests'))
+        self.assertTrue(t('cp x.py "/Users/x/Library/Application Support/Naim/app/naimtools.py"'))
+        self.assertTrue(t('naim-pdf a.html "/Users/x/Library/Application Support/Naim/app/out.pdf"'))
 
 if __name__ == "__main__":
     unittest.main()

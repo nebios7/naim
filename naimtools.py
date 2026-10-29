@@ -61,6 +61,26 @@ def is_naim_itself(path):
     return any(p == o or o in p.parents for o in OWN_PATHS)
 
 
+OWN_TOOL = re.compile(r"Application\\? Support/Naim/bin/[^/\s]+$", re.I)
+
+
+def touches_own_text(command):
+    """Naim's own files named in what the command acts on. Running one of Naim's tools (bin/naim-pdf…) is not changing
+    Naim: that program word alone does not count (its pip or python in .venv still does)."""
+    for seg in re.split(r"&&|\|\||[;|]", command):
+        try:
+            words = shlex.split(seg)
+        except ValueError:
+            words = seg.split()
+        while words and re.match(r"^\w+=", words[0]):  # VAR=value prefix
+            words = words[1:]
+        if words and OWN_TOOL.search(words[0]):
+            words = words[1:]
+        if any(OWN_TEXT.search(w) for w in words):
+            return True
+    return False
+
+
 def command_writes(command):
     """True unless every part of the command only reads (cat, ls, grep, git log…), with no redirection into a file."""
     if re.search(r"(^|[^2&])>{1,2}\s*[^&\s]", command) or GIT_WRITE.search(command) or re.search(r"\bfind\b.*\s-(delete|exec)\b", command):
@@ -318,7 +338,7 @@ def repeating(text):
 
 
 # a reply that only announces an action (« Je vais envoyer… ») instead of doing it
-ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|j'(?:écris|attaque)\b|je (?:(?:la|le|les|en|y) |l')?(?:lance|crée|cherche|rédige|écris|"
+ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|j'(?:écris|attaque)\b|je vais (?!(?:bien|mal|mieux|très|trop|aussi)\b)(?:(?:la|le|les|en|y|leur|lui|te|vous) |l')?\w{3,}|je (?:(?:la|le|les|en|y) |l')?\w+[^.!?\n]{0,60}\b(?:maintenant|tout de suite|à présent|dès maintenant)\b|je (?:(?:la|le|les|en|y) |l')?(?:lance|crée|cherche|rédige|écris|"
                          r"envoie|prépare|regarde|vérifie|imprime|appelle|continue|reprends|traduis|passe (?:à|au|aux))\b|(?:je vais|laisse-moi|je dois|il (?:me )?faut|je commence par|commençons par)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
                          r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim|"
                          r"ajout|rajout|mett|chang|corrig|refai|dessin|termin|complét|rectifi|remplac|retouch|réécri|recré|"
@@ -1725,7 +1745,7 @@ class Agent:
     def _guard_own_command(self, command):
         """A command that writes into Naim's own files (or runs inside them): explicit yes needed. None = allowed."""
         inside = is_naim_itself(self.root)
-        if not (inside or OWN_TEXT.search(command)) or not command_writes(command):
+        if not (inside or touches_own_text(command)) or not command_writes(command):
             return None
         if self.approve("⚠ Commande qui modifie Naim lui-même", f"$ {command}\n\nElle touche le programme, les réglages ou "
                         "le modèle de Naim. Ne l'accepte que si tu as toi-même demandé de modifier Naim.", kind="sensitive"):

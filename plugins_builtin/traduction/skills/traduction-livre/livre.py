@@ -161,11 +161,24 @@ def figure(d, n, box=None):
           f"Dans fr/p{n:03d}.md, à sa place : ![Légende traduite](figures/p{n:03d}.png)")
 
 
+def next_step(d, left):
+    """The exact command to run next, ready to copy: after a pause or a summary, the work goes on the right way
+    (the pages first, then this tool's own assembly and PDF, never a PDF made from the scanned pages)."""
+    me = f'"{sys.executable}" "{Path(__file__).resolve()}"'
+    if left:
+        return f"Suite (à lancer maintenant) : {me} suivant \"{d}\""
+    pdf = Path.home() / "Library/Application Support/Naim/bin/naim-pdf"
+    return ("Suite (à lancer maintenant, dans cet ordre ; le PDF se fait avec CES commandes, jamais à partir des images "
+            f"des pages) :\n  1. {me} assembler \"{d}\" \"<titre traduit>\" livre_traduit.html <code langue : fr, en, ar…>\n"
+            f"  2. \"{pdf}\" \"{d}/livre_traduit.html\" \"{d}/livre_traduit.pdf\" A4\n"
+            "  3. look_at sur le PDF (titre, une page avec dessin), puis copie-le dans ~/Documents/Naim/Fichiers")
+
+
 def suivant(d):
     d, inv = folder(d)
     todo = [p for p in inv["pages"] if not (d / "fr" / f"p{p['n']:03d}.md").exists()]
     if not todo:
-        print(f"Toutes les pages sont traduites. Ensuite : livre.py assembler {d} \"<titre>\" {d}/livre_fr.html")
+        print("Toutes les pages sont traduites.\n" + next_step(d, []))
         return
     p = todo[0]
     n = p["n"]
@@ -213,6 +226,7 @@ def etat(d):
     if same:
         print("pages NON traduites (le texte d'origine recopié) : " + ", ".join(map(str, same))
               + " — traduis-les vraiment, phrase par phrase")
+    print(next_step(d, left or same))
 
 
 def inline(s):
