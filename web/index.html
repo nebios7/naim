@@ -58,8 +58,7 @@
   aside#side:not(.searching) .searchrow { display: none; }
 }
 #sideWho { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
-#sideWho .avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--hover); color: var(--text); font-size: 12.5px; font-weight: 600; }
-#sideWho .wtxt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+#sideWho .wtxt { display: flex; flex-direction: column; gap: 3px; min-width: 0; line-height: 1.25; padding: 4px 6px; }
 #sideWho .wname { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #sideWho .status { font-size: 11.5px; color: var(--muted); padding: 0; }
 aside#side .sidefoot #sideTheme svg, aside#side .sidefoot #sideSettings svg { width: 16px; height: 16px; }
@@ -323,7 +322,7 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 .conv:hover .acts { display: flex; }
 .conv:hover, .conv.active { background: var(--panel); color: var(--text); }
 .conv input { flex: 1; border: 1px solid var(--accent); border-radius: 5px; padding: 1px 4px; background: var(--panel); font-size: 14px; outline: 0; min-width: 0; }
-.sidefoot { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px 0; border-top: 1px solid var(--line); margin-top: 6px; }
+.sidefoot { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px 4px; border-top: 1px solid var(--line); margin-top: 6px; }
 .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; min-width: 0; }
 .status span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
@@ -7344,10 +7343,10 @@ function buildRail() {
   const sf = $("aside#side .sidefoot"), st = sf && $(".status", sf);
   if (st && !$("#sideWho")) {
     const who = document.createElement("div"); who.id = "sideWho";
-    who.innerHTML = `<span class="avatar"></span><span class="wtxt"><b class="wname"></b></span>`;
+    who.innerHTML = `<span class="wtxt"><b class="wname"></b></span>`;  // no initial in a circle: the name and the state, airy
     st.before(who); $(".wtxt", who).appendChild(st);
   }
-  if ($("#sideWho")) { const nm = (S.user_name || "").trim(); $("#sideWho .avatar").textContent = (nm[0] || "N").toUpperCase(); $("#sideWho .wname").textContent = nm || "Naim"; }
+  if ($("#sideWho")) { const nm = (S.user_name || "").trim(); $("#sideWho .wname").textContent = nm || "Naim"; }
   const foot = $("aside#side .sidefoot");
   if (foot && !$("#sideTheme")) foot.insertAdjacentHTML("beforeend", `<button class="icon" id="sideTheme" title="Thème : clair / sombre / automatique"></button><button class="icon" data-go="settings" id="sideSettings" title="Personnaliser (⌘,)">${svgI("settings")}</button>`);
   const asideEl = $("aside#side");
