@@ -12,7 +12,7 @@ toute seule. Il ne touche jamais au programme de Naim : pour l'enlever, l'utilis
 
 - `mod.json` : `{ "description": "<ce qu'il fait, une phrase>", "version": "1.0" }`
 - `mod.js` : le code, en JavaScript du navigateur. Il reçoit l'objet `naim` :
-  - `naim.band(id, html, { tone })` : un bandeau d'une ligne au-dessus de la zone de message, avec un bouton
+  - `naim.band(id, html, { tone })` (html = du texte HTML ou un élément créé avec `document.createElement`) : un bandeau d'une ligne au-dessus de la zone de message, avec un bouton
     « Masquer » à droite (déjà fourni : ne le refais pas). `tone` : `"ok"` (vert), `"warn"` (orange), `"alert"` (rouge),
     rien = gris. Rappelle-le pour le mettre à jour ; `null` l'enlève ; `{ hideable: false }` sans « Masquer ».
     Donne-lui du texte sur une ligne (des `<span>`, pas de `<div>` ni de style de cadre : le bandeau a déjà le sien,

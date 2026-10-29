@@ -7827,7 +7827,8 @@ function modApi(name) {
         el.querySelector(".mhide").onclick = () => { modHidden(key(id), true); el.hidden = true; toast(`Bandeau masqué · /mods show ${name} pour le revoir`); };
         $(".composer").before(el);
       }
-      el.querySelector(".mbody").innerHTML = html;
+      const body = el.querySelector(".mbody");
+      if (html instanceof Node) body.replaceChildren(html); else body.innerHTML = String(html);  // an element or HTML text
       el.querySelector(".mhide").hidden = opts.hideable === false;
       el.dataset.tone = opts.tone || "";
       el.hidden = opts.hideable !== false && modHidden(key(id));
