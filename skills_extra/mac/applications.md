@@ -46,6 +46,11 @@ Si une application n'a pas de commande : skill controle-ecran (regarder l'écran
 ## Contacts, Calendrier, Rappels, Notes (voir aussi SKILL.md)
 - Créer un contact :
   `osascript -e 'tell application "Contacts"' -e 'set p to make new person with properties {first name:"Jean", last name:"Dupont"}' -e 'make new phone at end of phones of p with properties {label:"mobile", value:"+33612345678"}' -e 'save' -e 'end tell'`
+- Changer le numéro d'un contact (on change la VALEUR du téléphone, jamais `phone 1` lui-même ; nom exact, pris de
+  chercher_contact ; ne garde que les chiffres de l'ancien numéro, sans le +33, pour le retrouver) :
+  `osascript -e 'tell application "Contacts"' -e 'set p to first person whose name is "Jean Dupont"' -e 'set value of (first phone of p whose value contains "612345678") to "+33698765432"' -e 'save' -e 'end tell'`
+  Ajouter un numéro : `make new phone at end of phones of p with properties {label:"mobile", value:"+33…"}` puis `save`.
+  Un `person id` s'écrit entre guillemets : `person id "649EB6BB-…"`. Vérifie ensuite avec chercher_contact.
 - Rappels à faire : `osascript -e 'tell application "Reminders" to get name of reminders of list "Rappels" whose completed is false'`
 - Dernières notes : `osascript -e 'tell application "Notes" to get name of notes 1 thru 10'`
 
