@@ -1101,6 +1101,18 @@ class Agent:
             # the same file again, word for word: minutes of writing for nothing — on to what is still missing
             return (f"unchanged: {self.rel(p)} already has exactly this content. Do not write it again: go on with a "
                     "file you have not written yet, then build and run the project.")
+        # the same text written again and again into NEW files (p941.md, p942.md… all « Les sept anges… »): a loop
+        # that looks like progress — 948 files in one night. A third copy is refused, so it is not counted as progress.
+        norm = " ".join((content or "").split())
+        if len(norm) >= 30:
+            seen = getattr(self, "_written_texts", {})
+            others = [x for x in seen.get(norm, []) if x != str(p)]
+            if len(others) >= 2:
+                return (f"refused: this exact text is already in {len(others)} other files ({', '.join(Path(x).name for x in others[:3])}…). "
+                        "You are going round in circles: stop writing, look at where the work really is (list the files, "
+                        "the tool's progress command), then write the content that is actually missing.")
+            seen.setdefault(norm, []).append(str(p))
+            self._written_texts = seen
         self._rewrites = getattr(self, "_rewrites", {})
         self._rewrites[str(p)] = self._rewrites.get(str(p), 0) + (1 if p.exists() else 0)
         copied = self._copied_from(content, p)

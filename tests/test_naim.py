@@ -784,5 +784,18 @@ class McpFollowsTheProject(unittest.TestCase):
         self.assertEqual(cfg["args"], ["--project", "${PROJET}"])  # the saved config keeps its placeholder
 
 
+
+class NoCopyLoop(unittest.TestCase):
+    def test_same_text_into_new_files_is_stopped(self):
+        """948 files « p001…p948.md » with the same two lines in one night: the third copy is refused (not progress)."""
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            txt = "Les sept anges de l'imagination sont : l'ange de la lumiere et l'ange du feu."
+            r = [a.write_file(f"fr/p{n:03d}.md", txt) for n in range(1, 4)]
+            self.assertTrue(r[0].startswith("ok") and r[1].startswith("ok"))
+            self.assertTrue(r[2].startswith("refused"))
+            self.assertFalse((Path(d) / "fr/p003.md").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
