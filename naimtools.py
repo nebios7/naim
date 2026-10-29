@@ -321,7 +321,8 @@ def repeating(text):
 ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
                          r"envoie|prépare|regarde|vérifie|imprime|appelle)\b|(?:je vais|laisse-moi|je dois|il (?:me )?faut|je commence par|commençons par)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
                          r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim|"
-                         r"ajout|rajout|mett|chang|corrig|refai|dessin|termin|complét|rectifi|remplac|retouch|réécri|recré))",
+                         r"ajout|rajout|mett|chang|corrig|refai|dessin|termin|complét|rectifi|remplac|retouch|réécri|recré|"
+                         r"continu|repren|tradui))",
                          re.I | re.M)
 # a remark on the previous result (« pas obligé de… », « t'as rien compris », « c'est pas ça »), not a new request
 FEEDBACK_RE = re.compile(r"pas oblig|rien compris|pas compris|c'?est pas [cç]a|ce n'?est pas [cç]a|je t'?ai (dit|demand)|"
@@ -3513,6 +3514,7 @@ class Agent:
         self.messages.append({"role": "user", "content": task + now_note(), **({"images": images} if images else {})})
         self._task_idx = len(self.messages) - 1
         self._stall_pushbacks = 0
+        self._todo_push_at = -1
         self._reviewed = False
         # a budget of progress, not a fixed count: while files are written, steps ticked off and commands pass, it
         # goes on (the setting is a checkpoint: +50 each time it is still advancing, 1000 at most); it stops when
@@ -3655,6 +3657,20 @@ class Agent:
                         self.emit({"type": "note", "text": content})  # what it said it will do stays shown
                         self.messages.append({"role": "assistant", "content": content})
                         self.messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), puis dis-moi le résultat."})
+                        self._force_tool = True
+                        continue
+                    left = [t["text"] for t in (self.todos or []) if t.get("status") not in ("done", "skipped")]
+                    if (left and not self.subagent and not self.plan and self._last_progress > 0
+                            and self._todo_push_at < self._last_progress):
+                        # the three reminders above are spent (a book stops far more often than three times), but it
+                        # still moves forward: it goes on to the next step; once per progress, never in a circle
+                        self._todo_push_at = self._last_progress
+                        self.emit({"type": "note", "text": content})
+                        self.messages.append({"role": "assistant", "content": content})
+                        self.messages.append({"role": "user", "content": (
+                            f"Ta liste de tâches n'est pas finie : il reste {len(left)} étape(s). Continue maintenant "
+                            f"avec « {left[0]} », sans t'arrêter ni me demander, jusqu'à la dernière ; ta réponse "
+                            "finale viendra quand tout sera fait.")})
                         self._force_tool = True
                         continue
                     self._outcome = "answer"

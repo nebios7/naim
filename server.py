@@ -1710,6 +1710,14 @@ class Handler(BaseHTTPRequestHandler):
         s = body.get("settings") or {}
         mem = ext.memory_prompt() if s.get("enable_memory", True) is not False else ""
         system = CHAT_PROMPT + "\n\n" + today_line() + (f"\n\n{mem}" if mem else "") + (f"\n\nUser instructions:\n{extra}" if extra else "")
+        # the same instructions as the Agent (~/.naim/NAIM.md, then the project's): read once, then kept with the rest
+        # of the start (they are read again only when the file changes)
+        if glob := ext.global_instructions():
+            system += f"\n\nThe user's global instructions (~/.naim/NAIM.md):\n{glob}"
+        root = body.get("project")
+        name, proj = ext.project_instructions(root) if root and Path(root).is_dir() else (None, "")
+        if proj:
+            system += f"\n\nProject instructions from {name} (follow them):\n{proj}"
         system += "\n\n" + WRITING_STYLE  # how to write an answer (fixed text, read once)
         import naim_check
         if les := naim_check.lessons():  # rules Naim wrote after its own failed checks

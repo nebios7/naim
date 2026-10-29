@@ -684,6 +684,41 @@ class FinishTheWork(unittest.TestCase):
 
 
 
+class FollowThePlan(unittest.TestCase):
+    """A long task (a book) stops far more often than three times: while it moves forward, it goes on to the end of
+    its list; once it no longer moves, it stops instead of going round in circles."""
+
+    def run_pages(self, pages, progress=True):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            a.todos = [{"text": f"Traduire la page {i}", "status": "pending"} for i in range(1, pages + 1)]
+            calls = []
+
+            def fake(model, messages, **kw):
+                calls.append(1)
+                left = [t for t in a.todos if t["status"] != "done"]
+                if len(calls) % 2 and left and progress:  # it writes a page…
+                    n = a.todos.index(left[0]) + 1
+                    return {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "write_file",
+                            "arguments": {"path": f"p{n}.md", "content": f"Page {n} traduite en entier, fidèlement."}}}]}
+                if left and progress:  # …ticks it off, then stops as if it were finished
+                    left[0]["status"] = "done"
+                return {"role": "assistant", "content": "La page est traduite."}
+
+            with mock.patch.object(naimtools, "chat_watched", fake):
+                a.run("traduis le livre")
+            return a, len(calls)
+
+    def test_goes_to_the_end(self):
+        a, _ = self.run_pages(8)
+        self.assertEqual([t["status"] for t in a.todos], ["done"] * 8)
+
+    def test_stops_when_nothing_moves(self):
+        _, n = self.run_pages(8, progress=False)
+        self.assertLess(n, 10)
+
+
 class HooksOfOtherAgents(unittest.TestCase):
     """A plugin's hooks written for another agent: its names, its JSON answers, its background hooks."""
 
