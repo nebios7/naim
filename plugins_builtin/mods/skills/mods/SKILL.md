@@ -17,6 +17,8 @@ toute seule. Il ne touche jamais au programme de Naim : pour l'enlever, l'utilis
     rien = gris. Rappelle-le pour le mettre à jour ; `null` l'enlève ; `{ hideable: false }` sans « Masquer ».
     Donne-lui du texte sur une ligne (des `<span>`, pas de `<div>` ni de style de cadre : le bandeau a déjà le sien,
     à la largeur de la zone de message). Il renvoie la zone du texte, pour y attacher des clics. Sépare les infos par ` · ` (ex. `Limites 5 h 42 % · 7 jours 18 %`).
+    Pour colorer seulement un chiffre ou un mot (plus lisible qu'une ligne toute colorée) : `<b class="ok">11 %</b>`,
+    `class="warn"` ou `class="alert"` ; `<b>` seul = en clair. Ex. : `Limites 5 h <b class="ok">11 %</b> (reprise 23:50)`.
   - `naim.button(id, { label, title, onClick })` : un bouton dans la ligne sous la zone de message (`null` l'enlève).
   - `naim.toast(texte)` : un court message en bas de la fenêtre.
   - `naim.on("send", (texte) => …)` : à chaque message envoyé ; `naim.on("reply", (texte) => …)` : à chaque réponse finie.
