@@ -7728,7 +7728,9 @@ async function migrateLocal() {
   try { localStorage.removeItem("naim.convs"); } catch {}
 }
 (async () => {
-  await loadSettings(); await migrateLocal(); await checkStatus(); applySettings();
+  await loadSettings(); await migrateLocal(); await checkStatus();
+  S.mode = "chat";  // Naim opens in Chat (it acts too); an Agent conversation reopened keeps its own mode
+  applySettings();
   api("/api/self-check").then((r) => {  // the check Naim ran by itself while the Mac was idle: said once, quietly
     const l = r && r.last; let seen = ""; try { seen = localStorage.getItem("naim-check-seen") || ""; } catch {}
     if (!l || l.date === seen) return;

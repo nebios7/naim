@@ -53,6 +53,55 @@ CONTACT_SCRIPT = '''on run argv
 end run'''
 
 
+PHONE_SCRIPT = '''on run argv
+    set n to item 1 of argv
+    set i to (item 2 of argv) as integer
+    set v to item 3 of argv
+    tell application "Contacts"
+        set ps to every person whose name is n
+        if (count of ps) is not 1 then return "count:" & (count of ps)
+        set p to item 1 of ps
+        if i is 0 then
+            make new phone at end of phones of p with properties {label:"mobile", value:v}
+        else
+            set value of phone i of p to v
+        end if
+        save
+        set out to ""
+        repeat with t in phones of p
+            set out to out & (value of t) & linefeed
+        end repeat
+        return out
+    end tell
+end run'''
+
+
+def set_contact_phone(name, old, new):
+    """Change the number `old` of the person named exactly `name` to `new` (old empty: add `new`). The person is the one
+    chercher_contact found; the old number is recognised by its digits, whatever its spaces or +33/0 form.
+    Returns the person's numbers after the change."""
+    new = (new or "").strip()
+    if not re.search(r"\d{6,}", re.sub(r"\D", "", new)):
+        raise MailError(f"nouveau numéro invalide : {new!r}")
+    found = [c for c in find_contact(name) if c.get("tel")]
+    exact = sorted({c["nom"] for c in found if c["nom"].lower() == name.strip().lower()}) or sorted({c["nom"] for c in found})
+    if len(exact) != 1:
+        raise MailError(f"aucun contact « {name} » avec un numéro" if not exact
+                        else "plusieurs contacts : " + ", ".join(exact) + " ; redonne le nom exact")
+    who, index = exact[0], 0
+    if (old or "").strip():
+        tail = re.sub(r"\D", "", old)[-9:]  # the national digits: +33 6 12…, 06 12…, 0033… are the same number
+        nums = [c["tel"] for c in found if c["nom"] == who]
+        hits = [k for k, t in enumerate(nums, 1) if re.sub(r"\D", "", t).endswith(tail)]
+        if not hits:
+            raise MailError(f"{who} n'a pas le numéro {old} ; ses numéros : " + ", ".join(nums))
+        index = hits[0]
+    r = subprocess.run(["osascript", "-e", PHONE_SCRIPT, who, str(index), new], capture_output=True, text=True, timeout=60)
+    if r.returncode != 0 or r.stdout.startswith("count:"):
+        raise MailError("Contacts : " + (r.stderr.strip()[-200:] or r.stdout.strip()))
+    return who, [x for x in r.stdout.splitlines() if x.strip()]
+
+
 _OWN = []
 
 

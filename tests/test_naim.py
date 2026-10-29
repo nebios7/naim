@@ -922,5 +922,31 @@ class Mods(unittest.TestCase):
             finally:
                 mods.DIR, mods.OFF = old
 
+
+class ChangeAContactNumber(unittest.TestCase):
+    """modifier_contact: the old number found by its digits (any form), the right phone changed, no guessing in AppleScript."""
+
+    def test_change_and_add(self):
+        import mailer
+        from unittest import mock
+        people = [{"nom": "DUPONT Jean", "email": "", "tel": "+33 6 11 22 33 44", "label": "mobile"},
+                  {"nom": "DUPONT Jean", "email": "", "tel": "+33762550718", "label": "maison"},
+                  {"nom": "Jean Dupontel", "email": "", "tel": "+33600000000", "label": ""}]
+        calls = []
+        def run(args, **kw):
+            calls.append(args)
+            return mock.Mock(returncode=0, stdout="+33 6 11 22 33 44\n+33652909662\n", stderr="")
+        with mock.patch.object(mailer, "find_contact", return_value=people), mock.patch.object(mailer.subprocess, "run", run):
+            who, nums = mailer.set_contact_phone("dupont jean", "07 62 55 07 18", "+33652909662")
+            self.assertEqual(who, "DUPONT Jean")
+            self.assertEqual(calls[-1][3:], ["DUPONT Jean", "2", "+33652909662"])
+            self.assertIn("+33652909662", nums)
+            mailer.set_contact_phone("DUPONT Jean", "", "+33699999999")
+            self.assertEqual(calls[-1][4], "0")  # no old number: added
+            with self.assertRaises(mailer.MailError):
+                mailer.set_contact_phone("DUPONT Jean", "+33 1 00 00 00 00", "+33652909662")  # not one of his numbers
+            with self.assertRaises(mailer.MailError):
+                mailer.set_contact_phone("Jean", "", "+33652909662")  # two people: the exact name is asked
+
 if __name__ == "__main__":
     unittest.main()

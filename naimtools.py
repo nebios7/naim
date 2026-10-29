@@ -272,7 +272,7 @@ DOC_EXTS = {".pdf", ".docx", ".doc", ".rtf", ".odt", ".pages", ".xlsx", ".xlsm",
 # specialised tools, loaded only when a task needs them (like an assistant that looks up the tool it lacks):
 # group -> (tool names, what it is for, words of a request that load it right away)
 TOOL_GROUPS = {
-    "email": (("send_email", "chercher_contact", "mail_inbox", "mail_draft_reply", "mail_junk", "mail_done"),
+    "email": (("send_email", "chercher_contact", "modifier_contact", "mail_inbox", "mail_draft_reply", "mail_junk", "mail_done"),
               "envoyer des e-mails, lire et trier la boîte de réception, chercher un contact",
               r"e-?mails?|mails?|courriels?|envoie|envoyer|contacts?|bo[iî]te de r[ée]ception|spam|destinataire"),
     "ecran": (("computer",), "voir l'écran du Mac et cliquer, taper, ouvrir des applications",
@@ -723,6 +723,8 @@ class Agent:
         if self.features["email"] and not self.subagent:
             tools.append(EMAIL_TOOL)
             tools.append(CONTACT_TOOL)
+            if "MODIFY_CONTACT_TOOL" in globals():  # its description comes with the prompts
+                tools.append(MODIFY_CONTACT_TOOL)
             tools += MAIL_TOOLS
         lookup = {}
         self._mcp_on_demand, self._mcp_deferred = [], []
@@ -2657,6 +2659,15 @@ class Agent:
         return "\n".join(lines) + ("\nPlusieurs personnes : demande à l'utilisateur laquelle." if len(names) > 1 else "") + (
             "\nPour un SMS, un iMessage ou un appel : utilise le NUMÉRO (jamais le nom)." if phones else "")
 
+    def modifier_contact(self, nom, nouveau, ancien=""):
+        if not self.approve("Modifier un contact", f"{nom} : {ancien or '(nouveau numéro)'} → {nouveau}", kind="write"):
+            return "denied by the user"
+        try:
+            who, nums = mailer.set_contact_phone(nom, ancien, nouveau)
+        except mailer.MailError as e:
+            return f"error: {e}"
+        return f"ok: {who} a maintenant : {', '.join(nums)} (enregistré dans Contacts). C'est fait : dis-le à l'utilisateur."
+
     def mail_inbox(self, limit=20):
         try:
             msgs = mailer.inbox(limit)
@@ -2938,7 +2949,7 @@ class Agent:
               "use_mcp": self.use_mcp, "use_tools": self.use_tools, "delegate": self.delegate,
               "install_mcp": self.install_mcp, "add_hook": self.add_hook, "install_plugin": self.install_plugin,
               "update_todos": self.update_todos, "computer": self.computer, "simulator": self.simulator,
-              "send_email": self.send_email, "chercher_contact": self.chercher_contact, "mail_inbox": self.mail_inbox, "mail_draft_reply": self.mail_draft_reply,
+              "send_email": self.send_email, "chercher_contact": self.chercher_contact, "modifier_contact": self.modifier_contact, "mail_inbox": self.mail_inbox, "mail_draft_reply": self.mail_draft_reply,
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
               "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
