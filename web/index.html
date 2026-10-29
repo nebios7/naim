@@ -1093,6 +1093,26 @@ header#chatHeader { border-bottom: 1px solid var(--line); background: var(--bg);
 .menu button.danger .mic svg, #ctxmenu button.danger .mic svg { color: var(--danger); }
 .menu hr, #ctxmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
 @keyframes naimPop { from { opacity: 0; transform: scale(.97); } }
+.menu .mtxt { display: flex; flex-direction: column; gap: 1px; min-width: 0; text-align: left; line-height: 1.25; }
+.menu .mdesc { font-size: 11.5px; color: var(--muted); white-space: normal; max-width: 280px; }
+.menu button:has(.mtxt) { align-items: flex-start; padding-top: 7px !important; padding-bottom: 7px !important; height: auto !important; min-height: 0 !important; max-height: none !important; }
+/* like a coding assistant: a small star turning softly before « Réflexion… » while Naim works */
+.working .wspin { flex: none; width: 15px; height: 15px; display: inline-flex; color: #d97757; animation: naimSpin 2.4s cubic-bezier(.45, .05, .55, .95) infinite; }
+.working .wspin svg { width: 15px; height: 15px; }
+.working:has(.wspin) { gap: 8px; }
+#liveBar .lspin { flex: none; width: 15px; height: 15px; display: inline-flex; color: #d97757; animation: naimSpin 2.4s cubic-bezier(.45, .05, .55, .95) infinite; }
+#liveBar .lspin svg { width: 15px; height: 15px; }
+@keyframes naimSpin { 0% { transform: rotate(0) scale(.86); } 50% { transform: rotate(180deg) scale(1.06); } 100% { transform: rotate(360deg) scale(.86); } }
+/* the answer as it arrives: each new paragraph, item, code block or table fades in (what is already there stays still) */
+.turn.bot .fresh { animation: naimFresh 320ms var(--ease) both; }
+@keyframes naimFresh { from { opacity: 0; transform: translateY(3px); } }
+/* a group of steps (« Lu 4 fichiers ») or the reasoning opening: its content unfolds softly */
+details.agroup[open] > :not(summary), details.think[open] > :not(summary) { animation: naimUnfold 200ms var(--ease) both; }
+@keyframes naimUnfold { from { opacity: 0; transform: translateY(-3px); } }
+/* the small windows (effort, context, commands, palette) appear like the menus */
+.ctxpop, #slash:not([hidden]), #palette:not([hidden]) { animation: naimPop 130ms var(--ease) both; transform-origin: bottom left; }
+#palette:not([hidden]) { transform-origin: top center; }
+@media (prefers-reduced-motion: reduce) { .working .wspin, #liveBar .lspin, .turn.bot .fresh, details[open] > :not(summary), .ctxpop, #slash, #palette { animation: none !important; } }
 .toast, #toast { border-radius: var(--r-m); box-shadow: var(--shadow); animation: naimPop 140ms var(--ease) both; }
 #panel.show { animation: naimSlide 160ms var(--ease) both; }
 @keyframes naimSlide { from { opacity: 0; transform: translateX(10px); } }
@@ -1956,7 +1976,7 @@ body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { di
       <div id="scroll"><div id="thread"></div></div>
       <footer>
         <div id="goalBar" hidden></div>
-        <div id="liveBar" hidden><span class="ldot"></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris ou parle pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
+        <div id="liveBar" hidden><span class="ldot"></span><span class="lspin" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/></svg></span><span class="ltext"></span><span class="ltime"></span><span class="lhint">· écris ou parle pour guider Naim sans l'arrêter</span><span class="lprog" hidden><i></i></span></div>
         <div class="composer"><div id="talkGlow" aria-hidden="true"></div>
           <div class="slash" id="slash" hidden></div>
           <div class="atts" id="pending"></div>
@@ -2337,10 +2357,12 @@ function morphInto(el, html) {
   const tpl = document.createElement("div"); tpl.innerHTML = html;
   morphChildren(el, tpl);
 }
-function sameAttrs(a, b) {
-  if (a.attributes.length !== b.attributes.length) return false;
-  for (const at of a.attributes) if (b.getAttribute(at.name) !== at.value) return false;
-  return true;
+function sameAttrs(a, b) {  // « fresh » (a block still fading in) does not count
+  const cls = (x) => (x.getAttribute("class") || "").replace(/\bfresh\b/, "").trim();
+  const names = (x) => [...x.attributes].map((at) => at.name).filter((n) => n !== "class" || cls(x));
+  const na = names(a), nb = names(b);
+  if (na.length !== nb.length) return false;
+  return na.every((n) => n === "class" ? cls(a) === cls(b) : b.getAttribute(n) === a.getAttribute(n));
 }
 function morphChildren(el, from) {
   const next = [...from.childNodes], cur = [...el.childNodes];
@@ -2348,14 +2370,21 @@ function morphChildren(el, from) {
     const a = cur[i], b = next[i];
     if (a && a.nodeType === b.nodeType) {
       if (a.nodeType !== 1) { if (a.textContent !== b.textContent) a.textContent = b.textContent; continue; }
-      if (a.outerHTML === b.outerHTML) continue;
+      if (a.outerHTML === b.outerHTML || (a.classList.contains("fresh") && a.outerHTML.replace(/ class="fresh"| fresh\b|\bfresh /, "") === b.outerHTML)) continue;
       if (a.tagName === "IMG" && b.tagName === "IMG" && a.dataset.u && a.dataset.u === b.dataset.u) continue;  // the same photo (loaded or not): kept
       // same kind of block (a paragraph of photos growing, a list getting a new item): updated inside, so what is
       // already shown — a loaded photo — is kept; a code block or anything else is replaced whole
       if (a.tagName === b.tagName && /^(P|UL|OL|LI|DIV|TABLE|THEAD|TBODY|TR|BLOCKQUOTE)$/.test(a.tagName) && !a.classList.contains("code")
           && sameAttrs(a, b)) { morphChildren(a, b); continue; }
     }
-    if (a) el.replaceChild(b, a); else el.appendChild(b);
+    if (a) el.replaceChild(b, a);
+    else {  // a new paragraph, item, table while Naim writes: it fades in, then is an ordinary block again
+      if (mdLive && b.nodeType === 1) {
+        b.classList.add("fresh");
+        b.addEventListener("animationend", () => { b.classList.remove("fresh"); if (!b.classList.length) b.removeAttribute("class"); }, { once: true });
+      }
+      el.appendChild(b);
+    }
   }
   for (let j = cur.length - 1; j >= next.length; j--) cur[j].remove();
 }
@@ -3035,7 +3064,7 @@ function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()]; return k && RIC
 function showMenu(anchor, items) {
   closeMenu();
   const m = document.createElement("div"); m.className = "menu"; m.id = "ctxmenu";
-  m.innerHTML = items.map((it, i) => it === "-" ? "<hr>" : `<button data-i="${i}" class="${it.danger ? "danger" : ""}"${it.title ? ` title="${esc(it.title)}"` : ""}><span class="mic" style="width:18px;display:inline-flex;justify-content:center">${menuIcon(it.icon)}</span>${esc(it.label)}${it.key ? `<kbd>${it.key}</kbd>` : ""}</button>`).join("");
+  m.innerHTML = items.map((it, i) => it === "-" ? "<hr>" : `<button data-i="${i}" class="${it.danger ? "danger" : ""}"${it.title ? ` title="${esc(it.title)}"` : ""}><span class="mic" style="width:18px;display:inline-flex;justify-content:center">${menuIcon(it.icon)}</span>${it.desc ? `<span class="mtxt"><span>${esc(it.label)}</span><small class="mdesc">${esc(it.desc)}</small></span>` : esc(it.label)}${it.key ? `<kbd>${it.key}</kbd>` : ""}</button>`).join("");
   document.body.appendChild(m);
   let box = anchor.getBoundingClientRect ? anchor : null;
   while (box && box.parentElement && !box.getBoundingClientRect().width) box = box.parentElement;  // hidden button: its row
@@ -3745,7 +3774,7 @@ function toolMeta(name, a) {
 function addBot(m, idx) {
   const d = document.createElement("div"); d.className = "turn bot";
   d.innerHTML = `<details class="think" hidden><summary>Raisonnement</summary><div></div></details><div class="todos" hidden></div><div class="flow"></div><div class="md"></div>
-    <div class="working" hidden>${robotSVG("working")}<span class="wtext">Naim réfléchit…</span><span class="wprog"></span><span class="wtime"></span><div class="wbar" hidden><i></i></div></div>
+    <div class="working" hidden>${robotSVG("working")}<span class="wspin" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/></svg></span><span class="wtext">Naim réfléchit…</span><span class="wprog"></span><span class="wtime"></span><div class="wbar" hidden><i></i></div></div>
     <div class="msgacts">${S.show_time && m?.time ? `<span class="time">${fmtTime(m.time)}</span>` : ""}<button class="icon" data-a="copy" title="Copier">⧉</button>${voiceOK ? '<button class="icon" data-a="speak" title="Écouter (la voix de Naim)">♪</button>' : ""}<button class="icon" data-a="regen" title="Régénérer">↻</button><button class="icon" data-a="cont" title="Continuer la réponse">↪</button><button class="icon" data-a="raw" title="Voir le texte brut">¶</button><span class="stats"></span></div>`;
   $("#thread").appendChild(d);
   const think = $(".think", d), flow = $(".flow", d), body = $(".md", d), working = $(".working", d);
@@ -7042,7 +7071,7 @@ $("#permPill").onclick = (e) => {
   e.stopPropagation();
   const cur = permMode();
   const modes = PERM_MODES.filter((m) => S.mode === "agent" || m.id !== "plan");
-  showMenu(e.currentTarget, modes.map((m, i) => ({ icon: m.id === cur ? "✓" : "", label: m.label, title: m.desc, key: String(i + 1), run: () => setPermMode(m.id) })));
+  showMenu(e.currentTarget, modes.map((m, i) => ({ icon: m.id === cur ? "✓" : "", label: m.label, desc: m.desc, key: String(i + 1), run: () => setPermMode(m.id) })));
 };
 $("#input").addEventListener("keydown", (e) => {  // ⇧⇥ : next mode (agent only, not while a menu is open)
   if (e.key !== "Tab" || !e.shiftKey || !$("#slash").hidden) return;
