@@ -45,7 +45,7 @@ le disque** : aux ouvertures suivantes, elles sont rechargées en une seconde.
 | `/git` · `/mcp` · `/skills` · `/memory` | Ouvrir le panneau correspondant |
 | `/plugin marketplace add <lien>` | Ajouter une marketplace de plugins (un dépôt GitHub) |
 | `/plugin install <nom>` | Installer un plugin de cette marketplace (voir **4. Plugins**) |
-| `/plugin hooks <nom> on` · `off` | Allumer ou éteindre les hooks d'un plugin |
+| `/plugin hooks <nom> off` · `on` | Éteindre les hooks d'un plugin trop bavard (ils sont allumés dès l'installation), ou les rallumer |
 | `/plugin` | Voir les plugins installés et les marketplaces |
 | `/planifier <demande>` | Programmer une tâche récurrente ou à une heure précise |
 | `/help` | Toutes les commandes et raccourcis |
@@ -214,7 +214,7 @@ Attention à l'orthographe : c'est `/plugin`, pas `/plungin`. Ce que Naim fait �
 | **Serveurs MCP** | ajoutés avec le plugin |
 | **Hooks** | **allumés dès l'installation**, ils se déclenchent tout seuls selon la situation ; `/plugin hooks <nom> off` pour les éteindre. Naim leur parle leur langage (noms des outils, `file_path`, réponses JSON, hooks en arrière-plan) ; leurs réglages se mettent dans `hooks_env` du `plugin.json` du plugin |
 
-Pour ECC : 311 skills et 71 agents en bibliothèque, 97 commandes `/ecc:…`, 27 hooks éteints, environ 58 Mo. Réinstaller
+Pour ECC : 311 skills et 71 agents en bibliothèque, 97 commandes `/ecc:…`, 27 hooks allumés (sa « gate » coupée : `ECC_GATEGUARD: off`), environ 58 Mo. Réinstaller
 un plugin met l'ancienne version de côté (`~/.naim/plugins.anciens`), elle n'est jamais perdue. Retirer un plugin :
 Personnaliser › Plugins (il va dans la Corbeille).
 
