@@ -736,6 +736,13 @@ class FollowThePlan(unittest.TestCase):
                 a.run("continue : traduis les pages 188 à 193")
             self.assertEqual(pages, list(range(188, 194)))
 
+    def test_what_is_an_announcement(self):
+        for s in ("Je la traduis maintenant.", "Je l'écris maintenant.", "J'écris la suite.", "Je continue avec l'étape suivante.",
+                  "Je reprends là où j'en étais.", "Je vais continuer."):
+            self.assertTrue(naimtools.ANNOUNCE_RE.search(s), s)
+        for s in ("Tout est fini : le fichier est dans Fichiers.", "Si tu veux, je continue demain.", "Je te l'envoie si tu veux."):
+            self.assertFalse(naimtools.ANNOUNCE_RE.search(s), s)
+
     def test_stops_when_nothing_moves(self):
         _, n = self.run_pages(8, progress=False)
         self.assertLess(n, 10)

@@ -318,7 +318,7 @@ def repeating(text):
 
 
 # a reply that only announces an action (« Je vais envoyer… ») instead of doing it
-ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|je (?:lance|crée|cherche|"
+ANNOUNCE_RE = re.compile(r"^\W*(?:(?:d'accord|ok|très bien|parfait)[ ,.!]*)?(?:je m'en occupe|j'(?:écris|attaque)\b|je (?:(?:la|le|les|en|y) |l')?(?:lance|crée|cherche|rédige|écris|"
                          r"envoie|prépare|regarde|vérifie|imprime|appelle|continue|reprends|traduis|passe (?:à|au|aux))\b|(?:je vais|laisse-moi|je dois|il (?:me )?faut|je commence par|commençons par)\s+(?:\S+\s+){0,2}?(?:envoy|cré|lanc|imprim|appel|"
                          r"cherch|lire|ouvr|fair|génér|prépar|regard|vérifi|modifi|écri|rédig|exécut|install|déplac|copi|supprim|"
                          r"ajout|rajout|mett|chang|corrig|refai|dessin|termin|complét|rectifi|remplac|retouch|réécri|recré|"
