@@ -941,8 +941,8 @@ body.haslive .working .wtime { display: none; }
 .skinst .srow.col { gap: 12px; padding: 16px; }
 .skhead { display: flex; align-items: flex-start; gap: 10px; }
 .skhead .sl { flex: 1; min-width: 0; }
-.skic { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
-.skic svg { width: 16px; height: 16px; }
+.skhic { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
+.skhic svg { width: 16px; height: 16px; display: block; }
 .skfield { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 4px 4px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; transition: border-color .15s, box-shadow .15s; }
 .skfield:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
 .skpre { display: inline-flex; color: var(--muted); flex: none; }
@@ -5891,7 +5891,7 @@ const TABS = {
     <div class="sgroup" id="skillList"><div class="srow"><div class="sl">Chargement…</div></div></div>
     <div class="sgroup" id="skillEditor" hidden></div>
     <div class="sgroup skinst"><div class="srow col">
-      <div class="skhead"><span class="skic">${svgI("download")}</span><div class="sl"><b>Installer un skill</b><small>Depuis GitHub ou depuis ce Mac. Naim s'en sert tout seul quand une tâche en a besoin.</small></div></div>
+      <div class="skhead"><span class="skhic">${svgI("download")}</span><div class="sl"><b>Installer un skill</b><small>Depuis GitHub ou depuis ce Mac. Naim s'en sert tout seul quand une tâche en a besoin.</small></div></div>
       <div class="skfield"><span class="skpre">${svgI("globe")}</span><input class="mono" id="hubUrl" placeholder="github.com/owner/repo  ou  owner/repo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"><button class="btn primary" id="hubBrowse">Parcourir</button></div>
       <div class="skor"><span>ou</span></div>
       <button class="skdrop" id="hubLocal" type="button">${svgI("folder")}<span><b>Depuis mon Mac</b><small>Glisse ici un fichier .skill, .zip ou SKILL.md, ou clique pour le choisir</small></span></button><input type="file" id="hubLocalFile" accept=".skill,.zip,.md" multiple hidden>
@@ -5902,7 +5902,7 @@ const TABS = {
       <small class="sknote">${svgI("shield")}<span>Les fichiers sont seulement copiés dans <span class="mono">~/.naim/skills</span>, jamais exécutés à l'installation. Un skill du même nom est gardé dans <span class="mono">skills/.anciens</span>. Vérifie la licence de chaque skill.</span></small>
     </div></div>
     <div class="sgroup skinst"><div class="srow col">
-      <div class="skhead"><span class="skic">${svgI("book")}</span><div class="sl"><b>Bibliothèque</b><small id="libInfo">…</small></div><button class="kib" id="libOpen" title="Ouvrir le dossier">${svgI("folder")}</button></div>
+      <div class="skhead"><span class="skhic">${svgI("book")}</span><div class="sl"><b>Bibliothèque</b><small id="libInfo">…</small></div><button class="kib" id="libOpen" title="Ouvrir le dossier">${svgI("folder")}</button></div>
       <div class="skfield"><span class="skpre">${svgI("search")}</span><input id="libQ" placeholder="Chercher un skill dans la bibliothèque" autocomplete="off" spellcheck="false"></div>
       <div id="libFound" class="sklib"></div>
     </div></div>
