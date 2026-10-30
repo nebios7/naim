@@ -937,6 +937,35 @@ body.haslive .working .wtime { display: none; }
 .oline code { flex: 1 1 220px; min-width: 0; font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; overflow-wrap: anywhere; word-break: break-all; }
 .oline .obtns { display: flex; gap: 6px; flex: none; margin-left: auto; }
 .kres { display: block; font-size: 12px; }
+/* keys: a field with its eye and copy inside, actions below, the check result as a pill */
+.kcard { gap: 10px !important; }
+.khead { display: flex; align-items: flex-start; gap: 12px; }
+.khead .sl { flex: 1; min-width: 0; }
+.kstate { flex: none; max-width: 55%; font-size: 12px; line-height: 1.35; padding: 3px 10px 3px 20px; border-radius: 999px; position: relative; background: var(--hover); color: var(--muted); }
+.kstate::before { content: ""; position: absolute; left: 9px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: currentColor; }
+.kstate.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.kstate.bad { color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); }
+.kstate.wait::before { animation: kpulse 1s ease-in-out infinite; }
+@keyframes kpulse { 50% { opacity: .25; } }
+.kfield { display: flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 4px 0 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; transition: border-color .15s, box-shadow .15s; }
+.kcard.editing .kfield { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.kfield .kval { flex: 1; min-width: 0; background: none; border: 0; padding: 8px 0; font-size: 12.5px; letter-spacing: .02em; overflow-wrap: anywhere; word-break: break-all; color: var(--text); }
+.kfield .kval.empty { color: var(--muted); font-family: -apple-system, system-ui, sans-serif; font-style: italic; }
+.kfield .knew { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font-size: 12.5px; padding: 9px 0; }
+.kfield .knew::placeholder { color: var(--muted); font-family: -apple-system, system-ui, sans-serif; }
+.kin { display: flex; gap: 2px; flex: none; }
+.kib { width: 30px; height: 30px; display: grid; place-items: center; border: 0; background: none; border-radius: 7px; color: var(--muted); cursor: pointer; }
+.kib:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.kib:disabled { opacity: .35; cursor: default; }
+.kib svg, .kb svg { width: 15px; height: 15px; }
+.khint { font-size: 12px; color: var(--muted); margin-top: -4px; }
+.kacts { display: flex; justify-content: flex-end; }
+.kacts > span { display: flex; flex-wrap: wrap; gap: 6px; }
+.kb { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 5px 11px; }
+.kb svg { color: var(--muted); }
+.kdel { border-color: transparent; background: none; color: var(--danger); }
+.kdel svg { color: var(--danger); }
+.kdel:hover { border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .kres:empty { display: none; }
 #spane .srow .aout { flex: 1 1 100%; margin: 4px 0 0; max-height: 220px; overflow: auto; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; }
 .oid { font-size: 12.5px; overflow-wrap: anywhere; }
@@ -6636,36 +6665,63 @@ async function loadOwner() {
   const head = (t, d) => `<div class="srow col ohead"><div class="sl"><b>${t}</b>${d ? `<small>${d}</small>` : ""}</div></div>`;
   box.innerHTML = `
     <div class="sgroup">${head("Guide", "Entraîner, réentraîner et publier Naim, étape par étape.")}${r.guide.map((g) => `<div class="srow col"><div class="sl"><b>${esc(g.titre)}</b><small><ol class="osteps">${g.etapes.map((e) => `<li>${esc(e)}</li>`).join("")}</ol></small></div></div>`).join("")}</div>
-    <div class="sgroup">${head("Clés", "Tes accès aux services. « Vérifier » dit si une clé fonctionne encore.")}${r.cles.map((k, i) => `<div class="srow col" data-ki="${i}"><div class="sl"><b>${esc(k.service)} — ${esc(k.nom)} ${badge(k.decision)}</b><small>${esc(k.role)}${k.compte ? ` · compte ${esc(k.compte)}` : ""}</small></div>
-      <div class="oline"><code class="mono kval">••••••••••••</code><span class="obtns"><button class="btn" data-show>Afficher</button><button class="btn" data-copy-key>Copier</button><button class="btn" data-check>Vérifier</button><button class="btn" data-edit-key>Modifier</button><button class="btn danger" data-del-key>Supprimer</button></span></div>
-      <div class="oline kedit" hidden><input class="mono knew" type="password" placeholder="Colle la nouvelle clé" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><span class="obtns"><button class="btn primary" data-save-key>Enregistrer</button><button class="btn" data-cancel-key>Annuler</button></span></div><small class="kres"></small></div>`).join("")}</div>
+    <div class="sgroup">${head("Clés", "Tes accès aux services. « Vérifier » dit si une clé fonctionne encore.")}${r.cles.map((k, i) => `<div class="srow col kcard" data-ki="${i}">
+      <div class="khead"><div class="sl"><b>${esc(k.service)} — ${esc(k.nom)} ${badge(k.decision)}</b><small>${esc(k.role)}${k.compte ? ` · compte ${esc(k.compte)}` : ""}</small></div><span class="kstate" hidden></span></div>
+      <div class="kfield"><code class="mono kval"></code><input class="mono knew" type="text" placeholder="Colle la nouvelle clé ici" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" hidden>
+        <span class="kin"><button class="kib" data-show title="Afficher">${svgI("eye")}</button><button class="kib" data-copy-key title="Copier">${svgI("copy")}</button></span></div>
+      <small class="khint" hidden></small>
+      <div class="kacts"><span class="kview"><button class="btn kb" data-check>${svgI("shield")}Vérifier</button><button class="btn kb" data-edit-key>${svgI("edit")}Modifier</button><button class="btn kb kdel" data-del-key>${svgI("trash")}Supprimer</button></span>
+        <span class="kedit" hidden><button class="btn" data-cancel-key>Annuler</button><button class="btn primary" data-save-key disabled>Enregistrer</button></span></div></div>`).join("")}</div>
     <div class="sgroup" id="ownerInstalls"><div class="srow"><div class="sl"><small>Chargement…</small></div></div></div>
     <div class="sgroup">${head("Actions", "En un clic, depuis ce Mac.")}${r.actions.map((a) => `<div class="srow" data-a="${a.id}"><div class="sl"><b>${esc(a.titre)}</b><small>${esc(a.aide)}</small></div><div class="sc"><button class="btn primary"${a.off ? " disabled" : ""}>Lancer</button></div><pre class="mono aout" hidden></pre></div>`).join("")}</div>
     <div class="sgroup">${head("Commandes du Terminal", "Copie une commande, puis colle-la dans le Terminal.")}${r.commandes.map((c) => `<div class="srow col"><div class="sl"><b>${esc(c.titre)}</b></div><div class="oline"><code class="mono ocmd">${esc(c.cmd)}</code><span class="obtns"><button class="btn" data-cmd-copy="${esc(c.cmd)}">Copier</button></span></div></div>`).join("")}</div>`;
   $$("[data-ki]", box).forEach((row) => {
-    const k = r.cles[+row.dataset.ki], val = $(".kval", row);
-    $("[data-show]", row).onclick = (e) => { if (!k.valeur) return; const on = val.textContent.startsWith("•"); val.textContent = on ? k.valeur : "••••••••••••"; e.target.textContent = on ? "Masquer" : "Afficher"; };
-    $("[data-copy-key]", row).onclick = async () => { await copyText(k.valeur); toast("Clé copiée"); };
-    const res = $(".kres", row), edit = $(".kedit", row), inp = $(".knew", row);
-    const say = (x) => { res.textContent = (x.ok ? "✓ " : "✗ ") + (x.texte || x.error || ""); res.hidden = false; res.style.color = x.ok ? "var(--ok, #3fb9a0)" : "var(--danger, #e5735f)"; };
-    if (!k.valeur) { val.textContent = "(vide)"; }
-    $("[data-edit-key]", row).onclick = () => { edit.hidden = !edit.hidden; if (!edit.hidden) { inp.value = ""; inp.focus(); } };
-    $("[data-cancel-key]", row).onclick = () => { edit.hidden = true; inp.value = ""; };
-    const save = async () => {
-      const v = inp.value.trim(); if (!v) return inp.focus();
-      const x = await api("/api/owner/action", { method: "POST", body: { action: "set_key", args: { id: k.id, value: v } } });
-      if (x.ok) { k.valeur = v; val.textContent = "••••••••••••"; $("[data-show]", row).textContent = "Afficher"; edit.hidden = true; inp.value = ""; }
-      say(x);
+    const k = r.cles[+row.dataset.ki], val = $(".kval", row), inp = $(".knew", row), hint = $(".khint", row), state = $(".kstate", row);
+    const eye = $("[data-show]", row), save = $("[data-save-key]", row);
+    let shown = false;
+    const mask = (v) => v ? `${v.slice(0, Math.min(6, v.indexOf("_") + 1 || 4))}${"•".repeat(14)}${v.slice(-4)}` : "";
+    const paint = () => {
+      val.classList.toggle("empty", !k.valeur);
+      val.textContent = !k.valeur ? "Aucune clé enregistrée" : shown ? k.valeur : mask(k.valeur);
+      eye.innerHTML = svgI(shown ? "lock" : "eye"); eye.title = shown ? "Masquer" : "Afficher";
+      eye.disabled = $("[data-copy-key]", row).disabled = !k.valeur;
     };
-    $("[data-save-key]", row).onclick = save;
-    inp.onkeydown = (e) => { if (e.key === "Enter") save(); if (e.key === "Escape") $("[data-cancel-key]", row).click(); };
+    const status = (kind, text) => { state.hidden = !kind; state.className = `kstate ${kind || ""}`; state.textContent = text || ""; };
+    const editing = (on) => {
+      row.classList.toggle("editing", on); val.hidden = on; inp.hidden = !on; $(".kin", row).hidden = on;
+      $(".kview", row).hidden = on; $(".kedit", row).hidden = !on; hint.hidden = !on;
+      inp.value = ""; save.disabled = true; hint.textContent = "Colle la clé : elle s'affiche en clair pour que tu vérifies avant d'enregistrer.";
+      if (on) inp.focus();
+    };
+    paint();
+    eye.onclick = () => { shown = !shown; paint(); };
+    $("[data-copy-key]", row).onclick = async () => { await copyText(k.valeur); toast("Clé copiée"); };
+    $("[data-edit-key]", row).onclick = () => editing(true);
+    $("[data-cancel-key]", row).onclick = () => editing(false);
+    inp.oninput = () => {
+      const v = inp.value.trim(), kind = (v.match(/^(github_pat_|ghp_|hf_|sk-|xox[bp]-)/) || [])[1];
+      save.disabled = !v;
+      hint.textContent = v ? `${v.length} caractères${kind ? ` · commence par ${kind}` : ""}${/\s/.test(v) ? " · attention : contient un espace" : ""}` : "Colle la clé : elle s'affiche en clair pour que tu vérifies avant d'enregistrer.";
+    };
+    const doSave = async () => {
+      const v = inp.value.trim(); if (!v) return inp.focus();
+      save.disabled = true;
+      const x = await api("/api/owner/action", { method: "POST", body: { action: "set_key", args: { id: k.id, value: v } } });
+      if (x.ok) { k.valeur = v; shown = false; editing(false); paint(); status("ok", "Enregistrée"); toast("Clé enregistrée"); }
+      else { save.disabled = false; status("bad", x.texte || x.error || "Échec"); }
+    };
+    save.onclick = doSave;
+    inp.onkeydown = (e) => { if (e.key === "Enter") doSave(); if (e.key === "Escape") editing(false); };
     $("[data-del-key]", row).onclick = async () => {
       if (!confirm(`Supprimer la clé « ${k.service} — ${k.nom} » de Naim ?\n\nLa carte reste, vide, pour y mettre une nouvelle clé. Pense aussi à la révoquer sur le site du service.`)) return;
       const x = await api("/api/owner/action", { method: "POST", body: { action: "delete_key", args: { id: k.id } } });
-      if (x.ok) { k.valeur = ""; val.textContent = "(vide)"; }
-      say(x);
+      if (x.ok) { k.valeur = ""; shown = false; paint(); status("", ""); toast("Clé supprimée"); } else status("bad", x.texte || "Échec");
     };
-    $("[data-check]", row).onclick = async () => { const res = $(".kres", row); res.textContent = "…"; const x = await api("/api/owner/action", { method: "POST", body: { action: "check", args: { id: k.id } } }); res.textContent = (x.ok ? "✓ " : "✗ ") + (x.texte || x.error || ""); res.hidden = false; res.style.color = x.ok ? "var(--ok, #3fb9a0)" : "var(--danger, #e5735f)"; };
+    $("[data-check]", row).onclick = async (e) => {
+      const b = e.currentTarget; b.disabled = true; status("wait", "Vérification…");
+      try { const x = await api("/api/owner/action", { method: "POST", body: { action: "check", args: { id: k.id } } }); status(x.ok ? "ok" : "bad", x.texte || x.error || ""); }
+      finally { b.disabled = false; }
+    };
   });
   $$("[data-cmd-copy]", box).forEach((b) => (b.onclick = async () => { await copyText(b.dataset.cmdCopy); toast("Commande copiée : colle-la dans le Terminal"); }));
   $$("[data-a]", box).forEach((row) => ($("button", row).onclick = async (e) => {
