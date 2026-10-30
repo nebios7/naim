@@ -919,7 +919,7 @@ body.haslive .working .wtime { display: none; }
 #sResults button:hover { background: var(--hover); }
 #sResults button small { display: block; color: var(--muted); font-size: 11.5px; }
 #sResults .none { color: var(--muted); font-size: 12.5px; padding: 6px 8px; }
-.srow.flash { animation: sflash 1.6s ease-out; border-radius: 8px; }
+.srow.flash, .acard.flash { animation: sflash 1.6s ease-out; border-radius: 8px; }
 @keyframes sflash { 0%, 40% { background: var(--accent-soft, rgba(217,119,87,.18)); } 100% { background: transparent; } }
 /* Personnaliser when the page is narrow (big zoom or small window): the tab list goes above the content */
 .pagein { container-type: inline-size; }
@@ -6078,20 +6078,43 @@ function settingsIndex() {  // every setting of every tab (title, description), 
   return out;
 }
 const fold = (x) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// skills and plugins are loaded by their tabs, not written in them: fetched once per search session so they can be found too
+let dynIndex = null;
+async function loadDynIndex() {
+  const tabLabel = (t) => $(`#stabs button[data-s="${t}"]`)?.textContent || t;
+  const [skills, plg] = await Promise.all([
+    api(`/api/skills${S.project ? `?root=${encodeURIComponent(S.project)}` : ""}`).catch(() => []),
+    api("/api/plugins").catch(() => ({ plugins: [] })),
+  ]);
+  dynIndex = [
+    ...skills.map((k) => ({ tab: "skills", label: tabLabel("skills"), title: k.name, sub: k.description || "", row: k.name })),
+    ...(plg.plugins || []).map((p) => ({ tab: "plugins", label: tabLabel("plugins"), title: p.name, sub: `${p.description || ""} ${(p.skills || []).join(" ")}`, row: p.name })),
+  ];
+  $("#sSearch").dispatchEvent(new Event("input"));
+}
+$("#sSearch").addEventListener("focus", () => { if (!dynIndex) loadDynIndex(); });
+$("#sSearch").addEventListener("blur", () => setTimeout(() => { if (!$("#sSearch").value) dynIndex = null; }, 300));
 $("#sSearch").addEventListener("input", (e) => {
   const q = fold(e.target.value.trim()), box = $("#sResults");
   $$("#stabs .stablist > button").forEach((b) => (b.hidden = !!q));
   if (!q) { box.hidden = true; return; }
   const words = q.split(/\s+/);
-  const hits = settingsIndex().filter((x) => words.every((w) => fold(`${x.title} ${x.sub} ${x.label}`).includes(w))).slice(0, 30);
+  const hits = [...settingsIndex(), ...(dynIndex || [])].filter((x) => words.every((w) => fold(`${x.title} ${x.sub} ${x.label}`).includes(w))).slice(0, 30);
   box.hidden = false;
   box.innerHTML = hits.length ? hits.map((x, i) => `<button data-i="${i}">${esc(x.title)}<small>${esc(x.label)}${x.sub ? " · " + esc(x.sub.slice(0, 70)) : ""}</small></button>`).join("") : '<div class="none">Aucun réglage trouvé</div>';
   $$("button", box).forEach((b) => (b.onclick = () => {
     const x = hits[+b.dataset.i];
     e.target.value = ""; box.hidden = true; $$("#stabs .stablist > button").forEach((bb) => (bb.hidden = false));
     showSettingsTab(x.tab);
-    const r = $$("#spane .srow").find((el) => $(".sl b", el)?.textContent.trim() === x.title);
-    if (r) { r.scrollIntoView({ block: "center", behavior: "smooth" }); r.classList.add("flash"); setTimeout(() => r.classList.remove("flash"), 1700); }
+    const flash = (r) => { r.scrollIntoView({ block: "center", behavior: "smooth" }); r.classList.add("flash"); setTimeout(() => r.classList.remove("flash"), 1700); };
+    if (!x.row) { const r = $$("#spane .srow").find((el) => $(".sl b", el)?.textContent.trim() === x.title); if (r) flash(r); return; }
+    // a skill or a plugin: its row appears once the tab has loaded its list
+    let tries = 0;
+    const seek = () => {
+      const r = $$(x.tab === "skills" ? "#skillList .srow" : "#plgList .acard", $("#spane")).find((el) => ($("b", el)?.textContent || "").trim().split(/\s+/).includes(x.row));
+      if (r) flash(r); else if (++tries < 30) setTimeout(seek, 100);
+    };
+    seek();
   }));
 });
 $$("#stabs .stablist > button").forEach((b) => (b.onclick = () => showSettingsTab(b.dataset.s)));
