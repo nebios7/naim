@@ -26,6 +26,8 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
 2. Travaille dans un dossier à toi (ex. `cours-python/`). Les graphiques : un fichier JSON de données par graphique,
    puis `pdfpro.py chart …` → un .svg dans ce dossier.
 3. Écris `page.html` : SEULEMENT le contenu (pas de `<html>`, pas de `<style>`, pas de couleur à toi).
+   **Par morceaux**, jamais tout d'un coup (un long fichier en un seul appel se perd) : la couverture et le sommaire
+   avec `write_file(page.html, …)`, puis CHAQUE chapitre avec `write_file(page.html, <le chapitre>, append=true)`.
 4. `pdfpro.py render page.html document.pdf`, puis `pdfpro.py check document.pdf` et look_at sur les deux PNG :
    rien de coupé, formules affichées, graphiques lisibles. Corrige page.html et relance si besoin.
 5. Copie le PDF dans le dossier du projet ouvert (ou `~/Documents/Naim/Fichiers`) et donne son chemin.

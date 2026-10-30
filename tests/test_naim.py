@@ -1043,5 +1043,19 @@ class SkillFromThisMac(unittest.TestCase):
             with self.assertRaises(skill_hub.SkillError):
                 skill_hub.install_file(b"rien", "vide.md", d, "projet")
 
+
+class WriteInParts(unittest.TestCase):
+    """A long file written in parts (append) and a clear way out when a call too long loses its path or content."""
+
+    def test_append_and_lost_argument(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True)
+            a.write_file("page.html", "<section>1</section>")
+            a.write_file("page.html", "<section>2</section>", append=True)
+            self.assertEqual((Path(d) / "page.html").read_text(), "<section>1</section>\n<section>2</section>")
+            a.tools = [{"function": {"name": "write_file"}}]
+            out = a.call_tool("write_file", {"content": "x" * 50})
+            self.assertIn("append=true", out)
+
 if __name__ == "__main__":
     unittest.main()

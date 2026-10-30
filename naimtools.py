@@ -1130,7 +1130,7 @@ class Agent:
 
     BUILT_EXTS = {".xlsx", ".docx", ".pdf", ".odt", ".rtf"}
 
-    def write_file(self, path, content):
+    def write_file(self, path, content, append=False):
         if re.search(r"\.app/Contents/", str(path)):
             return ("refused: a Mac application (.app) is never assembled by hand (a script or a fake executable shows no window). "
                     "Use the app-macos skill: put the SwiftUI code in apps/<Nom>/<Nom>App.swift, then run "
@@ -1138,6 +1138,10 @@ class Agent:
         p = self.resolve(path)
         if err := self._guard_own_path(p, "Écrire"):
             return err
+        if append and p.is_file() and p.suffix.lower() not in self.BUILT_EXTS:
+            # a long file written in parts (a course, a report): this part goes after what is already there
+            old = p.read_text(errors="replace")
+            content = old + ("" if not old or old.endswith("\n") else "\n") + (content or "")
         if self.PLACEHOLDER_RE.search(content or ""):
             return ("refused: this content is a placeholder, not the real file. Write the complete, real content "
                     "of the file (or leave it as it is if it is already done).")
@@ -3066,6 +3070,12 @@ class Agent:
         try:
             result = fn(**args)
         except TypeError as e:
+            if name == "write_file" and "missing" in str(e):
+                # a very long file in one call: its path or its content gets lost on the way — written in parts it works
+                return ("error: your write_file call lost its " + ("path" if "'path'" in str(e) else "content") +
+                        " (the file was too long for one call). Write it in parts of about 150 lines: first "
+                        "write_file(path, content=<first part>), then write_file(path, content=<next part>, append=true) "
+                        "for each following part (a chapter, a section), until the end.")
             return f"error: bad arguments for {name}: {e}"
         except ValueError as e:
             return f"error: {e}"
