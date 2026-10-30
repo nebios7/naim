@@ -937,6 +937,50 @@ body.haslive .working .wtime { display: none; }
 .oline code { flex: 1 1 220px; min-width: 0; font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; overflow-wrap: anywhere; word-break: break-all; }
 .oline .obtns { display: flex; gap: 6px; flex: none; margin-left: auto; }
 .kres { display: block; font-size: 12px; }
+/* Personnaliser › Skills: install and library, the same building blocks as the keys card */
+.skinst .srow.col { gap: 12px; padding: 16px; }
+.skhead { display: flex; align-items: flex-start; gap: 10px; }
+.skhead .sl { flex: 1; min-width: 0; }
+.skic { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
+.skic svg { width: 16px; height: 16px; }
+.skfield { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 4px 4px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; transition: border-color .15s, box-shadow .15s; }
+.skfield:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.skpre { display: inline-flex; color: var(--muted); flex: none; }
+.skpre svg { width: 16px; height: 16px; }
+.skfield input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font-size: 13.5px; padding: 6px 0; }
+.skfield input::placeholder { color: var(--muted); }
+.skfield .btn { flex: none; }
+.skor { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.skor::before, .skor::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.skdrop { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px 16px; border: 1.5px dashed var(--line); border-radius: 10px; background: none; color: var(--text); cursor: pointer; transition: border-color .15s, background .15s; }
+.skdrop:hover, .skdrop.over { border-color: var(--brand); background: var(--brand-soft); }
+.skdrop > svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.skdrop span { display: flex; flex-direction: column; gap: 1px; }
+.skdrop b { font-weight: 500; font-size: 14px; }
+.skdrop small { color: var(--muted); font-size: 12.5px; }
+.skwhere { display: flex; flex-direction: column; gap: 6px; }
+.skwhere > small { color: var(--muted); font-size: 12px; }
+.skseg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.skseg button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; border: 1px solid transparent; background: none; color: var(--text); border-radius: 7px; padding: 7px 10px; cursor: pointer; }
+.skseg button b { font-weight: 500; font-size: 13.5px; }
+.skseg button small { color: var(--muted); font-size: 11.5px; }
+.skseg button.on { background: var(--panel); border-color: var(--line); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.skseg button.on b { color: var(--brand); }
+.skpop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.skpop:empty { display: none; }
+.skpop > small { color: var(--muted); font-size: 12px; margin-right: 2px; }
+.skchip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; }
+.skchip:hover { border-color: var(--brand); }
+.skchip svg { width: 13px; height: 13px; color: var(--brand); }
+.sknote { display: flex; gap: 8px; align-items: flex-start; color: var(--muted); font-size: 11.5px; line-height: 1.5; padding-top: 10px; border-top: 1px solid var(--line); }
+.sknote > svg { width: 14px; height: 14px; flex: none; margin-top: 1px; }
+#hubList:not(:empty) { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+#hubList .srow, .sklib .srow { padding: 10px 14px; }
+.sklib { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.sklib:empty { display: none; }
+.sklib .srow .sl b, #hubList .srow .sl b { font-size: 13.5px; }
+.sklib .btn, #hubList .srow > .btn { font-size: 12.5px; padding: 4px 10px; }
+@container (max-width: 560px) { .skseg { grid-template-columns: 1fr; } }
 /* keys: a field with its eye and copy inside, actions below, the check result as a pill */
 .kcard { gap: 10px !important; }
 .khead { display: flex; align-items: flex-start; gap: 12px; }
@@ -5846,13 +5890,22 @@ const TABS = {
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Des méthodes réutilisables (SKILL.md) rangées dans <span class="mono">~/.naim/skills</span> (et <span class="mono">.naim/skills</span> dans un projet). Naim charge celui qui correspond à la tâche, et chaque skill est aussi une commande : tape <span class="mono">/nom-du-skill</span>. Naim peut en créer lui-même après une tâche réussie (« reverse skill »). <button class="btn" id="skReveal" style="margin-left:6px">Ouvrir le dossier</button></p>
     <div class="sgroup" id="skillList"><div class="srow"><div class="sl">Chargement…</div></div></div>
     <div class="sgroup" id="skillEditor" hidden></div>
-    <div class="sgroup"><div class="srow col"><div class="sl"><b>🌐 Installer un skill</b><small>Un dépôt GitHub (<span class="mono">owner/repo</span>), un de ses dossiers, un lien vers un SKILL.md, ou <b>Depuis mon Mac</b> : un fichier <span class="mono">.skill</span>, <span class="mono">.zip</span> ou <span class="mono">SKILL.md</span>. Les fichiers sont seulement copiés dans <span class="mono">~/.naim/skills</span>, jamais exécutés à l'installation. Un skill du même nom est gardé dans <span class="mono">skills/.anciens</span>. Vérifie la licence de chaque skill.</small></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="field mono" id="hubUrl" placeholder="https://github.com/owner/repo  ou  owner/repo" style="flex:1 1 220px;min-width:0"><button class="btn primary" id="hubBrowse">Parcourir</button><button class="btn" id="hubLocal" title="Un fichier .skill ou .zip (un dossier avec son SKILL.md), ou un SKILL.md, depuis ce Mac">Depuis mon Mac…</button><input type="file" id="hubLocalFile" accept=".skill,.zip,.md" multiple hidden></div>
-      <div style="display:flex;gap:8px;align-items:center"><small class="muted">Installer dans :</small><select class="field" id="hubScope" style="flex:1"><option value="bibliotheque">la bibliothèque — autant que tu veux, Naim les cherche au besoin (recommandé)</option><option value="utilisateur">les skills actives — toujours chargées (garde-les peu nombreuses)</option></select></div>
-      <div class="srow" id="libRow" style="padding:6px 0"><div class="sl"><small id="libInfo">Bibliothèque : …</small></div><div class="sc" style="gap:6px"><input class="field" id="libQ" placeholder="chercher dans la bibliothèque" style="width:220px"><button class="btn" id="libOpen">Ouvrir le dossier</button></div></div>
-      <div id="libFound" style="max-height:520px;overflow:auto"></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap" id="hubPopular"></div>
-      <div id="hubList"></div></div></div>
+    <div class="sgroup skinst"><div class="srow col">
+      <div class="skhead"><span class="skic">${svgI("download")}</span><div class="sl"><b>Installer un skill</b><small>Depuis GitHub ou depuis ce Mac. Naim s'en sert tout seul quand une tâche en a besoin.</small></div></div>
+      <div class="skfield"><span class="skpre">${svgI("globe")}</span><input class="mono" id="hubUrl" placeholder="github.com/owner/repo  ou  owner/repo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"><button class="btn primary" id="hubBrowse">Parcourir</button></div>
+      <div class="skor"><span>ou</span></div>
+      <button class="skdrop" id="hubLocal" type="button">${svgI("folder")}<span><b>Depuis mon Mac</b><small>Glisse ici un fichier .skill, .zip ou SKILL.md, ou clique pour le choisir</small></span></button><input type="file" id="hubLocalFile" accept=".skill,.zip,.md" multiple hidden>
+      <div class="skwhere"><small>Installer dans</small><div class="skseg" id="hubSeg"><button type="button" data-v="bibliotheque" class="on"><b>La bibliothèque</b><small>Autant que tu veux, chargés au besoin · recommandé</small></button><button type="button" data-v="utilisateur"><b>Les skills actives</b><small>Toujours chargées · garde-les peu nombreuses</small></button></div>
+        <select id="hubScope" hidden><option value="bibliotheque">bibliothèque</option><option value="utilisateur">actives</option></select></div>
+      <div class="skpop" id="hubPopular"></div>
+      <div id="hubList"></div>
+      <small class="sknote">${svgI("shield")}<span>Les fichiers sont seulement copiés dans <span class="mono">~/.naim/skills</span>, jamais exécutés à l'installation. Un skill du même nom est gardé dans <span class="mono">skills/.anciens</span>. Vérifie la licence de chaque skill.</span></small>
+    </div></div>
+    <div class="sgroup skinst"><div class="srow col">
+      <div class="skhead"><span class="skic">${svgI("book")}</span><div class="sl"><b>Bibliothèque</b><small id="libInfo">…</small></div><button class="kib" id="libOpen" title="Ouvrir le dossier">${svgI("folder")}</button></div>
+      <div class="skfield"><span class="skpre">${svgI("search")}</span><input id="libQ" placeholder="Chercher un skill dans la bibliothèque" autocomplete="off" spellcheck="false"></div>
+      <div id="libFound" class="sklib"></div>
+    </div></div>
     <div class="sgroup"><div class="srow col"><div class="sl"><b>Nouveau skill</b></div>
       <div style="display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center">
         <label>Nom</label><input class="field" id="skName" placeholder="deployer-api-php">
@@ -6589,7 +6642,7 @@ async function loadSkillsPage() {
     };
     r.skills.forEach((k) => {
       const el = document.createElement("div"); el.className = "srow";
-      el.innerHTML = `<div class="sl"><b>📦 ${esc(k.name)}${have.has(k.name) ? ' <span class="badge2">déjà installé</span>' : ""}</b><small>${esc(k.description)}</small><small class="muted">${k.files} fichier${k.files > 1 ? "s" : ""} · ${Math.max(1, Math.round(k.size / 1024))} Ko${k.license ? " · licence : " + esc(k.license.slice(0, 80)) : ""}</small></div><button class="btn">${have.has(k.name) ? "Remplacer" : "Installer"}</button>`;
+      el.innerHTML = `<div class="sl"><b>${esc(k.name)}${have.has(k.name) ? ' <span class="badge2">déjà installé</span>' : ""}</b><small>${esc(k.description)}</small><small class="muted">${k.files} fichier${k.files > 1 ? "s" : ""} · ${Math.max(1, Math.round(k.size / 1024))} Ko${k.license ? " · licence : " + esc(k.license.slice(0, 80)) : ""}</small></div><button class="btn">${have.has(k.name) ? "Remplacer" : "Installer"}</button>`;
       $("button", el).onclick = (e) => install([k.name], e.target);
       list.appendChild(el);
     });
@@ -6607,8 +6660,13 @@ async function loadSkillsPage() {
   $("#hubBrowse").onclick = hubBrowse;
   // « Depuis mon Mac » : a .skill / .zip archive or a SKILL.md, read here and installed by Naim (copied, never run)
   $("#hubLocal").onclick = () => $("#hubLocalFile").click();
-  $("#hubLocalFile").onchange = async (e) => {
-    const files = [...e.target.files]; e.target.value = "";
+  $$("#hubSeg button").forEach((b) => (b.onclick = () => { $("#hubScope").value = b.dataset.v; $$("#hubSeg button").forEach((x) => x.classList.toggle("on", x === b)); }));
+  const drop = $("#hubLocal");
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = () => drop.classList.remove("over");
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files.length) installLocal([...e.dataTransfer.files]); };
+  $("#hubLocalFile").onchange = (e) => { const files = [...e.target.files]; e.target.value = ""; installLocal(files); };
+  const installLocal = async (files) => {
     const done = [], errs = [];
     for (const f of files) {
       const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = ko; r.readAsDataURL(f); });
@@ -6635,7 +6693,7 @@ async function loadSkillsPage() {
   const libLoad = async (q = libQuery, more = false) => {
     libQuery = q; if (!more) libShown = 0;
     const r = await api("/api/skills/bibliotheque", { method: "POST", body: { q, offset: libShown, limit: 50 } }).catch(() => null); if (!r) return;
-    $("#libInfo").textContent = `Bibliothèque : ${r.count} skill${r.count > 1 ? "s" : ""} — Naim les cherche et les charge tout seul quand une tâche en a besoin`;
+    $("#libInfo").textContent = `${r.count.toLocaleString("fr-FR")} skill${r.count > 1 ? "s" : ""} · Naim les cherche et les charge tout seul quand une tâche en a besoin`;
     $("#libOpen").onclick = () => api("/api/reveal", { method: "POST", body: { path: r.path } });
     const box = $("#libFound"); if (!more) box.innerHTML = "";
     $("[data-libmore]", box)?.remove();
@@ -6653,7 +6711,8 @@ async function loadSkillsPage() {
   libLoad();
   $("#hubUrl").onkeydown = (e) => { if (e.key === "Enter") hubBrowse(); };
   api("/api/skills/popular", { method: "POST", body: {} }).then((r) => {
-    $("#hubPopular").innerHTML = r.sources.map((x) => `<button class="ghost" data-src="${esc(x.url)}" title="${esc(x.description)}">⭐ ${esc(x.title)}</button>`).join("");
+    $("#hubPopular").innerHTML = r.sources.map((x) => `<button class="skchip" data-src="${esc(x.url)}" title="${esc(x.description)}">${svgI("star")}${esc(x.title)}</button>`).join("");
+    if (r.sources.length) $("#hubPopular").insertAdjacentHTML("afterbegin", "<small>Sources populaires</small>");
     $$("#hubPopular [data-src]").forEach((b) => (b.onclick = () => { $("#hubUrl").value = b.dataset.src; hubBrowse(); }));
   }).catch(() => {});
   $("#skCreate").onclick = async () => {
