@@ -65,5 +65,6 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
   « Ce que dit le courrier », « Points d'attention » (`callout warn`), « Ce qu'il faut faire » (tableau action ·
   échéance · priorité avec `tag`), et les chiffres du courrier en tableau ou en graphique.
 - **Rapport / statistiques** : chiffres clés en `kpis`, un graphique par message important, tableaux sourcés.
+- **CV et lettre de motivation** : skill cv-lettre, avec le modèle `$T/exemples/cv.html` (déjà dans ce style).
 - **Plan d'architecte** : le plan en SVG (skill plan-maison pour les pièces et les cotes), une pièce par ligne de
   tableau (nom, surface m², orientation), un encadré par contrainte (normes, budget).

@@ -1,6 +1,6 @@
 {
   "name": "candidature",
-  "version": "1.0",
+  "version": "1.1",
   "description": "CV et lettre de motivation dans le style demandé (modèle copié, jamais retapé) ; la lettre est faite par un script à partir du CV, sans mélanger les deux.",
   "skills": "skills"
 }

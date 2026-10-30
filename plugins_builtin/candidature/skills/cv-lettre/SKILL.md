@@ -22,7 +22,12 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
 - **Une skill de style nommée** (design-style-gitingest…) : charge-la avec use_skill et suis ses valeurs exactes ;
   si son dossier contient `modele.html`, pars de ce fichier avec `cp`, comme ci-dessus.
 - **Une image de référence** : reprends ce que tu vois (couleurs, polices, disposition, cartes, badges).
-- **Rien de donné** : sobre, une colonne, A4, une couleur d'accent.
+- **« Le style de mes PDF », « style pdf-pro », ou rien de donné** : le modèle tout prêt
+  `~/.naim/plugins/pdf-pro/skills/pdf-pro/exemples/cv.html` (titres élégants, accent terracotta, A4), avec le script
+  ci-dessus comme un modèle joint. Ses textes à remplacer : « Prénom Nom », « Intitulé du poste recherché », les
+  coordonnées, « Deux ou trois phrases… », « Intitulé du poste 1 », « Entreprise 1 · Ville 1 », « Réalisation 1 du poste 1… »,
+  « Diplôme 1 », « Compétence clé 1 », « Langue 1 », « Niveau 1 »… Un poste ou un diplôme en plus : copie un bloc
+  `<div class="poste">` avec multi_edit. Un bloc en trop : retire-le avec edit_file. « tag fort » = compétence principale.
 
 ## 3. La lettre « avec le même style » : avec le script, jamais à la main
 1. Termine d'abord le CV (`CV_<Nom>.html`).
