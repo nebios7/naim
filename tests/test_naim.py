@@ -1061,6 +1061,10 @@ class WriteInParts(unittest.TestCase):
             self.assertTrue(out.startswith("refused") and "append=true" in out)
             out = a.write_file("page.html", "<section>3</section>", append=True)
             self.assertIn("now has 201 lines", out)
+            b = naimtools.Agent(d, "naim", auto_yes=True)  # « continue »: a new run, the same file
+            out = b.write_file("page.html", "<p>fin du chapitre 4</p>\n" * 300)
+            self.assertTrue(out.startswith("refused") and "erase its beginning" in out)
+            self.assertIn("ok", b.write_file("page.html", "<p>ligne</p>\n<p>tout réécrit</p>\n" * 300))
 
 
 class RunawayCallIsCut(unittest.TestCase):

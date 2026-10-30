@@ -637,6 +637,9 @@ def mac_allow(area):
     MAC_GRANTS.write_text(json.dumps(d, ensure_ascii=False, indent=1))
 
 
+
+APPENDED = set()  # files written in parts (append) since Naim started
+
 class Agent:
     """Tool-using agent loop. `approver(action, detail) -> bool` and `emit(event_dict)` let each UI plug in."""
 
@@ -1143,6 +1146,13 @@ class Agent:
             # a long file written in parts (a course, a report): this part goes after what is already there
             old = p.read_text(errors="replace")
             content = old + ("" if not old or old.endswith("\n") else "\n") + (content or "")
+        elif str(p) in APPENDED and p.is_file():
+            # a file built in parts: a next part written without append would erase every part before it
+            first = next((l.strip() for l in p.read_text(errors="replace").splitlines() if l.strip()), "")
+            if first and first not in (content or ""):
+                return (f"refused: {self.rel(p)} is being written in parts and this would erase its beginning "
+                        f"({p.read_text(errors='replace').count(chr(10)) + 1} lines already). To ADD this part at the end: "
+                        f"write_file(path=\"{self.rel(p)}\", content=<this part>, append=true). To change a passage: edit_file.")
         if self.PLACEHOLDER_RE.search(content or ""):
             return ("refused: this content is a placeholder, not the real file. Write the complete, real content "
                     "of the file (or leave it as it is if it is already done).")
@@ -1191,6 +1201,8 @@ class Agent:
             return (f"ok: built {self.rel(p)} ({p.stat().st_size} bytes) from your "
                     f"{'CSV' if p.suffix.lower() == '.xlsx' else 'Markdown/HTML'} content. It is a real "
                     f"{p.suffix[1:].upper()} file: do not write it again.")
+        if append:
+            APPENDED.add(str(p))  # kept for the whole session: a « continue » is a new run on the same file
         p.write_text(content)
         lines = content.count(chr(10)) + 1
         self._last_written = self.rel(p)
