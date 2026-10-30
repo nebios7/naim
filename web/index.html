@@ -1524,6 +1524,17 @@ details.think > summary::before { content: ""; width: 13px; height: 13px; backgr
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat; }
 details.think[open] > summary::before { transform: rotate(90deg); }
 details.think > summary:hover { color: var(--text); background: var(--hover); }
+/* thinking, like a pro tool: a terracotta star turning while it thinks, the thoughts in a small box that scrolls by
+   itself (older lines fading at the top), a single live line (no « Naim réfléchit » under it) */
+details.think > summary .thspin { display: inline-flex; width: 14px; height: 14px; color: #d97757; animation: naimSpin 2.4s cubic-bezier(.45, .05, .55, .95) infinite; }
+details.think > summary .thspin[hidden] { display: none; }
+details.think > summary .thspin svg { width: 14px; height: 14px; }
+details.think.live > summary::before { display: none; }
+details.think > summary .thlab { font-variant-numeric: tabular-nums; }
+details.think > div { max-height: 220px; overflow-y: auto; font-size: 12.5px; line-height: 1.6; padding: 4px 0 4px 12px !important; margin-top: 6px; scrollbar-width: thin; }
+details.think.live > div { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px); mask-image: linear-gradient(to bottom, transparent 0, #000 28px); }
+.turn.bot:has(details.think.live) .liveline { display: none; }
+@media (prefers-reduced-motion: reduce) { details.think > summary .thspin { animation: none; } }
 /* thinking: three dots that rise one after another */
 .ldots { display: inline-flex; align-items: flex-end; gap: 3px; margin-left: 5px; height: 1em; vertical-align: -1px; }
 .ldots i { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); animation: ldot 1.2s ease-in-out infinite; }
@@ -3271,7 +3282,7 @@ function renderThread() {
     if (current.summary && idx === current.summary.upto) $("#thread").appendChild(compactNote(current.summary));
     if (m.role === "user") addUser(m, idx);
     else {
-      const v = addBot(m, idx); if (m.todos) v.todos(m.todos); for (const s of m.steps || []) v.replay(s); v.setText(m.content || ""); if (m.thinking) v.setThinking(m.thinking); if (m.stats) v.setStats(m.stats);
+      const v = addBot(m, idx); if (m.todos) v.todos(m.todos); for (const s of m.steps || []) v.replay(s); v.setText(m.content || ""); if (m.thinking) v.setThinking(m.thinking, m.think_s ?? true); if (m.stats) v.setStats(m.stats);
       if (live && live.reply === m) { v._replay = false; live.v = v; v.typing(live.status || "Naim travaille…"); } else { v.finish(); v.actions(m); }
     }
   });
@@ -3797,9 +3808,10 @@ function toolMeta(name, a) {
   return diff ? { diff } : {};
 }
 
+const fmtSecs = (s) => s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}`;
 function addBot(m, idx) {
   const d = document.createElement("div"); d.className = "turn bot";
-  d.innerHTML = `<details class="think" hidden><summary>Raisonnement</summary><div></div></details><div class="todos" hidden></div><div class="flow"></div><div class="md"></div>
+  d.innerHTML = `<details class="think" hidden><summary><span class="thspin" hidden></span><span class="thlab">Raisonnement</span></summary><div></div></details><div class="todos" hidden></div><div class="flow"></div><div class="md"></div>
     <div class="working" hidden>${robotSVG("working")}<span class="wtext">Naim réfléchit…</span><span class="wprog"></span><span class="wtime"></span><div class="wbar" hidden><i></i></div></div>
     <div class="msgacts">${S.show_time && m?.time ? `<span class="time">${fmtTime(m.time)}</span>` : ""}<button class="icon" data-a="copy" title="Copier">⧉</button>${voiceOK ? '<button class="icon" data-a="speak" title="Écouter (la voix de Naim)">♪</button>' : ""}<button class="icon" data-a="regen" title="Régénérer">↻</button><button class="icon" data-a="cont" title="Continuer la réponse">↪</button><button class="icon" data-a="raw" title="Voir le texte brut">¶</button><span class="stats"></span></div>`;
   $("#thread").appendChild(d);
@@ -3853,11 +3865,39 @@ function addBot(m, idx) {
       // and the reader's position is kept as it was.
       const sc = $("#scroll"), top = sc.scrollTop, before = body.offsetHeight, live = !!working && !d.dataset.done;
       morphInto(body, t ? md(t) : "");
-      if (t) working.hidden = true;
+      if (t) { working.hidden = true; v.thinkEnd(); }
       if (live && t && body.offsetHeight < before) body.style.minHeight = before + "px";
       if (live && !stickBottom) sc.scrollTop = top;
     },
-    setThinking(t) { think.hidden = !t; $("div", think).textContent = t; },
+    // like a pro tool: « Réflexion… 12 s » with a turning star while Naim thinks, its thoughts scrolling in a small
+    // box; then « A réfléchi 14 s », folded. final: a saved answer (its seconds, or true when they were not kept)
+    setThinking(t, final) {
+      think.hidden = !t;
+      const box = $(":scope > div", think), stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 12;
+      box.textContent = t;
+      if (stick) box.scrollTop = box.scrollHeight;
+      if (!t) return;
+      if (final !== undefined || d.dataset.done) return v.thinkEnd(final === true ? null : final);
+      if (v._thDone) return;
+      if (!v._th0) {
+        v._th0 = Date.now(); think.classList.add("live");
+        const sp = $(".thspin", think); sp.innerHTML = svgI("spark"); sp.hidden = false;
+        v._thTick = setInterval(() => v._thPaint(), 1000);
+        // the first step or the first words of the answer: the thinking is over
+        v._thObs = new MutationObserver(() => { if ([...flow.children].some((c) => !c.classList.contains("liveline"))) v.thinkEnd(); });
+        v._thObs.observe(flow, { childList: true });
+      }
+      v._thPaint();
+    },
+    _thPaint() { $(".thlab", think).textContent = `Réflexion… ${fmtSecs(Math.round((Date.now() - v._th0) / 1000))}`; },
+    thinkEnd(secs) {
+      if (v._thDone || think.hidden) return;
+      v._thDone = true; clearInterval(v._thTick); v._thObs?.disconnect();
+      think.classList.remove("live"); $(".thspin", think).hidden = true;
+      if (secs == null && v._th0) secs = Math.round((Date.now() - v._th0) / 1000);
+      if (secs != null && m) m.think_s = secs;
+      $(".thlab", think).textContent = secs != null ? `A réfléchi ${fmtSecs(secs)}` : "Raisonnement";
+    },
     setStats(s) {  // after the answer, like a pro tool: speed, length, time to the first word, total time, why it stopped
       const el = $(".stats", d); if (!el) return;
       if (!s || !S.show_stats) { el.innerHTML = ""; return; }
@@ -3883,7 +3923,7 @@ function addBot(m, idx) {
     },
     finish() {
       const sc = $("#scroll"), stick = stickBottom && current && d.isConnected;  // WebKit may jump to the top here
-      working.hidden = true; clearInterval(v._timer);
+      working.hidden = true; clearInterval(v._timer); v.thinkEnd();
       d.dataset.done = "1"; body.style.minHeight = "";  // finished: the answer takes its real height
       if (!S.keep_actions_open) $$(".agroup", flow).forEach((g) => (g.open = false));
       $$(".arow.run", flow).forEach((r) => (r.className = "arow")); // no row keeps "running" once the reply is over
