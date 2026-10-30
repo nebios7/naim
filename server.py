@@ -2034,6 +2034,7 @@ class Handler(BaseHTTPRequestHandler):
         prompt_tokens = 0
         started = time.time()  # files made from now on are this reply's deliverables
         nudges = 1 if body.get("_relaunched") else 0
+        progress, todo_push_at = 0, -1  # tool results that worked, and when the unfinished list last sent it back to work
         refusals = 0  # tool calls refused because the message only asks for an answer
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
@@ -2336,6 +2337,19 @@ class Handler(BaseHTTPRequestHandler):
                                  "SMS : chercher_contact ou le numéro que je t'ai donné, puis osascript avec Messages ; appel : "
                                  "open \"tel:<numéro>\"). Ne me dis pas de le faire moi-même. Je validerai si on me le demande."})
                 continue
+            left = [x["text"] for x in (getattr(helper, "todos", None) or []) if x.get("status") not in ("done", "skipped")]
+            if not calls and not stop.is_set() and left and progress > todo_push_at:
+                # its own list is not finished (a course: 4 chapters and the PDF still to do) and the last steps moved
+                # forward: it goes on to the next one — once per progress, never in a circle
+                todo_push_at = progress
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content})
+                    self.event({"type": "token", "text": "\n\n"})
+                messages.append({"role": "user", "content": (
+                    f"Ta liste de tâches n'est pas finie : il reste {len(left)} étape(s). Continue maintenant avec « {left[0]} », "
+                    "sans t'arrêter ni me demander, jusqu'à la dernière ; ta réponse finale viendra quand tout sera fait.")})
+                force_tool = True
+                continue
             if stop.is_set() or not calls:
                 break
             if any(c["function"]["name"] == "run_command" for c in calls):
@@ -2425,6 +2439,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = f"error: {e}"
                 result = str(result)
                 self.event({"type": "tool_result", "name": name, "result": result[-3000:]})
+                if not result.startswith(("error", "refused", "denied", "blocked", "not allowed")):
+                    progress += 1
                 if helper._same_error(name, result):
                     result += ("\n\n[STOP: same error twice. Do not call it again. Tell the user the exact error, your "
                                "hypothesis about its cause and what would fix it.]")

@@ -4455,6 +4455,8 @@ async function continueReply() {
   if (current.mode === "agent") return send("continue");  // Agent: resume the task (its notebook, its skill), not finish a cut text
   const idx = current.messages.length - 1, last = current.messages[idx];
   if (!last || last.role !== "assistant") return;
+  // a task left with steps to do (a course: chapters and the PDF still pending): the task goes on, with its tools
+  if ((last.todos || []).some((t) => t.status !== "done" && t.status !== "skipped")) return send("continue");
   const hist = histFor(current, current.messages.length);
   const turns = $$("#thread .turn.bot"); turns[turns.length - 1]?.remove();
   const v = addBot(last, idx); if (last.todos) v.todos(last.todos); for (const st of last.steps || []) v.replay(st); v.setText(last.content || "");

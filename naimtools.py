@@ -1149,8 +1149,8 @@ class Agent:
         if p.is_file() and p.stat().st_size > 1500 and len(content or "") < p.stat().st_size * 0.1:
             old_lines = p.read_text(errors="replace").count("\n") + 1
             return (f"refused: {self.rel(p)} has {old_lines} lines and you would replace it with "
-                    f"{(content or '').count(chr(10)) + 1} line(s). If you only need a change, use edit_file; "
-                    f"otherwise write the complete new content.")
+                    f"{(content or '').count(chr(10)) + 1} line(s). To ADD this part at the end of the file: "
+                    f"write_file(path=\"{self.rel(p)}\", content=<this part>, append=true). To change a passage: edit_file.")
         if p.exists() and p.read_text(errors="replace").strip() == (content or "").strip():
             # the same file again, word for word: minutes of writing for nothing — on to what is still missing
             return (f"unchanged: {self.rel(p)} already has exactly this content. Do not write it again: go on with a "
@@ -1193,11 +1193,15 @@ class Agent:
                     f"{p.suffix[1:].upper()} file: do not write it again.")
         p.write_text(content)
         lines = content.count(chr(10)) + 1
+        self._last_written = self.rel(p)
+        if append:  # a part added: the file grows, the next part follows the same way
+            return (f"ok: added to {self.rel(p)}, which now has {lines} lines. Add the next part the same way "
+                    f"(write_file(path=\"{self.rel(p)}\", content=<next part>, append=true)), or go on to the next step.")
         # a complete file is the goal (a complex app needs real components): only a huge one gets advice, to split it
         long_note = (f" Note: {lines} lines in one file: next time split it into smaller modules (same content, several files)."
                      if lines > 400 else "")
-        return (f"ok: wrote {self.rel(p)} ({lines} lines). This file is done: "
-                f"do not write it again, move on to the next file or step.{long_note}{self._missing_packages(p, content)}"
+        return (f"ok: wrote {self.rel(p)} ({lines} lines). This file is done: do not write it again, move on to the "
+                f"next file or step (more parts of the same file go after it with append=true).{long_note}{self._missing_packages(p, content)}"
                 + (f" NOTE: this is version {self._rewrites[str(p)] + 1} of this file. Stop rewriting the files already "
                    "done: write the ones still missing (and check that the entry file imports them), then build and run."
                    if self._rewrites.get(str(p), 0) >= 2 else "")
@@ -3074,10 +3078,13 @@ class Agent:
         except TypeError as e:
             if name == "write_file" and "missing" in str(e):
                 # a very long file in one call: its path or its content gets lost on the way — written in parts it works
+                last = getattr(self, "_last_written", None)
+                to = (f"To add this part at the end of {last}: write_file(path=\"{last}\", content=<this part>, append=true). "
+                      if last else "")
                 return ("error: your write_file call lost its " + ("path" if "'path'" in str(e) else "content") +
-                        " (the file was too long for one call). Write it in parts of about 150 lines: first "
-                        "write_file(path, content=<first part>), then write_file(path, content=<next part>, append=true) "
-                        "for each following part (a chapter, a section), until the end.")
+                        " (always give path first, then content). " + to + "A long file is written in parts of about 150 "
+                        "lines: first write_file(path, content=<first part>), then write_file(path, content=<next part>, "
+                        "append=true) for each following part (a chapter, a section), until the end.")
             return f"error: bad arguments for {name}: {e}"
         except ValueError as e:
             return f"error: {e}"

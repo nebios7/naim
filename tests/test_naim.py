@@ -1055,7 +1055,12 @@ class WriteInParts(unittest.TestCase):
             self.assertEqual((Path(d) / "page.html").read_text(), "<section>1</section>\n<section>2</section>")
             a.tools = [{"function": {"name": "write_file"}}]
             out = a.call_tool("write_file", {"content": "x" * 50})
-            self.assertIn("append=true", out)
+            self.assertIn('write_file(path="page.html", content=<this part>, append=true)', out)  # the file it was writing
+            (Path(d) / "page.html").write_text("<p>ligne</p>\n" * 200)
+            out = a.write_file("page.html", "<section>3</section>")
+            self.assertTrue(out.startswith("refused") and "append=true" in out)
+            out = a.write_file("page.html", "<section>3</section>", append=True)
+            self.assertIn("now has 201 lines", out)
 
 
 class RunawayCallIsCut(unittest.TestCase):
