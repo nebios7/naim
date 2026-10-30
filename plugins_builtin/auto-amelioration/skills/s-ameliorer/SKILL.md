@@ -27,6 +27,20 @@ outil) et veut que tu fasses pareil, ne te contente pas de le faire une fois : t
   l'application. Écris la demande précise dans ~/.naim/ameliorations.md (ce que l'utilisateur a montré, le chemin de
   la capture, ce qui doit changer) et dis-le en une phrase.
 
+## Installer depuis un lien GitHub (« installe ce projet : github.com/… »)
+1. **Regarder ce que contient le dépôt** avant tout : `web_fetch https://github.com/<auteur>/<dépôt>` (le README et la
+   liste des fichiers). Ne rien exécuter avant d'avoir lu.
+2. Selon ce qu'il contient :
+   - un `SKILL.md` (à la racine ou dans des dossiers) : c'est un **skill** → `install_skill("https://github.com/<auteur>/<dépôt>")`.
+     Ses scripts, polices, modèles et images sont copiés avec lui dans `~/.naim/skills/<nom>/`. Les chemins de son
+     SKILL.md sont relatifs à son dossier : utilise ce dossier (`~/.naim/skills/<nom>/`), jamais le dossier de skills d'un autre assistant.
+   - un `plugin.json` (à la racine ou dans un dossier caché `.<nom>-plugin/`) : c'est un **plugin** → `install_plugin` avec le lien.
+   - sinon, c'est un **projet de code** : `git clone` dans le dossier du projet ouvert, puis suivre son README
+     (dépendances Python dans un `.venv`, jamais dans le Python du système).
+3. Si le skill a une étape d'installation (« first run: setup », `scripts/setup.sh`), lance-la tout de suite depuis son
+   dossier et lis sa sortie jusqu'à « READY » (ou l'équivalent) ; installe ce qu'elle demande (ex. `brew install ffmpeg`).
+4. Dis en deux lignes ce qui est installé, où, et comment s'en servir (sa commande, ex. `/effects orbit`).
+
 ## Un plugin complet (comme pdf-pro, mods, traduction) : la méthode
 Quand une demande revient ou demande un vrai savoir-faire (des PDF soignés, un format de fichier, un affichage) :
 1. **Regarder ce qui existe** avant d'écrire : les skills et plugins proches (list_files ~/.naim/plugins,

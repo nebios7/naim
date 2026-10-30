@@ -1097,9 +1097,6 @@ header#chatHeader { border-bottom: 1px solid var(--line); background: var(--bg);
 .menu .mdesc { font-size: 11.5px; color: var(--muted); white-space: normal; max-width: 280px; }
 .menu button:has(.mtxt) { align-items: flex-start; padding-top: 7px !important; padding-bottom: 7px !important; height: auto !important; min-height: 0 !important; max-height: none !important; }
 /* like a coding assistant: a small star turning softly before « Réflexion… » while Naim works */
-.working .wspin { flex: none; width: 15px; height: 15px; display: inline-flex; color: #d97757; animation: naimSpin 2.4s cubic-bezier(.45, .05, .55, .95) infinite; }
-.working .wspin svg { width: 15px; height: 15px; }
-.working:has(.wspin) { gap: 8px; }
 #liveBar .lspin { flex: none; width: 15px; height: 15px; display: inline-flex; color: #d97757; animation: naimSpin 2.4s cubic-bezier(.45, .05, .55, .95) infinite; }
 #liveBar .lspin svg { width: 15px; height: 15px; }
 @keyframes naimSpin { 0% { transform: rotate(0) scale(.86); } 50% { transform: rotate(180deg) scale(1.06); } 100% { transform: rotate(360deg) scale(.86); } }
@@ -1112,7 +1109,7 @@ details.agroup[open] > :not(summary), details.think[open] > :not(summary) { anim
 /* the small windows (effort, context, commands, palette) appear like the menus */
 .ctxpop, #slash:not([hidden]), #palette:not([hidden]) { animation: naimPop 130ms var(--ease) both; transform-origin: bottom left; }
 #palette:not([hidden]) { transform-origin: top center; }
-@media (prefers-reduced-motion: reduce) { .working .wspin, #liveBar .lspin, .turn.bot .fresh, details[open] > :not(summary), .ctxpop, #slash, #palette { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { #liveBar .lspin, .turn.bot .fresh, details[open] > :not(summary), .ctxpop, #slash, #palette { animation: none !important; } }
 .toast, #toast { border-radius: var(--r-m); box-shadow: var(--shadow); animation: naimPop 140ms var(--ease) both; }
 #panel.show { animation: naimSlide 160ms var(--ease) both; }
 @keyframes naimSlide { from { opacity: 0; transform: translateX(10px); } }
@@ -3774,7 +3771,7 @@ function toolMeta(name, a) {
 function addBot(m, idx) {
   const d = document.createElement("div"); d.className = "turn bot";
   d.innerHTML = `<details class="think" hidden><summary>Raisonnement</summary><div></div></details><div class="todos" hidden></div><div class="flow"></div><div class="md"></div>
-    <div class="working" hidden>${robotSVG("working")}<span class="wspin" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/></svg></span><span class="wtext">Naim réfléchit…</span><span class="wprog"></span><span class="wtime"></span><div class="wbar" hidden><i></i></div></div>
+    <div class="working" hidden>${robotSVG("working")}<span class="wtext">Naim réfléchit…</span><span class="wprog"></span><span class="wtime"></span><div class="wbar" hidden><i></i></div></div>
     <div class="msgacts">${S.show_time && m?.time ? `<span class="time">${fmtTime(m.time)}</span>` : ""}<button class="icon" data-a="copy" title="Copier">⧉</button>${voiceOK ? '<button class="icon" data-a="speak" title="Écouter (la voix de Naim)">♪</button>' : ""}<button class="icon" data-a="regen" title="Régénérer">↻</button><button class="icon" data-a="cont" title="Continuer la réponse">↪</button><button class="icon" data-a="raw" title="Voir le texte brut">¶</button><span class="stats"></span></div>`;
   $("#thread").appendChild(d);
   const think = $(".think", d), flow = $(".flow", d), body = $(".md", d), working = $(".working", d);
