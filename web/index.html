@@ -7926,7 +7926,7 @@ function modApi(name) {
       if (!el) {
         el = document.createElement("div"); el.id = key(id); el.className = "modband"; el.dataset.mod = name;
         el.innerHTML = '<div class="mbody"></div><button class="mhide" title="Masquer ce bandeau (/mods show pour le revoir)">Masquer</button>';
-        el.querySelector(".mhide").onclick = () => { modHidden(key(id), true); el.hidden = true; toast(`Bandeau masqué · /mods show ${name} pour le revoir`); };
+        el.querySelector(".mhide").onclick = () => { modHidden(key(id), true); el.hidden = true; toast(`Bandeau masqué (le mod tourne encore) · /mods off ${name} pour l'éteindre, /mods show ${name} pour le revoir`); };
         $(".composer").before(el);
       }
       const body = el.querySelector(".mbody");
