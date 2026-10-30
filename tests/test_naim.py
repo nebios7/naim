@@ -1015,5 +1015,33 @@ class WritesItsOwnExtensions(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     a.resolve(str(home / rel))
 
+
+class SkillFromThisMac(unittest.TestCase):
+    """« Depuis mon Mac » : a .skill / .zip archive (its folder and files) or a SKILL.md; nothing written outside."""
+
+    def test_archive_and_file(self):
+        import io
+        import zipfile
+        import skill_hub
+        with tempfile.TemporaryDirectory() as d:
+            b = io.BytesIO()
+            with zipfile.ZipFile(b, "w") as z:
+                z.writestr("polices/SKILL.md", "---\nname: polices-retro\ndescription: d\n---\nfais ceci")
+                z.writestr("polices/exemples/a.html", "<p>x</p>")
+                z.writestr("__MACOSX/polices/._SKILL.md", "junk")
+            self.assertEqual(skill_hub.install_file(b.getvalue(), "polices.skill", d, "projet"), ["polices-retro"])
+            got = Path(d) / ".naim/skills/polices-retro"
+            self.assertEqual(sorted(str(p.relative_to(got)) for p in got.rglob("*") if p.is_file()), ["SKILL.md", "exemples/a.html"])
+            evil = io.BytesIO()
+            with zipfile.ZipFile(evil, "w") as z:
+                z.writestr("x/SKILL.md", "---\nname: x\n---\nhi")
+                z.writestr("x/../../dehors.txt", "non")
+            with self.assertRaises(skill_hub.SkillError):
+                skill_hub.install_file(evil.getvalue(), "x.skill", d, "projet")
+            self.assertFalse((Path(d) / ".naim/dehors.txt").exists())
+            self.assertEqual(skill_hub.install_file(b"---\nname: seul\n---\nfais", "SKILL.md", d, "projet"), ["seul"])
+            with self.assertRaises(skill_hub.SkillError):
+                skill_hub.install_file(b"rien", "vide.md", d, "projet")
+
 if __name__ == "__main__":
     unittest.main()

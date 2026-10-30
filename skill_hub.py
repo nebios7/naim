@@ -259,3 +259,49 @@ def _replace(dest, write):
     except Exception:
         shutil.rmtree(dest, ignore_errors=True)
         raise
+
+
+def install_file(data, filename, root=None, scope="utilisateur"):
+    """A skill from this Mac: a `.skill` or `.zip` archive (a folder with its SKILL.md and files) or a SKILL.md alone.
+    Only copied, never executed; nothing outside the skill's folder is written. Returns [name]."""
+    import zipfile
+    if scope == "bibliotheque":
+        import skills_bibliotheque
+        base = skills_bibliotheque.LIB
+    else:
+        base = (Path(root) / ".naim" / "skills") if scope == "projet" and root else ext.HOME / "skills"
+    base.mkdir(parents=True, exist_ok=True)
+    if len(data) > MAX_SKILL:
+        raise SkillError(f"fichier trop gros ({len(data) // 1_000_000} Mo, au plus {MAX_SKILL // 1_000_000} Mo)")
+    if not data[:4] == b"PK\x03\x04":  # not an archive: a SKILL.md alone
+        text = data.decode("utf-8", errors="replace")
+        meta, body = _meta(text)
+        if not body.strip() or not (meta.get("name") or meta.get("description")):
+            raise SkillError("ce fichier n'est ni une archive .skill / .zip ni un SKILL.md (avec son en-tête name / description)")
+        name = ext.slugify(meta.get("name") or Path(filename).stem or "skill")
+        _replace(base / name, lambda d: (d / "SKILL.md").write_text(text))
+        return [name]
+    zf = zipfile.ZipFile(io.BytesIO(data))
+    files = [i for i in zf.infolist() if not i.is_dir() and "__MACOSX" not in i.filename and not Path(i.filename).name.startswith("._")]
+    skills = sorted((i for i in files if Path(i.filename).name == "SKILL.md"), key=lambda i: i.filename.count("/"))
+    if not skills:
+        raise SkillError("aucun SKILL.md dans cette archive")
+    if sum(i.file_size for i in files) > MAX_SKILL:
+        raise SkillError(f"skill trop gros une fois décompressé (au plus {MAX_SKILL // 1_000_000} Mo)")
+    parent = str(Path(skills[0].filename).parent)
+    top = "" if parent == "." else parent  # the folder holding the SKILL.md (« retro-editorial-fonts/ »), or the root
+    meta, _ = _meta(zf.read(skills[0]).decode("utf-8", errors="replace"))
+    name = ext.slugify(meta.get("name") or (Path(top).name if top else Path(filename).stem) or "skill")
+
+    def write(dest):
+        for i in files:
+            rel = i.filename[len(top) + 1:] if top else i.filename
+            if not rel or (top and not i.filename.startswith(top + "/")):
+                continue  # outside the skill's folder
+            out = (dest / rel).resolve()
+            if dest.resolve() not in out.parents:
+                raise SkillError(f"chemin refusé dans l'archive : {i.filename}")
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(zf.read(i))
+    _replace(base / name, write)
+    return [name]

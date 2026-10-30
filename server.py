@@ -1291,6 +1291,15 @@ class Handler(BaseHTTPRequestHandler):
                     dst, k = lib.LIB / f"{src.name}-{k}", k + 1
                 shutil.move(str(src), str(dst))
                 self.send_json({"ok": True, "name": dst.name})
+        elif path == "/api/skills/upload":  # « Depuis mon Mac » : a .skill / .zip archive or a SKILL.md chosen on this Mac
+            b = self.read_json()
+            try:
+                data = base64.b64decode(b.get("data") or "")
+                self.send_json({"installed": skill_hub.install_file(data, b.get("filename", "skill"), b.get("project"), b.get("scope", "utilisateur"))})
+            except (skill_hub.SkillError, ValueError) as e:
+                self.send_json({"error": str(e)}, 400)
+            except Exception as e:  # noqa: BLE001 — a damaged archive: said in the window
+                self.send_json({"error": f"{type(e).__name__}: {e}"}, 400)
         elif path in ("/api/skills/browse", "/api/skills/install"):
             b = self.read_json()
             try:

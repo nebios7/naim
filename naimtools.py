@@ -2774,7 +2774,19 @@ class Agent:
                 + text)
 
     def _install_local_skill(self, src):
-        """A skill from this Mac: a SKILL.md file (« ~/Downloads/SKILL.md ») or its folder (with its other files)."""
+        """A skill from this Mac: a SKILL.md file (« ~/Downloads/SKILL.md »), its folder (with its other files), or a
+        .skill / .zip archive of that folder."""
+        if src.is_file() and src.suffix.lower() in (".skill", ".zip"):
+            if not self.approve(f"Installer le skill de « {src.name} »", str(src)):
+                return "denied by the user"
+            try:
+                name = skill_hub.install_file(src.read_bytes(), src.name)[0]
+            except (skill_hub.SkillError, OSError, ValueError) as e:
+                return f"error: {e}"
+            dst = ext.HOME / "skills" / name
+            self.emit({"type": "skill_created", "name": name, "path": str(dst / "SKILL.md")})
+            return (f"ok: skill {name} installed from {src} into the active skills ({dst}). Load it now with "
+                    f"use_skill(\"{name}\") if the task needs it.")
         folder = src if src.is_dir() else None
         f = (src / "SKILL.md") if folder else src
         try:

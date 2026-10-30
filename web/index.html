@@ -5792,8 +5792,8 @@ const TABS = {
     <p class="sub" style="color:var(--muted);margin:-6px 0 14px">Des méthodes réutilisables (SKILL.md) rangées dans <span class="mono">~/.naim/skills</span> (et <span class="mono">.naim/skills</span> dans un projet). Naim charge celui qui correspond à la tâche, et chaque skill est aussi une commande : tape <span class="mono">/nom-du-skill</span>. Naim peut en créer lui-même après une tâche réussie (« reverse skill »). <button class="btn" id="skReveal" style="margin-left:6px">Ouvrir le dossier</button></p>
     <div class="sgroup" id="skillList"><div class="srow"><div class="sl">Chargement…</div></div></div>
     <div class="sgroup" id="skillEditor" hidden></div>
-    <div class="sgroup"><div class="srow col"><div class="sl"><b>🌐 Installer depuis internet</b><small>Un dépôt GitHub (<span class="mono">owner/repo</span>), un de ses dossiers, ou un lien vers un SKILL.md. Les fichiers sont seulement copiés dans <span class="mono">~/.naim/skills</span>, jamais exécutés à l'installation. Un skill du même nom est gardé dans <span class="mono">skills/.anciens</span>. Vérifie la licence de chaque skill.</small></div>
-      <div style="display:flex;gap:8px"><input class="field mono" id="hubUrl" placeholder="https://github.com/owner/repo  ou  owner/repo" style="flex:1"><button class="btn primary" id="hubBrowse">Parcourir</button></div>
+    <div class="sgroup"><div class="srow col"><div class="sl"><b>🌐 Installer un skill</b><small>Un dépôt GitHub (<span class="mono">owner/repo</span>), un de ses dossiers, un lien vers un SKILL.md, ou <b>Depuis mon Mac</b> : un fichier <span class="mono">.skill</span>, <span class="mono">.zip</span> ou <span class="mono">SKILL.md</span>. Les fichiers sont seulement copiés dans <span class="mono">~/.naim/skills</span>, jamais exécutés à l'installation. Un skill du même nom est gardé dans <span class="mono">skills/.anciens</span>. Vérifie la licence de chaque skill.</small></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="field mono" id="hubUrl" placeholder="https://github.com/owner/repo  ou  owner/repo" style="flex:1 1 220px;min-width:0"><button class="btn primary" id="hubBrowse">Parcourir</button><button class="btn" id="hubLocal" title="Un fichier .skill ou .zip (un dossier avec son SKILL.md), ou un SKILL.md, depuis ce Mac">Depuis mon Mac…</button><input type="file" id="hubLocalFile" accept=".skill,.zip,.md" multiple hidden></div>
       <div style="display:flex;gap:8px;align-items:center"><small class="muted">Installer dans :</small><select class="field" id="hubScope" style="flex:1"><option value="bibliotheque">la bibliothèque — autant que tu veux, Naim les cherche au besoin (recommandé)</option><option value="utilisateur">les skills actives — toujours chargées (garde-les peu nombreuses)</option></select></div>
       <div class="srow" id="libRow" style="padding:6px 0"><div class="sl"><small id="libInfo">Bibliothèque : …</small></div><div class="sc" style="gap:6px"><input class="field" id="libQ" placeholder="chercher dans la bibliothèque" style="width:220px"><button class="btn" id="libOpen">Ouvrir le dossier</button></div></div>
       <div id="libFound" style="max-height:520px;overflow:auto"></div>
@@ -6551,6 +6551,20 @@ async function loadSkillsPage() {
     }));
   };
   $("#hubBrowse").onclick = hubBrowse;
+  // « Depuis mon Mac » : a .skill / .zip archive or a SKILL.md, read here and installed by Naim (copied, never run)
+  $("#hubLocal").onclick = () => $("#hubLocalFile").click();
+  $("#hubLocalFile").onchange = async (e) => {
+    const files = [...e.target.files]; e.target.value = "";
+    const done = [], errs = [];
+    for (const f of files) {
+      const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = ko; r.readAsDataURL(f); });
+      const res = await api("/api/skills/upload", { method: "POST", body: { filename: f.name, data, scope: $("#hubScope").value } }).catch((x) => ({ error: x.message }));
+      if (res.error) errs.push(`${f.name} : ${res.error}`); else done.push(...res.installed);
+    }
+    if (done.length) toast(`${$("#hubScope").value === "bibliotheque" ? "Dans la bibliothèque" : "Installé"} : ${done.join(", ")}`);
+    if (errs.length) toast(errs.join(" · "));
+    loadSkillsPage();
+  };
   // the library: every skill, 50 at a time (a search filters), each one can be read or made active again
   let libShown = 0, libQuery = "";
   const libRow = (k) => {
