@@ -4899,16 +4899,39 @@ const naimDots = (() => {
     const [r, g, b] = m.slice(1).map((h) => parseInt(h, 16));
     return Math.max(r, g, b) - Math.min(r, g, b) > 60 ? a : "#d97757";
   };
+  // one cycle: two swaps in a square, the dots line up, jump one after the other, the line turns, the square comes back
+  const SWAP = 2 * PERIOD, LINE = 0.34, WAVE = 0.95, TURN = 0.42, BACK = 0.34, CYCLE = SWAP + LINE + WAVE + TURN + BACK + 0.12;
+  const ease = (u) => (u = Math.max(0, Math.min(1, u)), u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+  const mix = (a, b, u) => a.map(([x, y], i) => [x + (b[i][0] - x) * u, y + (b[i][1] - y) * u]);
+  const ROW = [[0, .5], [1, .5], [2 / 3, .5], [1 / 3, .5]];        // TL, TR, BR, BL on one line, without crossing
+  const COL = ROW.map(([x]) => [.5, x]);                            // the same line turned a quarter (clockwise)
+  function swaps(t) {  // pair 0 (TL, BR) swaps on even turns, pair 1 (TR, BL) on odd ones; after two turns all are back
+    const n = Math.floor(t / PERIOD);
+    return CORNERS.map(([x, y], k) => {
+      const m = n - ((n - (k % 2)) % 2 + 2) % 2, s = t - m * PERIOD;
+      const [ox, oy] = CORNERS[(k + 2) % 4];
+      return [x + (ox - x) * curve(X, s), y + (oy - y) * curve(Y, s)];
+    });
+  }
+  function dance(t) {
+    if (t < SWAP) return swaps(t);
+    t -= SWAP; if (t < LINE) return mix(CORNERS, ROW, ease(t / LINE));
+    t -= LINE; if (t < WAVE) {  // left to right, each dot hops a little after the one before
+      const order = [0, 3, 2, 1];
+      return ROW.map(([x, y], i) => { const u = (t - order.indexOf(i) * 0.14) / 0.42; return [x, y - (u > 0 && u < 1 ? .42 * Math.sin(Math.PI * u) : 0)]; });
+    }
+    t -= WAVE; if (t < TURN) {  // the line turns a quarter around its middle
+      const a = ease(t / TURN) * Math.PI / 2, c = Math.cos(a), si = Math.sin(a);
+      return ROW.map(([x, y]) => [.5 + (x - .5) * c - (y - .5) * si, .5 + (x - .5) * si + (y - .5) * c]);
+    }
+    t -= TURN; if (t < BACK) return mix(COL, [[1, 0], [1, 1], [0, 1], [0, 0]], ease(t / BACK));
+    return [[1, 0], [1, 1], [0, 1], [0, 0]];
+  }
   let running = false;
   function frame(now) {
     const cvs = [...document.querySelectorAll(".bgdots canvas")].filter((c) => c.isConnected && c.offsetParent);
     if (!cvs.length) { running = false; return; }
-    const t = now / 1000, n = Math.floor(t / PERIOD);
-    const pts = CORNERS.map(([x, y], k) => {  // pair 0 (TL, BR) swaps on even turns, pair 1 (TR, BL) on odd ones
-      const m = n - ((n - (k % 2)) % 2 + 2) % 2, s = still.matches ? DUR : t - m * PERIOD;
-      const [ox, oy] = CORNERS[(k + 2) % 4];
-      return [x + (ox - x) * curve(X, s), y + (oy - y) * curve(Y, s)];
-    });
+    const pts = still.matches ? CORNERS : dance((now / 1000) % CYCLE);
     for (const c of cvs) {
       const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
       if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
