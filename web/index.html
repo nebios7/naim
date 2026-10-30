@@ -1529,7 +1529,6 @@ details.think > summary:hover { color: var(--text); background: var(--hover); }
 details.think > summary .thspin { display: inline-flex; width: 14px; height: 14px; color: #d97757; animation: naimSpin 2.4s cubic-bezier(.45, .05, .55, .95) infinite; }
 details.think > summary .thspin[hidden] { display: none; }
 details.think > summary .thspin svg { width: 14px; height: 14px; }
-details.think.live > summary::before { display: none; }
 details.think > summary .thlab { font-variant-numeric: tabular-nums; }
 details.think > div { max-height: 220px; overflow-y: auto; font-size: 12.5px; line-height: 1.6; padding: 4px 0 4px 12px !important; margin-top: 6px; scrollbar-width: thin; }
 details.think.live > div { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px); mask-image: linear-gradient(to bottom, transparent 0, #000 28px); }
@@ -3881,7 +3880,6 @@ function addBot(m, idx) {
       if (v._thDone) return;
       if (!v._th0) {
         v._th0 = Date.now(); think.classList.add("live");
-        const sp = $(".thspin", think); sp.innerHTML = svgI("spark"); sp.hidden = false;
         v._thTick = setInterval(() => v._thPaint(), 1000);
         // the first step or the first words of the answer: the thinking is over
         v._thObs = new MutationObserver(() => { if ([...flow.children].some((c) => !c.classList.contains("liveline"))) v.thinkEnd(); });
@@ -3889,7 +3887,7 @@ function addBot(m, idx) {
       }
       v._thPaint();
     },
-    _thPaint() { $(".thlab", think).textContent = `Réflexion… ${fmtSecs(Math.round((Date.now() - v._th0) / 1000))}`; },
+    _thPaint() { $(".thlab", think).textContent = "Raisonnement"; },
     thinkEnd(secs) {
       if (v._thDone || think.hidden) return;
       v._thDone = true; clearInterval(v._thTick); v._thObs?.disconnect();
