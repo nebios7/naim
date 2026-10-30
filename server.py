@@ -2038,6 +2038,7 @@ class Handler(BaseHTTPRequestHandler):
         refusals = 0  # tool calls refused because the message only asks for an answer
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
+        searches = 0  # web searches in a row: now and then Naim takes stock of what it found (no limit: it decides)
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
@@ -2364,6 +2365,7 @@ class Handler(BaseHTTPRequestHandler):
                         args = json.loads(args)
                     except ValueError:
                         args = {}
+                searches = searches + 1 if name in ("web_search", "web_fetch") else 0
                 sig = name + json.dumps(args, sort_keys=True, ensure_ascii=False)[:500]
                 seen_calls[sig] = seen_calls.get(sig, 0) + 1
                 if seen_calls[sig] > 2:  # the same call a third time: it is going round in circles
@@ -2444,6 +2446,12 @@ class Handler(BaseHTTPRequestHandler):
                 if helper._same_error(name, result):
                     result += ("\n\n[STOP: same error twice. Do not call it again. Tell the user the exact error, your "
                                "hypothesis about its cause and what would fix it.]")
+                if searches and searches % 6 == 0:  # 67 searches, the same 8 reworded, not one line written: it never asked itself
+                    result += (f"\n\n[Point d'étape : {searches} recherches d'affilée. Avant d'en lancer une autre, fais le point "
+                               "pour toi : qu'as-tu déjà appris, que manque-t-il vraiment pour la demande ? S'il te manque un "
+                               "point précis, cherche CE point (pas une reformulation d'une recherche déjà faite). Si tu as de "
+                               "quoi faire, passe à la suite maintenant : plan avec update_todos si le travail est long, puis "
+                               "l'écriture.]")
                 messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
             # a screenshot or an image looked at: Naim SEES it (only the latest one stays, older ones are dropped)
             imgs, helper._pending_images = getattr(helper, "_pending_images", []), []

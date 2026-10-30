@@ -1,6 +1,6 @@
 {
   "name": "pdf-pro",
-  "version": "1.3",
+  "version": "1.4",
   "description": "Des PDF professionnels avec un seul style soigné : cours, analyses de courrier, rapports, dossiers avec plans ; tableaux, graphiques, schémas, formules mathématiques, code coloré, prêts à imprimer. Rien à installer.",
   "skills": "skills",
   "triggers": {

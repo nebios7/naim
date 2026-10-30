@@ -22,7 +22,8 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
 ## Méthode
 
 1. Le fond d'abord : lis les documents donnés (read_file lit .pdf, .docx, .xlsx), cherche sur le web si besoin.
-   Aucun chiffre inventé. Plan avec update_todos : couverture, sommaire, 3 à 8 chapitres, conclusion.
+   Après chaque recherche, juge toi-même : qu'ai-je appris, que manque-t-il ? Cherche seulement ce qui manque
+   (jamais la même recherche reformulée) et passe à l'écriture dès que tu as de quoi faire. Aucun chiffre inventé. Plan avec update_todos : couverture, sommaire, 3 à 8 chapitres, conclusion.
 2. Travaille dans un dossier à toi (ex. `cours-python/`). Les graphiques : un fichier JSON de données par graphique,
    puis `pdfpro.py chart …` → un .svg dans ce dossier.
 3. Écris `page.html` : SEULEMENT le contenu (pas de `<html>`, pas de `<style>`, pas de couleur à toi).
