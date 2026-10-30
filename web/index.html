@@ -6637,14 +6637,34 @@ async function loadOwner() {
   box.innerHTML = `
     <div class="sgroup">${head("Guide", "Entraîner, réentraîner et publier Naim, étape par étape.")}${r.guide.map((g) => `<div class="srow col"><div class="sl"><b>${esc(g.titre)}</b><small><ol class="osteps">${g.etapes.map((e) => `<li>${esc(e)}</li>`).join("")}</ol></small></div></div>`).join("")}</div>
     <div class="sgroup">${head("Clés", "Tes accès aux services. « Vérifier » dit si une clé fonctionne encore.")}${r.cles.map((k, i) => `<div class="srow col" data-ki="${i}"><div class="sl"><b>${esc(k.service)} — ${esc(k.nom)} ${badge(k.decision)}</b><small>${esc(k.role)}${k.compte ? ` · compte ${esc(k.compte)}` : ""}</small></div>
-      <div class="oline"><code class="mono kval">••••••••••••</code><span class="obtns"><button class="btn" data-show>Afficher</button><button class="btn" data-copy-key>Copier</button><button class="btn" data-check>Vérifier</button></span></div><small class="kres"></small></div>`).join("")}</div>
+      <div class="oline"><code class="mono kval">••••••••••••</code><span class="obtns"><button class="btn" data-show>Afficher</button><button class="btn" data-copy-key>Copier</button><button class="btn" data-check>Vérifier</button><button class="btn" data-edit-key>Modifier</button><button class="btn danger" data-del-key>Supprimer</button></span></div>
+      <div class="oline kedit" hidden><input class="mono knew" type="password" placeholder="Colle la nouvelle clé" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><span class="obtns"><button class="btn primary" data-save-key>Enregistrer</button><button class="btn" data-cancel-key>Annuler</button></span></div><small class="kres"></small></div>`).join("")}</div>
     <div class="sgroup" id="ownerInstalls"><div class="srow"><div class="sl"><small>Chargement…</small></div></div></div>
     <div class="sgroup">${head("Actions", "En un clic, depuis ce Mac.")}${r.actions.map((a) => `<div class="srow" data-a="${a.id}"><div class="sl"><b>${esc(a.titre)}</b><small>${esc(a.aide)}</small></div><div class="sc"><button class="btn primary"${a.off ? " disabled" : ""}>Lancer</button></div><pre class="mono aout" hidden></pre></div>`).join("")}</div>
     <div class="sgroup">${head("Commandes du Terminal", "Copie une commande, puis colle-la dans le Terminal.")}${r.commandes.map((c) => `<div class="srow col"><div class="sl"><b>${esc(c.titre)}</b></div><div class="oline"><code class="mono ocmd">${esc(c.cmd)}</code><span class="obtns"><button class="btn" data-cmd-copy="${esc(c.cmd)}">Copier</button></span></div></div>`).join("")}</div>`;
   $$("[data-ki]", box).forEach((row) => {
     const k = r.cles[+row.dataset.ki], val = $(".kval", row);
-    $("[data-show]", row).onclick = (e) => { const on = val.textContent.startsWith("•"); val.textContent = on ? k.valeur : "••••••••••••"; e.target.textContent = on ? "Masquer" : "Afficher"; };
+    $("[data-show]", row).onclick = (e) => { if (!k.valeur) return; const on = val.textContent.startsWith("•"); val.textContent = on ? k.valeur : "••••••••••••"; e.target.textContent = on ? "Masquer" : "Afficher"; };
     $("[data-copy-key]", row).onclick = async () => { await copyText(k.valeur); toast("Clé copiée"); };
+    const res = $(".kres", row), edit = $(".kedit", row), inp = $(".knew", row);
+    const say = (x) => { res.textContent = (x.ok ? "✓ " : "✗ ") + (x.texte || x.error || ""); res.hidden = false; res.style.color = x.ok ? "var(--ok, #3fb9a0)" : "var(--danger, #e5735f)"; };
+    if (!k.valeur) { val.textContent = "(vide)"; }
+    $("[data-edit-key]", row).onclick = () => { edit.hidden = !edit.hidden; if (!edit.hidden) { inp.value = ""; inp.focus(); } };
+    $("[data-cancel-key]", row).onclick = () => { edit.hidden = true; inp.value = ""; };
+    const save = async () => {
+      const v = inp.value.trim(); if (!v) return inp.focus();
+      const x = await api("/api/owner/action", { method: "POST", body: { action: "set_key", args: { id: k.id, value: v } } });
+      if (x.ok) { k.valeur = v; val.textContent = "••••••••••••"; $("[data-show]", row).textContent = "Afficher"; edit.hidden = true; inp.value = ""; }
+      say(x);
+    };
+    $("[data-save-key]", row).onclick = save;
+    inp.onkeydown = (e) => { if (e.key === "Enter") save(); if (e.key === "Escape") $("[data-cancel-key]", row).click(); };
+    $("[data-del-key]", row).onclick = async () => {
+      if (!confirm(`Supprimer la clé « ${k.service} — ${k.nom} » de Naim ?\n\nLa carte reste, vide, pour y mettre une nouvelle clé. Pense aussi à la révoquer sur le site du service.`)) return;
+      const x = await api("/api/owner/action", { method: "POST", body: { action: "delete_key", args: { id: k.id } } });
+      if (x.ok) { k.valeur = ""; val.textContent = "(vide)"; }
+      say(x);
+    };
     $("[data-check]", row).onclick = async () => { const res = $(".kres", row); res.textContent = "…"; const x = await api("/api/owner/action", { method: "POST", body: { action: "check", args: { id: k.id } } }); res.textContent = (x.ok ? "✓ " : "✗ ") + (x.texte || x.error || ""); res.hidden = false; res.style.color = x.ok ? "var(--ok, #3fb9a0)" : "var(--danger, #e5735f)"; };
   });
   $$("[data-cmd-copy]", box).forEach((b) => (b.onclick = async () => { await copyText(b.dataset.cmdCopy); toast("Commande copiée : colle-la dans le Terminal"); }));
