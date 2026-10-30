@@ -1129,6 +1129,7 @@ class Agent:
     PLACEHOLDER_RE = re.compile(r"^\s*<(already written|\d+ lignes écrites)|\(ancien résultat raccourci\)|Résumé de mes étapes précédentes")
 
     BUILT_EXTS = {".xlsx", ".docx", ".pdf", ".odt", ".rtf"}
+    MAX_CALL_SECONDS = 360
 
     def write_file(self, path, content, append=False):
         if re.search(r"\.app/Contents/", str(path)):
@@ -3065,7 +3066,8 @@ class Agent:
         if isinstance(args, dict) and "_unreadable" in args:
             return (f"error: your {name} call could not be read ({args['_unreadable']}): its arguments were not valid "
                     "JSON (often a quote or backslash not escaped, or the call was cut off). Call it again with valid "
-                    "arguments; for a long file, write a first part with write_file, then add the rest with edit_file.")
+                    "arguments; for a long file, write it in parts of about 150 lines: the first with write_file, each next one "
+                    "with write_file(path, content=<next part>, append=true).")
         cut = isinstance(args, dict) and args.pop("_maybe_cut", False)
         try:
             result = fn(**args)
@@ -3600,6 +3602,9 @@ class Agent:
             self._sent_msgs_tokens = self._msgs_tokens()
             # right after « Fais-le maintenant », the next step must be an action, not the same announcement
             step_opts = dict(self.options, tool_choice="required") if getattr(self, "_force_tool", False) else self.options
+            # one tool call written for more than MAX_CALL_SECONDS (a whole course in one file) is cut: it is then
+            # written in parts instead of 27 minutes per try
+            step_opts = {"max_seconds": self.MAX_CALL_SECONDS, **step_opts}
             self._force_tool = False
             think = self._think_now()
             if think and not self.think:

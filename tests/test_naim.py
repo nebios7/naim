@@ -1057,5 +1057,35 @@ class WriteInParts(unittest.TestCase):
             out = a.call_tool("write_file", {"content": "x" * 50})
             self.assertIn("append=true", out)
 
+
+class RunawayCallIsCut(unittest.TestCase):
+    """A tool call still being written after max_seconds is cut (the stream closed), and arrives marked as cut."""
+
+    def test_cut(self):
+        from unittest import mock
+        import itertools
+        import json as _j
+
+        def lines():
+            yield b'data: ' + _j.dumps({"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"name": "write_file", "arguments": '{"path": "c.html", "content": "'}}]}}]}).encode()
+            for _ in range(10000):
+                yield b'data: ' + _j.dumps({"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": "<p>x</p>"}}]}}]}).encode()
+
+        class Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def __iter__(self): return lines()
+
+        clock = itertools.count(0, 1.0)  # each read moves the clock one second
+        with mock.patch.object(llamacpp.urllib.request, "urlopen", return_value=Resp()), \
+             mock.patch.object(llamacpp.SERVER, "ensure", return_value=None), \
+             mock.patch.object(llamacpp.time, "time", side_effect=lambda: next(clock)):
+            out = list(llamacpp.chat([{"role": "user", "content": "x"}], tools=[], stream=True, options={"max_seconds": 30}))
+        calls = [c for c in out if c.get("message", {}).get("tool_calls")]
+        self.assertTrue(calls, "the cut call is still given")
+        args = calls[-1]["message"]["tool_calls"][0]["function"]["arguments"]
+        self.assertTrue(args.get("_maybe_cut") or "_unreadable" in args or "content" not in args or "path" in args)
+        self.assertLess(sum(1 for c in out if "writing" in c), 100)  # stopped after about 30 reads, not 10 000
+
 if __name__ == "__main__":
     unittest.main()

@@ -598,6 +598,9 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         first, calls, reason = None, {}, None  # tool calls arrive in pieces while streaming: assembled, then given at the end
         told = 0.0  # last « writing » progress given (a whole file written in a tool call is otherwise invisible)
         made = 0  # tokens generated so far (one streamed piece is one token): shown while it thinks or writes
+        # a tool call that runs away (a whole course in one write_file: 27 min per try on a slow Mac): stopped after
+        # max_seconds; its cut arguments then tell the agent to write in parts
+        limit, started = (options or {}).get("max_seconds"), time.time()
         with resp:
             for raw in resp:
                 line = raw.decode("utf-8", errors="replace").strip()
@@ -626,6 +629,9 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                             yield {"message": {}, "done": False,
                                    "writing": {"name": c["name"], "chars": len(c["args"]), "path": path.group(1) if path else "",
                                                "lines": c["args"].count("\\n") + 1, "tokens": made}}
+                    if limit and calls and time.time() - started > limit:
+                        reason = "length"
+                        break  # closing the stream stops the engine
                     if delta.get("reasoning_content") and not calls and time.time() - told > 1.0:  # thinking: how far it got
                         told = time.time()
                         yield {"message": {}, "done": False, "writing": {"think": True, "tokens": made}}
