@@ -5000,7 +5000,8 @@ function liveKind(label, tool) {
 const TOOL_KIND = { run_command: "run", start_process: "run", update_todos: "plan", planifier: "plan", delegate: "plan",
   web_search: "web", web_fetch: "web", browser: "web", search: "search", find_files: "search", find_symbol: "search",
   list_files: "read", read_file: "read", look_at: "check", ask_user: "wait", write_file: "write", edit_file: "write", multi_edit: "write" };
-const liveIcon = (k) => k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>'
+const liveIcon = (k) => k === "write" ? `<span class="licon lfeather">${svgI("feather")}</span>`
+  : k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>'
   : `<span class="bgdots" data-m="${k}" aria-hidden="true"><canvas></canvas></span>`;
 // four dots in a square; two opposite corners swap places, then the other two, one swap every 0.625 s with no pause
 // (each swap lasts 0.667 s, so the next one starts as the last settles). The curves are measured frame by frame: the
@@ -5070,21 +5071,6 @@ const naimDots = (() => {
     // waits for the user: the square breathes, slowly
     wait: (t) => { const b = (1 - Math.cos(wrap(t, 2.8) * 6.2832)) / 2; return CORNERS.map(([x, y]) => [x + (.5 - x) * .14 * b, y + (.5 - y) * .14 * b, .8 + .2 * b]); },
   };
-  // writes: the quill crosses the line, the ink comes out behind it as letters (four dots), then fades and the quill
-  // goes back to the start of the next line
-  const QUILL = new Path2D("M20.2 3.8c-5.6.3-10.4 3.6-12.2 9.6L6.6 18M20.2 3.8c-.4 5.8-4 10.3-9.7 11.7M8.6 15.4l5.1-5.1M6.6 18L4 20.6");
-  function writing(g, w, u) {
-    const line = Math.min(1, u / .74), back = u > .8 ? ease((u - .8) / .2) : 0;
-    const x = .06 + .6 * (line - back), y = .84 - .05 * Math.abs(Math.sin(line * 19)) - .18 * bump((u - .8) / .2);
-    const fade = u < .74 ? 1 : Math.max(0, 1 - (u - .74) / .12);
-    for (let i = 0; i < 4; i++) {  // the letters: each appears as the quill passes it
-      const dx = .1 + .17 * i, grow = Math.max(0, Math.min(1, (x - dx) / .06)) * fade;
-      if (grow > .02) { g.globalAlpha = Math.min(1, grow); g.beginPath(); g.arc(dx * w, .9 * w, w * .068 * Math.min(1, .4 + grow), 0, 6.2832); g.fill(); }
-    }
-    g.globalAlpha = 1;
-    g.save(); g.translate(x * w, y * w); g.rotate(-.12 + .1 * Math.sin(line * 19)); g.scale(w * .5 / 24, w * .5 / 24); g.translate(-4, -20.6);
-    g.strokeStyle = g.fillStyle; g.lineWidth = 2.4; g.lineCap = g.lineJoin = "round"; g.stroke(QUILL); g.restore();
-  }
   let running = false;
   function frame(now) {
     const cvs = [...document.querySelectorAll(".bgdots canvas")].filter((c) => c.isConnected && c.offsetParent);
@@ -5092,13 +5078,12 @@ const naimDots = (() => {
     const t = now / 1000, made = {};
     const shape = (m) => made[m] ||= still.matches ? CORNERS : (DANCES[m] || ((x) => dance(x % CYCLE)))(t);
     for (const c of cvs) {
-      const mode = c.parentElement?.dataset.m || "think", pts = mode === "write" ? [] : shape(mode);
+      const pts = shape(c.parentElement?.dataset.m || "think");
       const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
       if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
       c._color ||= dotColor(c);
       const g = c.getContext("2d"), r = w * 0.102, lo = w * 0.2, span = w * 0.6;  // dot radius: 0.17 of the square's side, as measured
       g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, w); g.fillStyle = c._color;
-      if (mode === "write") writing(g, w, still.matches ? .6 : wrap(t, 1.9));
       for (const [x, y, k = 1] of pts) { if (k > .02) { g.beginPath(); g.arc(lo + x * span, lo + y * span, r * k, 0, 6.2832); g.fill(); } }
     }
     if (still.matches) { running = false; return; }  // reduced motion: one still square
