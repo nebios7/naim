@@ -684,6 +684,17 @@ class SkillScripts(unittest.TestCase):
         self.assertLess(out.index("Compétences"), out.index("Expérience"))
         self.assertLess(out.index("Projets"), out.index("Formation"))
 
+    def test_cv_photo_from_the_word_file(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            with zipfile.ZipFile(t / "cv.docx", "w") as z:
+                z.writestr("word/document.xml", "<w/>")
+                z.writestr("word/media/image1.png", b"\x89PNG fake photo")
+            (t / "cv.json").write_text(json.dumps({"nom": "Marie Curie", "photo": str(t / "cv.docx")}))
+            subprocess.run([sys.executable, "-I", str(self.D / "cv_pro.py"), "cv.json", "cv.html"], cwd=t, check=True, capture_output=True, text=True)
+            self.assertIn('class="photo" alt="" src="data:image/png;base64,', (t / "cv.html").read_text())
+
     def test_word_given_is_still_a_cv(self):
         import extensions
         t = "le pdf du cv n'est pas fidèle a ce que j'ai fourni, le voici à nouveau format word, tu vas générer le pdf"

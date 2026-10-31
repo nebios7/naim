@@ -5,7 +5,7 @@ has two jobs and one diploma: filling it would drop the rest), then the PDF in t
 
 cv.json (only what the source gives; a missing key is simply not shown):
 {
-  "nom": "Prénom NOM", "titre": "Poste visé", "kicker": "Curriculum vitæ",
+  "nom": "Prénom NOM", "titre": "Poste visé", "kicker": "Curriculum vitæ", "photo": "/chemin/de/la/photo.jpg",
   "contact": [["Tél.", "06 …"], ["E-mail", "…"], ["Ville", "…"], ["En ligne", "GitHub", "https://github.com/…"]],
   "profil": "Deux ou trois phrases.",
   "experiences": [{"quand": "2023 — 2025", "poste": "…", "ou": "Entreprise · Ville", "points": ["…", "…"]}],
@@ -16,6 +16,8 @@ cv.json (only what the source gives; a missing key is simply not shown):
   "langues": [["Français", "Langue maternelle"], ["Anglais", "B2"]],
   "ordre": ["profil", "competences", "experiences", "Projets", "formations"]
 }
+"photo" (facultatif) : la photo de l'utilisateur, ronde, en haut à droite : le chemin de l'image, ou du CV Word joint
+(sa photo est prise dedans). Elle est mise DANS la page : rien à copier ni à extraire.
 "ordre" (facultatif) : l'ordre des rubriques du CV source (les clés, ou le titre d'une section) ; sinon profil,
 expériences, formations, puis les sections.
 """
@@ -29,11 +31,36 @@ MODEL = Path.home() / ".naim/plugins/pdf-pro/skills/pdf-pro/exemples/cv.html"
 PDFPRO = Path.home() / ".naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py"
 # a rubric title stays with what follows it, a job or a diploma is never cut in two, skills and languages stay together
 KEEP = ("<style>.rubrique{break-after:avoid;page-break-after:avoid}.poste,.deux,.tags,.niveaux{break-inside:avoid;"
-        "page-break-inside:avoid}.carte>.rubrique+*{break-before:avoid}</style>\n")
+        "page-break-inside:avoid}.carte>.rubrique+*{break-before:avoid}"
+        "header:has(.photo){padding-right:33mm}header .photo{position:absolute;right:0;top:0;width:27mm;height:27mm;"
+        "border-radius:50%;object-fit:cover;border:1px solid var(--line)}</style>\n")
 
 
 def esc(t):
     return html.escape(str(t or "").strip())
+
+
+def photo(path):
+    """The person's photo, round, top right, inside the page itself (a data URI: the PDF needs no other file)."""
+    if not path:
+        return ""
+    import base64
+    import mimetypes
+    f = Path(str(path)).expanduser()
+    if not f.is_file():
+        sys.exit(f"error: photo introuvable : {f} (donne le chemin exact de l'image jointe).")
+    if f.suffix.lower() == ".docx":  # the photo inside the Word CV given: its largest picture
+        import zipfile
+        with zipfile.ZipFile(f) as z:
+            pics = sorted((i for i in z.infolist() if i.filename.startswith("word/media/")
+                           and Path(i.filename).suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp")), key=lambda i: -i.file_size)
+            if not pics:
+                sys.exit(f"error: pas d'image dans {f.name} : demande la photo à l'utilisateur.")
+            data, name = z.read(pics[0]), pics[0].filename
+    else:
+        data, name = f.read_bytes(), f.name
+    mime = mimetypes.guess_type(name)[0] or "image/jpeg"
+    return f'<img class="photo" alt="" src="data:{mime};base64,{base64.b64encode(data).decode()}">'
 
 
 def block(when, title, where, points):
@@ -53,7 +80,7 @@ def body(cv):
         label, value, link = (list(c) + ["", ""])[:3]
         shown = f'<a href="{esc(link)}">{esc(value)}</a>' if link else esc(value)
         contact.append(f"<span><b>{esc(label)}</b>{shown}</span>")
-    out = ["<header>", f'  <div class="kicker">{esc(cv.get("kicker") or "Curriculum vitæ")}</div>', f'  <h1>{esc(cv.get("nom"))}</h1>']
+    out = ["<header>" + photo(cv.get("photo")), f'  <div class="kicker">{esc(cv.get("kicker") or "Curriculum vitæ")}</div>', f'  <h1>{esc(cv.get("nom"))}</h1>']
     if cv.get("titre"):
         out.append(f'  <div class="titre">{esc(cv["titre"])}</div>')
     out += ['  <div class="band"></div>', '  <div class="contact">\n    ' + "\n    ".join(contact) + "\n  </div>", "</header>", ""]

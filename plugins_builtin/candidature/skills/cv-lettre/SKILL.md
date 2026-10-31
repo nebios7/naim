@@ -34,6 +34,8 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
   Le format de cv.json est en tête du script (lis-le avec read_file si besoin) : nom, titre, contact, profil,
   experiences, formations, sections (Projets, Publications, Certifications…), competences, langues, et « ordre »
   (l'ordre des rubriques du CV source, ex. ["profil", "competences", "experiences", "Projets", "formations"]).
+  Une photo demandée : `"photo"` = le chemin de l'image jointe, ou du CV Word joint (sa photo est prise dedans) ;
+  ronde, en haut à droite. N'écris jamais une image avec creer_fichier ou write_file (ce sont des fichiers texte).
   Fidèle = chaque poste, chaque diplôme, chaque projet, chaque date du source, avec ses lignes ; rien de retiré,
   rien d'ajouté. Le script donne les nombres (expériences, formations…) : compare-les avec le source. Pour corriger :
   change cv.json et relance la même commande (jamais d'édition du .html à la main).
