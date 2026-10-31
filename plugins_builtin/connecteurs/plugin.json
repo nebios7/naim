@@ -1,0 +1,10 @@
+{
+  "name": "connecteurs",
+  "version": "1.0",
+  "description": "Brancher n'importe quel outil à Naim : il trouve son CLI officiel, l'installe, vérifie qu'il marche, te laisse te connecter à ton compte, puis écrit un skill global pour s'en servir ensuite tout seul (Stripe, Supabase, Vercel, GitHub, AWS, Firebase…).",
+  "skills": "skills",
+  "triggers": {
+    "connecter-outil": "\\bconnect[- ]?tool\\b|\\bconnecter[- ]outil\\b|\\b(connect\\w*|branch\\w*|int[éèe]gr\\w*|install\\w*|ajout\\w*|configur\\w*|relie\\w*)\\b[^.?!]{0,50}\\b(cli|outil en ligne de commande|ligne de commande|commande officielle|outil officiel)\\b|\\b(connect\\w*|branch\\w*|int[éèe]gr\\w*|relie\\w*)\\b[^.?!]{0,40}\\b(à|a|dans|avec|sur) (naim|toi)\\b"
+  },
+  "priority": true
+}

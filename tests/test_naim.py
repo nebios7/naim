@@ -1152,5 +1152,16 @@ class LongTaskKeepsTheRequest(unittest.TestCase):
         self.assertIn("que le PDF", again[1]["content"])
         self.assertIn("cobol 0", again[2]["content"])
 
+
+class ConnectATool(unittest.TestCase):
+    """connecter-outil: « branche Stripe à Naim » installs the official CLI and writes a global skill; other requests do not pick it."""
+
+    def test_triggers(self):
+        trig = json.loads((Path(__file__).resolve().parents[1] / "plugins_builtin/connecteurs/plugin.json").read_text())["triggers"]["connecter-outil"]
+        for t in ("branche stripe à naim", "intègre supabase dans naim", "installe le cli de vercel", "connect-tool aws"):
+            self.assertRegex(t, trig)
+        for t in ("connecte-toi au wifi", "branche l'imprimante", "intègre ce chapitre dans le cours", "installe python"):
+            self.assertNotRegex(t, trig)
+
 if __name__ == "__main__":
     unittest.main()
