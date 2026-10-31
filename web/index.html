@@ -1015,6 +1015,35 @@ body.haslive .working .wtime { display: none; }
 #spane .srow .aout { flex: 1 1 100%; margin: 4px 0 0; max-height: 220px; overflow: auto; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; }
 .oid { font-size: 12.5px; overflow-wrap: anywhere; }
 /* questions asked by Naim */
+/* ask_user: the question card (one row per choice, « Autre », Passer / Envoyer) and « Nécessite ton intervention » under it */
+.askq { border: 1px solid var(--line); background: var(--panel); border-radius: 16px; overflow: hidden; max-width: 640px; box-shadow: 0 1px 3px rgb(0 0 0 / .06); }
+.askq .aqhead { padding: 14px 18px; font-size: 15px; line-height: 1.45; font-weight: 500; background: color-mix(in srgb, var(--text) 4%, transparent); border-bottom: 1px solid var(--line); }
+.askq .aqopts { display: flex; flex-direction: column; }
+.askq .aqopt { display: flex; gap: 14px; align-items: flex-start; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--text); padding: 13px 18px; cursor: pointer; font: inherit; transition: background .15s; }
+.askq .aqopt:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.askq .aqopt:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.askq .aqmark { flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--text) 35%, transparent); position: relative; transition: border-color .15s, background .15s; }
+.askq .aqmark.sq { border-radius: 6px; }
+.askq .aqopt.on .aqmark { border-color: var(--brand); background: var(--brand); }
+.askq .aqopt.on .aqmark::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: #fff; }
+.askq .aqopt.on .aqmark.sq::after { inset: 4px 6px 6px; border-radius: 0; background: none; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.askq .aqtxt { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.askq .aqtxt b { font-weight: 500; font-size: 14.5px; }
+.askq .aqtxt small { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.askq .aqrec { font-size: 11px; font-weight: 500; color: var(--brand); background: var(--brand-soft); border-radius: 99px; padding: 1px 7px; margin-left: 6px; vertical-align: 1px; }
+.askq .aqother input { margin-top: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 13.5px; }
+.askq .aqother input:focus { outline: none; border-color: var(--brand); }
+.askq .aqfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; }
+.askq .aqfoot kbd { font: 11px/1 -apple-system, sans-serif; border: 1px solid currentColor; opacity: .55; border-radius: 4px; padding: 2px 4px; margin-left: 2px; }
+.askq .aqfoot .aqsend:disabled { opacity: .45; cursor: default; }
+.askq.done { opacity: .8; }
+.askq .aqres { padding: 11px 18px; font-size: 13.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.askq .aqcheck { display: inline-flex; color: var(--ok); }
+.askq .aqcheck svg { width: 15px; height: 15px; }
+.aqwait { display: inline-flex; align-self: flex-start; width: fit-content; align-items: center; gap: 9px; margin: 10px 0 2px 2px; padding: 4px 12px 4px 8px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); color: var(--warn); border-radius: 99px; font-size: 13px; font-weight: 500; }
+.aqwait span { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent); animation: aqpulse 1.6s ease-in-out infinite; }
+@keyframes aqpulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--warn) 0%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .aqwait span { animation: none; } }
 .askq .qopts { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px 4px; }
 .askq .qother { display: flex; gap: 8px; padding: 8px 12px 12px; }
 .askq .qother input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 13.5px; }
@@ -4201,19 +4230,37 @@ function addBot(m, idx) {
       if (document.hidden || !document.hasFocus()) notify("Naim attend ton autorisation", ev.action);
     },
     question(st) {
-      const q = document.createElement("div"); q.className = "approval askq"; q.dataset.qid = st.id;
-      q.innerHTML = `<div class="aphead">❓ ${esc(st.question)}</div><div class="qopts">${st.options.map((o, i) => `<button class="btn qopt" data-i="${i}">${esc(o)}</button>`).join("")}</div>
-        <div class="qother"><input placeholder="${st.options.length ? "Autre réponse…" : "Ta réponse…"}"><button class="btn primary">Répondre</button></div>`;
-      const picked = new Set();
+      // one row per choice (its explanation under it, « Recommandé » on the first: the best comes first), « Autre » to
+      // write one's own answer, Passer / Envoyer (⌘↵); the keys 1–9 pick a choice
+      const q = document.createElement("div"); q.className = "askq"; q.dataset.qid = st.id;
+      const multi = !!st.multiple, split = (o) => { const m = String(o).match(/^(.+?)\s+(?:—|–|-|:)\s+(.+)$/); return m ? [m[1], m[2]] : [String(o), ""]; };
+      const row = (i, label, desc, rec) => `<button type="button" class="aqopt" data-i="${i}" role="${multi ? "checkbox" : "radio"}" aria-checked="false">
+        <span class="aqmark${multi ? " sq" : ""}"></span><span class="aqtxt"><b>${esc(label)}${rec ? ' <span class="aqrec">Recommandé</span>' : ""}</b>${desc ? `<small>${esc(desc)}</small>` : ""}</span></button>`;
+      q.innerHTML = `<div class="aqhead">${esc(st.question)}</div>
+        <div class="aqopts" role="${multi ? "group" : "radiogroup"}">${st.options.map((o, i) => { const [l, d] = split(o); return row(i, l.replace(/\s*\((recommand[ée]e?|conseill[ée]e?)\)\s*$/i, ""), d, st.options.length > 1 && (i === 0 || /\((recommand|conseill)/i.test(l))); }).join("")}
+          <div class="aqopt aqother" data-i="other" role="${multi ? "checkbox" : "radio"}" aria-checked="false"><span class="aqmark${multi ? " sq" : ""}"></span>
+            <span class="aqtxt"><b>${st.options.length ? "Autre" : "Ta réponse"}</b><input placeholder="${st.options.length ? "Écris ta propre réponse…" : "Écris ta réponse…"}" spellcheck="true"></span></div></div>
+        <div class="aqfoot"><button type="button" class="btn aqskip">Passer</button><button type="button" class="btn primary aqsend" disabled>Envoyer <kbd>⌘</kbd><kbd>↵</kbd></button></div>`;
+      const wait = document.createElement("div"); wait.className = "aqwait"; wait.dataset.qid = st.id; wait.innerHTML = "<span></span>Nécessite ton intervention";
+      const picked = new Set(), inp = $(".aqother input", q), sendB = $(".aqsend", q);
+      const sync = () => {
+        $$(".aqopt", q).forEach((b) => { const on = picked.has(b.dataset.i); b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+        sendB.disabled = !picked.size || (picked.has("other") && !inp.value.trim() && picked.size === 1);
+      };
+      const pick = (k) => { if (multi) { picked.has(k) ? picked.delete(k) : picked.add(k); } else { picked.clear(); picked.add(k); } sync(); };
       const send = async (text) => { if (!text) return; st.answer = text; v.questionDone(st); await api("/api/answer", { method: "POST", body: { id: st.id, answer: text } }); };
-      $$(".qopt", q).forEach((b) => (b.onclick = () => {
-        if (!st.multiple) return send(st.options[+b.dataset.i]);
-        b.classList.toggle("primary"); picked.has(b.dataset.i) ? picked.delete(b.dataset.i) : picked.add(b.dataset.i);
-      }));
-      const inp = $(".qother input", q);
-      $(".qother .btn", q).onclick = () => send(inp.value.trim() || [...picked].map((i) => st.options[+i]).join(", "));
-      inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $(".qother .btn", q).click(); } };
-      block(q); if (st.answer != null) v.questionDone(st); else { scrollDown(true); setTimeout(() => inp.focus(), 50); }
+      const answer = () => [...picked].map((k) => k === "other" ? inp.value.trim() : split(st.options[+k])[0].replace(/\s*\((recommand|conseill)[^)]*\)\s*$/i, "")).filter(Boolean).join(", ");
+      $$(".aqopt", q).forEach((b) => (b.onclick = (e) => { if (b.dataset.i === "other") { if (!picked.has("other") || !multi) pick("other"); if (e.target !== inp) inp.focus(); } else pick(b.dataset.i); }));
+      inp.oninput = () => { if (inp.value.trim() && !picked.has("other")) pick("other"); else sync(); };
+      sendB.onclick = () => send(answer());
+      $(".aqskip", q).onclick = () => { st.skipped = true; send("__passe__"); };
+      q.onkeydown = (e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey || e.target === inp) && !sendB.disabled) { e.preventDefault(); sendB.click(); return; }
+        if (e.target !== inp && /^[1-9]$/.test(e.key) && +e.key <= st.options.length) { e.preventDefault(); pick(String(+e.key - 1)); }
+      };
+      block(q); flow.insertBefore(wait, q.nextSibling);
+      if (st.answer != null) v.questionDone(st);
+      else { scrollDown(true); setTimeout(() => (st.options.length ? $(".aqopt", q) : inp).focus(), 50); }
       if (st.answer == null && (document.hidden || !document.hasFocus())) notify("Naim te pose une question", st.question);
     },
     schedule(st) {
@@ -4230,10 +4277,12 @@ function addBot(m, idx) {
       block(c);
     },
     questionDone(st) {
+      flow.querySelector(`.aqwait[data-qid="${st.id}"]`)?.remove();
       const q = flow.querySelector(`.askq[data-qid="${st.id}"]`); if (!q || q.classList.contains("done")) return;
       q.classList.add("done");
-      $(".qopts", q)?.remove(); $(".qother", q)?.remove();
-      q.insertAdjacentHTML("beforeend", `<div class="res">${st.answer ? "→ " + esc(st.answer) : "Pas de réponse : Naim a choisi lui-même"}</div>`);
+      $(".aqopts", q)?.remove(); $(".aqfoot", q)?.remove();
+      const skipped = st.answer === "__passe__" || !st.answer;
+      q.insertAdjacentHTML("beforeend", `<div class="aqres">${skipped ? "Question passée : Naim choisit lui-même" : `<span class="aqcheck">${svgI("check")}</span>${esc(st.answer)}`}</div>`);
     },
     replay(s) {
       v._replay = true;

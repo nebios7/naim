@@ -2593,10 +2593,15 @@ class Agent:
                 f"prochaine exécution {t.get('next_run') or '—'} (id={t['id']}). Elle tourne tant que l'app Naim est ouverte.")
 
     def ask_user(self, question, options=None, multiple=False):
-        choices = [str(o)[:120] for o in (options or []) if str(o).strip()][:6]
+        # an option may carry its explanation (« Label — pourquoi »): shown under the label in the question card
+        choices = [str(o.get("label", "") + (f" — {o['description']}" if o.get("description") else "") if isinstance(o, dict) else o)[:300]
+                   for o in (options or []) if str(o).strip()][:6]
         if not self.asker:
             return "No one can answer now: choose the most reasonable option yourself, continue, and say which in your answer."
         answer = self.asker(str(question)[:600], choices, bool(multiple))
+        if answer == "__passe__":  # « Passer » in the card
+            return ("The user skipped this question: choose the most reasonable option yourself, continue, and say which "
+                    "one in your final answer.")
         if not answer:
             return ("No answer (the user is away): choose the most reasonable option yourself, continue, and say which "
                     "one in your final answer.")

@@ -1163,5 +1163,21 @@ class ConnectATool(unittest.TestCase):
         for t in ("connecte-toi au wifi", "branche l'imprimante", "intègre ce chapitre dans le cours", "installe python"):
             self.assertNotRegex(t, trig)
 
+
+class AskTheUser(unittest.TestCase):
+    """ask_user: options with their explanation reach the card; « Passer » lets Naim choose and say which."""
+
+    def test_skip_and_options(self):
+        with tempfile.TemporaryDirectory() as d:
+            seen = []
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True,
+                                asker=lambda q, c, m: (seen.append(c), "__passe__")[1])
+            self.assertIn("ask_user", {t["function"]["name"] for t in a.tools})
+            res = a.ask_user("Quel style ?", [{"label": "pdf-pro", "description": "comme tes cours"}, "Sobre"])
+            self.assertEqual(seen[0], ["pdf-pro — comme tes cours", "Sobre"])
+            self.assertIn("skipped", res)
+            a.asker = lambda q, c, m: "Sobre"
+            self.assertEqual(a.ask_user("Quel style ?", ["pdf-pro", "Sobre"]), "The user answered: Sobre")
+
 if __name__ == "__main__":
     unittest.main()

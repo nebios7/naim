@@ -2026,6 +2026,21 @@ class Handler(BaseHTTPRequestHandler):
             self.event({"type": "approval_result", "id": aid, "allow": entry["allow"]})
             return entry["allow"]
 
+        def asker(question, choices, multiple):  # ask_user in the Chat too: the same question card as the Agent
+            aid = uuid.uuid4().hex
+            entry = {"event": threading.Event(), "answer": None}
+            with _lock:
+                _pending[aid] = entry
+            self.event({"type": "question", "id": aid, "question": question, "options": choices, "multiple": multiple})
+            deadline = time.time() + APPROVAL_TIMEOUT
+            while not entry["event"].wait(0.3):
+                if stop.is_set() or time.time() > deadline:
+                    break
+            with _lock:
+                _pending.pop(aid, None)
+            self.event({"type": "question_result", "id": aid, "answer": entry["answer"]})
+            return entry["answer"]
+
         folder = Path(s.get("project") or body.get("project") or chatfiles.OUT).expanduser()
         if not folder.is_dir():
             folder = chatfiles.OUT
@@ -2036,7 +2051,7 @@ class Handler(BaseHTTPRequestHandler):
             folder = named
             self.event({"type": "project", "path": str(named)})
         helper = Agent(str(folder), body.get("model", "naim"), auto_yes=bool(body.get("auto_yes")), emit=self.event,
-                       approver=approver, options=options, **agent_settings(body))
+                       approver=approver, asker=asker, options=options, **agent_settings(body))
         run_id = body.get("run_id") or helper.run_id
         helper.set_conversation(body.get("conv_id"))  # its background jobs report there; its own draft folder
         helper._bg_intent = bool(Agent.BG_INTENT_RE.search(body.get("message") or ""))
