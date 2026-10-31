@@ -1127,5 +1127,30 @@ class RunawayCallIsCut(unittest.TestCase):
         self.assertTrue(args.get("_maybe_cut") or "_unreadable" in args or "content" not in args or "path" in args)
         self.assertLess(sum(1 for c in out if "writing" in c), 100)  # stopped after about 30 reads, not 10 000
 
+
+class LongTaskKeepsTheRequest(unittest.TestCase):
+    """Chat: when a long task outgrows the engine's room, the request stays word for word and the steps are summed up."""
+
+    def test_lighten(self):
+        import server
+        msgs = [{"role": "system", "content": "SYS"}, {"role": "user", "content": "fais un cours sur COBOL"},
+                {"role": "assistant", "content": "voilà le cours"},
+                {"role": "user", "content": "les 4 séances suivantes, peu d'exercices, que le PDF"}]
+        for i in range(30):
+            msgs.append({"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "web_search", "arguments": {"query": f"cobol {i}"}}}]})
+            msgs.append({"role": "tool", "content": "x" * 9000})
+        msgs.append({"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "write_file", "arguments": {"path": "c/page.html"}}}]})
+        msgs.append({"role": "tool", "content": "ok"})
+        out, at = server.lighten_conversation(msgs, 3)
+        self.assertEqual(out[0]["content"], "SYS")
+        self.assertEqual(at, 1)
+        self.assertIn("les 4 séances suivantes, peu d'exercices, que le PDF", out[1]["content"])
+        self.assertIn("fais un cours sur COBOL", out[1]["content"])
+        self.assertIn("cherché « cobol 0 »", out[2]["content"])
+        self.assertLessEqual(len(out), 9)
+        again, at2 = server.lighten_conversation(out + msgs[-4:], at)  # a second time: the request and the first summary stay
+        self.assertIn("que le PDF", again[1]["content"])
+        self.assertIn("cobol 0", again[2]["content"])
+
 if __name__ == "__main__":
     unittest.main()

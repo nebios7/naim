@@ -132,6 +132,41 @@ def shorten_used_results(messages):
             m["content"] = c[:USED_RESULT_KEEP] + SHORTENED
 
 
+def lighten_conversation(messages, task_at):
+    """The conversation outgrew the engine's room: the instructions, the user's request (and what they asked before, in
+    short) stay word for word, the steps done are summed up, the last steps stay. Returns the new list and where the
+    request now is. Before, only the last six messages were kept: after a long task Naim no longer knew what was asked."""
+    task_at = task_at if 0 < task_at < len(messages) else max((i for i, m in enumerate(messages) if m.get("role") == "user"), default=0)
+    tail = messages[-6:] if len(messages) - task_at > 7 else messages[task_at + 1:]
+    while tail and tail[0].get("role") == "tool":
+        tail = tail[1:]
+    for m in tail:
+        if m.get("role") == "tool" and len(str(m.get("content") or "")) > 4000:
+            m["content"] = str(m["content"])[:4000] + "\n… (raccourci)"
+    before = [str(m.get("content") or "")[:600] for m in messages[1:task_at] if m.get("role") == "user"][-3:]
+    done, notes = [], []
+    for m in messages[task_at + 1:len(messages) - len(tail)]:
+        c = str(m.get("content") or "")
+        if m.get("role") == "assistant" and c.startswith("(Résumé"):
+            notes.append(c)  # a summary made earlier in this same task: kept in the new one
+        for call in m.get("tool_calls") or []:
+            f = call.get("function", call)
+            a = f.get("arguments") if isinstance(f.get("arguments"), dict) else {}
+            n = f.get("name")
+            done.append(f"écrit {a.get('path')}" if n == "write_file" else f"modifié {a.get('path')}" if n == "edit_file"
+                        else f"cherché « {str(a.get('query'))[:60]} »" if n == "web_search" else f"lu {str(a.get('url') or a.get('path'))[:80]}"
+                        if n in ("web_fetch", "read_file") else f"créé {a.get('nom')}" if n == "creer_fichier" else str(n))
+    task = dict(messages[task_at])
+    if before:
+        task["content"] = "[Ce que l'utilisateur a demandé avant, pour le contexte]\n" + "\n".join(f"- {b}" for b in before) + \
+            "\n\n[Sa demande actuelle, à suivre exactement]\n" + str(task.get("content") or "")
+    summary = {"role": "assistant", "content": "(Résumé de mes étapes précédentes pour cette demande ; les fichiers sont sur le disque)\n"
+               + ("\n".join(n.split("\n", 1)[-1] for n in notes)[-2500:] + "\n" if notes else "")
+               + ("Fait : " + ", ".join(dict.fromkeys(done))[:3000] + "." if done else "")
+               + "\nJe reprends en respectant chaque point de la demande ci-dessus."}
+    return [messages[0], task, summary] + tail, 1
+
+
 REWRITE_RE = re.compile(r"\b(?:r[ée]{1,2}cri[st]?|reformule|am[ée]liore|retravaille|avec (?:du|plus de|un) style|plus (?:beau|joli|pro"
                         r"|professionnel|styl[ée])|mets?[- ]le en forme|mise en forme|autrement|une autre version)\b", re.I)
 
@@ -2038,6 +2073,7 @@ class Handler(BaseHTTPRequestHandler):
         refusals = 0  # tool calls refused because the message only asks for an answer
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
+        task_at = len(messages) - 1  # the user's request: always kept word for word when the conversation is lightened
         searches = 0  # web searches in a row: now and then Naim takes stock of what it found (no limit: it decides)
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
@@ -2212,17 +2248,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
             except llamacpp.ContextFull:
-                # the conversation outgrew the engine's room: the oldest exchanges go (the instructions, the request
-                # and the last steps stay), and the same step is asked again
+                # the conversation outgrew the engine's room: the instructions and the request stay, the steps done
+                # are summed up, the last steps stay, and the same step is asked again
                 self.event({"type": "status", "text": "Naim allège la conversation pour continuer…"})
-                head = [m for m in messages[:1]]
-                tail = messages[-6:]
-                while tail and tail[0].get("role") == "tool":
-                    tail = tail[1:]
-                for m in tail:
-                    if m.get("role") == "tool" and len(str(m.get("content") or "")) > 4000:
-                        m["content"] = str(m["content"])[:4000] + "\n… (raccourci)"
-                messages[:] = head + tail
+                messages[:], task_at = lighten_conversation(messages, task_at)
                 stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
             thought = redirected = False
             for chunk in stream:
