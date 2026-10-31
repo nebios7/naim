@@ -1,0 +1,18 @@
+{
+  "name": "ameliore-systeme",
+  "version": "1.0",
+  "description": "Naim relit ses dernières conversations et en fait un rapport d'amélioration en PDF : ce qui marche, ce qui coûte du temps, les skills et automatisations à créer, puis il applique ce que tu choisis.",
+  "skills": "skills",
+  "triggers": {
+    "ameliore-systeme": "(?<![\\w-])/?am[ée]lior\\w*[- ]syst[eè]me?\\b|\\brapport d'am[ée]lioration\\b|\\b(analyse|relis|relire|lis|lire|[ée]tudie)\\w*\\b[^.?!]{0,30}\\b(mes|nos|tes|les) (derni[eè]res )?conversations\\b[^.?!]{0,60}\\b(am[ée]lior\\w*|automatis\\w*|rapport|bilan)"
+  },
+  "commands": [
+    {
+      "cmd": "/ameliore-systeme",
+      "arg": "[nombre de jours, 7 par défaut]",
+      "description": "Relire les dernières conversations et faire un rapport d'amélioration et d'automatisation",
+      "prompt": "Avec le skill ameliore-systeme, relis mes dernières conversations et fais le rapport d'amélioration (en PDF), puis demande-moi quelles propositions appliquer."
+    }
+  ],
+  "priority": true
+}

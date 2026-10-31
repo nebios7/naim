@@ -1183,6 +1183,39 @@ class ConnectATool(unittest.TestCase):
             self.assertNotRegex(t, trig)
 
 
+class ImproveTheSystem(unittest.TestCase):
+    """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
+    P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"
+
+    def test_triggers(self):
+        trig = json.loads((self.P / "plugin.json").read_text())["triggers"]["ameliore-systeme"]
+        for t in ("/ameliore-system", "/ameliore-systeme 30", "fais un rapport d'amélioration", "analyse mes conversations pour les automatiser"):
+            self.assertRegex(t, trig)
+        for t in ("améliore le style du site", "crée un rapport PDF des ventes", "lis mes mails"):
+            self.assertNotRegex(t, trig)
+
+    def test_digest(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analyse", self.P / "skills/ameliore-systeme/analyse.py")
+        a = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(a)
+        conv = {"id": "c1", "title": "sms", "messages": [
+            {"role": "user", "content": "envoie un sms à Paul pour demain", "time": 1793440000000},
+            {"role": "assistant", "content": "ok", "stats": {"total": 600, "reason": "stop"}, "steps": [
+                {"type": "event", "text": "Skill utilisé : mac"},
+                {"type": "tool", "name": "run_command", "args": {"command": "osascript -e x"}, "result": "exit code 1\nboom"},
+                {"type": "tool", "name": "run_command", "args": {"command": "osascript -e x"}, "result": "exit code 1\nboom"}]},
+            {"role": "user", "content": "il a pas envoyé, ça ne marche pas"}]}
+        with tempfile.TemporaryDirectory() as d:
+            a.REPORTS = Path(d)
+            out = a.digest([conv, {**conv, "id": "c2"}], 7)
+        self.assertIn("4× run_command osascript", out)  # 2 failures × 2 conversations, grouped by command
+        self.assertIn("1 refaits", out)
+        self.assertIn("ça ne marche pas", out)
+        self.assertIn("mac (2)", out)
+        self.assertIn("Demandes qui reviennent", out)
+
+
 class AskTheUser(unittest.TestCase):
     """ask_user: options with their explanation reach the card; « Passer » lets Naim choose and say which."""
 
