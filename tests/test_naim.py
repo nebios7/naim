@@ -1003,9 +1003,12 @@ class PdfPro(unittest.TestCase):
 
     def test_requests_pick_it(self):
         trig = json.loads((Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/plugin.json").read_text())["triggers"]["pdf-pro"]
-        for t in ("crée-moi un cours complet sur python en pdf", "fais les 4 séances suivantes ? une fois fini tu fournis que le pdf avec son sommaire"):
+        # nobody has to know the skill's name: making a new PDF picks it, acting on an existing one does not
+        for t in ("crée-moi un cours complet sur python en pdf", "fais les 4 séances suivantes ? une fois fini tu fournis que le pdf avec son sommaire",
+                  "je veux un pdf sur l'histoire de l'algérie", "un tutoriel pdf sur git", "explique moi les fractions dans un pdf pour mon fils"):
             self.assertRegex(t, trig)
-        for t in ("envoie-moi cours-cobol/document.pdf par mail", "fusionne ces deux pdf", "lis le fichier cours.pdf", "fais un plan de maison en pdf"):
+        for t in ("envoie-moi cours-cobol/document.pdf par mail", "fusionne ces deux pdf", "lis le fichier cours.pdf", "fais un plan de maison en pdf",
+                  "résume ce pdf", "traduis ce pdf en anglais"):
             self.assertNotRegex(t, trig)
 
     def test_content_only_page_gets_the_theme(self):

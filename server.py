@@ -2106,9 +2106,16 @@ class Handler(BaseHTTPRequestHandler):
                     keep = ("app-macos", "react-app", "react-native")  # an application stays an application
                 found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k and k["name"] in keep] if keep else []
                 if not found and re.search(r"\b(respect\w*|pas mis|pas fait|toujours|encore|m[êe]me style|le style|l'affichage|enrichi\w*|"
-                                           r"refai\w*|recommence\w*|c'?est pas [cç]a|pas ce que)\b", m_, re.I):
-                    # a remark on the work under way (« tu n'as pas respecté le style ») keeps that work's skill
-                    found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k][:1]
+                                           r"refai\w*|recommence\w*|c'?est pas [cç]a|pas ce que|la suite|suivant\w*|continu\w*|de plus|en plus)\b", m_, re.I):
+                    # a remark on the work under way (« tu n'as pas respecté le style ») or its next part (« fais la suite »)
+                    # keeps that work's skill — the one of the document being made (pdf-pro…) before a subject or a sending
+                    found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k]
+                    try:
+                        import plugins
+                        fmt = set(plugins.priority_skills("after-specific"))
+                    except Exception:  # noqa: BLE001
+                        fmt = set()
+                    found = ([k for k in found if k["name"] in fmt] or found)[:1]
                 sk = (next((k for k in found if k["name"] != "application-web"), None) or (found[0] if found else None)
                       or ext.design_follow_up(m_, " ".join(str(m.get("content") or "")[:2000] for m in (body.get("history") or [])[-6:]))
                       or ext.match_skill(body["message"], helper.root, helper.disabled_skills))  # nothing under way: the generic one

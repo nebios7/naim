@@ -1,10 +1,10 @@
 {
   "name": "pdf-pro",
-  "version": "1.6",
+  "version": "1.7",
   "description": "Des PDF professionnels avec un seul style soigné : cours, analyses de courrier, rapports, dossiers avec plans ; tableaux, graphiques, schémas, formules mathématiques, code coloré, prêts à imprimer. Rien à installer.",
   "skills": "skills",
   "triggers": {
-    "pdf-pro": "^(?![^\\n]*\\bplans?\\s+(d['’]?\\s*archit|de\\s+(la\\s+)?(maison|appartement|villa)))[\\s\\S]*?(?:\\b(cr[ée]\\w*|fai[st]?\\w*|g[ée]n[èe]r\\w*|produi\\w*|r[ée]dig\\w*|donne\\w*|pr[ée]pare\\w*|mets?|met|export\\w*|livre\\w*|sors?|r[ée]alis\\w*|transforme\\w*)\\b[^.?!]{0,120}\\b(en|un|dans un|au format|sous forme de|version)\\s+pdf\\b|\\bpdf\\s+(pro\\w*|joli|beau|soign[ée]|complet|imprimable|bien pr[ée]sent[ée])\\b|\\b(cours|support de cours|fiche de r[ée]vision|polycopi[ée])\\b[^.?!]{0,60}\\bpdf\\b|\\b(cours|s[ée]ances?|le[çc]ons?|chapitres?|support de cours|fiche de r[ée]vision|polycopi[ée])\\b(?![-/])[^\\n]{0,240}?(?<![./\\w-])pdf\\b)"
+    "pdf-pro": "^(?![^\\n]*\\bplans?\\s+(d['’]?\\s*archit|de\\s+(la\\s+)?(maison|appartement|villa)))[\\s\\S]*?(?:\\b(cr[ée]\\w*|fai[st]?\\w*|g[ée]n[èe]r\\w*|produi\\w*|r[ée]dig\\w*|donne\\w*|pr[ée]pare\\w*|mets?|met|export\\w*|livre\\w*|sors?|r[ée]alis\\w*|transforme\\w*)\\b[^.?!]{0,120}\\b(en|un|dans un|au format|sous forme de|version)\\s+pdf\\b|\\bpdf\\s+(pro\\w*|joli|beau|soign[ée]|complet|imprimable|bien pr[ée]sent[ée])\\b|\\b(cours|support de cours|fiche de r[ée]vision|polycopi[ée])\\b[^.?!]{0,60}\\bpdf\\b|\\b(cours|s[ée]ances?|le[çc]ons?|chapitres?|support de cours|fiche de r[ée]vision|polycopi[ée])\\b(?![-/])[^\\n]{0,240}?(?<![./\\w-])pdf\\b|(?![\\s\\S]*\\b(fusionn\\w*|r[ée]sum\\w*|lis|lire|envoi\\w*|envoy\\w*|imprim\\w*|extrai\\w*|d[ée]coup\\w*|divis\\w*|compress\\w*|sign\\w*|rempli\\w*|tradui\\w*|ouvr\\w*|pivot\\w*|ocr|mail\\w*|joint\\w*)\\b)[\\s\\S]*?(?:\\b(un|une|en|au format|dans un|sous forme d'un|version)\\s+(document\\s+|fichier\\s+)?pdf\\b|\\b(guide|tutoriel|tuto|fiche|document|dossier|livret|manuel|support|expos[ée]|m[ée]mo|synth[eè]se|explication)s?\\s+(en\\s+)?pdf\\b))"
   },
   "priority": "after-specific"
 }

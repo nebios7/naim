@@ -1037,7 +1037,7 @@ SKILL_TRIGGERS = {
              r"\bcorrige\b[^.?!]{0,30}\b(code|script|programme|bug|erreur|appli\w*|fonction|\w+\.(py|js|ts|html|css|php|swift|java))\b",
     "git-commit": r"\bcommit\b",
     "readme": r"\b(readme)\b",
-    "pdf": r"\bpdf\b",
+    "pdf": r"(?<![./\w-])pdf\b",  # the word, not a file name (« envoie document.pdf » is not a PDF to make)
     "excel": r"\b(excel|xlsx|tableur)\b",
     "word": r"\b(word|docx)\b",
     "cv-lettre": r"\b(cv|curriculum( vitae)?|lettres? de motivation|lettre de candidature)\b",
@@ -1134,6 +1134,11 @@ def match_skill(task, root=None, disabled=()):
     # a skill the user names (« utilise design-style-gitingest ») is that one, before any guess from the words
     for s in sorted(skills, key=lambda s: -len(s["name"])):
         if len(s["name"]) >= 4 and re.search(rf"(?<![\w-]){re.escape(s['name'].lower())}(?![\w-])", text):
+            # a subject named inside a document to make (« un cours sur COBOL en PDF »): the document's skill gives the
+            # method, the subject's one stays at hand (use_skill)
+            fmt = next((n for n in after_specific if n != s["name"] and n in by_name and re.search(triggers[n], text)), None)
+            if fmt and s["name"] not in first and s["name"] not in priority and s["name"] not in after_specific:
+                return by_name[fmt]
             return s
     try:
         import skills_bibliotheque
