@@ -639,14 +639,17 @@ def mac_allow(area):
 
 
 def finals(files):
-    """The files to show the user: a PDF hides its drafts (the HTML it was made from, its .pro.html, its page previews)."""
+    """The files to show the user: a PDF hides its drafts (the HTML it was made from, its .pro.html, its page previews,
+    the texts and data written next to it to fill it: lettre.txt, textes.json)."""
     pdfs = [f["path"] for f in files if str(f["path"]).lower().endswith(".pdf")]
     if not pdfs:
         return files
     stems = {re.sub(r"\.pdf$", "", p, flags=re.I) for p in pdfs}
+    beside = {os.path.dirname(p) for p in pdfs}
     def draft(path):
         low = str(path).lower()
-        return low.endswith((".html", ".htm")) or any(re.fullmatch(re.escape(s) + r"\.page\d+\.png", str(path), re.I) for s in stems)
+        return (low.endswith((".html", ".htm")) or any(re.fullmatch(re.escape(s) + r"\.page\d+\.png", str(path), re.I) for s in stems)
+                or (low.endswith((".txt", ".json")) and os.path.dirname(str(path)) in beside))
     return [f for f in files if not draft(f["path"])]
 
 
@@ -3160,7 +3163,23 @@ class Agent:
                         found.append((st.st_mtime, {"path": self.rel(f), "size": st.st_size, "ext": f.suffix.lower()[1:]}))
         return [x for _, x in sorted(found, key=lambda t: -t[0])[:8]]
 
-    DOC_OUT = {".html", ".htm", ".md", ".txt", ".docx", ".pdf", ".rtf", ".odt"}
+    def _named_outputs(self, text, since):
+        """Documents a command names (« PDF : ~/…/CV.pdf ») and made since `since`, wherever they are: the folder of an
+        attachment, not the project, is often where a CV or a letter is written."""
+        exts = "|".join(e[1:] for e in self.DELIVERABLE_EXTS)
+        paths = re.findall(r"[\"']((?:~|/)[^\"'\n]+?\.(?:%s))[\"']" % exts, text, re.I)
+        paths += re.findall(r"(?<![\w/~.-])((?:~|/)[^\s\"'`]+?\.(?:%s))(?![\w-])" % exts, text, re.I)
+        found = []
+        for p in dict.fromkeys(paths):
+            f = Path(os.path.expanduser(p))
+            try:
+                if f.is_file() and f.stat().st_mtime >= since - 1:
+                    found.append({"path": self.rel(f), "size": f.stat().st_size, "ext": f.suffix.lower()[1:]})
+            except OSError:
+                pass
+        return found
+
+    DOC_OUT ={".html", ".htm", ".md", ".txt", ".docx", ".pdf", ".rtf", ".odt"}
     FACT_PROMPT = (
         "Document A (source, fourni par l'utilisateur) :\n<<<\n{src}\n>>>\n\nDocument B (produit à partir de A) :\n<<<\n{out}\n>>>\n\n"
         "Liste chaque information FACTUELLE de B qui n'apparaît PAS dans A (même reformulée) : compétence, outil ou "
@@ -3235,6 +3254,10 @@ class Agent:
             if not self.subagent and not self.plan:
                 try:
                     files = self._deliverables(started)
+                    said = "\n".join(json.dumps(self._args_of(c), ensure_ascii=False).replace('\\"', '"') if c else str(m.get("content") or "")
+                                     for m in self.messages[getattr(self, "_task_idx", 0):]
+                                     for c in (m.get("tool_calls") or [None] if m.get("role") != "user" else []))
+                    files += [f for f in self._named_outputs(said, started) if all(f["path"] != g["path"] for g in files)]
                     if files:
                         self.emit({"type": "deliverables", "root": str(self.root), "files": finals(files)})
                 except OSError:

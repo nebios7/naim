@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -1031,6 +1032,22 @@ class PdfPro(unittest.TestCase):
         files = [{"path": p} for p in ("c/document.pdf", "c/page.html", "c/page.pro.html", "c/document.page1.png", "c/fig.svg")]
         self.assertEqual([f["path"] for f in naimtools.finals(files)], ["c/document.pdf", "c/fig.svg"])
         self.assertEqual(naimtools.finals([{"path": "site/index.html"}]), [{"path": "site/index.html"}])
+        cv = [{"path": p} for p in ("j/lettre.txt", "j/textes.json", "j/CV.pdf", "j/Lettre.pdf", "notes.txt")]
+        self.assertEqual([f["path"] for f in naimtools.finals(cv)], ["j/CV.pdf", "j/Lettre.pdf", "notes.txt"])
+
+    def test_a_pdf_made_outside_the_project_is_shown(self):
+        # a CV written in the attachment's folder by a command, while the app's folder is another project
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as joint:
+            a = naimtools.Agent(proj, "naim")
+            since = time.time()
+            pdf = Path(joint) / "Mon CV.pdf"
+            pdf.write_bytes(b"%PDF-1.4")
+            old = Path(joint) / "ancien.pdf"
+            old.write_bytes(b"%PDF-1.4")
+            os.utime(old, (since - 3600, since - 3600))
+            said = f'python3 pdfpro.py render "{joint}/cv.html" "{pdf}"\nPDF : {old} (1 pages)'
+            self.assertEqual([f["ext"] for f in a._named_outputs(said, since)], ["pdf"])
+            self.assertTrue(a._named_outputs(said, since)[0]["path"].endswith("Mon CV.pdf"))
 
 
 class WritesItsOwnExtensions(unittest.TestCase):
