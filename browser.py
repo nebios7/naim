@@ -77,7 +77,7 @@ class Browser:
         self.proc = None
 
 
-def describe(r, full_text=False):
+def describe(r, full_text=False, limit=None):
     """Readable summary of a page answer for the model."""
     if r.get("error"):
         return f"error: {r['error']}"
@@ -96,7 +96,7 @@ def describe(r, full_text=False):
                      + (f"\n… et {len(els) - 80} autres" if len(els) > 80 else ""))
     text = r.get("text") or ""
     if text:
-        limit = 4000 if full_text else 1500
+        limit = limit or (4000 if full_text else 1500)
         cut = f"\n… ({r.get('textLength', len(text))} caractères en tout : action=page pour tout lire)" if len(text) > limit or r.get("textLength", 0) > len(text) else ""
         lines.append("Texte visible :\n" + text[:limit] + cut)
     return "\n".join(lines)

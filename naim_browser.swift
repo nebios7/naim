@@ -34,27 +34,30 @@ let captureJS = """
 
 // Numbered list of what can be clicked or filled, plus the visible text.
 let pageJS = """
-(() => { const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+(() => { const deepAll = (sel, root = document, out = []) => { root.querySelectorAll(sel).forEach(e => out.push(e)); root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) deepAll(sel, e.shadowRoot, out); }); return out; };  // inside the shadow roots too (Salesforce, web components)
+  const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
   const label = el => { const t = (el.getAttribute('aria-label') || el.innerText || el.value || el.placeholder || el.title || el.alt || el.name || '').trim().replace(/\\s+/g, ' ');
     if (!t && el.id) { const l = document.querySelector('label[for="' + el.id + '"]'); if (l) return l.innerText.trim(); } return t.slice(0, 80); };
-  document.querySelectorAll('[data-naim-id]').forEach(e => e.removeAttribute('data-naim-id'));
-  const els = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=checkbox], [onclick], summary')].filter(vis).slice(0, 120);
+  deepAll('[data-naim-id]').forEach(e => e.removeAttribute('data-naim-id'));
+  const els = deepAll('a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=checkbox], [onclick], summary').filter(vis).slice(0, 150);
   const items = els.map((el, i) => { el.setAttribute('data-naim-id', i + 1); const tag = el.tagName.toLowerCase();
     const kind = tag === 'a' ? 'lien' : tag === 'button' || el.getAttribute('role') === 'button' ? 'bouton' : tag === 'select' ? 'liste' : tag === 'textarea' ? 'zone de texte' : tag === 'input' ? 'champ ' + (el.type || 'text') : tag;
     const extra = (tag === 'input' || tag === 'textarea') && el.value ? ' = "' + String(el.value).slice(0, 40) + '"' : tag === 'input' && (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? ' ☑' : ' ☐') : el.disabled ? ' (désactivé)' : '';
-    return '[' + (i + 1) + '] ' + kind + ' « ' + label(el) + ' »' + extra; });
+    const to = tag === 'a' && el.href && !/^javascript:/.test(el.href) && el.href.split('#')[0] !== location.href.split('#')[0] ? ' → ' + el.href.slice(0, 160) : '';  // where a link goes (not back to this page)
+    return '[' + (i + 1) + '] ' + kind + ' « ' + label(el) + ' »' + extra + to; });
   const text = (document.body ? document.body.innerText : '').replace(/\\n{3,}/g, '\\n\\n').trim();
-  return JSON.stringify({ title: document.title, url: location.href, text: text.slice(0, 5000), textLength: text.length, elements: items }); })()
+  return JSON.stringify({ title: document.title, url: location.href, text: text.slice(0, 20000), textLength: text.length, elements: items }); })()
 """
 
 func findJS(_ target: String) -> String {
     let t = target.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
     let lit = String(data: try! JSONSerialization.data(withJSONObject: [t], options: []), encoding: .utf8)!
     return """
-    const __t = \(lit)[0]; let el = /^\\d+$/.test(__t) ? document.querySelector('[data-naim-id="' + __t + '"]') : null;
+    const deepAll = (sel, root = document, out = []) => { root.querySelectorAll(sel).forEach(e => out.push(e)); root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) deepAll(sel, e.shadowRoot, out); }); return out; };
+    const __t = \(lit)[0]; let el = /^\\d+$/.test(__t) ? deepAll('[data-naim-id="' + __t + '"]')[0] : null;
     if (!el && !/^\\d+$/.test(__t)) { try { el = document.querySelector(__t); } catch (e) {} }
-    if (!el) { const want = __t.toLowerCase(); const all = [...document.querySelectorAll('a, button, input, textarea, select, label, [role], summary, [onclick], li, td, span, div')];
+    if (!el) { const want = __t.toLowerCase(); const all = deepAll('a, button, input, textarea, select, label, [role], summary, [onclick], li, td, span, div');
       const txt = e => (e.getAttribute('aria-label') || e.innerText || e.value || e.placeholder || '').trim().toLowerCase();
       el = all.find(e => txt(e) === want) || all.filter(e => txt(e).includes(want)).sort((a, b) => txt(a).length - txt(b).length)[0]; }
     """

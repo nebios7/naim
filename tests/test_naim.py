@@ -547,6 +547,38 @@ class AttachedFilesKept(unittest.TestCase):
         self.assertEqual([f["path"] for f in naimtools.finals(files, self.d)], ["Lettre_pro.pdf"])
 
 
+class WebPages(unittest.TestCase):
+    """A page read like a pro tool: its main text without menu noise, its titles and its links; a page built by
+    JavaScript is read again in the real browser."""
+
+    def test_text_titles_and_links(self):
+        import extensions as e
+        page = ('<html><nav><a href="/x">Menu</a></nav><main><h2>Offres</h2><ul><li></li><li>Poste A</li></ul>'
+                + "<p>" + "texte " * 400 + '</p><a href="/offre/1">Voir l\'offre 1</a><a hreflang="en" href="https://en.x/">English</a></main></html>')
+        t = e.html_to_text(e._main_part(page))
+        self.assertIn("## Offres", t)
+        self.assertNotIn("\n- \n", t)
+        self.assertNotIn("Menu", t)
+        links = e._links(e._main_part(page), "https://site.fr/liste")
+        self.assertEqual(links, ["- Voir l'offre 1 → https://site.fr/offre/1"])
+
+    def test_javascript_page_read_in_the_browser(self):
+        from unittest import mock
+        a = naimtools.Agent(tempfile.mkdtemp(), auto_yes=True)
+
+        class FakeBrowser:
+            def send(self, cmd, **k):
+                return {"title": "Offres", "url": "https://site.fr", "text": "7 offre(s) trouvée(s)\nPoste A\nPoste B " * 20,
+                        "textLength": 900, "elements": ["[1] lien « Ouvrir Poste A »"]}
+        with mock.patch("extensions.web_fetch", return_value="Offres\nhttps://site.fr\n\n- \n- "), \
+                mock.patch("browser.Browser", FakeBrowser), mock.patch("time.sleep"):
+            r = a.web_fetch("https://site.fr")
+        self.assertIn("lue avec le navigateur", r)
+        self.assertIn("[1] lien « Ouvrir Poste A »", r)
+        with mock.patch("extensions.web_fetch", return_value="Doc\nhttps://d.fr\n\n" + "mot " * 300):
+            self.assertNotIn("navigateur", a.web_fetch("https://d.fr"))  # a page with its text: no browser
+
+
 class ChatFolder(unittest.TestCase):
     """A conversation with attached files works beside them, not in the last Agent project."""
 

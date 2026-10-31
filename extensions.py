@@ -753,12 +753,41 @@ def _get(url, timeout=20, limit=3_000_000):
 
 def html_to_text(src):
     src = re.sub(r"(?is)<(script|style|noscript|svg|nav|footer|header|form)[^>]*>.*?</\1>", " ", src)
+    src = re.sub(r"(?is)<h([1-3])[^>]*>(.*?)</h\1>", lambda m: "\n\n" + "#" * int(m.group(1)) + " " + m.group(2) + "\n", src)  # titles kept as titles
     src = re.sub(r"(?i)<br\s*/?>|</(p|div|li|h[1-6]|tr|section|article|pre)>", "\n", src)
     src = re.sub(r"(?i)<li[^>]*>", "\n- ", src)
+    src = re.sub(r"(?i)</t[dh]>", " | ", src)  # a table row stays on one line
     src = re.sub(r"(?s)<[^>]+>", " ", src)
     src = html.unescape(src)
     src = re.sub(r"[ \t\r\f\v]+", " ", src)
+    src = re.sub(r"(?m)^[ \t]*[-|•·]?[ \t|]*$", "", src)  # empty bullets and cells (menus): noise
     return re.sub(r"\n\s*\n+", "\n\n", src).strip()
+
+
+def _main_part(page):
+    """The page's main content (<main>, <article>, the article body of a wiki) when it holds the text: no menus."""
+    for rx in (r"(?is)<main\b[^>]*>(.*)</main>", r"(?is)<article\b[^>]*>(.*)</article>", r'(?is)<div[^>]+id="mw-content-text"[^>]*>(.*)'):
+        m = re.search(rx, page)
+        if m and len(re.sub(r"(?s)<[^>]+>", "", m.group(1))) > 1500:
+            return m.group(1)
+    return page
+
+
+def _links(page, base, limit=40):
+    """The page's links (text → address), to follow a page it lists: no anchors, scripts or doubles."""
+    own, other, seen = [], [], {base.split("#")[0]}
+    host = urllib.parse.urlparse(base).netloc
+    for attrs, txt in re.findall(r'(?is)<a\b([^>]*)>(.*?)</a>', page):
+        href = re.search(r'href="([^"#][^"]*)"', attrs)
+        if not href or re.search(r'\b(hreflang|lang)=', attrs):  # the same page in other languages: noise
+            continue
+        t = re.sub(r"\s+", " ", html.unescape(re.sub(r"(?s)<[^>]+>", " ", txt))).strip()
+        url = urllib.parse.urljoin(base, html.unescape(href.group(1)))
+        if len(t) < 3 or not url.startswith("http") or url.split("#")[0] in seen:
+            continue
+        seen.add(url.split("#")[0])
+        (own if urllib.parse.urlparse(url).netloc == host else other).append(f"- {t[:80]} → {url[:200]}")
+    return (own + other)[:limit]  # the site's own pages first
 
 
 def web_search(query, limit=6):
@@ -785,9 +814,13 @@ def web_fetch(url, max_chars=12000):
     except Exception as e:
         return f"error: {e}"
     title = re.search(r"(?is)<title[^>]*>(.*?)</title>", body)
-    text = html_to_text(body) if "html" in ctype or body.lstrip().startswith("<") else body
+    is_html = "html" in ctype or body.lstrip().startswith("<")
+    main = _main_part(body) if is_html else body
+    text = html_to_text(main) if is_html else body
     head = f"{html_to_text(title.group(1)) if title else final}\n{final}\n\n"
-    return head + (text[:max_chars] + "\n...(tronqué)" if len(text) > max_chars else text)
+    out = head + (text[:max_chars] + "\n...(tronqué)" if len(text) > max_chars else text)
+    links = _links(main, final) if is_html else []
+    return out + ("\n\nLiens de la page (pour en ouvrir un : web_fetch de son adresse) :\n" + "\n".join(links) if links else "")
 
 
 # ============================================================================ undo checkpoints

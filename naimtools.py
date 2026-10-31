@@ -2191,7 +2191,36 @@ class Agent:
         return "\n\n".join(f"{i + 1}. {r['title']}\n   {r['url']}\n   {r['snippet']}" for i, r in enumerate(results)) or "no result"
 
     def web_fetch(self, url):
-        return ext.web_fetch(url)
+        """The page's text; a page built by JavaScript (a job board, a shop, Salesforce…) is nearly empty without it:
+        then it is read again in Naim's own browser, which runs it, with its numbered links to open what it lists."""
+        text = ext.web_fetch(url)
+        if text.startswith("error") and not re.search(r"\b(403|429|503)\b", text):
+            return text
+        body = text.split("\n\n", 1)[-1]
+        if len(re.findall(r"[A-Za-zÀ-ÿ]{3,}", body)) >= 150 and not re.search(r"(?i)enable javascript|activez javascript|javascript (is )?(required|disabled)", body):
+            return text
+        try:
+            import browser as br
+            if getattr(self, "_browser", None) is None:
+                self._browser = br.Browser()
+            r = self._browser.send(cmd="open", url=url)
+            last = -1
+            for _ in range(10):  # its content arrives after the page: wait until the text stops growing (≤ 10 s)
+                time.sleep(1)
+                r2 = self._browser.send(cmd="page")
+                if r2.get("error"):
+                    break
+                r = r2
+                if r.get("textLength", 0) == last:
+                    break
+                last = r.get("textLength", 0)
+            if r.get("error") or r.get("textLength", 0) < len(body):
+                return text
+            return ("[Page construite par JavaScript : lue avec le navigateur de Naim. Pour ouvrir un élément listé, "
+                    "browser action=click target=<son numéro> (la page est déjà ouverte), puis browser action=page.]\n"
+                    + br.describe(r, full_text=True, limit=15000))
+        except Exception as e:  # noqa: BLE001 — the plain text is still an answer
+            return text + f"\n[navigateur indisponible : {e}]"
 
     # ---- memory
     def remember(self, fact, category="autre"):
@@ -2690,7 +2719,7 @@ class Agent:
                     return "error: url is required for open"
                 return br.describe(self._browser.send(cmd="open", url=url), full_text=True)
             if action == "page":
-                return br.describe(self._browser.send(cmd="page"), full_text=True)
+                return br.describe(self._browser.send(cmd="page"), full_text=True, limit=12000)
             if action in ("click", "type", "select"):
                 if not target:
                     return f"error: target is required for {action} (element number or visible text)"
