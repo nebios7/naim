@@ -451,7 +451,7 @@ def _to_openai(messages, vision):
 def _payload(messages, tools, think, stream, options, vision=None):
     o = dict(options or {})
     vision = SERVER.status()["vision"] if vision is None else vision
-    body = {"messages": _to_openai(messages, vision), "stream": stream, "cache_prompt": True,
+    body = {"messages": _to_openai(messages, vision), "stream": stream, "cache_prompt": True, **({"return_progress": True} if stream else {}),
             "chat_template_kwargs": {"enable_thinking": bool(think)},
             "temperature": o.get("temperature", 0.3), "top_p": o.get("top_p", 0.95), "top_k": o.get("top_k", 20)}
     for src, dst in (("repeat_penalty", "repeat_penalty"), ("presence_penalty", "presence_penalty"), ("seed", "seed")):
@@ -610,6 +610,15 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 if data == "[DONE]":
                     break
                 ev = json.loads(data)
+                pp = ev.get("prompt_progress")
+                d0 = (ev.get("choices") or [{}])[0].get("delta") or {}
+                if pp and not (d0.get("content") or d0.get("reasoning_content") or d0.get("tool_calls")):
+                    # still reading the conversation (a long one: minutes, after web pages): how far it got
+                    total, done = pp.get("total") or 0, (pp.get("processed") or 0)
+                    if total > 2000 and time.time() - told > 1.0:
+                        told = time.time()
+                        yield {"message": {}, "done": False, "writing": {"reading": True, "done": done, "total": total}}
+                    continue
                 if ev.get("error"):  # the engine failed in the middle of the answer: said, not an empty reply
                     err = ev["error"] if isinstance(ev["error"], str) else (ev["error"].get("message") or json.dumps(ev["error"]))
                     note_error("erreur pendant la réponse", err)

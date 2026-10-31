@@ -417,6 +417,11 @@ header select { max-width: 220px; text-overflow: ellipsis; }
 .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
 .md p { margin: 0 0 10px; } .md ul, .md ol { margin: 0 0 10px; padding-left: 22px; } .md li { margin: 2px 0; }
 .md h1, .md h2, .md h3, .md h4 { margin: 18px 0 8px; line-height: 1.3; } .md h1 { font-size: 1.4em; } .md h2 { font-size: 1.2em; } .md h3 { font-size: 1.07em; } .md h4 { font-size: 1em; }
+.md a.fchip, .bubble a.fchip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; vertical-align: bottom; padding: 1px 8px 1px 6px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--code); color: var(--text); text-decoration: none; font-size: .92em; line-height: 1.45; }
+.md a.fchip:hover, .bubble a.fchip:hover { border-color: var(--muted); background: var(--hover); }
+.md a.fchip svg, .bubble a.fchip svg { width: 13px; height: 13px; flex: none; color: var(--muted); }
+.md a.fchip span, .bubble a.fchip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .md code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .87em; background: var(--code); border: 1px solid var(--line); padding: 0 4px; border-radius: 5px; }
 .md a { color: var(--accent); }
 .md blockquote { margin: 0 0 10px; padding: 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
@@ -2422,8 +2427,21 @@ function inline(s) {
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     // a bare address (http://localhost:5050/…) is a link too, opened in the browser
     .replace(/(^|[\s(«])(https?:\/\/[^\s<«»"]*[^\s<«»".,;:!?)])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
-  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[+i])}</code>`);
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => fileChip(codes[+i]) || `<code>${esc(codes[+i])}</code>`);
 }
+// a file named by its whole path in an answer (`/Users/…/Fichiers/CV.pdf`): its name, clickable (opens it; ⌥-click:
+// shows it in the Finder), the whole path on hover, as in a pro tool
+function fileChip(t) {
+  const p = String(t || "").trim();
+  if (!/^(~|\/(Users|Volumes|private|tmp)\/)[^\n<>`]*\/[^/\n<>`]+\.[A-Za-z0-9]{1,5}$/.test(p)) return "";
+  return `<a class="fchip" href="#" data-fpath="${esc(p)}" title="${esc(p)} — clic : ouvrir · ⌥ clic : montrer dans le Finder">${svgI("file")}<span>${esc(baseName(p))}</span></a>`;
+}
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.("a.fchip"); if (!a) return;
+  e.preventDefault();
+  const runs = /\.(app|command|sh|zsh|bash|tool|pkg|dmg|scpt|workflow|terminal|py|rb|pl|js)$/i.test(a.dataset.fpath);  // a program: shown, never launched
+  api("/api/reveal", { method: "POST", body: { path: a.dataset.fpath, select: e.altKey || runs } }).then((r) => { if (r && r.ok === false) toast("Fichier introuvable : il a peut-être été déplacé"); });
+});
 const PREVIEWABLE = /^(html|svg)$/i;
 const RUNNABLE = /^(sh|bash|zsh|shell|console|terminal|command)$/i;
 const FILE_RE = /([\w.\/-]*[\w-]\.(?:py|js|mjs|ts|tsx|jsx|html|css|scss|json|ya?ml|toml|md|swift|kt|java|php|rb|go|rs|c|h|cpp|sh|sql|env|txt|xml|vue|svelte|ini|cfg|gradle|plist))\b|\b(Dockerfile|Makefile|Procfile|\.gitignore)\b/;
@@ -3774,21 +3792,26 @@ const baseName = (p) => String(p || "").split("/").pop() || String(p || "");
 function actionInfo(name, a = {}, res = "") {
   const q = (t) => `« ${String(t || "").slice(0, 60)} »`;
   const cmd = (c) => `<code>${esc(String(c || "").slice(0, 80))}</code>`;
+  // a path shown by its name (the whole path on hover), a command with its paths shortened the same way
+  const file = (p) => p ? `<code title="${esc(String(p))}">${esc(baseName(String(p).replace(/\/+$/, "")).slice(0, 70))}</code>` : "";
+  const shortCmd = (c) => { const full = String(c || "").replace(/^cd\s+("[^"]+"|\S+)\s*&&\s*/, "");
+    const short = full.replace(/(["']?)((?:~|\/)[^"'\s]*\/)([^"'\s/]+)\1/g, (m, qt, dir, name) => qt + name + qt).replace(/\s+/g, " ");
+    return `<code title="${esc(String(c || ""))}">${esc(short.length > 90 ? short.slice(0, 89) + "…" : short)}</code>`; };
   if (name.startsWith("mcp__")) { const [, srv, tool] = name.split("__"); return { kind: "mcp", label: `${esc(tool)} <span class="muted">· ${esc(srv)}</span>` }; }
   const M = {
     list_files: () => ({ kind: "read", label: `Exploré ${a.path && a.path !== "." ? cmd(a.path) : "le projet"}` }),
-    read_file: () => ({ kind: "read", label: `Lu ${cmd(a.path)}` }),
-    write_file: () => ({ kind: "write", label: `Écrit ${cmd(a.path)}${a.lines ? ` <span class="muted">· ${a.lines} ligne${a.lines > 1 ? "s" : ""}</span>` : ""}` }),
-    edit_file: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : ""}` }),
+    read_file: () => ({ kind: "read", label: `Lu ${file(a.path)}` }),
+    write_file: () => ({ kind: "write", label: `Écrit ${file(a.path)}${a.lines ? ` <span class="muted">· ${a.lines} ligne${a.lines > 1 ? "s" : ""}</span>` : ""}` }),
+    edit_file: () => ({ kind: "write", label: `Modifié ${file(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : ""}` }),
     search: () => ({ kind: "read", label: `Recherché ${esc(q(a.pattern))}` }),
     run_command: () => { if (a.description && String(a.description).trim()) return { kind: "cmd", label: esc(String(a.description).trim().slice(0, 90)) };  // its own words, like a title
       const plain = approvalPlain("⚠", "$ " + (a.command || ""));  // a Mac action said simply
-      return { kind: plain && plain !== "Lancer une commande sur le Mac" ? "mac" : "cmd", label: plain && plain !== "Lancer une commande sur le Mac" ? esc(plain.replace(/^Envoyer/, "Envoi :").replace(/^Imprimer/, "Impression :").replace(/^Appeler/, "Appel :").replace(/^Régler/, "Réglage :").replace(/^Ouvrir/, "Ouverture :").replace(/^Piloter/, "Pilotage :")) : `Commande ${cmd(a.command)}` }; },
-    start_process: () => ({ kind: "cmd", label: `Lancé en arrière-plan ${cmd(a.command)}` }),
+      return { kind: plain && plain !== "Lancer une commande sur le Mac" ? "mac" : "cmd", label: plain && plain !== "Lancer une commande sur le Mac" ? esc(plain.replace(/^Envoyer/, "Envoi :").replace(/^Imprimer/, "Impression :").replace(/^Appeler/, "Appel :").replace(/^Régler/, "Réglage :").replace(/^Ouvrir/, "Ouverture :").replace(/^Piloter/, "Pilotage :")) : `Commande ${shortCmd(a.command)}` }; },
+    start_process: () => ({ kind: "cmd", label: `Lancé en arrière-plan ${shortCmd(a.command)}` }),
     process_output: () => ({ kind: "read", label: "Vérifié un programme en cours" }),
     stop_process: () => ({ kind: "cmd", label: "Arrêté un programme" }),
     list_processes: () => ({ kind: "read", label: "Listé les programmes en cours" }),
-    open: () => ({ kind: "cmd", label: `Ouvert ${cmd(a.target)}` }),
+    open: () => ({ kind: "cmd", label: `Ouvert ${/^(\/|~)/.test(String(a.target || "")) ? file(a.target) : cmd(a.target)}` }),
     web_search: () => ({ kind: "web", label: `Cherché sur le web ${esc(q(a.query))}` }),
     web_fetch: () => ({ kind: "web", label: `Lu la page ${cmd((String(a.url || "").match(/\/\/([^/]+)/) || [])[1] || a.url)}` }),
     remember: () => ({ kind: "mem", label: `Mémorisé ${esc(q(a.fact))}` }),
@@ -3802,12 +3825,12 @@ function actionInfo(name, a = {}, res = "") {
     send_email: () => ({ kind: "mail", label: `Envoyé un email à ${cmd(a.to)}${a.subject ? ` <span class="muted">· ${esc(a.subject)}</span>` : ""}` }),
     use_mcp: () => a.tool ? { kind: "mcp", label: `${esc(String(a.tool).split("__").pop())} <span class="muted">· ${esc(a.server || "")}</span>` }
                           : { kind: "mcp", label: `Consulté les outils MCP ${cmd(a.server)}` },
-    convert_document: () => ({ kind: "write", label: `Converti ${a.source ? cmd(a.source) + " en " : ""}${cmd(a.path)}` }),
-    make_diagram: () => ({ kind: "write", label: `Dessiné le schéma ${cmd(a.path)}` }),
-    look_at: () => ({ kind: "read", label: `Vérifié le rendu de ${cmd(a.path)}` }),
+    convert_document: () => ({ kind: "write", label: `Converti ${a.source ? file(a.source) + " en " : ""}${file(a.path)}` }),
+    make_diagram: () => ({ kind: "write", label: `Dessiné le schéma ${file(a.path)}` }),
+    look_at: () => ({ kind: "read", label: `Vérifié le rendu de ${file(a.path)}` }),
     ask_user: () => ({ kind: "other", label: `Question : ${esc(q(a.question))}` }),
     planifier: () => ({ kind: "other", label: ({ create: `Planifié ${esc(q(a.name))}`, update: "Modifié une tâche planifiée", delete: "Supprimé une tâche planifiée", list: "Consulté les tâches planifiées" })[a.action] || "Planifier" }),
-    browser: () => ({ kind: "web", label: ({ open: `Ouvert dans le navigateur ${cmd(a.url)}`, page: "Lu la page", click: `Cliqué ${esc(q(a.target))}`, type: `Saisi ${esc(q(a.text))}`, select: `Choisi ${esc(q(a.text))}`, key: `Touche ${cmd(a.key)}`, scroll: "Défilé la page", back: "Page précédente", console: "Lu la console JavaScript", screenshot: "Capturé la page", eval: "Exécuté du JavaScript" })[a.action] || "Utilisé le navigateur" }),
+    browser: () => ({ kind: "web", label: ({ open: `Ouvert dans le navigateur ${cmd(a.url)}`, page: a.url && !/^about:/.test(a.url) ? (/^file:/.test(a.url) ? `Ouvert ${file(decodeURIComponent(a.url.replace(/^file:\/\//, "")))}` : `Lu la page ${cmd((String(a.url).match(/\/\/([^/]+)/) || [])[1] || baseName(a.url))}`) : "Lu la page", click: `Cliqué ${esc(q(a.target))}`, type: `Saisi ${esc(q(a.text))}`, select: `Choisi ${esc(q(a.text))}`, key: `Touche ${cmd(a.key)}`, scroll: "Défilé la page", back: "Page précédente", console: "Lu la console JavaScript", screenshot: "Capturé la page", eval: "Exécuté du JavaScript" })[a.action] || "Utilisé le navigateur" }),
     install_skill: () => ({ kind: "skill", label: a.names?.length ? `Installé le skill ${esc(a.names.join(", "))} depuis ${cmd(a.url)}` : `Parcouru les skills de ${cmd(a.url)}` }),
     delegate: () => ({ kind: "sub", label: "Réparti le travail entre des sous-agents" }),
     computer: () => ({ kind: "screen", label: ({ screenshot: "Regardé l'écran", click_text: `Cliqué sur ${esc(q(a.text))}`, click: "Cliqué",
@@ -3822,7 +3845,7 @@ function actionInfo(name, a = {}, res = "") {
     creer_fichier: () => ({ kind: "write", label: a.nom ? `Créé ${cmd(a.nom)}` : "Créé un fichier" }),
     aller_dans_dossier: () => ({ kind: "read", label: `Ouvert le dossier ${cmd(a.dossier)}` }),
     find_files: () => ({ kind: "read", label: `Cherché les fichiers ${cmd(a.pattern || a.name || a.query)}` }),
-    multi_edit: () => ({ kind: "write", label: `Modifié ${cmd(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : a.edits?.length ? ` <span class="muted">· ${a.edits.length} changements</span>` : ""}` }),
+    multi_edit: () => ({ kind: "write", label: `Modifié ${file(a.path)}${a.added != null ? ` <span class="add">+${a.added}</span> <span class="del">−${a.removed}</span>` : a.edits?.length ? ` <span class="muted">· ${a.edits.length} changements</span>` : ""}` }),
     move_file: () => ({ kind: "write", label: `Déplacé ${cmd(a.source || a.src)} vers ${cmd(a.destination || a.dst)}` }),
     delete_file: () => ({ kind: "write", label: `Mis à la corbeille ${cmd(a.path)}` }),
     http_request: () => ({ kind: "web", label: `Requête ${esc(a.method || "GET")} ${cmd(a.url)}` }),
@@ -5029,7 +5052,7 @@ function liveKind(label, tool) {
   if (/^(exécute|lance|compile|installe|démarre|récupère|utilise l'(outil|ordinateur))\b/i.test(l)) return "run";
   if (/^(écrit|modifie|crée|rédige|dessine)\b/i.test(l)) return "write";
   if (/^cherche\b/i.test(l)) return "search";
-  if (/^(lit|explore|consulte|charge|parcourt)\b/i.test(l)) return "read";
+  if (/^(lit|relit|explore|consulte|charge|parcourt)\b/i.test(l)) return "read";
   return tool || "think";
 }
 // the step of a tool, when its label does not say it (a command's own description: « Compte les lignes… »)
@@ -5042,7 +5065,7 @@ const TOOL_KIND = { run_command: "run", start_process: "run", update_todos: "pla
 // short quick taps. Same size and resting pose as before (the stroke is drawn here, not by the CSS loop).
 const quill = { rate: 0, last: 0, chars: 0, at: 0, cmd: false, phase: 0, x: 0, raf: 0, t: 0 };
 function quillProgress(w) {
-  if (!w || w.think) return;
+  if (!w || w.think || w.reading) return;
   const now = performance.now(), dc = (w.chars || 0) - quill.chars, dt = (now - quill.at) / 1000;
   if (dc > 0 && dt > 0 && dt < 5) quill.rate = quill.rate ? quill.rate * 0.4 + (dc / dt) * 0.6 : dc / dt;
   if (dc !== 0 || !quill.at) quill.last = now;
