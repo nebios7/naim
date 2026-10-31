@@ -677,6 +677,14 @@ body.vnarrow #panel.show { margin: 0; inset: 0 !important; width: auto !importan
 .sgroup { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; margin-bottom: 16px; }
 .srow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .srow:last-child { border-bottom: 0; }
+.cthemes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; width: 100%; margin-top: 10px; }
+.ctheme { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ctheme select { width: 100%; }
+.cprev { background: var(--code); color: var(--ct); border: 1px solid var(--line); border-radius: 10px; padding: 8px 0; overflow: hidden;
+  font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+.cpl { display: flex; gap: 12px; padding: 0 12px 0 0; border-left: 3px solid transparent; }
+.cpl.d { background: var(--del); border-left-color: var(--del-t); } .cpl.a { background: var(--add); border-left-color: var(--add-t); }
+.cpn { width: 26px; text-align: right; color: var(--c); flex: none; } .cpt { white-space: pre-wrap; min-width: 0; }
 .srow .sl { flex: 1 1 240px; min-width: 0; }  /* not enough room: the control goes below instead of squeezing the title */
 .srow .sl b { display: block; font-weight: 500; font-size: 14.5px; }
 .srow .sl small { color: var(--muted); font-size: 12.5px; }
@@ -2284,7 +2292,7 @@ const DEFAULTS = {
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   external_on: false, external_provider: "cli", external_cli: "", external_url: "", external_model: "", external_key: "", external_timeout: 900,
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
-  notify: true, sound: false, mic_sounds: true, self_check: true, show_stats: true, show_time: false, wrap_code: false,
+  notify: true, sound: false, mic_sounds: true, self_check: true, show_stats: true, show_time: false, wrap_code: false, code_light: "naim", code_dark: "naim", code_font: "", code_size: 0,
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
@@ -5023,6 +5031,16 @@ function liveKind(label, tool) {
 const TOOL_KIND = { run_command: "run", start_process: "run", update_todos: "plan", planifier: "plan", delegate: "plan",
   web_search: "web", web_fetch: "web", browser: "web", search: "search", find_files: "search", find_symbol: "search",
   list_files: "read", read_file: "read", look_at: "check", ask_user: "wait", write_file: "write", edit_file: "write", multi_edit: "write" };
+// the quill writes like a hand: the same stroke, each one a little faster or slower, now and then a short pause
+// (each feather on its own beat, like the dots of the thinking dance)
+function quillBeat(e) {
+  if (e.animationName !== "quill" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const el = e.target, pause = Math.random() < 0.22 ? 0.15 + Math.random() * 0.45 : 0;
+  el.style.animation = "none"; void el.offsetWidth;  // the stroke ends where it starts: the restart does not jump
+  el.style.animation = `quill ${(0.75 + Math.random() * 0.8).toFixed(2)}s ease-in-out ${pause.toFixed(2)}s 1`;
+}
+document.addEventListener("animationiteration", quillBeat);
+document.addEventListener("animationend", quillBeat);
 const liveIcon = (k) => k === "write" ? `<span class="licon lfeather">${svgI("feather")}</span>`
   : k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>'
   : `<span class="bgdots" data-m="${k}" aria-hidden="true"><canvas></canvas></span>`;
@@ -5892,6 +5910,57 @@ function renderArtifacts() {
 }
 $("#artSearch").oninput = renderArtifacts;
 
+// ======================================================================= code appearance (Général › Apparence du code)
+// a palette = the colours of the code: k keywords, f functions, s strings, n numbers, c comments, t tags, ct text,
+// bg background, add/del the changed lines (and their text). « naim » keeps the app's own colours.
+const CODE_THEMES = {
+  light: {
+    naim: ["Naim clair", { k: "#7a4fc4", f: "#2b64a8", s: "#3d7a45", n: "#a65a1a", c: "#8b8a84", t: "#a33a2e", ct: "#1f1e1d", bg: "#f5f4ee", add: "#e6f0e3", addt: "#2f6b2a", del: "#f7e4e0", delt: "#9b2c20" }],
+    github: ["GitHub clair", { k: "#cf222e", f: "#8250df", s: "#0a3069", n: "#0550ae", c: "#6e7781", t: "#116329", ct: "#1f2328", bg: "#ffffff", add: "#dafbe1", addt: "#116329", del: "#ffebe9", delt: "#82071e" }],
+    one: ["One Light", { k: "#a626a4", f: "#4078f2", s: "#50a14f", n: "#986801", c: "#a0a1a7", t: "#e45649", ct: "#383a42", bg: "#fafafa", add: "#e3f3e1", addt: "#2f7a2d", del: "#fbe4e4", delt: "#b3261e" }],
+    solarized: ["Solarized clair", { k: "#859900", f: "#268bd2", s: "#2aa198", n: "#d33682", c: "#93a1a1", t: "#cb4b16", ct: "#586e75", bg: "#fdf6e3", add: "#eef0d2", addt: "#5f7300", del: "#f8e3d8", delt: "#b3361a" }],
+    xcode: ["Xcode clair", { k: "#9b2393", f: "#326d74", s: "#c41a16", n: "#1c00cf", c: "#5d6c79", t: "#643820", ct: "#262626", bg: "#ffffff", add: "#e2f5e2", addt: "#1f6f1f", del: "#fde6e6", delt: "#a3201d" }],
+  },
+  dark: {
+    naim: ["Naim sombre", { k: "#e08bd8", f: "#7fb4ea", s: "#a3dc7b", n: "#66c2cd", c: "#8a8880", t: "#f0a095", ct: "#edebe6", bg: "#191816", add: "#243522", addt: "#9fd69a", del: "#3d2522", delt: "#f0a095" }],
+    github: ["GitHub sombre", { k: "#ff7b72", f: "#d2a8ff", s: "#a5d6ff", n: "#79c0ff", c: "#8b949e", t: "#7ee787", ct: "#e6edf3", bg: "#0d1117", add: "#12261e", addt: "#7ee787", del: "#2d1214", delt: "#ffa198" }],
+    one: ["One Dark", { k: "#c678dd", f: "#61afef", s: "#98c379", n: "#d19a66", c: "#7f848e", t: "#e06c75", ct: "#abb2bf", bg: "#282c34", add: "#2b3a2c", addt: "#98c379", del: "#3f2a2e", delt: "#e06c75" }],
+    dracula: ["Dracula", { k: "#ff79c6", f: "#50fa7b", s: "#f1fa8c", n: "#bd93f9", c: "#6272a4", t: "#8be9fd", ct: "#f8f8f2", bg: "#282a36", add: "#273a2e", addt: "#50fa7b", del: "#43272f", delt: "#ff5555" }],
+    nord: ["Nord", { k: "#81a1c1", f: "#88c0d0", s: "#a3be8c", n: "#b48ead", c: "#616e88", t: "#bf616a", ct: "#d8dee9", bg: "#2e3440", add: "#344236", addt: "#a3be8c", del: "#45333a", delt: "#bf616a" }],
+    monokai: ["Monokai", { k: "#f92672", f: "#a6e22e", s: "#e6db74", n: "#ae81ff", c: "#75715e", t: "#66d9ef", ct: "#f8f8f2", bg: "#272822", add: "#2f3a24", addt: "#a6e22e", del: "#40252a", delt: "#f92672" }],
+  },
+};
+const codeVars = (v) => `--k:${v.k};--f:${v.f};--s:${v.s};--n:${v.n};--c:${v.c};--t:${v.t};--ct:${v.ct};--code:${v.bg};--add:${v.add};--add-t:${v.addt};--del:${v.del};--del-t:${v.delt};`;
+const CODE_BLOCKS = ".code pre, .bubble pre.ucode, .step pre, .approval pre, #viewer pre, .acard pre, #gitDiff, .aout, .dside, .editor, #termOut, .tin, #procOut";
+function applyCodeTheme() {
+  let el = document.getElementById("codeThemeCss");
+  if (!el) { el = document.createElement("style"); el.id = "codeThemeCss"; }
+  document.body.appendChild(el);  // last in the page: it wins over the app's own colours
+  const L = S.code_light !== "naim" && CODE_THEMES.light[S.code_light], D = S.code_dark !== "naim" && CODE_THEMES.dark[S.code_dark];
+  const text = `.code pre, .bubble pre.ucode, #viewer pre, .acard pre { color: var(--ct, inherit); }`;
+  let css = "";
+  if (L) css += `:root[data-theme="light"] { ${codeVars(L[1])} } @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { ${codeVars(L[1])} } }`;
+  if (D) css += `:root[data-theme="dark"] { ${codeVars(D[1])} } @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${codeVars(D[1])} } }`;
+  if (L || D) css += text;
+  const font = String(S.code_font || "").trim().replace(/["\\;{}<>]/g, "");
+  if (font) css += `${CODE_BLOCKS}, .md code, .bubble code.uinline, .alabel code, .mono { font-family: "${font}", ui-monospace, "SF Mono", Menlo, monospace !important; }`;
+  if (+S.code_size) css += `${CODE_BLOCKS} { font-size: ${+S.code_size}px !important; }`;
+  el.textContent = css;
+}
+// the little diff of the settings, in one palette (whatever the app's theme is now)
+function codePreview(side, id) {
+  const v = (CODE_THEMES[side][id] || CODE_THEMES[side].naim)[1], hl = (t) => highlight(t, "typescript");
+  const line = (n, t, cls) => `<div class="cpl ${cls || ""}"><span class="cpn">${n}</span><span class="cpt">${hl(t)}</span></div>`;
+  return `<div class="cprev" style="${codeVars(v)}">${line(1, "function greet(name: string) {")}${line(2, '  return "Hello, " + name;', "d")}${line(2, "  return `Hello, ${name}!`;", "a")}${line(3, "}")}</div>`;
+}
+const codeAppearanceHTML = () => `<div class="sgroup">
+      <div class="srow col"><div class="sl"><b>Apparence du code</b><small>Les couleurs du code, des diffs et du terminal : une palette pour le thème clair, une pour le sombre.</small></div>
+        <div class="cthemes">${["light", "dark"].map((side) => `<div class="ctheme">${sel(side === "light" ? "code_light" : "code_dark",
+          Object.entries(CODE_THEMES[side]).map(([k, [name]]) => [k, name]))}<div data-cprev="${side}">${codePreview(side, S[side === "light" ? "code_light" : "code_dark"])}</div></div>`).join("")}</div></div>
+      ${row("Police de code", "Une police à chasse fixe installée sur le Mac, pour le code et le terminal. Vide = la police du système.", `<input class="field" type="text" data-k="code_font" value="${esc(S.code_font)}" placeholder="p. ex. JetBrains Mono" style="width:220px">`)}
+      ${row("Taille de police du code", "Fichiers ouverts, diffs, blocs de code, sortie des commandes et terminal.", sel("code_size", [[0, "Par défaut"], ...[11, 12, 13, 14, 15, 16, 17, 18].map((n) => [n, `${n} px`])]))}
+    </div>`;
+
 // ======================================================================= settings page
 function sw(key) { return `<label class="switch"><input type="checkbox" data-k="${key}" ${S[key] ? "checked" : ""}><span></span></label>`; }
 // the red switch asks for a clear yes before it is turned on (capture phase: before the setting is saved)
@@ -5923,6 +5992,7 @@ const TABS = {
       ${row("Taille du texte", "", range("font_size", 12, 20, 1, FMT.font_size))}
       ${row("Largeur de la conversation", "", sel("width", [["narrow", "Étroite"], ["normal", "Normale"], ["wide", "Large"], ["full", "Pleine largeur"]]))}
     </div>
+    ${codeAppearanceHTML()}
     <div class="sgroup">
       ${row("Envoyer avec", "", sel("send_key", [["enter", "Entrée (Maj+Entrée = nouvelle ligne)"], ["mod", "⌘+Entrée (Entrée = nouvelle ligne)"]]))}
       ${row("Notification quand Naim a fini", "Si la fenêtre est en arrière-plan, ou quand l'agent attend une autorisation.", sw("notify"))}
@@ -6249,10 +6319,11 @@ function bindSettings() {
     const ev = el.type === "range" ? "input" : el.tagName === "TEXTAREA" || el.type === "text" ? "input" : "change";
     el.addEventListener(ev, () => {
       let v = el.type === "checkbox" ? el.checked : el.value;
-      if (el.hasAttribute("data-num") || /^(num_ctx|max_steps|top_k|font_size|loop_limit|llama_gpu_layers|llama_threads|llama_batch|llama_checkpoints|max_subagents|memory_limit|command_timeout|external_timeout)$/.test(k)) v = +v;
+      if (el.hasAttribute("data-num") || /^(num_ctx|max_steps|top_k|font_size|loop_limit|llama_gpu_layers|llama_threads|llama_batch|llama_checkpoints|max_subagents|memory_limit|command_timeout|external_timeout|code_size)$/.test(k)) v = +v;
       if (k === "keep_alive") v = String(v);
       S[k] = v;
       const out = $(`[data-v="${k}"]`); if (out) out.textContent = (FMT[k] || ((x) => x))(v);
+      if (k === "code_light" || k === "code_dark") { const side = k === "code_light" ? "light" : "dark"; $(`[data-cprev="${side}"]`).innerHTML = codePreview(side, v); }
       applySettings(); saveSettingsSoon();
     });
   });
@@ -7322,6 +7393,7 @@ function applySettings() {
   document.documentElement.style.setProperty("--fs", `${S.font_size}px`);
   document.documentElement.style.setProperty("--w", WIDTHS[S.width] || WIDTHS.normal);
   document.body.classList.toggle("wrapcode", !!S.wrap_code);
+  applyCodeTheme();
   $$("#modeSeg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === S.mode));
   const agent = S.mode === "agent";
   $("#projectBar").classList.toggle("show", agent);
