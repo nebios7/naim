@@ -488,6 +488,28 @@ class SkillRouting(unittest.TestCase):
         self.assertEqual(self.name("la dernière fois on avait corrigé la facture, tu te souviens ?"), "mem-search")
 
 
+class ChatFolder(unittest.TestCase):
+    """A conversation with attached files works beside them, not in the last Agent project."""
+
+    def test_joints_of(self):
+        import server
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as t, mock.patch("naimtools.JOINTS", Path(t)):
+            (Path(t) / "c1").mkdir(); (Path(t) / "c2").mkdir(); (Path(t) / "c2" / "cv.docx").write_text("x")
+            self.assertIsNone(server.joints_of("c1"))  # empty: nothing attached
+            self.assertIsNone(server.joints_of("../c2"))
+            self.assertIsNone(server.joints_of("absent"))
+            self.assertEqual(server.joints_of("c2"), Path(t) / "c2")
+
+    def test_result_folder_is_writable(self):
+        with tempfile.TemporaryDirectory() as t:
+            a = naimtools.Agent(t, auto_yes=True)
+            out = naimtools.JOINTS.parent / "Lettre.pdf"
+            self.assertEqual(a.resolve(str(out)), out.resolve())
+            with self.assertRaises(ValueError):
+                a.resolve(str(naimtools.JOINTS.parent.parent / "autre.pdf"))
+
+
 class ChatOrAgent(unittest.TestCase):
     """A real piece of work asked in the Chat goes to the Agent's loop; a question stays an answer."""
 

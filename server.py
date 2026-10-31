@@ -2050,6 +2050,8 @@ class Handler(BaseHTTPRequestHandler):
         if named and named.resolve() != folder.resolve():  # the user names the folder to work in: go there first
             folder = named
             self.event({"type": "project", "path": str(named)})
+        elif not named and (j := joints_of(body.get("conv_id"))):  # files attached to this conversation: the work and
+            folder = j                                                  # what is made from them stay beside them
         helper = Agent(str(folder), body.get("model", "naim"), auto_yes=bool(body.get("auto_yes")), emit=self.event,
                        approver=approver, asker=asker, options=options, **agent_settings(body))
         run_id = body.get("run_id") or helper.run_id
@@ -2847,6 +2849,13 @@ def _storage_dirs():
 
 def _safe_name(name):
     return re.sub(r"[/\\:\0]", "_", Path(name or "fichier").name).strip(". ") or "fichier"
+
+
+def joints_of(cid):
+    """The folder of this conversation's attached files, if it has some (None otherwise: nothing is created)."""
+    from naimtools import JOINTS
+    d = JOINTS / str(cid or "")
+    return d if ID_RE.match(cid or "") and d.is_dir() and any(f.is_file() for f in d.iterdir()) else None
 
 
 def joints_dir(cid):

@@ -990,6 +990,8 @@ class Agent:
             joints = JOINTS.resolve()
             if joints in p.parents:  # the attached files and the work on them, in their conversation's folder
                 return p
+            if p.parent == JOINTS.parent.resolve() and p.suffix:  # ~/Documents/Naim/Fichiers: where the attached files' note says the result goes
+                return p
             # its own extensions, where its skills say to put them: mods of its window, skills, plugins (its program
             # and settings stay protected: they are not in these folders)
             if any(d in p.parents for d in ((ext.HOME / x).resolve() for x in ("mods", "skills", "plugins"))):

@@ -47,6 +47,8 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
   change cv.json et relance la même commande (jamais d'édition du .html à la main).
 
 ## 3. La lettre « avec le même style » : avec le script, jamais à la main
+Jamais creer_fichier pour un CV ou une lettre (il n'a pas le style). La lettre de l'utilisateur est jointe (PDF, Word)
+ou collée : c'est SON texte. Recopie-le mot pour mot dans lettre.txt (mêmes blocs), puis l'étape 3 ; n'en écris pas une autre.
 1. Termine d'abord le CV (`CV_<Nom>.html`).
 2. Écris le texte de la lettre dans `lettre.txt` (write_file), blocs séparés par une ligne vide : lieu et date ;
    destinataire ; « Objet : … » ; « Madame, » ; 3 ou 4 paragraphes (le poste et pourquoi lui ; ce que j'apporte, avec

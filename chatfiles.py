@@ -192,4 +192,6 @@ def create(nom, contenu="", fichiers=None, folder=None):
     info = {"path": dst.name, "size": dst.stat().st_size, "ext": dst.suffix.lower()[1:]}
     where = "dans le dossier de travail de l'utilisateur" if folder else f"dans le dossier des fichiers du mode Chat ({OUT})"
     return (f"fichier créé : {dst} ({info['size']} octets), {where}. Il est affiché à l'utilisateur, prêt à ouvrir "
-            "ou télécharger. Quand tu en parles, donne exactement ce nom et cet emplacement.", info)
+            "ou télécharger. Quand tu en parles, donne exactement ce nom et cet emplacement."
+            + (" C'est un PDF SIMPLE (texte, sans mise en page) : si l'utilisateur veut un style (pdf-pro, « comme le CV », "
+               "un CV, une lettre, un rapport), ce n'est pas le bon outil : refais-le avec le script de ton skill." if dst.suffix.lower() == ".pdf" else ""), info)
