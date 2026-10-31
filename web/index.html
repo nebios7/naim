@@ -4701,6 +4701,7 @@ async function stream(reply, v, message, hist, extra = {}) {
             }
             lastTool = { type: "tool", name: ev.name, sub: ev.sub, output: "",
               args: { path: a.path || a.output, source: a.source, question: a.question, key: a.key, command: a.command, pattern: a.pattern, target: a.target, id: a.id, query: a.query, url: a.url, name: a.name, fact: a.fact, action: a.action, names: a.names, server: a.server, to: a.to, subject: a.subject, text: a.text, keys: a.keys, app: a.app, scheme: a.scheme, bundle_id: a.bundle_id, nom: a.nom, dossier: a.dossier, method: a.method, group: a.group, ...toolMeta(ev.name, a) } };
+            if (!ev.sub) run.kind = TOOL_KIND[ev.name] || "run";  // the dance of this tool until its result comes back
             reply.steps.push(lastTool); v.addStep(ev.name, lastTool.args, ev.sub); v.typing(toolLabel(ev.name, a));
             if (ev.sub) { const l = toolLabel(ev.name, a).replace(/^Naim /, ""); v.subagent({ name: ev.sub, status: "run", action: l.charAt(0).toUpperCase() + l.slice(1) }); }
             break;
@@ -4713,6 +4714,7 @@ async function stream(reply, v, message, hist, extra = {}) {
             break;
           case "output": if (lastTool) lastTool.output = (lastTool.output + ev.text).slice(-8000); v.output(ev.text); break;
           case "tool_result": if (ev.name === "simulator" && /lancé/.test(ev.result || "") && !/^error/.test(ev.result || "")) setTimeout(() => showPanel("sim"), 400);
+            if (!ev.sub) run.kind = null;  // back to thinking about what comes next
             if (ev.name === "update_todos") break; if (!ev.sub) v.typing(currentTodo(reply.todos)); if (lastTool) lastTool.result = ev.result.slice(-3000); v.stepResult(ev.name, ev.result); break;
           case "detached": v.detached(ev.id); break;
           case "email": reply.steps.push({ type: "event", icon: "✉️", text: `Email envoyé à ${ev.to.join(", ")} : ${ev.subject}` }); v.event("✉️", `Email envoyé à ${ev.to.join(", ")} : ${ev.subject}`); break;
@@ -4979,15 +4981,28 @@ const DOTS = '<span class="ldots" aria-hidden="true"><i></i><i></i><i></i></span
 // the last piece of work in a reply (the live line at the bottom is not one)
 function lastWork(flow) { return [...flow.children].filter((c) => !c.classList.contains("liveline")).pop() || null; }
 const LDOTS = '<span class="bgdots" aria-hidden="true"><canvas></canvas></span>';
-// what Naim does right now, from the words of its status: writes (a quill), reads (dots in a wave), thinks or works
-// (the turning dots)
-function liveKind(label) {
-  if (/^(Naim )?(écrit|modifie|crée|rédige)\b/i.test(label)) return "write";
-  if (/^(Naim )?(lit|regarde|explore|cherche|consulte|charge|parcourt)\b/i.test(label)) return "read";
-  return "think";
+// what Naim does right now, from the words of its status (else from the tool it runs): writes (a quill), reads (dots
+// in a wave), or one of the dot dances — thinks, plans, searches, browses the web, runs a command, checks, sums up, waits
+function liveKind(label, tool) {
+  const l = label.replace(/^Naim /, "");
+  if (/^attend\b/i.test(l)) return "wait";
+  if (/^(planifie|répartit)\b|\bplan\b/i.test(l)) return "plan";
+  if (/\b(sur le web|une page web|navigateur)\b|https?:\/\//i.test(l)) return "web";
+  if (/^(résume|allège)\b/i.test(l)) return "sum";
+  if (/^(vérifi\w*|teste|regarde|contrôle)\b|^vérification\b/i.test(l)) return "check";
+  if (/^(exécute|lance|compile|installe|démarre|récupère|utilise l'(outil|ordinateur))\b/i.test(l)) return "run";
+  if (/^(écrit|modifie|crée|rédige|dessine)\b/i.test(l)) return "write";
+  if (/^cherche\b/i.test(l)) return "search";
+  if (/^(lit|explore|consulte|charge|parcourt)\b/i.test(l)) return "read";
+  return tool || "think";
 }
+// the step of a tool, when its label does not say it (a command's own description: « Compte les lignes… »)
+const TOOL_KIND = { run_command: "run", start_process: "run", update_todos: "plan", planifier: "plan", delegate: "plan",
+  web_search: "web", web_fetch: "web", browser: "web", search: "search", find_files: "search", find_symbol: "search",
+  list_files: "read", read_file: "read", look_at: "check", ask_user: "wait", write_file: "write", edit_file: "write", multi_edit: "write" };
 const liveIcon = (k) => k === "write" ? `<span class="licon lfeather">${svgI("feather")}</span>`
-  : k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>' : LDOTS;
+  : k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>'
+  : `<span class="bgdots" data-m="${k}" aria-hidden="true"><canvas></canvas></span>`;
 // four dots in a square; two opposite corners swap places, then the other two, one swap every 0.625 s with no pause
 // (each swap lasts 0.667 s, so the next one starts as the last settles). The curves are measured frame by frame: the
 // vertical motion leads and overshoots by 11 %, the horizontal one follows, so the two dots pass along a curve and the
@@ -5038,18 +5053,38 @@ const naimDots = (() => {
     t -= TURN; if (t < BACK) return mix(COL, [[1, 0], [1, 1], [0, 1], [0, 0]], ease(t / BACK));
     return [[1, 0], [1, 1], [0, 1], [0, 0]];
   }
+  // the other steps, the same four dots: each dance says what is being done
+  const wrap = (t, p) => (t % p) / p, bump = (u) => Math.sin(Math.PI * Math.max(0, Math.min(1, u)));
+  const DANCES = {
+    // plans: a list of four, each line ticked in turn (it steps to the right and comes back)
+    plan: (t) => { const u = wrap(t, 2.0) * 4, k = Math.floor(u); return [0, 1, 2, 3].map((i) => [.2 + (i === k ? .6 * bump(u - k) : 0), i / 3]); },
+    // searches: three dots hold still, the fourth goes round them like a magnifier
+    search: (t) => { const a = wrap(t, 1.3) * 6.2832; return [[.5, .26], [.29, .64], [.71, .64], [.5 + .52 * Math.cos(a), .5 + .52 * Math.sin(a), .9]]; },
+    // the web: four dots on a turning globe, the far ones smaller
+    web: (t) => [0, 1, 2, 3].map((i) => { const a = wrap(t, 2.4) * 6.2832 + i * Math.PI / 2; return [.5 + .5 * Math.cos(a), .5 + .22 * Math.sin(a) - .1 * Math.cos(a) * .4, .62 + .38 * (Math.sin(a) + 1) / 2]; }),
+    // runs a command: the dots go by on a belt, coming in on the left and leaving on the right
+    run: (t) => [0, 1, 2, 3].map((i) => { const x = ((i / 3 + t / 1.1) % (4 / 3)) - 1 / 6; return [x, .5, Math.max(0, Math.min(1, Math.min(x + 1 / 6, 7 / 6 - x) * 4))]; }),
+    // checks: the square beats twice, like a pulse taken
+    check: (t) => { const u = wrap(t, 1.2), b = .28 * (bump(u / .18) + .7 * bump((u - .24) / .18)); return CORNERS.map(([x, y]) => [x + (.5 - x) * b, y + (.5 - y) * b, 1 + .25 * b]); },
+    // sums up: the four meet in the middle, are one for an instant, then part again
+    sum: (t) => { const u = wrap(t, 1.6), m = u < .4 ? ease(u / .4) : u < .6 ? 1 : 1 - ease((u - .6) / .4); return CORNERS.map(([x, y]) => [x + (.5 - x) * m, y + (.5 - y) * m, 1 + .3 * m]); },
+    // waits for the user: the square breathes, slowly
+    wait: (t) => { const b = (1 - Math.cos(wrap(t, 2.8) * 6.2832)) / 2; return CORNERS.map(([x, y]) => [x + (.5 - x) * .14 * b, y + (.5 - y) * .14 * b, .8 + .2 * b]); },
+  };
   let running = false;
   function frame(now) {
     const cvs = [...document.querySelectorAll(".bgdots canvas")].filter((c) => c.isConnected && c.offsetParent);
     if (!cvs.length) { running = false; return; }
-    const pts = still.matches ? CORNERS : dance((now / 1000) % CYCLE);
+    const t = now / 1000, made = {};
+    const shape = (m) => made[m] ||= still.matches ? CORNERS : (DANCES[m] || ((x) => dance(x % CYCLE)))(t);
     for (const c of cvs) {
+      const pts = shape(c.parentElement?.dataset.m || "think");
       const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
       if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
       c._color ||= dotColor(c);
       const g = c.getContext("2d"), r = w * 0.102, lo = w * 0.2, span = w * 0.6;  // dot radius: 0.17 of the square's side, as measured
       g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, w); g.fillStyle = c._color;
-      for (const [x, y] of pts) { g.beginPath(); g.arc(lo + x * span, lo + y * span, r, 0, 6.2832); g.fill(); }
+      for (const [x, y, k = 1] of pts) { if (k > .02) { g.beginPath(); g.arc(lo + x * span, lo + y * span, r * k, 0, 6.2832); g.fill(); } }
     }
     if (still.matches) { running = false; return; }  // reduced motion: one still square
     requestAnimationFrame(frame);
@@ -5072,7 +5107,7 @@ function liveInThread(r, label, step, time) {
     last.classList.add("live");
     const sum = $(":scope > summary", last);
     let gl = $(".glive", sum); if (!gl) { gl = document.createElement("span"); gl.className = "glive"; sum.prepend(gl); }
-    const kind = liveKind(label); if (gl.dataset.k !== kind) { gl.dataset.k = kind; gl.innerHTML = liveIcon(kind); }
+    const kind = liveKind(label, r.kind); if (gl.dataset.k !== kind) { gl.dataset.k = kind; gl.innerHTML = liveIcon(kind); }
     // the title says what is being done right now (« Lit index.html », the command's own description), then the
     // time and the chevron; the tally (« Lu 2 fichiers… ») comes back once the work is done
     let now = $(".gnow", sum); if (!now) { now = document.createElement("span"); now.className = "gnow"; $(".gsum", sum).after(now); }
@@ -5085,7 +5120,7 @@ function liveInThread(r, label, step, time) {
   } else {
     let l = $(".liveline", flow);
     if (!l) { l = document.createElement("div"); l.className = "liveline"; l.innerHTML = '<span class="lic"></span><span class="ltxt"></span><span class="ltm"></span>'; }
-    const kind = liveKind(label), lic = $(".lic", l); if (lic.dataset.k !== kind) { lic.dataset.k = kind; lic.innerHTML = liveIcon(kind); }
+    const kind = liveKind(label, r.kind), lic = $(".lic", l); if (lic.dataset.k !== kind) { lic.dataset.k = kind; lic.innerHTML = liveIcon(kind); }
     if (l !== flow.lastElementChild) flow.appendChild(l);
     const txt = (step ? step + " · " : "") + label + "…";
     if ($(".ltxt", l).textContent !== txt) $(".ltxt", l).textContent = txt;
