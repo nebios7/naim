@@ -82,6 +82,7 @@ def main():
         sys.exit(__doc__)
     cv, text, dst = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
     top, header, card, badge, close = parts(cv.read_text(errors="replace"))
+    header = re.sub(r"(class=\"kicker\"[^>]*>)\s*(curriculum vit\w*|cv)\s*(?=<)", r"\1Candidature", header, flags=re.I)  # not a CV
     body, words = letter_html(text.read_text(errors="replace"))
     style = ("<style>.lettre p{margin:0 0 11px;line-height:1.55}.lettre .l-date{text-align:right}"
              ".lettre .l-dest{margin-bottom:16px}.lettre .l-objet{margin:14px 0 16px}.lettre .l-sign{margin-top:22px;text-align:right}"

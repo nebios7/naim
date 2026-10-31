@@ -1113,6 +1113,8 @@ def match_skill(task, root=None, disabled=()):
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
+    # works whose skill makes the document itself, in the asked style (« mon CV, le voici en Word » is a CV to make)
+    OWN_DOCUMENT = ("cv-lettre", "plan-maison")
     first = ("design-style-gitingest", "neobrutalism-ui", "cv-lettre", "plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     triggers = dict(SKILL_TRIGGERS)
     priority, after_specific = [], []
@@ -1134,6 +1136,11 @@ def match_skill(task, root=None, disabled=()):
     # a skill the user names (« utilise design-style-gitingest ») is that one, before any guess from the words
     for s in sorted(skills, key=lambda s: -len(s["name"])):
         if len(s["name"]) >= 4 and re.search(rf"(?<![\w-]){re.escape(s['name'].lower())}(?![\w-])", text):
+            # a skill whose name is an ordinary word (« le voici en format word ») is not named when the request is
+            # about a work whose skill makes the document (a CV, a house plan): that work's method decides
+            if (s["name"] in SKILL_TRIGGERS and not re.search(rf"\bskills?\W+{re.escape(s['name'].lower())}\b", text)
+                    and any(n in by_name and re.search(triggers[n], text) for n in OWN_DOCUMENT)):
+                continue
             # a subject named inside a document to make (« un cours sur COBOL en PDF »): the document's skill gives the
             # method, the subject's one stays at hand (use_skill)
             fmt = next((n for n in after_specific if n != s["name"] and n in by_name and re.search(triggers[n], text)), None)

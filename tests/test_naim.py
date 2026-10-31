@@ -664,6 +664,32 @@ class SkillScripts(unittest.TestCase):
             self.assertIn(".carte{border:2px solid}", out)
             self.assertIn("PDF", r.stdout.splitlines()[-1])  # the PDF in the same step (or how to make it)
 
+    def test_cv_from_facts(self):
+        # three jobs, two diplomas, a projects section: everything kept, in the source's order (the model has 2 jobs)
+        cv = {"nom": "Marie Curie", "titre": "Chercheuse", "contact": [["E-mail", "m@c.fr"]], "profil": "Physicienne.",
+              "experiences": [{"quand": str(y), "poste": f"Poste {y}", "ou": "Labo", "points": [f"Fait {y}"]} for y in (2020, 2010, 2000)],
+              "formations": [{"quand": "1995", "diplome": "Doctorat"}, {"quand": "1990", "diplome": "Licence"}],
+              "sections": [{"titre": "Projets", "items": [{"titre": "Radium"}]}],
+              "competences": ["Physique", "Chimie"], "langues": [["Polonais", "natif"]],
+              "ordre": ["profil", "competences", "experiences", "Projets", "formations"]}
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            (t / "cv.json").write_text(json.dumps(cv))
+            r = subprocess.run([sys.executable, "-I", str(self.D / "cv_pro.py"), "cv.json", "cv.html"], cwd=t, check=True, capture_output=True, text=True)
+            out = (t / "cv.html").read_text()
+        self.assertIn("3 expérience(s), 2 formation(s)", r.stdout)
+        for x in ("Poste 2020", "Poste 2010", "Poste 2000", "Doctorat", "Licence", "Radium", "Polonais", "Chimie"):
+            self.assertIn(x, out)
+        self.assertNotIn("Intitulé du poste", out)  # nothing of the model's sample texts
+        self.assertLess(out.index("Compétences"), out.index("Expérience"))
+        self.assertLess(out.index("Projets"), out.index("Formation"))
+
+    def test_word_given_is_still_a_cv(self):
+        import extensions
+        t = "le pdf du cv n'est pas fidèle a ce que j'ai fourni, le voici à nouveau format word, tu vas générer le pdf"
+        self.assertEqual((extensions.match_skill(t, extensions.HOME, set()) or {}).get("name"), "cv-lettre")
+        self.assertEqual((extensions.match_skill("utilise le skill word pour ce rapport", extensions.HOME, set()) or {}).get("name"), "word")
+
 
 
 class FinishTheWork(unittest.TestCase):

@@ -7,6 +7,11 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
 
 ## 1. Le contenu
 - Il vient de l'utilisateur : texte collé, ou fichier joint (« fichier original : … » : lis-le avec read_file).
+  Un CV joint en Word ou en PDF est la SOURCE : on en tire le contenu, puis on fait le CV dans le style demandé
+  (pdf-pro si rien n'est dit). On ne refait pas un Word, sauf si l'utilisateur demande un fichier Word : alors fais
+  d'abord le CV comme ci-dessous, puis l'outil `convert_document` du .html vers un .docx (même nom, autre extension).
+- Ne réécris JAMAIS un fichier joint : tes fichiers ont toujours un autre nom que les siens (CV_<Nom>.html,
+  CV_<Nom>.pdf), dans un dossier à toi.
 - N'invente aucun diplôme, poste, date, chiffre ni coordonnée. « Enrichir » = reformuler avec des verbes d'action,
   ordonner (le plus utile pour le poste d'abord), ajouter les mots-clés du poste visé et les compétences qui
   découlent de ce qui est écrit. Dis ensuite ce que tu as ajouté.
@@ -22,12 +27,16 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
 - **Une skill de style nommée** (design-style-gitingest…) : charge-la avec use_skill et suis ses valeurs exactes ;
   si son dossier contient `modele.html`, pars de ce fichier avec `cp`, comme ci-dessus.
 - **Une image de référence** : reprends ce que tu vois (couleurs, polices, disposition, cartes, badges).
-- **« Le style de mes PDF », « style pdf-pro », ou rien de donné** : le modèle tout prêt
-  `~/.naim/plugins/pdf-pro/skills/pdf-pro/exemples/cv.html` (titres élégants, accent terracotta, A4), avec le script
-  ci-dessus comme un modèle joint. Ses textes à remplacer : « Prénom Nom », « Intitulé du poste recherché », les
-  coordonnées, « Deux ou trois phrases… », « Intitulé du poste 1 », « Entreprise 1 · Ville 1 », « Réalisation 1 du poste 1… »,
-  « Diplôme 1 », « Compétence clé 1 », « Langue 1 », « Niveau 1 »… Un poste ou un diplôme en plus : copie un bloc
-  `<div class="poste">` avec multi_edit. Un bloc en trop : retire-le avec edit_file. « tag fort » = compétence principale.
+- **« Le style de mes PDF », « style pdf-pro », ou rien de donné** (le cas le plus courant) : PAS de textes.json,
+  PAS de modèle à remplir. Écris `cv.json` (write_file) avec TOUTES les informations du CV source, puis UNE commande
+  fait le CV dans le style pdf-pro ET son PDF, avec autant de postes, diplômes et projets qu'il en faut :
+  `python3 ~/.naim/plugins/candidature/skills/cv-lettre/cv_pro.py cv.json "<dossier>/CV_<Nom>.html"`
+  Le format de cv.json est en tête du script (lis-le avec read_file si besoin) : nom, titre, contact, profil,
+  experiences, formations, sections (Projets, Publications, Certifications…), competences, langues, et « ordre »
+  (l'ordre des rubriques du CV source, ex. ["profil", "competences", "experiences", "Projets", "formations"]).
+  Fidèle = chaque poste, chaque diplôme, chaque projet, chaque date du source, avec ses lignes ; rien de retiré,
+  rien d'ajouté. Le script donne les nombres (expériences, formations…) : compare-les avec le source. Pour corriger :
+  change cv.json et relance la même commande (jamais d'édition du .html à la main).
 
 ## 3. La lettre « avec le même style » : avec le script, jamais à la main
 1. Termine d'abord le CV (`CV_<Nom>.html`).
