@@ -2345,6 +2345,16 @@ class Agent:
         src, dst = self.resolve(source), self.resolve(output)
         if not self.approve(f"Convertir {self.rel(src)} en {self.rel(dst)}", f"{src}\n→ {dst}"):
             return "denied by the user"
+        if dst.is_file():  # a PDF already made (and liked) can be brought back if this one is worse
+            self.checkpoint.save(dst)
+            self.emit({"type": "checkpoint", "run_id": self.run_id})
+        pro = ext.HOME / "plugins" / "pdf-pro" / "skills" / "pdf-pro" / "pdfpro.py"
+        if src.suffix.lower() in (".html", ".htm") and dst.suffix.lower() == ".pdf" and src.is_file() and pro.is_file():
+            head = src.read_text(errors="replace")[:4000].lower()
+            if not re.search(r"<(html|head|style)\b", head):
+                # only the content, no style of its own (a pdf-pro page): it gets the pdf-pro look, never a bare one
+                r = subprocess.run([sys.executable, str(pro), "render", str(src), str(dst)], capture_output=True, text=True, timeout=240)
+                return (r.stdout or r.stderr).strip()[-600:] + "\n(Style pdf-pro appliqué : cette page n'a que le contenu.)"
         try:
             if src.suffix.lower() in (".svg", ".html", ".htm") and dst.suffix.lower() == ".png" or (
                     src.suffix.lower() == ".svg" and dst.suffix.lower() == ".pdf"):

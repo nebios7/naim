@@ -1001,6 +1001,29 @@ class PdfPro(unittest.TestCase):
             self.assertTrue(svg.startswith("<svg") and svg.endswith("</svg>"))
         self.assertIn("#c96442", self.p.bars([["a", 1]]))
 
+    def test_requests_pick_it(self):
+        trig = json.loads((Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/plugin.json").read_text())["triggers"]["pdf-pro"]
+        for t in ("crée-moi un cours complet sur python en pdf", "fais les 4 séances suivantes ? une fois fini tu fournis que le pdf avec son sommaire"):
+            self.assertRegex(t, trig)
+        for t in ("envoie-moi cours-cobol/document.pdf par mail", "fusionne ces deux pdf", "lis le fichier cours.pdf", "fais un plan de maison en pdf"):
+            self.assertNotRegex(t, trig)
+
+    def test_content_only_page_gets_the_theme(self):
+        # convert_document on a pdf-pro page (only the content) renders with pdf-pro, and keeps the PDF it replaces
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as home:
+            tool = Path(home, "plugins/pdf-pro/skills/pdf-pro/pdfpro.py")
+            tool.parent.mkdir(parents=True)
+            tool.write_text("import sys; open(sys.argv[3], 'w').write('THEMED'); print('PDF : ok')\n")
+            Path(d, "page.html").write_text('<section class="cover"><h1>Cours</h1></section>')
+            Path(d, "document.pdf").write_text("BEFORE")
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            from unittest import mock
+            with mock.patch.object(naimtools.ext, "HOME", Path(home)):
+                res = a.convert_document("page.html", "document.pdf")
+            self.assertIn("pdf-pro", res)
+            self.assertEqual(Path(d, "document.pdf").read_text(), "THEMED")
+            self.assertIn("document.pdf", a.checkpoint.manifest["files"])
+
 
 class WritesItsOwnExtensions(unittest.TestCase):
     """A mod, a skill, a plugin go in ~/.naim/mods|skills|plugins from any project; the rest of ~/.naim stays closed."""
