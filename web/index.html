@@ -1323,6 +1323,12 @@ header#chatHeader { overflow: hidden; }
 /* the sweep is sized to the words (not the whole bar width), like « Raisonnement »: the light really crosses them */
 #liveBar .ltext { flex: 0 1 auto; }
 #liveBar .ltime { margin-left: auto; }
+/* an answer stopped before the end: one quiet line with « Continuer » */
+.cutoff { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; padding: 8px 10px 8px 12px; border: 1px solid var(--line);
+  border-radius: 10px; color: var(--muted); font-size: 13px; background: var(--code); }
+.cutoff svg { width: 15px; height: 15px; flex: none; }
+.cutoff span { flex: 1; }
+.cutoff .btn { padding: 3px 12px; font-size: 12.5px; }
 /* end of an answer, quieter: suggestions as small chips (the text already lists them), « Annuler » as a light button,
    the figures (tok/s, tokens, time) only when the pointer is on the answer */
 body .suggest .chip { display: inline-flex; align-items: center; gap: 6px; width: auto; max-width: 100%; border-radius: 999px;
@@ -4010,14 +4016,18 @@ function addBot(m, idx) {
       const el = $(".stats", d); if (!el) return;
       if (!s || !S.show_stats) { el.innerHTML = ""; return; }
       const sec = (x) => x == null ? null : x < 10 ? `${x.toFixed(2)} s` : x < 60 ? `${Math.round(x)} s` : `${Math.floor(x / 60)} min ${String(Math.round(x % 60)).padStart(2, "0")} s`;
-      const why = { stop: "Fin de la réponse", length: "Limite de longueur atteinte", tool_calls: "Outil appelé", stopped: "Arrêté" }[s.reason] || (s.reason ? s.reason : null);
       const chip = (ic, txt, tip) => txt ? `<span class="schip" title="${esc(tip)}">${ic ? svgI(ic) : ""}${esc(txt)}</span>` : "";
-      el.innerHTML = chip("bolt", s.tps ? `${s.tps.toFixed(1)} tok/s` : "", "Vitesse d'écriture")
-        + chip("list", s.tokens ? `${s.tokens} tokens` : "", "Tokens écrits par Naim")
-        + chip("sched", sec(s.ttft), "Temps avant le premier mot")
-        + chip("", s.total != null ? `total ${sec(s.total)}` : "", "Durée totale de la réponse")
-        + chip("file", s.prompt ? `${s.prompt.toLocaleString("fr-FR")} lus` : "", "Tokens lus avant de répondre (instructions, outils, conversation, résultats) qui n'étaient pas déjà en mémoire")
-        + chip("", why ? `Arrêt : ${why}` : "", "Pourquoi la réponse s'est arrêtée");
+      // plain words, like a pro tool: how long it took, how fast it wrote; the details on hover
+      el.innerHTML = chip("sched", s.total != null ? sec(s.total) : "", `Durée totale${s.ttft != null ? ` · premier mot après ${sec(s.ttft)}` : ""}`)
+        + chip("bolt", s.tps ? `${s.tps.toFixed(1).replace(".", ",")} mots/s` : "", `Vitesse d'écriture${s.tokens ? ` · ${s.tokens.toLocaleString("fr-FR")} mots écrits` : ""}${s.prompt ? ` · ${s.prompt.toLocaleString("fr-FR")} relus` : ""}`);
+      // stopped before the end (cut, stopped, or left in the middle of its work): said clearly, with a way to go on
+      let cut = $(".cutoff", d);
+      const why = { length: "La réponse a été coupée : elle était trop longue.", tool_calls: "Naim s'est arrêté au milieu de son travail.",
+        stopped: "Tu as arrêté Naim avant la fin." }[s.reason];
+      if (!why || d !== $$("#thread .turn").pop()) { cut?.remove(); return; }
+      if (!cut) { cut = document.createElement("div"); cut.className = "cutoff"; el.before(cut); }
+      cut.innerHTML = `${svgI("warn")}<span>${why}</span><button class="btn">Continuer</button>`;
+      $("button", cut).onclick = () => { cut.remove(); send("continue là où tu t'es arrêté"); };
     },
     typing(text) {
       working.hidden = false; $(".wtext", working).textContent = (text || "Naim réfléchit").replace(/[.…\s]+$/, "") + "…";
@@ -4148,6 +4158,12 @@ function addBot(m, idx) {
       lastRow.appendChild(el);
     },
     note(t) {
+      // the same intention said again in other words (« Je vais lire le CV… » then « Je dois d'abord lire le CV… »):
+      // shown once
+      const words = (x) => new Set(String(x || "").toLowerCase().match(/[a-zà-ÿ0-9]{4,}/g) || []);
+      const now = words(t), prev = v._lastNote ? words(v._lastNote) : null;
+      if (prev && now.size && [...now].filter((w) => prev.has(w)).length / Math.min(now.size, prev.size) >= 0.7) return;
+      v._lastNote = t;
       const n = document.createElement("div"); n.className = "md fnote"; n.innerHTML = md(t);
       // what it says it will do comes BEFORE its work: a group holding only the skill it loaded stays open for the steps
       if (group && !$(".arow[data-tool]", group) && group.parentNode === flow) { flow.insertBefore(n, group); return; }
