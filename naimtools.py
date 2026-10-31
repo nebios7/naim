@@ -3753,7 +3753,7 @@ class Agent:
                 self.emit({"type": "status", "text": "Naim planifie..." if self._step == 1 else "Naim analyse l'échec..."})
             try:
                 msg = chat_watched(self.model, self.messages, tools=self.tools, think=think, options=step_opts,
-                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
+                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w), "w": w}), on_size=self._measured)
             except Exception as e:  # noqa: BLE001
                 if type(e).__name__ != "ContextFull":
                     raise
@@ -3762,7 +3762,7 @@ class Agent:
                 self._compact_history(force=True)
                 self._sent_msgs_tokens = self._msgs_tokens()
                 msg = chat_watched(self.model, self.messages, tools=self.tools, think=think, options=step_opts,
-                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
+                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w), "w": w}), on_size=self._measured)
             if self.cancel.is_set():
                 self.emit({"type": "answer", "text": "⏹ Arrêté."})
                 self._outcome = "stopped"
@@ -3773,7 +3773,7 @@ class Agent:
                     self.emit({"type": "thinking", "text": msg["thinking"].strip()})
                 self.emit({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
                 msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options,
-                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w)}), on_size=self._measured)
+                                   cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w), "w": w}), on_size=self._measured)
             self.messages.append(msg)
             if msg.get("thinking") and think:
                 self.emit({"type": "thinking", "text": msg["thinking"].strip()})

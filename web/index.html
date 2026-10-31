@@ -4691,6 +4691,7 @@ async function stream(reply, v, message, hist, extra = {}) {
         notifyConv = conv.id;  // approvals / questions of this run: their notification leads back here
         if (reply.ttft == null && /^(token|thinking_token|tool)$/.test(ev.type)) reply.ttft = (Date.now() - reply.time) / 1000;
         if (ev.type === "token" || ev.type === "thinking_token") run.ntok = (run.ntok || 0) + 1;  // the words it produces, live
+        if (ev.type === "tool") { quill.chars = 0; quill.at = 0; quill.rate = 0; }  // the next writing starts from nothing
         switch (ev.type) {
           case "token": {
             reply.content += ev.text;
@@ -4708,7 +4709,7 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "retract": if (ev.chars > 0) { reply.content = reply.content.slice(0, Math.max(0, reply.content.length - ev.chars)); renderText(); } break;  // an old answer copied again: taken back
           case "thinking_token": reply.thinking += ev.text; v.setThinking(reply.thinking); break;
           case "thinking": reply.thinking += (reply.thinking ? "\n\n" : "") + ev.text; v.setThinking(reply.thinking); break;
-          case "status": if (!ev.sub) v.typing(ev.text); break;
+          case "status": if (!ev.sub) { v.typing(ev.text); quillProgress(ev.w); } break;
           case "run": reply.run_id = ev.run_id; break;
           case "checkpoint": reply.checkpoint = ev.run_id; break;
           case "memory": reply.steps.push({ type: "event", icon: "🧠", text: `Mémorisé : ${ev.fact}` }); v.event("🧠", `Mémorisé : ${ev.fact}`); break;
@@ -5032,16 +5033,42 @@ function liveKind(label, tool) {
 const TOOL_KIND = { run_command: "run", start_process: "run", update_todos: "plan", planifier: "plan", delegate: "plan",
   web_search: "web", web_fetch: "web", browser: "web", search: "search", find_files: "search", find_symbol: "search",
   list_files: "read", read_file: "read", look_at: "check", ask_user: "wait", write_file: "write", edit_file: "write", multi_edit: "write" };
-// the quill writes like a hand: the same stroke, each one a little faster or slower, now and then a short pause
-// (each feather on its own beat, like the dots of the thinking dance)
-function quillBeat(e) {
-  if (e.animationName !== "quill" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const el = e.target, pause = Math.random() < 0.22 ? 0.15 + Math.random() * 0.45 : 0;
-  el.style.animation = "none"; void el.offsetWidth;  // the stroke ends where it starts: the restart does not jump
-  el.style.animation = `quill ${(0.75 + Math.random() * 0.8).toFixed(2)}s ease-in-out ${pause.toFixed(2)}s 1`;
+// the quill follows what Naim really writes: each progress of the tool call being written (about once a second:
+// how many characters so far) sets its pace. Many characters a second: quick strokes; few: slow ones; nothing new
+// for a while: it rests. A file: long strokes moving along the line, back at its start like a new line; a command:
+// short quick taps. Same size and resting pose as before (the stroke is drawn here, not by the CSS loop).
+const quill = { rate: 0, last: 0, chars: 0, at: 0, cmd: false, phase: 0, x: 0, raf: 0, t: 0 };
+function quillProgress(w) {
+  if (!w || w.think) return;
+  const now = performance.now(), dc = (w.chars || 0) - quill.chars, dt = (now - quill.at) / 1000;
+  if (dc > 0 && dt > 0 && dt < 5) quill.rate = quill.rate ? quill.rate * 0.4 + (dc / dt) * 0.6 : dc / dt;
+  if (dc !== 0 || !quill.at) quill.last = now;
+  quill.chars = w.chars || 0; quill.at = now; quill.cmd = w.name === "run_command" || w.name === "start_process";
+  quillRun();
 }
-document.addEventListener("animationiteration", quillBeat);
-document.addEventListener("animationend", quillBeat);
+function quillRun() {
+  if (quill.raf || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const step = (t) => {
+    const pens = $$(".lfeather svg");
+    if (!pens.length) { quill.raf = 0; quill.t = 0; return; }
+    const dt = quill.t ? Math.min(0.05, (t - quill.t) / 1000) : 0; quill.t = t;
+    const idle = t - quill.last > 1800;  // nothing new: the hand rests
+    const hz = idle ? 0 : quill.cmd ? 2.6 + Math.min(1.6, quill.rate / 400) : 0.9 + Math.min(1.8, quill.rate / 350);
+    quill.phase += dt * hz * Math.PI * 2;
+    let rot, x, y;
+    if (idle) { quill.x *= 0.9; rot = -9 + Math.sin(t / 900) * 0.8; x = quill.x; y = 0; }
+    else if (quill.cmd) { rot = -9 + 6 * Math.max(0, Math.sin(quill.phase)); x = 0.8 * Math.sin(quill.phase / 2); y = -0.4 * Math.max(0, Math.sin(quill.phase)); }
+    else {
+      quill.x += dt * (0.6 + Math.min(1.6, quill.rate / 500)); if (quill.x > 3) quill.x = 0;  // along the line, then a new line
+      rot = -9 + 13 * (0.5 + 0.5 * Math.sin(quill.phase)) - 3 * Math.max(0, Math.sin(quill.phase * 2)); x = quill.x; y = -0.5 * Math.max(0, Math.sin(quill.phase));
+    }
+    for (const p of pens) { p.style.animation = "none"; p.style.transform = `rotate(${rot.toFixed(2)}deg) translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`; }
+    quill.raf = requestAnimationFrame(step);
+  };
+  quill.raf = requestAnimationFrame(step);
+}
+new MutationObserver(() => { if (!quill.raf && $(".lfeather svg")) { quill.last = performance.now(); quillRun(); } })  // it appears: writing begins
+  .observe(document.body, { childList: true, subtree: true });
 const liveIcon = (k) => k === "write" ? `<span class="licon lfeather">${svgI("feather")}</span>`
   : k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>'
   : `<span class="bgdots" data-m="${k}" aria-hidden="true"><canvas></canvas></span>`;

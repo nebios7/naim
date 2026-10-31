@@ -2287,7 +2287,7 @@ class Handler(BaseHTTPRequestHandler):
                     copied = True
                     break
                 if chunk.get("writing"):  # a whole file written in a tool call: shown while it is written
-                    self.event({"type": "status", "text": writing_text(chunk["writing"])})
+                    self.event({"type": "status", "text": writing_text(chunk["writing"]), "w": chunk["writing"]})
                 msg = chunk.get("message", {})
                 if msg.get("thinking"):
                     thought = True
