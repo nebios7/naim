@@ -1374,6 +1374,9 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
    dots while it thinks — the same terracotta as the dots */
 .licon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: #d97757; }
 .lfeather svg { width: 16px; height: 16px; transform-origin: 18% 88%; animation: quill 1.1s ease-in-out infinite; }
+/* the quill moves inside a frame of fixed size: its strokes never change the height of the page (no small jumps) */
+.licon.lfeather { box-sizing: content-box; padding: 6px; margin: -6px; overflow: hidden; contain: strict; }
+.lfeather svg { will-change: transform; }
 @keyframes quill { 0%, 100% { transform: rotate(-9deg) translate(0, 0); } 35% { transform: rotate(4deg) translate(1px, -0.5px); } 70% { transform: rotate(-3deg) translate(2px, 0); } }
 .lread { gap: 2.5px; }
 .lread i { width: 3.5px; height: 3.5px; border-radius: 50%; background: currentColor; animation: rdot 0.9s ease-in-out infinite; }
