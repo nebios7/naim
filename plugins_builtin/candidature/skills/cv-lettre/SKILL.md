@@ -39,7 +39,9 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
 4. Pas de .docx ni de .txt à rendre sauf si l'utilisateur le demande : un .docx joint est une SOURCE de contenu.
 
 ## 4. Livrer et vérifier
-1. L'outil `convert_document` (un outil, pas une commande du Terminal) de chaque .html vers .pdf (A4).
+1. Les deux scripts font AUSSI le PDF (style pdf-pro, A4), à côté du .html : leur dernière ligne dit « PDF : <chemin> ».
+   Rien à convertir. S'ils disent « PDF non fait », utilise l'outil `convert_document` (un outil, pas une commande du
+   Terminal). Si tu modifies un .html après coup, refais son PDF avec la commande que le script a donnée.
 2. `look_at` du PDF : le style est-il celui du modèle ? CV en 1-2 pages, lettre en 1 page ? Sinon corrige le .html
    (resserre les marges ou le texte) et reconvertis.
 3. Réponds avec les chemins exacts des PDF (le CV, la lettre) et ce qui a été enrichi. Seulement les PDF : les .html,

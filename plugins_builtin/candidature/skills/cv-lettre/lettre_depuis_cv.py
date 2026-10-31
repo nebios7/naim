@@ -55,6 +55,28 @@ def letter_html(text):
     return "\n      ".join(out), sum(len(b.split()) for b in blocks)
 
 
+PDFPRO = Path.home() / ".naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py"
+
+
+def to_pdf(page):
+    """The PDF next to the page, in the same step (pdf-pro): nothing left to convert. If it fails, the page is still
+    there and convert_document does it."""
+    page = page.resolve()
+    pdf = page.with_suffix(".pdf")
+    if not PDFPRO.exists():
+        return "PDF : à faire avec l'outil convert_document (pdf-pro absent)."
+    import subprocess
+    try:
+        r = subprocess.run([sys.executable, str(PDFPRO), "render", str(page), str(pdf)], capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"PDF non fait ({e}) : fais-le avec l'outil convert_document."
+    if r.returncode or not pdf.exists():
+        return f"PDF non fait ({(r.stderr or r.stdout).strip()[-300:]}) : fais-le avec l'outil convert_document."
+    pages = re.search(r"\((\d+) pages?\)", r.stdout)
+    return (f"PDF : {pdf}" + (f" ({pages.group(1)} page(s))" if pages else "") + ". Regarde-le avec look_at ; si tu "
+            f"modifies le .html, refais le PDF : python3 {PDFPRO} render \"{page}\" \"{pdf}\"")
+
+
 def main():
     if len(sys.argv) != 4:
         sys.exit(__doc__)
@@ -70,6 +92,7 @@ def main():
     dst.write_text(page)
     print(f"ok: {dst} ({words} mots{', trop long pour une page : vise 250-380 mots' if words > 400 else ''}). "
           f"Style et en-tête repris de {cv.name}, aucun contenu du CV dans la lettre.")
+    print(to_pdf(dst))
 
 
 if __name__ == "__main__":

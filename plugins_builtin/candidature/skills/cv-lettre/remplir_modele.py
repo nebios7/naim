@@ -67,6 +67,28 @@ def replace(page, old, new):
     return page, False
 
 
+PDFPRO = Path.home() / ".naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py"
+
+
+def to_pdf(page):
+    """The PDF next to the page, in the same step (pdf-pro): nothing left to convert. If it fails, the page is still
+    there and convert_document does it."""
+    page = page.resolve()
+    pdf = page.with_suffix(".pdf")
+    if not PDFPRO.exists():
+        return "PDF : à faire avec l'outil convert_document (pdf-pro absent)."
+    import subprocess
+    try:
+        r = subprocess.run([sys.executable, str(PDFPRO), "render", str(page), str(pdf)], capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"PDF non fait ({e}) : fais-le avec l'outil convert_document."
+    if r.returncode or not pdf.exists():
+        return f"PDF non fait ({(r.stderr or r.stdout).strip()[-300:]}) : fais-le avec l'outil convert_document."
+    pages = re.search(r"\((\d+) pages?\)", r.stdout)
+    return (f"PDF : {pdf}" + (f" ({pages.group(1)} page(s))" if pages else "") + ". Regarde-le avec look_at ; si tu "
+            f"modifies le .html, refais le PDF : python3 {PDFPRO} render \"{page}\" \"{pdf}\"")
+
+
 def main():
     if len(sys.argv) != 4:
         sys.exit(__doc__)
@@ -74,7 +96,11 @@ def main():
     page = src.read_text(errors="replace")
     pairs = json.loads(pairs_f.read_text())
     done, missing = 0, []
-    for old, new in pairs:
+    for pair in pairs:
+        if not (isinstance(pair, list) and len(pair) == 2 and all(isinstance(x, str) for x in pair)):
+            missing.append(f"  - {json.dumps(pair, ensure_ascii=False)[:90]} ignoré : chaque ligne est [\"texte du modèle\", \"nouveau texte\"]")
+            continue
+        old, new = pair
         page, ok = replace(page, old, new)
         if ok:
             done += 1
@@ -86,6 +112,7 @@ def main():
     print(f"ok: {dst} — {done} texte(s) remplacé(s) sur {len(pairs)}, style du modèle intact.")
     if missing:
         print("Non trouvés (rien changé pour eux) : copie le texte tel qu'il est sur la page :\n" + "\n".join(missing))
+    print(to_pdf(dst))
 
 
 if __name__ == "__main__":

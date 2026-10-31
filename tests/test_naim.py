@@ -653,14 +653,16 @@ class SkillScripts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             t = Path(t)
             (t / "m.html").write_text(self.MODEL)
-            (t / "p.json").write_text(json.dumps([["Jean Dupont", "Marie Curie"], ["Poste chez ACME en 2020", "Chercheuse"], ["absent", "x"]]))
+            (t / "p.json").write_text(json.dumps([["Jean Dupont", "Marie Curie"], ["Poste chez ACME en 2020", "Chercheuse"], ["absent", "x"], ["a", "b", "c"]]))
             r = subprocess.run([sys.executable, "-I", str(self.D / "remplir_modele.py"), "m.html", "p.json", "o.html"], cwd=t,
                                check=True, capture_output=True, text=True)
             out = (t / "o.html").read_text()
             self.assertIn("Marie Curie", out)
             self.assertIn("Chercheuse", out)
-            self.assertIn("2 texte(s) remplacé(s) sur 3", r.stdout)
+            self.assertIn("2 texte(s) remplacé(s) sur 4", r.stdout)
+            self.assertIn("ignoré", r.stdout)  # a line of three texts: told, not a crash
             self.assertIn(".carte{border:2px solid}", out)
+            self.assertIn("PDF", r.stdout.splitlines()[-1])  # the PDF in the same step (or how to make it)
 
 
 
