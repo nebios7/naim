@@ -638,6 +638,18 @@ def mac_allow(area):
 
 
 
+def finals(files):
+    """The files to show the user: a PDF hides its drafts (the HTML it was made from, its .pro.html, its page previews)."""
+    pdfs = [f["path"] for f in files if str(f["path"]).lower().endswith(".pdf")]
+    if not pdfs:
+        return files
+    stems = {re.sub(r"\.pdf$", "", p, flags=re.I) for p in pdfs}
+    def draft(path):
+        low = str(path).lower()
+        return low.endswith((".html", ".htm")) or any(re.fullmatch(re.escape(s) + r"\.page\d+\.png", str(path), re.I) for s in stems)
+    return [f for f in files if not draft(f["path"])]
+
+
 APPENDED = set()  # files written in parts (append) since Naim started
 
 class Agent:
@@ -3219,7 +3231,7 @@ class Agent:
                 try:
                     files = self._deliverables(started)
                     if files:
-                        self.emit({"type": "deliverables", "root": str(self.root), "files": files})
+                        self.emit({"type": "deliverables", "root": str(self.root), "files": finals(files)})
                 except OSError:
                     pass
             self._close_todos()

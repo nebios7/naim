@@ -1024,6 +1024,11 @@ class PdfPro(unittest.TestCase):
             self.assertEqual(Path(d, "document.pdf").read_text(), "THEMED")
             self.assertIn("document.pdf", a.checkpoint.manifest["files"])
 
+    def test_only_the_pdf_is_shown(self):
+        files = [{"path": p} for p in ("c/document.pdf", "c/page.html", "c/page.pro.html", "c/document.page1.png", "c/fig.svg")]
+        self.assertEqual([f["path"] for f in naimtools.finals(files)], ["c/document.pdf", "c/fig.svg"])
+        self.assertEqual(naimtools.finals([{"path": "site/index.html"}]), [{"path": "site/index.html"}])
+
 
 class WritesItsOwnExtensions(unittest.TestCase):
     """A mod, a skill, a plugin go in ~/.naim/mods|skills|plugins from any project; the rest of ~/.naim stays closed."""

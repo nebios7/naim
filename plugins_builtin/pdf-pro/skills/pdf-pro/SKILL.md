@@ -31,7 +31,9 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
    avec `write_file(page.html, …)`, puis CHAQUE chapitre avec `write_file(page.html, <le chapitre>, append=true)`.
 4. `pdfpro.py render page.html document.pdf`, puis `pdfpro.py check document.pdf` et look_at sur les deux PNG :
    rien de coupé, formules affichées, graphiques lisibles. Corrige page.html et relance si besoin.
-5. Copie le PDF dans le dossier du projet ouvert (ou `~/Documents/Naim/Fichiers`) et donne son chemin.
+5. Copie le PDF dans le dossier du projet ouvert (ou `~/Documents/Naim/Fichiers`) et donne son chemin : seulement
+   le PDF. `page.html`, `page.pro.html` et les PNG sont tes brouillons : ne les présente pas, n'en crée pas d'autres
+   (une suite de cours = un nouveau dossier avec SON page.html et SON PDF, jamais des séance1.html, séance2.html…).
 
 ## Les éléments (classes du thème)
 

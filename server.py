@@ -61,7 +61,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import (answer_here, ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+from naimtools import (answer_here, finals, ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
@@ -2415,7 +2415,7 @@ class Handler(BaseHTTPRequestHandler):
                             result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"), here)
                         if info:
                             made.append(info)
-                        self.event({"type": "deliverables", "root": str(here or chatfiles.OUT), "files": list(reversed(made))})
+                        self.event({"type": "deliverables", "root": str(here or chatfiles.OUT), "files": finals(list(reversed(made)))})
                     else:
                         result = helper.call_tool(name, args)
                         if name == "send_email":
@@ -2436,7 +2436,7 @@ class Handler(BaseHTTPRequestHandler):
                                     pass
                             if new_files and (here or not made):
                                 made.extend(reversed(new_files))
-                                self.event({"type": "deliverables", "root": str(helper.root), "files": list(reversed(made))})
+                                self.event({"type": "deliverables", "root": str(helper.root), "files": finals(list(reversed(made)))})
                 except Exception as e:  # a tool error is told to the model, never a crash of the reply
                     result = f"error: {e}"
                 result = str(result)
@@ -2610,7 +2610,7 @@ class Handler(BaseHTTPRequestHandler):
                         else:
                             result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"))
                             made.append(info)
-                            self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": list(reversed(made))})
+                            self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": finals(list(reversed(made)))})
                     else:
                         result = (helper.planifier(**args) if name == "planifier" else helper.web_search(args.get("query", ""))
                                   if name == "web_search" else helper.web_fetch(args.get("url", "")))
