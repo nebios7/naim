@@ -1040,7 +1040,7 @@ SKILL_TRIGGERS = {
     "pdf": r"(?<![./\w-])pdf\b",  # the word, not a file name (« envoie document.pdf » is not a PDF to make)
     "excel": r"\b(excel|xlsx|tableur)\b",
     "word": r"\b(word|docx)\b",
-    "cv-lettre": r"\b(cv|curriculum( vitae)?|lettres? de motivation|lettre de candidature)\b",
+    "cv-lettre": r"(?<![a-z0-9])(cv|curriculum[ _-]?(vitae)?|lettres?[ _-]+(de[ _-]+)?motivation|lettre[ _-]+de[ _-]+candidature)(?![a-z0-9])",  # also a joined file's name (Lettre_motivation_…, CV_Nom.docx)
     # slides; « la page de présentation d'un café » is a web page, not slides
     "presentation": r"\b(powerpoint|pptx|diapo|keynote|slides?\b)|(?<!page de )(?<!site de )(?<!page d'accueil et de )\bpr[ée]sentation\b(?! (?:d'une? |du |de la )?(?:site|page|web))",
     "analyse-donnees": r"\b(csv|analyse[rz]? (les |des )?donn[ée]es|pandas|graphiques?|statistiques)\b",

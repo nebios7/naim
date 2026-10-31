@@ -1409,6 +1409,7 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 /* opened step, as in the reference: no card inside the frame — the command in a slightly darker box, the output
    right under it on the frame itself; step titles at reading size */
 .agroup > .arows .aout, .agroup > .arows .aout:has(> .cmdline) { background: none; border: 0; padding: 0; border-radius: 0; margin: 10px 0 2px; max-height: 340px; }
+.aout, .aout .cmdline { overflow-wrap: anywhere; word-break: break-word; }  /* a long path breaks inside the box, never past it */
 .agroup > .arows .aout .cmdline { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 10px 40px 10px 12px; margin: 0; font-size: 12.5px; line-height: 1.6; }
 .agroup > .arows .aout { font-size: 12.5px; line-height: 1.6; color: var(--text); }
 .agroup > .arows .aline { font-size: 14.5px; }
@@ -5958,7 +5959,8 @@ const codeAppearanceHTML = () => `<div class="sgroup">
         <div class="cthemes">${["light", "dark"].map((side) => `<div class="ctheme">${sel(side === "light" ? "code_light" : "code_dark",
           Object.entries(CODE_THEMES[side]).map(([k, [name]]) => [k, name]))}<div data-cprev="${side}">${codePreview(side, S[side === "light" ? "code_light" : "code_dark"])}</div></div>`).join("")}</div></div>
       ${row("Police de code", "Une police à chasse fixe installée sur le Mac, pour le code et le terminal. Vide = la police du système.", `<input class="field" type="text" data-k="code_font" value="${esc(S.code_font)}" placeholder="p. ex. JetBrains Mono" style="width:220px">`)}
-      ${row("Taille de police du code", "Fichiers ouverts, diffs, blocs de code, sortie des commandes et terminal.", sel("code_size", [[0, "Par défaut"], ...[11, 12, 13, 14, 15, 16, 17, 18].map((n) => [n, `${n} px`])]))}
+      ${row("Taille du texte de la conversation", "Messages, réponses de Naim et étapes.", sel("font_size", [...new Set([12, 13, 14, 15, 16, 17, 18, 20, 22, +S.font_size])].sort((a, b) => a - b).map((n) => [n, n === 15 ? "Par défaut · 15 px" : `${n} px`])))}
+      ${row("Taille de police du code", "Fichiers ouverts, diffs, blocs de code, sortie des commandes et terminal.", sel("code_size", [[0, "Par défaut"], ...[11, 12, 13, 14, 15, 16, 17, 18, 20, 22].map((n) => [n, `${n} px`])]))}
     </div>`;
 
 // ======================================================================= settings page
@@ -5989,7 +5991,6 @@ const TABS = {
       ${row("Thème", "", sel("theme", [["auto", "Automatique"], ["light", "Clair"], ["dark", "Sombre"]]))}
       ${row("Couleur d'accent", "Boutons, interrupteurs, élément actif.", `<div class="accents">${Object.entries(ACCENTS).map(([k, a]) => `<button data-accent="${k}" class="${S.accent === k ? "on" : ""}" style="background:${a[0]}" title="${a[2]}"></button>`).join("")}</div>`)}
       ${row("Zoom de l'interface", "Aussi avec ⌘+ / ⌘− / ⌘0.", range("zoom", 0.6, 2, 0.05, FMT.zoom))}
-      ${row("Taille du texte", "", range("font_size", 12, 20, 1, FMT.font_size))}
       ${row("Largeur de la conversation", "", sel("width", [["narrow", "Étroite"], ["normal", "Normale"], ["wide", "Large"], ["full", "Pleine largeur"]]))}
     </div>
     ${codeAppearanceHTML()}

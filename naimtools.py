@@ -638,9 +638,18 @@ def mac_allow(area):
 
 
 
-def finals(files):
+def finals(files, root=None):
     """The files to show the user: a PDF hides its drafts (the HTML it was made from, its .pro.html, its page previews,
-    the texts and data written next to it to fill it: lettre.txt, textes.json)."""
+    the texts, data and scripts written next to it to make it: lettre.txt, textes.json, faire_doc.py); a preview of a
+    document (CV.docx.png) and a file moved away since (mv) are never shown."""
+    def gone(path):
+        f = Path(os.path.expanduser(str(path)))
+        if not f.is_absolute():
+            if not root:
+                return False
+            f = Path(root) / f
+        return not f.exists()
+    files = [f for f in files if not gone(f["path"]) and not re.search(r"\.(docx?|pdf|pptx?|xlsx?|odt|pages)\.(png|jpe?g)$", str(f["path"]), re.I)]
     pdfs = [f["path"] for f in files if str(f["path"]).lower().endswith(".pdf")]
     if not pdfs:
         return files
@@ -650,7 +659,7 @@ def finals(files):
     def draft(path):
         low = str(path).lower()
         return (low.endswith((".html", ".htm")) or any(re.fullmatch(re.escape(s) + r"\.page\d+\.png", str(path), re.I) for s in stems)
-                or (low.endswith((".txt", ".json")) and folder(path) in beside))
+                or (low.endswith((".txt", ".json", ".py", ".sh")) and folder(path) in beside))
     return [f for f in files if not draft(f["path"])]
 
 
@@ -975,12 +984,46 @@ class Agent:
         rel = str(p.relative_to(home)) if p != home else ""
         return not any(rel == x or rel.startswith(x + "/") for x in self.PRIVATE_HOME)
 
+    @staticmethod
+    def _joint_original(p):
+        """A file the user attached (listed in its folder's .joints, in Fichiers/Joints): never replaced, moved or deleted."""
+        try:
+            p = Path(p).expanduser().resolve()
+            lst = p.parent / ".joints"
+            return JOINTS.resolve() in p.parents and p.is_file() and lst.is_file() and p.name in lst.read_text().splitlines()
+        except OSError:
+            return False
+
+    JOINT_KEEP = ("refused: {name} est le fichier joint par l'utilisateur : on ne le remplace, ne le déplace et ne le "
+                  "supprime jamais. Écris ton résultat sous un autre nom (ex. {stem}_pro{suffix}) dans le même dossier.")
+
+    def _joint_hit(self, command):
+        """The attached file a command would overwrite, move or delete (mv/cp onto it, rm, sed -i, > or tee into it)."""
+        cmd = str(command or "")
+        if not re.search(r"\b(mv|cp|rm|tee|truncate|ditto|rsync)\b|sed\s+-i|>", cmd):
+            return None
+        toks = re.findall(r'"([^"]+)"|\'([^\']+)\'|(\S+)', cmd)
+        words = [a or b or c for a, b, c in toks]
+        for i, w in enumerate(words):
+            if not self._joint_original(os.path.join(str(self.root), os.path.expanduser(w))):
+                continue
+            before = " ".join(words[:i])
+            seg = re.split(r"&&|\|\||;|\|", before)[-1]
+            op = re.findall(r"\b(mv|cp|rm|tee|truncate|ditto|rsync)\b|sed\s+-i|>>?", seg)
+            last = i + 1 == len(words) or re.match(r"&&|\|\||;|\|", words[i + 1] or "")
+            if re.search(r">>?\s*$", before) or re.search(r"\b(rm|tee|truncate)\b|sed\s+-i", seg) or (
+                    re.search(r"\b(mv|ditto|rsync)\b", seg)) or (re.search(r"\bcp\b", seg) and last):
+                return Path(os.path.expanduser(w))
+        return None
+
     def resolve(self, path, read=False):
         path = self._undouble(os.path.expanduser(str(path or ".")))  # « ~/… » is the user's home, as in the Terminal
         path = self._localized(path)
         p = (self.root / path).resolve()
         if not p.exists() and ("'" in path or "’" in path):  # « Capture d'écran » typed, « Capture d’écran » on disk
             p = Path(self._apostrophe_twin(str(p)) or p)
+        if not read and self._joint_original(p):  # the user's attached file: written beside, never over
+            raise ValueError(self.JOINT_KEEP.format(name=p.name, stem=p.stem, suffix=p.suffix))
         if p != self.root and self.root not in p.parents:
             if read and self._readable_home(p):  # read-only outside the project: writing stays in the project
                 return p
@@ -1659,12 +1702,12 @@ class Agent:
         """Syntax / compile errors with the checkers already on this Mac (nothing installed, nothing executed)."""
         import shutil as _sh
         if path:
-            target = self.resolve(path)
+            target = self.resolve(path, read=True)
             files = [target] if target.is_file() else list(self._code_files(path)) + [f for f in target.rglob("*.json") if not any(x in SKIP_DIRS for x in f.parts)][:50]
         else:  # the files this task wrote or edited
             changed = {a.get("path") for m in self.messages[getattr(self, "_task_idx", 0):] for c in (m.get("tool_calls") or [])
                        for a in [self._args_of(c)] if c["function"]["name"] in ("write_file", "edit_file", "multi_edit")}
-            files = [self.resolve(x) for x in changed if x]
+            files = [self.resolve(x, read=True) for x in changed if x]
         files = [f for f in files if f.is_file()][:80]
         if not files:
             return "no code file to check (give a path)"
@@ -2015,7 +2058,7 @@ class Agent:
             return "error: url is required"
         if until == "file" and not path:
             return "error: path is required"
-        target = self.resolve(path) if until == "file" else None
+        target = self.resolve(path, read=True) if until == "file" else None
         self.emit({"type": "status", "text": {"process_exit": f"Naim attend la fin de {p.name if p else id}…", "url": f"Naim attend que {url} réponde…",
                                               "file": f"Naim attend le fichier {path}…", "output": f"Naim attend « {text} »…"}[until]})
         while time.time() - t0 < timeout:
@@ -2098,7 +2141,7 @@ class Agent:
         if re.match(r"^https?://", target):
             arg = target
         else:
-            p = self.resolve(target)
+            p = self.resolve(target, read=True)
             if not p.exists():
                 return f"error: not found: {target}"
             arg = str(p)
@@ -2382,7 +2425,7 @@ class Agent:
         return res
 
     def convert_document(self, source, output, paper="A4", orientation="portrait"):
-        src, dst = self.resolve(source), self.resolve(output)
+        src, dst = self.resolve(source, read=True), self.resolve(output)
         if not self.approve(f"Convertir {self.rel(src)} en {self.rel(dst)}", f"{src}\n→ {dst}"):
             return "denied by the user"
         if dst.is_file():  # a PDF already made (and liked) can be brought back if this one is worse
@@ -2422,7 +2465,7 @@ class Agent:
 
     def look_at(self, path, page=1):
         """Render a deliverable to an image and show it to the model (once), plus a thumbnail in the chat."""
-        p = self.resolve(path)
+        p = self.resolve(path, read=True)
         if not p.is_file():
             return f"error: file not found: {path}"
         if p.suffix.lower() in (".xlsx", ".xlsm", ".csv"):  # a table has no page to look at: its cells, as text
@@ -3140,6 +3183,8 @@ class Agent:
                     "arguments; for a long file, write it in parts of about 150 lines: the first with write_file, each next one "
                     "with write_file(path, content=<next part>, append=true).")
         cut = isinstance(args, dict) and args.pop("_maybe_cut", False)
+        if name == "run_command" and isinstance(args, dict) and (hit := self._joint_hit(args.get("command"))):
+            return self.JOINT_KEEP.format(name=hit.name, stem=hit.stem, suffix=hit.suffix)
         try:
             result = fn(**args)
             if name == "run_command" and isinstance(result, str) and "No such file or directory" in result:
@@ -3227,7 +3272,7 @@ class Agent:
         if not last:
             return ""
         try:
-            p = self.resolve(last)
+            p = self.resolve(last, read=True)
             if p.suffix.lower() in (".html", ".htm"):
                 t = re.sub(r"<style.*?</style>|<script.*?</script>", " ", p.read_text(errors="replace"), flags=re.S)
                 t = H.unescape(re.sub(r"<[^>]+>", "\n", t))
@@ -3286,7 +3331,7 @@ class Agent:
                                      for c in (m.get("tool_calls") or [None] if m.get("role") != "user" else []))
                     files += [f for f in self._named_outputs(said, started) if all(f["path"] != g["path"] for g in files)]
                     if files:
-                        self.emit({"type": "deliverables", "root": str(self.root), "files": finals(files)})
+                        self.emit({"type": "deliverables", "root": str(self.root), "files": finals(files, self.root)})
                 except OSError:
                     pass
             self._close_todos()
@@ -3496,7 +3541,7 @@ class Agent:
             key = name + json.dumps(args, sort_keys=True, ensure_ascii=False)[:2000]
             if name == "read_file":  # re-reading a file that changed since is not a repetition
                 try:
-                    st = self.resolve(args.get("path", "")).stat()
+                    st = self.resolve(args.get("path", ""), read=True).stat()
                     key += f"@{st.st_mtime_ns}:{st.st_size}"
                 except (OSError, ValueError):
                     pass

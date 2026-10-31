@@ -618,7 +618,7 @@ class Handler(BaseHTTPRequestHandler):
         if left:
             dst.unlink(missing_ok=True)
             return {"error": "envoi interrompu"}
-        return {"path": str(_same_file(dst, h.hexdigest())), "size": n, "folder": str(folder)}
+        return {"path": str(_read_only(_same_file(dst, h.hexdigest()))), "size": n, "folder": str(folder)}
 
     def read_json(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -2468,7 +2468,7 @@ class Handler(BaseHTTPRequestHandler):
                             result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"), here)
                         if info:
                             made.append(info)
-                        self.event({"type": "deliverables", "root": str(here or chatfiles.OUT), "files": finals(list(reversed(made)))})
+                        self.event({"type": "deliverables", "root": str(here or chatfiles.OUT), "files": finals(list(reversed(made)), here or chatfiles.OUT)})
                     else:
                         result = helper.call_tool(name, args)
                         if name == "send_email":
@@ -2492,7 +2492,7 @@ class Handler(BaseHTTPRequestHandler):
                                     pass
                             if new_files and (here or not made):
                                 made.extend(reversed(new_files))
-                                self.event({"type": "deliverables", "root": str(helper.root), "files": finals(list(reversed(made)))})
+                                self.event({"type": "deliverables", "root": str(helper.root), "files": finals(list(reversed(made)), helper.root)})
                 except Exception as e:  # a tool error is told to the model, never a crash of the reply
                     result = f"error: {e}"
                 result = str(result)
@@ -2666,7 +2666,7 @@ class Handler(BaseHTTPRequestHandler):
                         else:
                             result, info = chatfiles.create(args.get("nom", ""), args.get("contenu") or "", args.get("fichiers"))
                             made.append(info)
-                            self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": finals(list(reversed(made)))})
+                            self.event({"type": "deliverables", "root": str(chatfiles.OUT), "files": finals(list(reversed(made)), chatfiles.OUT)})
                     else:
                         result = (helper.planifier(**args) if name == "planifier" else helper.web_search(args.get("query", ""))
                                   if name == "web_search" else helper.web_fetch(args.get("url", "")))
@@ -2896,8 +2896,22 @@ def keep_joint(cid):
     def keep(name, data):
         dst = _free_name(joints_dir(cid), _safe_name(name))
         dst.write_bytes(data)
-        return _same_file(dst, hashlib.sha256(data).hexdigest())
+        return _read_only(_same_file(dst, hashlib.sha256(data).hexdigest()))
     return keep
+
+
+def _read_only(f):
+    """An attached file stays as the user gave it: its name goes in the folder's list of originals (.joints), which
+    Naim's tools never replace, move or delete (it writes beside them)."""
+    try:
+        f = Path(f)
+        lst = f.parent / ".joints"
+        names = set(lst.read_text().splitlines()) if lst.exists() else set()
+        if f.name not in names:
+            lst.write_text("\n".join(sorted(names | {f.name})) + "\n")
+    except OSError:
+        pass
+    return f
 
 
 def to_trash(items, label):

@@ -509,6 +509,44 @@ class ProByDefault(unittest.TestCase):
         self.assertNotIn("--clay", seen["p"])
 
 
+class AttachedFilesKept(unittest.TestCase):
+    """The file the user attached is never replaced, moved or deleted; the files card shows only what was asked."""
+
+    def setUp(self):
+        from unittest import mock
+        self.t = tempfile.mkdtemp()
+        self.p = mock.patch("naimtools.JOINTS", Path(self.t))
+        self.p.start()
+        self.d = Path(self.t) / "c1"; self.d.mkdir()
+        import server
+        (self.d / "Lettre.pdf").write_bytes(b"%PDF original")
+        server._read_only(self.d / "Lettre.pdf")
+        (self.d / "copie.pdf").write_bytes(b"%PDF mine")
+        self.a = naimtools.Agent(str(self.d), auto_yes=True)
+
+    def tearDown(self):
+        self.p.stop()
+
+    def test_commands_onto_it_refused(self):
+        L, C = f'"{self.d}/Lettre.pdf"', f'"{self.d}/copie.pdf"'
+        for cmd in (f"mv {C} {L}", f"cp {C} {L}", f"rm {L}", f"echo x > {L}", f"sed -i '' s/a/b/ {L}", f"mv {L} {self.d}/autre.pdf"):
+            self.assertTrue(str(self.a.call_tool("run_command", {"command": cmd})).startswith("refused"), cmd)
+        for cmd in (f"cp {L} {self.d}/travail.pdf", f"pdftotext {L} {self.d}/t.txt", f"ls {self.d}"):
+            self.assertIsNone(self.a._joint_hit(cmd), cmd)
+        self.assertEqual((self.d / "Lettre.pdf").read_bytes(), b"%PDF original")
+
+    def test_write_onto_it_refused(self):
+        with self.assertRaises(ValueError):
+            self.a.resolve(str(self.d / "Lettre.pdf"))
+        self.assertEqual(self.a.resolve(str(self.d / "Lettre.pdf"), read=True), (self.d / "Lettre.pdf").resolve())
+        self.assertEqual(self.a.resolve(str(self.d / "copie.pdf")), (self.d / "copie.pdf").resolve())
+
+    def test_card_shows_only_the_result(self):
+        files = [{"path": "Lettre_pro.pdf"}, {"path": "Lettre.docx.png"}, {"path": "faire_doc.py"}, {"path": "parti.pdf"}]
+        (self.d / "Lettre_pro.pdf").write_text("x"); (self.d / "faire_doc.py").write_text("x"); (self.d / "Lettre.docx.png").write_text("x")
+        self.assertEqual([f["path"] for f in naimtools.finals(files, self.d)], ["Lettre_pro.pdf"])
+
+
 class ChatFolder(unittest.TestCase):
     """A conversation with attached files works beside them, not in the last Agent project."""
 
@@ -1161,8 +1199,10 @@ class PdfPro(unittest.TestCase):
         self.assertEqual([f["path"] for f in naimtools.finals(cv)], ["j/CV.pdf", "j/Lettre.pdf", "notes.txt"])
 
     def test_drafts_hidden_whatever_the_case_of_the_folder(self):
-        files = [{"path": "~/Documents/naim/J/CV.pdf"}, {"path": "~/Documents/Naim/J/cv.json"}]
-        self.assertEqual([f["path"] for f in naimtools.finals(files)], ["~/Documents/naim/J/CV.pdf"])
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "naim").mkdir(); (Path(t) / "naim" / "CV.pdf").write_text("x"); (Path(t) / "naim" / "cv.json").write_text("{}")
+            files = [{"path": f"{t}/naim/CV.pdf"}, {"path": f"{t}/Naim/cv.json"}]  # the Mac ignores case: one folder
+            self.assertEqual([f["path"] for f in naimtools.finals(files)], [f"{t}/naim/CV.pdf"])
 
     def test_a_pdf_made_outside_the_project_is_shown(self):
         # a CV written in the attachment's folder by a command, while the app's folder is another project

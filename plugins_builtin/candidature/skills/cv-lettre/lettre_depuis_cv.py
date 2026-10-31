@@ -2,6 +2,8 @@
 details), and in place of the CV's sections, one card with the letter. Nothing of the CV's content is kept.
 
     python3 lettre_depuis_cv.py CV.html lettre.txt Lettre.html
+    python3 lettre_depuis_cv.py moi.json lettre.txt Lettre.html     (no CV made: the pdf-pro head from
+                                         {"nom": …, "titre": …, "contact": [["Tél.", …], ["E-mail", …], ["Ville", …]]})
 
 lettre.txt, in this order, blocks separated by an empty line:
     Bordeaux, le 22 octobre 2026                 (place and date)
@@ -81,7 +83,17 @@ def main():
     if len(sys.argv) != 4:
         sys.exit(__doc__)
     cv, text, dst = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-    top, header, card, badge, close = parts(cv.read_text(errors="replace"))
+    if cv.suffix.lower() == ".json":  # no CV page: the same pdf-pro head (name, contact, photo) made from these facts
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import json
+        import cv_pro
+        facts = cv_pro.tidy({**json.loads(cv.read_text()), "kicker": "Candidature"})
+        model = cv_pro.MODEL.read_text(errors="replace")
+        head = model[:re.search(r"<body\b[^>]*>", model, re.I).end()].replace("</head>", cv_pro.KEEP + "</head>", 1)
+        source = f"{head}\n<main>\n{cv_pro.body({k: facts.get(k) for k in ('nom', 'titre', 'kicker', 'photo', 'contact')})}\n</main>\n</body>\n</html>\n"
+    else:
+        source = cv.read_text(errors="replace")
+    top, header, card, badge, close = parts(source)
     header = re.sub(r"(class=\"kicker\"[^>]*>)\s*(curriculum vit\w*|cv)\s*(?=<)", r"\1Candidature", header, flags=re.I)  # not a CV
     body, words = letter_html(text.read_text(errors="replace"))
     style = ("<style>.lettre p{margin:0 0 11px;line-height:1.55}.lettre .l-date{text-align:right}"
