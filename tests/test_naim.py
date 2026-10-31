@@ -808,6 +808,17 @@ class SkillScripts(unittest.TestCase):
         t = "Fais mon CV en PDF avec le style pdf-pro à partir de ce Word, avec ma photo à droite"
         self.assertEqual((extensions.match_skill(t, extensions.HOME, set()) or {}).get("name"), "cv-lettre")  # a style, not the method
 
+    def test_any_pdf_to_make_is_pdf_pro(self):
+        import extensions
+        name = lambda t: (extensions.match_skill(t, extensions.HOME, set()) or {}).get("name")  # noqa: E731
+        # the attached file's name says what it is, the user's words alone are only « le pdf »
+        self.assertEqual(name("Document joint « Lettre_motivation_Professeur.pdf » :\n[PDF]\n\nMadame,\n\ndonne moi le pdf merci"), "cv-lettre")
+        for t in ("donne moi le pdf", "fais un pdf de ce texte : bonjour à tous", "mets ce texte en pdf"):
+            self.assertEqual(name(t), "pdf-pro", t)
+        self.assertEqual(name("crée moi un cv"), "cv-lettre")
+        for t in ("fusionne ces deux pdf", "extrais la page 3 du pdf"):  # operations on PDFs stay with the PDF tool
+            self.assertNotEqual(name(t), "pdf-pro", t)
+
     def test_word_tells_its_pictures(self):
         import zipfile
         import docs

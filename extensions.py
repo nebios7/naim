@@ -1103,12 +1103,19 @@ SKILL_TRIGGERS = {
 }
 
 
+PDF_TOOL_RE = re.compile(r"\b(fusionn\w*|assembl\w*|d[ée]coup\w*|s[ée]par\w*|divis\w*|extrai\w*|compress\w*|all[ée]g\w*|"
+                         r"pivot\w*|tourn\w*|rotat\w*|sign\w*|filigrane|watermark|ocr|formulaire|rempli\w*|chiffr\w*|"
+                         r"d[ée]verrouill\w*|mot de passe|prot[ée]g\w*|merge|split|pages? \d)")
+
+
 def match_skill(task, root=None, disabled=()):
     """Pick the enabled skill that best fits the task (keyword triggers, then description overlap)."""
     if re.search(r"(Document|Fichier) joint « ", task or ""):
         # attached files come first, the user's own words last: only their words choose the skill (a Word file
         # about health that says « celle-ci » is not a CI/CD request)
-        task = task.rsplit("\n\n", 1)[-1]
+        # … but the attached files' NAMES say what they are (« Lettre_motivation_….pdf » is a cover letter)
+        names = " ".join(re.sub(r"[_.-]+", " ", n) for n in re.findall(r"(?:Document|Fichier) joint « ([^»]+) »", task))
+        task = task.rsplit("\n\n", 1)[-1] + (f"\n(fichiers joints : {names})" if names else "")
     text = task.lower().replace("’", "'").replace("‘", "'")  # the Mac's typographic apostrophe, as typed
     skills = [s for s in list_skills(root, disabled) if s["enabled"]]
     by_name = {s["name"]: s for s in skills}
@@ -1172,6 +1179,10 @@ def match_skill(task, root=None, disabled=()):
         return by_name[min(hits)[2]]
     for name in ordered:
         if name in by_name and re.search(triggers[name], text):
+            # « pdf » alone is the tool on existing PDFs (merge, split, extract…); making or giving a PDF is pdf-pro,
+            # the default style of Naim's PDFs
+            if name == "pdf" and "pdf-pro" in by_name and not PDF_TOOL_RE.search(text):
+                return by_name["pdf-pro"]
             return by_name[name]
     words = {w for w in re.findall(r"[a-zà-ÿ]{5,}", text)}
     best, score = None, 1

@@ -7,22 +7,16 @@ LIBRARY = {
 ## Lire un document existant (Word, PDF, Excel, PowerPoint)
 - `read_file` donne directement son TEXTE (jamais les octets bruts). Ne pas écrire de script pour lire un .docx.
 
-## Créer un PDF : la méthode qui marche (aucune installation)
-1. Écrire une page HTML avec `write_file` (ex. `cv.html`), mise en page en CSS :
-   - `@page { size: A4; margin: 0 }` puis les marges dans le HTML (`.page { padding: 16mm 15mm }`), ou `@page { size: A4; margin: 16mm }`.
-   - Police : `font-family: -apple-system, Helvetica, Arial, sans-serif` ; texte 10-11pt ; titres en couleur.
-   - Colonnes : `display: flex` ou `grid` (ex. colonne latérale colorée de 60mm + contenu).
-   - Couleurs de fond conservées dans le PDF. Nouvelle page : `<div style="page-break-before: always">`.
-   - Tout en UTF-8 (`<meta charset="utf-8">`) : accents, €, emojis OK.
-2. `convert_document` source=`cv.html` output=`cv.pdf` → répond « cv.pdf créé (N pages) ».
-3. Vérifier avec `look_at cv.pdf` (tu vois la page) : rien de coupé ni de superposé. Un CV tient en 1 page (2 max).
-   S'il déborde : réduire les marges, la police (10pt) ou les espacements, puis reconvertir et regarder à nouveau.
-4. Si l'utilisateur veut le PDF par mail : `send_email` avec `attachments: ["cv.pdf"]`.
+## Créer un PDF : toujours le style pdf-pro (le style de tous les PDF de Naim)
+- Charge le skill pdf-pro (use_skill pdf-pro) : le contenu en HTML simple avec ses classes, puis
+  `python3 ~/.naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py render page.html sortie.pdf`. Pas de CSS à toi.
+- Un CV ou une lettre de motivation : skill cv-lettre (ses scripts font le CV et la lettre en style pdf-pro).
+- Vérifier avec `look_at` : rien de coupé ni de superposé. Par mail : `send_email` avec le PDF.
 
 ## Convertir un document existant en PDF
 - `convert_document` source=`fichier.docx` (ou .md, .rtf, .odt, .txt, .html) output=`fichier.pdf`.
-- Pour AMÉLIORER le document en même temps (CV, rapport) : lire le .docx avec `read_file`, réécrire le contenu
-  amélioré dans une page HTML soignée (méthode ci-dessus), puis convertir : le rendu est bien meilleur.
+- Pour le mettre au style (le cas courant) : lire le document avec `read_file`, réécrire son texte en HTML pdf-pro,
+  puis `pdfpro.py render` (méthode ci-dessus).
 
 ## Modèle de CV (à adapter, contenu RÉEL de l'utilisateur uniquement, rien d'inventé)
 ```html
@@ -64,7 +58,8 @@ ul { margin: 3pt 0 6pt 14pt; padding: 0 } li { margin: 1.5pt 0 }
 
 Python à utiliser (déjà prêt, ne fais pas de pip install) : `~/.naim/docs-venv/bin/python` (python-docx, lxml).
 Écris un script `faire_doc.py` dans ton brouillon, lance-le avec ce Python, puis VÉRIFIE (étape 4).
-Version PDF seulement : skill pdf (page HTML soignée puis convert_document), pas Word.
+Un PDF demandé (même « à partir du Word joint ») : ce n'est PAS ce skill. Charge pdf-pro (use_skill pdf-pro) ;
+un CV ou une lettre : cv-lettre. Un .docx seulement si l'utilisateur veut un fichier Word.
 
 ## 1. Choisir la méthode
 | Demande | Méthode |

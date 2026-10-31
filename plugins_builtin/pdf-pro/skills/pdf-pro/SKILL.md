@@ -6,6 +6,8 @@ description: Faire un PDF professionnel et joli (cours, analyse d'un courrier ou
 # PDF professionnel : un seul style, soigné, prêt à imprimer
 
 C'est le style par défaut de TOUS tes PDF, même quand l'utilisateur ne le nomme pas : jamais un PDF sans style.
+Un PDF, un Word ou un texte donné « à mettre en PDF » : read_file pour son texte (mot pour mot), puis écris-le en HTML
+avec les classes ci-dessous et `render`. Jamais python-docx ni un .docx au milieu, jamais un CSS à toi.
 
 Tu ne fais PAS de design : le style est déjà fait (`theme.css`, couleurs chaudes, titres élégants, tout en A4).
 Tu écris seulement le contenu en HTML simple, avec les classes ci-dessous, puis l'outil fait le PDF.
