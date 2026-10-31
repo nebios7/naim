@@ -2089,7 +2089,7 @@ class Handler(BaseHTTPRequestHandler):
         progress, todo_push_at = 0, -1  # tool results that worked, and when the unfinished list last sent it back to work
         refusals = 0  # tool calls refused because the message only asks for an answer
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
-        seen_calls, stuck, last_redirect, mac_tried = {}, False, 0.0, False
+        seen_calls, stuck, last_redirect, mac_tried = {}, 0, 0.0, False
         task_at = len(messages) - 1  # the user's request: always kept word for word when the conversation is lightened
         searches = 0  # web searches in a row: now and then Naim takes stock of what it found (no limit: it decides)
         heard = []  # what the user said while Naim worked
@@ -2247,7 +2247,9 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "user", "content": "(Message de l'utilisateur pendant ton travail — prends-le en "
                                  "compte maintenant, sans recommencer ce qui est déjà fait) : " + "\n".join(notes)})
                 self.event({"type": "interjection_read", "count": len(notes)})
-            last = last or stuck
+            # going round in circles again and again (three different actions each repeated three times): then only, the
+            # answer with what it found. One repeated search is refused and the work goes on (it stopped 3 CVs at once)
+            last = last or stuck >= 3
             # after a refused tool call, the next step is the answer itself: without this the model announced « je vais
             # créer un fichier… », was refused, and started again — six times, five minutes, nothing made
             # always the same tool list: it comes first in what the engine reads, so removing it (after a refused call, or
@@ -2422,11 +2424,13 @@ class Handler(BaseHTTPRequestHandler):
                 sig = name + json.dumps(args, sort_keys=True, ensure_ascii=False)[:500]
                 seen_calls[sig] = seen_calls.get(sig, 0) + 1
                 if seen_calls[sig] > 2:  # the same call a third time: it is going round in circles
-                    stuck = True
-                    messages.append({"role": "tool", "tool_name": name, "content": "refused: you already did exactly this twice."})
-                    messages.append({"role": "user", "content": "Tu répètes la même action sans résultat : arrête-la. Change de "
-                                     "méthode ou réponds maintenant avec ce que tu sais (pour un schéma : un bloc ```mermaid "
-                                     "dans ta réponse)."})
+                    stuck += seen_calls[sig] == 3  # each action counted once
+                    messages.append({"role": "tool", "tool_name": name, "content": "refused: you already did exactly this twice, "
+                                     "its result is above."})
+                    messages.append({"role": "user", "content": "Tu répètes la même action : elle ne donnera rien de plus. Passe "
+                                     "à l'étape suivante de ta tâche avec ce que tu as déjà (ou change de méthode : une autre "
+                                     "page, le navigateur pour un site qui en a besoin). Pour un schéma : un bloc ```mermaid "
+                                     "dans ta réponse."})
                     continue
                 if plain:  # « salut », « merci »: just an answer
                     refusals += 1
