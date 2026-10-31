@@ -135,6 +135,8 @@ def _make(dst, content):
             page = Path(tmp) / f"{dst.stem}.html"
             if ext == ".png" and (content or "").lstrip().startswith("<svg"):
                 page.write_text(f"<!doctype html><meta charset='utf-8'><body style='margin:0'>{content}</body>")
+            elif ext == ".pdf" and "<html" not in (content or "").lower():  # a whole page keeps its own design; the rest: pdf-pro
+                page.write_text(docs.pro_html(content, dst.stem))
             else:
                 page.write_text(_html(content, dst.stem))
             if ext == ".png":
@@ -193,5 +195,5 @@ def create(nom, contenu="", fichiers=None, folder=None):
     where = "dans le dossier de travail de l'utilisateur" if folder else f"dans le dossier des fichiers du mode Chat ({OUT})"
     return (f"fichier créé : {dst} ({info['size']} octets), {where}. Il est affiché à l'utilisateur, prêt à ouvrir "
             "ou télécharger. Quand tu en parles, donne exactement ce nom et cet emplacement."
-            + (" C'est un PDF SIMPLE (texte, sans mise en page) : si l'utilisateur veut un style (pdf-pro, « comme le CV », "
-               "un CV, une lettre, un rapport), ce n'est pas le bon outil : refais-le avec le script de ton skill." if dst.suffix.lower() == ".pdf" else ""), info)
+            + (" Il a le style pdf-pro de base. Un CV ou une lettre « comme le CV » : refais-le avec le script de ton skill "
+               "(cv-lettre), qui reprend l'en-tête et la photo." if dst.suffix.lower() == ".pdf" else ""), info)

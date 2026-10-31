@@ -488,6 +488,27 @@ class SkillRouting(unittest.TestCase):
         self.assertEqual(self.name("la dernière fois on avait corrigé la facture, tu te souviens ?"), "mem-search")
 
 
+class ProByDefault(unittest.TestCase):
+    """A PDF made from text or Markdown has the pdf-pro look; a whole HTML page keeps its own design."""
+
+    def test_markdown_gets_the_pro_look(self):
+        import docs
+        if not docs.PDFPRO.exists():
+            self.skipTest("pdf-pro not installed")
+        page = docs.pro_html("# Mon rapport\n\nTexte.", "r")
+        self.assertIn('class="prohead"', page)
+        self.assertIn("--clay", page)  # the theme's colours
+
+    def test_whole_page_kept(self):
+        import chatfiles
+        from unittest import mock
+        seen = {}
+        with tempfile.TemporaryDirectory() as t, mock.patch("docs.convert", lambda page, dst: (seen.setdefault("p", Path(page).read_text()), Path(dst).write_text("pdf"))):
+            chatfiles.create("a.pdf", "<html><head><style>body{color:red}</style></head><body><p>x</p></body></html>", folder=t)
+        self.assertNotIn("prohead", seen["p"])
+        self.assertNotIn("--clay", seen["p"])
+
+
 class ChatFolder(unittest.TestCase):
     """A conversation with attached files works beside them, not in the last Agent project."""
 

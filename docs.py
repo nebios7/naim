@@ -250,6 +250,38 @@ def markdown_html(text, title="Document"):
             f"<style>{css}</style></head><body>{''.join(out)}</body></html>")
 
 
+PDFPRO = Path.home() / ".naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py"
+
+
+def pro_html(text, title="Document"):
+    """Text, Markdown or an HTML fragment -> a page in the pdf-pro look (the default style of Naim's PDFs);
+    the plain look only if pdf-pro is missing."""
+    import importlib.util
+    text = text or ""
+    is_html = bool(re.search(r"<(div|p|h[1-6]|table|section|ul|ol|header|main|article)\b", text, re.I))
+    try:
+        spec = importlib.util.spec_from_file_location("naim_pdfpro", PDFPRO)
+        pro = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pro)
+    except Exception:
+        return text if is_html else markdown_html(text, title)
+    if is_html:
+        body = text
+    else:
+        m = re.search(r"<body[^>]*>(.*)</body>", markdown_html(text, title), re.S | re.I)
+        body = m.group(1) if m else text
+        # the first title as the pdf-pro head: the small clay line above, the band under it (as the covers, compact)
+        import datetime
+        d = datetime.date.today()
+        when = f"{d.day} {'janvier février mars avril mai juin juillet août septembre octobre novembre décembre'.split()[d.month - 1]} {d.year}"
+        body = re.sub(r"^\s*<h1[^>]*>(.*?)</h1>", lambda h: f'<header class="prohead"><div class="kicker">{when}</div><h1>{h.group(1)}</h1>'
+                      '<div class="band"></div></header>', body, count=1, flags=re.S)
+        body = ("<style>.prohead{margin:0 0 8mm}.prohead .kicker{font-size:9pt;letter-spacing:.14em;text-transform:uppercase;"
+                "color:var(--clay);font-weight:600}.prohead h1{font-size:26pt;line-height:1.15;margin:3mm 0 0}.prohead .band"
+                "{height:3px;width:40mm;background:var(--clay);border-radius:2px;margin-top:5mm}</style>") + body
+    return pro.page(body, title)
+
+
 def convert(src, dst, paper="A4", orientation="portrait"):
     """Convert a document: HTML / Word / RTF / ODT / Markdown / text -> PDF, and between Word, RTF, ODT, HTML, text.
 
@@ -266,7 +298,7 @@ def convert(src, dst, paper="A4", orientation="portrait"):
                 page = src  # keep it next to its images / CSS
             elif a in (".md", ".markdown"):
                 page = src.with_name(f".{src.stem}-naim.html")
-                page.write_text(markdown_html(src.read_text(errors="replace"), src.stem))
+                page.write_text(pro_html(src.read_text(errors="replace"), src.stem))
             elif a in TEXTUTIL_IN:
                 page = Path(tmp) / "page.html"
                 r = subprocess.run(["textutil", "-convert", "html", str(src), "-output", str(page)], capture_output=True, timeout=120)
