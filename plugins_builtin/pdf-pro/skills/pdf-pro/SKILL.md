@@ -68,6 +68,9 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
 
 ## Selon la demande
 
+- **Un texte donné à mettre en PDF** (une note, un compte rendu, quelques lignes) : son texte, TOUT son texte, rien
+  d'autre. Pas de couverture, pas de sommaire, pas de chapitre ajouté : un `<h1>` (le titre du texte, ou ses premiers
+  mots), puis ses paragraphes et ses listes. Quelques lignes = une page. Tu n'inventes aucun contenu.
 - **Cours** : couverture, sommaire, un chapitre par notion (explication, exemple de code ou formule, encadré
   « À retenir », exercice en `callout ok`), corrigés en dernier chapitre.
 - **Analyse d'un courrier / d'un document** : chapitre « En bref » (3 à 5 points, `kpis` si chiffres), puis
