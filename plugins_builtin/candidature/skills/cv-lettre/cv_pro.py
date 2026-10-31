@@ -35,6 +35,15 @@ KEEP = ("<style>.rubrique{break-after:avoid;page-break-after:avoid}.poste,.deux,
         "header:has(.photo){padding-right:33mm}header .photo{position:absolute;right:0;top:0;width:27mm;height:27mm;"
         "border-radius:50%;object-fit:cover;border:1px solid var(--line)}</style>\n")
 
+# a CV longer than two pages is tightened, step by step, then made again (same content, smaller spacing)
+TIGHT = ["",
+         "<style>body{font-size:9.4pt;line-height:1.4}header{padding-bottom:4mm;margin-bottom:4.5mm}header h1{font-size:24pt}"
+         "header .band{margin:3mm 0}section.carte{margin-bottom:4mm}.poste{margin-bottom:2.6mm}.poste li{margin:.2mm 0}"
+         "p.profil{font-size:9.8pt;line-height:1.45}.niveaux li{padding:.7mm 0}h2.rubrique{margin-bottom:2mm}</style>\n",
+         "<style>@page{margin:12mm 14mm}body{font-size:8.9pt;line-height:1.35}header h1{font-size:21pt}.poste{grid-template-columns:"
+         "25mm 1fr;margin-bottom:2mm}.poste h3{font-size:10.3pt}.poste .ou{margin:0 0 .8mm}section.carte{margin-bottom:3mm}"
+         "p.profil{font-size:9.2pt}</style>\n"]
+
 
 def esc(t):
     return html.escape(str(t or "").strip())
@@ -63,6 +72,77 @@ def photo(path):
     return f'<img class="photo" alt="" src="data:{mime};base64,{base64.b64encode(data).decode()}">'
 
 
+def pick(d, *keys):
+    for k in keys:
+        if str(d.get(k) or "").strip():
+            return d[k]
+    return ""
+
+
+def entry(d, *title_keys):
+    """One job, diploma or project, whatever names cv.json gives its fields (periode, entreprise, missions…)."""
+    if not isinstance(d, dict):
+        return {"quand": "", "titre": str(d), "ou": "", "points": []}
+    where = pick(d, "ou") or " · ".join(str(d[k]) for k in ("entreprise", "societe", "employeur", "etablissement", "ecole",
+                                                               "organisme", "lieu", "ville") if str(d.get(k) or "").strip())
+    points = pick(d, "points", "missions", "taches", "realisations", "details", "description")
+    if isinstance(points, str):
+        points = [points]
+    return {"quand": pick(d, "quand", "periode", "dates", "date", "annee", "duree"),
+            "titre": pick(d, *title_keys, "titre", "intitule", "nom", "role"), "ou": where, "points": points}
+
+
+LABELS = {"telephone": "Tél.", "tel": "Tél.", "email": "E-mail", "mail": "E-mail", "ville": "Ville", "adresse": "Adresse"}
+TITLES = {"projets": "Projets", "publications": "Publications", "certifications": "Certifications", "benevolat": "Bénévolat",
+          "centres_interet": "Centres d'intérêt", "interets": "Centres d'intérêt", "loisirs": "Loisirs", "references": "Références"}
+GROUPS = {"basesdedonnees": "Bases de données", "systemes": "Systèmes", "methodes": "Méthodes", "reseaux": "Réseaux",
+          "securite": "Sécurité", "logiciels": "Logiciels", "electronique": "Électronique"}
+KNOWN = {"nom", "titre", "kicker", "photo", "contact", "profil", "experiences", "formations", "sections", "competences",
+         "langues", "ordre"}
+
+
+def slug(t):
+    import unicodedata
+    return re.sub(r"[\W_]+", "", unicodedata.normalize("NFD", str(t)).encode("ascii", "ignore").decode().lower())
+
+
+def tidy(cv):
+    """cv.json as Naim wrote it -> the keys this script draws. Nothing of the source is dropped: a key with another
+    name (projets, publications, entreprise, missions, skill groups, a contact dict) still reaches the page."""
+    cv = dict(cv)
+    if isinstance(cv.get("contact"), dict):
+        cv["contact"] = [[LABELS.get(slug(k), k.replace("_", " ").capitalize()), v] + ([v] if re.match(r"https?://", str(v)) else [])
+                         for k, v in cv["contact"].items() if str(v or "").strip()]
+    cv["experiences"] = [entry(e, "poste") for e in cv.get("experiences") or []]
+    cv["formations"] = [entry(f, "diplome") for f in cv.get("formations") or []]
+    langs, groups = list(cv.get("langues") or []), []
+    comp = cv.get("competences") or {}
+    if isinstance(comp, dict):
+        for k, v in list(comp.items()):
+            if k in ("fortes", "autres"):
+                continue
+            if slug(k).startswith("langue"):
+                langs += v if isinstance(v, list) else [v]
+            else:
+                groups.append([GROUPS.get(slug(k), k.replace("_", " ").capitalize()), ", ".join(map(str, v)) if isinstance(v, list) else str(v)])
+            del comp[k]
+    cv["competences"], cv["groupes"] = comp, groups
+    cv["langues"] = [l if isinstance(l, (list, tuple)) else
+                     (lambda m: [m.group(1).strip().capitalize(), m.group(2)] if m else [str(l).capitalize(), ""])(
+                         re.match(r"(.+?)\s*[(:—-]\s*([^)]*)\)?$", str(l))) for l in langs]
+    sections = list(cv.get("sections") or [])
+    for k in [k for k in cv if k not in KNOWN and k != "groupes"]:
+        v, title = cv.pop(k), TITLES.get(slug(k), k.replace("_", " ").capitalize())
+        if isinstance(v, list) and v and all(isinstance(i, dict) for i in v):
+            sections.append({"titre": title, "items": v})
+        elif isinstance(v, list):
+            sections.append({"titre": title, "liste": v})
+        elif str(v or "").strip():
+            sections.append({"titre": title, "texte": v})
+    cv["sections"] = [dict(s, items=[entry(i) for i in s["items"]]) if s.get("items") else s for s in sections]
+    return cv
+
+
 def block(when, title, where, points):
     pts = "".join(f"<li>{esc(p)}</li>" for p in points or [] if str(p).strip())
     return (f'  <div class="poste">\n    <div class="quand">{esc(when)}</div>\n'
@@ -88,39 +168,41 @@ def body(cv):
     if cv.get("profil"):
         parts["profil"] = card("Profil", f'  <p class="profil">{esc(cv["profil"])}</p>')
     if cv.get("experiences"):
-        parts["experiences"] = card("Expérience", "\n".join(block(e.get("quand"), e.get("poste") or e.get("titre"), e.get("ou"), e.get("points"))
+        parts["experiences"] = card("Expérience", "\n".join(block(e["quand"], e["titre"], e["ou"], e["points"])
                                                           for e in cv["experiences"]))
     if cv.get("formations"):
-        parts["formations"] = card("Formation", "\n".join(block(f.get("quand"), f.get("diplome") or f.get("titre"), f.get("ou"), f.get("points"))
+        parts["formations"] = card("Formation", "\n".join(block(f["quand"], f["titre"], f["ou"], f["points"])
                                                          for f in cv["formations"]))
     for s in cv.get("sections") or []:
         if s.get("items"):
-            inner = "\n".join(block(i.get("quand"), i.get("titre"), i.get("ou"), i.get("points")) for i in s["items"])
+            inner = "\n".join(block(i["quand"], i["titre"], i["ou"], i["points"]) for i in s["items"])
         elif s.get("liste"):
             inner = '  <ul class="niveaux">' + "".join(f"<li><span>{esc(x)}</span><span></span></li>" for x in s["liste"]) + "</ul>"
         else:
             inner = f'  <p class="profil">{esc(s.get("texte"))}</p>'
-        parts[s.get("titre") or f"section{len(parts)}"] = card(s.get("titre") or "", inner)
+        parts[slug(s.get("titre")) or f"section{len(parts)}"] = card(s.get("titre") or "", inner)
     comp, langs = cv.get("competences") or {}, cv.get("langues") or []
     if isinstance(comp, list):
         comp = {"fortes": [], "autres": comp}
     tags = "".join(f'<span class="tag fort">{esc(t)}</span>' for t in comp.get("fortes") or []) + \
         "".join(f'<span class="tag">{esc(t)}</span>' for t in comp.get("autres") or [])
+    rows = "".join(f"<li><span>{esc(g)}</span><span>{esc(v)}</span></li>" for g, v in cv.get("groupes") or [])
     side = []
-    if tags:
-        side.append(card("Compétences", f'  <div class="tags">{tags}</div>'))
+    if tags or rows:  # the source's own groups (Programmation : …) as rows, else tags
+        side.append(card("Compétences", (f'  <ul class="niveaux">{rows}</ul>' if rows else "") + (f'\n  <div class="tags">{tags}</div>' if tags else "")))
     if langs:
         side.append(card("Langues", '  <ul class="niveaux">' + "".join(
             f"<li><span>{esc(l[0])}</span><span>{esc(l[1] if len(l) > 1 else '')}</span></li>" for l in langs) + "</ul>"))
     if side:  # « competences » in "ordre": skills and languages side by side, where the source puts them
         parts["competences"] = '<div class="deux">\n' + "\n".join(side) + "\n</div>" if len(side) == 2 else side[0]
-    order = [k for k in cv.get("ordre") or [] if k in parts]
+    order = [slug(k) for k in cv.get("ordre") or [] if slug(k) in parts]
     out += [parts[k] for k in order + [k for k in parts if k not in order]]
     return "\n\n".join(out)
 
 
-def to_pdf(page):
-    """The PDF next to the page (pdf-pro); if it fails the page is still there and convert_document does it."""
+def to_pdf(page, remake=None):
+    """The PDF next to the page (pdf-pro); if it fails the page is still there and convert_document does it.
+    remake(level) writes the page again tighter: used while the PDF has more than two pages."""
     import subprocess
     page = page.resolve()
     pdf = page.with_suffix(".pdf")
@@ -133,6 +215,11 @@ def to_pdf(page):
     if r.returncode or not pdf.exists():
         return f"PDF non fait ({(r.stderr or r.stdout).strip()[-300:]}) : fais-le avec l'outil convert_document."
     pages = re.search(r"\((\d+) pages?\)", r.stdout)
+    level = getattr(remake, "level", 0)
+    if remake and pages and int(pages.group(1)) > 2 and level + 1 < len(TIGHT):
+        remake.level = level + 1
+        remake(remake.level)
+        return to_pdf(page, remake)
     return (f"PDF : {pdf}" + (f" ({pages.group(1)} page(s))" if pages else "") + ". Regarde-le avec look_at ; pour changer "
             f"quelque chose, corrige cv.json et relance la même commande.")
 
@@ -147,15 +234,35 @@ def main():
         sys.exit(f"error: {src.name} n'est pas un JSON valide ({e}) : corrige-le et relance.")
     if not cv.get("nom"):
         sys.exit("error: « nom » manque dans cv.json.")
+    if "photo" not in cv:  # the source Word CV beside cv.json holds a photo: a faithful CV keeps it ("photo": "" = none)
+        import zipfile
+        for w in sorted(src.resolve().parent.glob("*.docx")):
+            try:
+                with zipfile.ZipFile(w) as z:
+                    if any(n.startswith("word/media/") for n in z.namelist()):
+                        cv["photo"] = str(w)
+                        print(f"photo : prise dans {w.name} (le CV Word source). Pas de photo voulue : \"photo\": \"\" dans cv.json.")
+                        break
+            except (OSError, zipfile.BadZipFile):
+                pass
+    cv = tidy(cv)
     model = MODEL.read_text(errors="replace")
-    head = model[:re.search(r"<body\b[^>]*>", model, re.I).end()].replace("</head>", KEEP + "</head>", 1)
-    dst.write_text(f"{head}\n<main>\n{body(cv)}\n</main>\n</body>\n</html>\n")
+    page = f"<main>\n{body(cv)}\n</main>\n</body>\n</html>\n"
+
+    def write(level=0):
+        head = model[:re.search(r"<body\b[^>]*>", model, re.I).end()].replace("</head>", KEEP + TIGHT[level] + "</head>", 1)
+        dst.write_text(f"{head}\n{page}")
+    write()
     comp = cv.get("competences") or {}
-    n_comp = len(comp) if isinstance(comp, list) else len(comp.get("fortes") or []) + len(comp.get("autres") or [])
-    print(f"ok: {dst} — {len(cv.get('experiences') or [])} expérience(s), {len(cv.get('formations') or [])} formation(s), "
-          f"{n_comp} compétence(s), {len(cv.get('langues') or [])} langue(s), {len(cv.get('sections') or [])} autre(s) "
-          f"rubrique(s). Compare ces nombres avec le CV source : il doit en avoir autant.")
-    print(to_pdf(dst))
+    n_comp = (len(comp) if isinstance(comp, list) else len(comp.get("fortes") or []) + len(comp.get("autres") or [])) + \
+        sum(len(v.split(",")) for _, v in cv.get("groupes") or [])
+    other = ", ".join(f"{x.get('titre')} ({len(x.get('items') or x.get('liste') or [])})" if x.get("items") or x.get("liste")
+                      else str(x.get("titre")) for x in cv["sections"]) or "aucune"
+    print(f"ok: {dst} — {len(cv['experiences'])} expérience(s), {len(cv['formations'])} formation(s), "
+          f"{n_comp} compétence(s), {len(cv['langues'])} langue(s), autres rubriques : {other}, "
+          f"photo : {'oui' if cv.get('photo') else 'non'}. Compare chaque nombre avec le CV source (et sa photo) : "
+          f"un 0 ou un manque = une rubrique du source absente du CV, corrige cv.json et relance.")
+    print(to_pdf(dst, write))
 
 
 if __name__ == "__main__":

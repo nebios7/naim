@@ -684,6 +684,30 @@ class SkillScripts(unittest.TestCase):
         self.assertLess(out.index("Compétences"), out.index("Expérience"))
         self.assertLess(out.index("Projets"), out.index("Formation"))
 
+    def test_cv_keys_named_otherwise_are_kept(self):
+        # Naim wrote its own names (entreprise, periode, missions, projets, skill groups, contact dict): nothing is lost,
+        # and the photo of the Word CV beside cv.json comes along
+        import zipfile
+        cv = {"nom": "Marie Curie", "contact": {"telephone": "06", "email": "m@c.fr"},
+              "competences": {"programmation": ["Python", "C"], "bases_de_donnees": ["DB2"], "langues": ["anglais (courant)"]},
+              "experiences": [{"poste": "Chercheuse", "entreprise": "Institut", "periode": "1900", "missions": ["Radium"]}],
+              "projets": [{"nom": "Polonium", "description": "Découverte."}], "publications": "Thèse 1903",
+              "formations": [{"diplome": "Doctorat", "etablissement": "Sorbonne", "periode": "1903"}],
+              "ordre": ["profil", "competences", "experiences", "projets", "publications", "formations"]}
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            with zipfile.ZipFile(t / "source.docx", "w") as z:
+                z.writestr("word/media/image1.png", b"\x89PNG fake photo")
+            (t / "cv.json").write_text(json.dumps(cv))
+            r = subprocess.run([sys.executable, "-I", str(self.D / "cv_pro.py"), "cv.json", "cv.html"], cwd=t, check=True, capture_output=True, text=True)
+            out = (t / "cv.html").read_text()
+        for x in ("Institut", "1900", "Radium", "Polonium", "Découverte.", "Thèse 1903", "Sorbonne", "Bases de données",
+                  "Python, C", "Anglais", "courant", "m@c.fr", 'class="photo"'):
+            self.assertIn(x, out)
+        self.assertIn("3 compétence(s), 1 langue(s), autres rubriques : Projets (1), Publications, photo : oui", r.stdout)
+        self.assertLess(out.index("Projets"), out.index("Publications"))
+        self.assertLess(out.index("Publications"), out.index("Formation"))
+
     def test_cv_photo_from_the_word_file(self):
         import zipfile
         with tempfile.TemporaryDirectory() as t:
@@ -1092,6 +1116,10 @@ class PdfPro(unittest.TestCase):
         self.assertEqual(naimtools.finals([{"path": "site/index.html"}]), [{"path": "site/index.html"}])
         cv = [{"path": p} for p in ("j/lettre.txt", "j/textes.json", "j/CV.pdf", "j/Lettre.pdf", "notes.txt")]
         self.assertEqual([f["path"] for f in naimtools.finals(cv)], ["j/CV.pdf", "j/Lettre.pdf", "notes.txt"])
+
+    def test_drafts_hidden_whatever_the_case_of_the_folder(self):
+        files = [{"path": "~/Documents/naim/J/CV.pdf"}, {"path": "~/Documents/Naim/J/cv.json"}]
+        self.assertEqual([f["path"] for f in naimtools.finals(files)], ["~/Documents/naim/J/CV.pdf"])
 
     def test_a_pdf_made_outside_the_project_is_shown(self):
         # a CV written in the attachment's folder by a command, while the app's folder is another project

@@ -645,11 +645,12 @@ def finals(files):
     if not pdfs:
         return files
     stems = {re.sub(r"\.pdf$", "", p, flags=re.I) for p in pdfs}
-    beside = {os.path.dirname(p) for p in pdfs}
+    folder = lambda p: os.path.dirname(os.path.expanduser(str(p))).lower()  # the Mac ignores case: naim = Naim
+    beside = {folder(p) for p in pdfs}
     def draft(path):
         low = str(path).lower()
         return (low.endswith((".html", ".htm")) or any(re.fullmatch(re.escape(s) + r"\.page\d+\.png", str(path), re.I) for s in stems)
-                or (low.endswith((".txt", ".json")) and os.path.dirname(str(path)) in beside))
+                or (low.endswith((".txt", ".json")) and folder(path) in beside))
     return [f for f in files if not draft(f["path"])]
 
 

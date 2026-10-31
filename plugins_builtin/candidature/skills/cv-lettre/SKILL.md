@@ -34,14 +34,16 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
   Le format de cv.json est en tête du script (lis-le avec read_file si besoin) : nom, titre, contact, profil,
   experiences, formations, sections (Projets, Publications, Certifications…), competences, langues, et « ordre »
   (l'ordre des rubriques du CV source, ex. ["profil", "competences", "experiences", "Projets", "formations"]).
-  Une photo demandée : `"photo"` = le chemin de l'image jointe, ou du CV Word joint (sa photo est prise dedans) ;
-  ronde, en haut à droite. N'écris jamais une image avec creer_fichier ou write_file (ce sont des fichiers texte).
+  Écris cv.json avec les clés du script (sinon il les range au mieux et le dit). Le CV Word source a une photo : le
+  script la reprend tout seul quand cv.json est dans le dossier du Word (« photo : prise dans … ») ; autre photo :
+  `"photo"` = le chemin de l'image ; pas de photo voulue : `"photo": ""`. Ronde, en haut à droite. N'écris jamais une image avec creer_fichier ou write_file (ce sont des fichiers texte).
   Où est la photo : 1. le Word joint (read_file finit par « Images dans ce document : … » : donne le .docx) ;
   2. une image jointe ou un chemin donné par l'utilisateur (copie-le tel quel, entre guillemets) ;
   3. sinon DEMANDE-la avec ask_user. Ne cherche jamais une photo de la personne sur le Mac : une image au hasard
   (un schéma, une capture) dans un CV est pire que pas de photo.
   Fidèle = chaque poste, chaque diplôme, chaque projet, chaque date du source, avec ses lignes ; rien de retiré,
-  rien d'ajouté. Le script donne les nombres (expériences, formations…) : compare-les avec le source. Pour corriger :
+  rien d'ajouté. Le script donne les nombres (expériences, formations, compétences, langues, autres rubriques, photo) :
+  compare CHACUN avec le source. Un 0 ou une rubrique absente alors que le source l'a = le CV n'est pas fini. Pour corriger :
   change cv.json et relance la même commande (jamais d'édition du .html à la main).
 
 ## 3. La lettre « avec le même style » : avec le script, jamais à la main
@@ -64,4 +66,4 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
 2. `look_at` du PDF : le style est-il celui du modèle ? CV en 1-2 pages, lettre en 1 page ? Sinon corrige le .html
    (resserre les marges ou le texte) et reconvertis.
 3. Réponds avec les chemins exacts des PDF (le CV, la lettre) et ce qui a été enrichi. Seulement les PDF : les .html,
-   .pro.html, textes.json et lettre.txt sont des brouillons, on ne les cite pas. Jamais un fichier vide ou sans nom.
+   .pro.html, cv.json, textes.json et lettre.txt sont des brouillons, on ne les cite pas. Jamais un fichier vide ou sans nom.
