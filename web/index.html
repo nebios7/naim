@@ -2293,7 +2293,7 @@ const DEFAULTS = {
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   external_on: false, external_provider: "cli", external_cli: "", external_url: "", external_model: "", external_key: "", external_timeout: 900,
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
-  notify: true, sound: false, mic_sounds: true, self_check: true, show_stats: true, show_time: false, wrap_code: false, code_light: "naim", code_dark: "naim", code_font: "", code_size: 0,
+  notify: true, sound: false, mic_sounds: true, self_check: true, show_stats: true, show_time: false, wrap_code: false, code_light: "naim", code_dark: "naim", code_font: "", code_size: 0, ui_font: "",
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
@@ -5946,6 +5946,8 @@ function applyCodeTheme() {
   const font = String(S.code_font || "").trim().replace(/["\\;{}<>]/g, "");
   if (font) css += `${CODE_BLOCKS}, .md code, .bubble code.uinline, .alabel code, .mono { font-family: "${font}", ui-monospace, "SF Mono", Menlo, monospace !important; }`;
   if (+S.code_size) css += `${CODE_BLOCKS} { font-size: ${+S.code_size}px !important; }`;
+  const ui = String(S.ui_font || "").trim().replace(/["\\;{}<>]/g, "");  // Naim's own writing: messages, menus, settings
+  if (ui) css += `body, :root[data-theme] body { font-family: "${ui}", -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important; }`;
   el.textContent = css;
 }
 // the little diff of the settings, in one palette (whatever the app's theme is now)
@@ -5955,10 +5957,11 @@ function codePreview(side, id) {
   return `<div class="cprev" style="${codeVars(v)}">${line(1, "function greet(name: string) {")}${line(2, '  return "Hello, " + name;', "d")}${line(2, "  return `Hello, ${name}!`;", "a")}${line(3, "}")}</div>`;
 }
 const codeAppearanceHTML = () => `<div class="sgroup">
-      <div class="srow col"><div class="sl"><b>Apparence du code</b><small>Les couleurs du code, des diffs et du terminal : une palette pour le thème clair, une pour le sombre.</small></div>
+      <div class="srow col"><div class="sl"><b>Apparence</b><small>Les couleurs du code, des diffs et du terminal : une palette pour le thème clair, une pour le sombre.</small></div>
         <div class="cthemes">${["light", "dark"].map((side) => `<div class="ctheme">${sel(side === "light" ? "code_light" : "code_dark",
           Object.entries(CODE_THEMES[side]).map(([k, [name]]) => [k, name]))}<div data-cprev="${side}">${codePreview(side, S[side === "light" ? "code_light" : "code_dark"])}</div></div>`).join("")}</div></div>
       ${row("Police de code", "Une police à chasse fixe installée sur le Mac, pour le code et le terminal. Vide = la police du système.", `<input class="field" type="text" data-k="code_font" value="${esc(S.code_font)}" placeholder="p. ex. JetBrains Mono" style="width:220px">`)}
+      ${row("Police de Naim", "L'écriture de toute l'interface : messages, réponses, menus, réglages. Vide = Inter, la police d'origine.", `<input class="field" type="text" list="uiFonts" data-k="ui_font" value="${esc(S.ui_font)}" placeholder="p. ex. SF Pro, Avenir Next" style="width:220px"><datalist id="uiFonts">${["Inter", "SF Pro Text", "Helvetica Neue", "Avenir Next", "Gill Sans", "Optima", "Iowan Old Style", "Charter", "Georgia", "Palatino"].map((f) => `<option value="${f}">`).join("")}</datalist>`)}
       ${row("Taille du texte de la conversation", "Messages, réponses de Naim et étapes.", sel("font_size", [...new Set([12, 13, 14, 15, 16, 17, 18, 20, 22, +S.font_size])].sort((a, b) => a - b).map((n) => [n, n === 15 ? "Par défaut · 15 px" : `${n} px`])))}
       ${row("Taille de police du code", "Fichiers ouverts, diffs, blocs de code, sortie des commandes et terminal.", sel("code_size", [[0, "Par défaut"], ...[11, 12, 13, 14, 15, 16, 17, 18, 20, 22].map((n) => [n, `${n} px`])]))}
     </div>`;
