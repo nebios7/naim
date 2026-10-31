@@ -1136,9 +1136,10 @@ def match_skill(task, root=None, disabled=()):
     # a skill the user names (« utilise design-style-gitingest ») is that one, before any guess from the words
     for s in sorted(skills, key=lambda s: -len(s["name"])):
         if len(s["name"]) >= 4 and re.search(rf"(?<![\w-]){re.escape(s['name'].lower())}(?![\w-])", text):
-            # a skill whose name is an ordinary word (« le voici en format word ») is not named when the request is
-            # about a work whose skill makes the document (a CV, a house plan): that work's method decides
-            if (s["name"] in SKILL_TRIGGERS and not re.search(rf"\bskills?\W+{re.escape(s['name'].lower())}\b", text)
+            # a skill whose name is an ordinary word (« le voici en format word ») or a style (« le style pdf-pro ») is
+            # not named when the request is about a work whose skill makes the document in that style (a CV, a house
+            # plan): that work's method decides
+            if ((s["name"] in SKILL_TRIGGERS or s["name"] in after_specific) and not re.search(rf"\bskills?\W+{re.escape(s['name'].lower())}\b", text)
                     and any(n in by_name and re.search(triggers[n], text) for n in OWN_DOCUMENT)):
                 continue
             # a subject named inside a document to make (« un cours sur COBOL en PDF »): the document's skill gives the

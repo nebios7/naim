@@ -31,6 +31,8 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
    avec `write_file(page.html, …)`, puis CHAQUE chapitre avec `write_file(page.html, <le chapitre>, append=true)`.
 4. `pdfpro.py render page.html document.pdf`, puis `pdfpro.py check document.pdf` et look_at sur les deux PNG :
    rien de coupé, formules affichées, graphiques lisibles. Corrige page.html et relance si besoin.
+   Avant de dire « c'est fait » : compare avec la demande et les sources (chaque chapitre, chaque élément demandé) ;
+   n'annonce que ce que tu as vu sur la page. Si quelque chose bloque, dis-le au lieu d'improviser un autre format.
 5. Copie le PDF dans le dossier du projet ouvert (ou `~/Documents/Naim/Fichiers`) et donne son chemin : seulement
    le PDF. `page.html`, `page.pro.html` et les PNG sont tes brouillons : ne les présente pas, n'en crée pas d'autres
    (une suite de cours = un nouveau dossier avec SON page.html et SON PDF, jamais des séance1.html, séance2.html…).
@@ -68,6 +70,7 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
   « Ce que dit le courrier », « Points d'attention » (`callout warn`), « Ce qu'il faut faire » (tableau action ·
   échéance · priorité avec `tag`), et les chiffres du courrier en tableau ou en graphique.
 - **Rapport / statistiques** : chiffres clés en `kpis`, un graphique par message important, tableaux sourcés.
-- **CV et lettre de motivation** : skill cv-lettre, avec le modèle `$T/exemples/cv.html` (déjà dans ce style).
+- **CV et lettre de motivation** : ce n'est PAS ce skill. Charge le skill cv-lettre (use_skill) et suis-le : son
+  script fait le CV dans ce style, avec tous les postes et la photo, même quand l'utilisateur dit « style pdf-pro ».
 - **Plan d'architecte** : le plan en SVG (skill plan-maison pour les pièces et les cotes), une pièce par ligne de
   tableau (nom, surface m², orientation), un encadré par contrainte (normes, budget).

@@ -700,6 +700,25 @@ class SkillScripts(unittest.TestCase):
         t = "le pdf du cv n'est pas fidèle a ce que j'ai fourni, le voici à nouveau format word, tu vas générer le pdf"
         self.assertEqual((extensions.match_skill(t, extensions.HOME, set()) or {}).get("name"), "cv-lettre")
         self.assertEqual((extensions.match_skill("utilise le skill word pour ce rapport", extensions.HOME, set()) or {}).get("name"), "word")
+        t = "Fais mon CV en PDF avec le style pdf-pro à partir de ce Word, avec ma photo à droite"
+        self.assertEqual((extensions.match_skill(t, extensions.HOME, set()) or {}).get("name"), "cv-lettre")  # a style, not the method
+
+    def test_word_tells_its_pictures(self):
+        import zipfile
+        import docs
+        with tempfile.TemporaryDirectory() as t:
+            f = Path(t) / "cv.docx"
+            with zipfile.ZipFile(f, "w") as z:
+                z.writestr("word/media/image1.png", b"x" * 3000)
+            self.assertIn("Images dans ce document : image1.png", docs.pictures_of(f))
+
+    def test_typographic_apostrophe(self):
+        with tempfile.TemporaryDirectory() as t:
+            real = Path(t) / "Capture d\u2019écran 1.png"
+            real.write_bytes(b"png")
+            a = naimtools.Agent(t, "naim")
+            self.assertEqual(a.resolve(str(Path(t) / "Capture d'écran 1.png")), real.resolve())
+            self.assertIn(str(real), a._apostrophe_hint(f'cp "{t}/Capture d\'écran 1.png" /tmp/x.png'))
 
 
 

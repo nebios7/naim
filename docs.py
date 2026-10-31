@@ -104,6 +104,21 @@ def pptx_text(path):
     return "\n\n".join(parts), f"{len(slides)} diapositives"
 
 
+def pictures_of(path):
+    """The pictures inside a Word file (a CV's photo…), told after its text: the text alone does not show them."""
+    import zipfile
+    try:
+        with zipfile.ZipFile(path) as z:
+            pics = [i for i in z.infolist() if i.filename.startswith("word/media/") and not i.filename.endswith("/")]
+    except (OSError, zipfile.BadZipFile):
+        return ""
+    if not pics:
+        return ""
+    names = ", ".join(f"{Path(i.filename).name} ({max(1, i.file_size // 1024)} Ko)" for i in pics[:8])
+    return (f"\n\n[Images dans ce document : {names}. Elles sont DANS le fichier (une photo de CV en fait partie) : "
+            f"pour en sortir une, unzip -o -j \"{path}\" word/media/<nom> -d <dossier>.]")
+
+
 def extract(path):
     """(text, short note) of a document; raises DocError."""
     path = Path(path)
@@ -116,6 +131,8 @@ def extract(path):
         text, note = pptx_text(path)
     elif ext in (".docx", ".doc", ".rtf", ".odt", ".html", ".webarchive", ".pages"):
         text, note = textutil(path)
+        if ext == ".docx":
+            text += pictures_of(path)
     else:
         raise DocError(f"format {ext or 'inconnu'} non pris en charge")
     text = re.sub(r"\n{3,}", "\n\n", text).strip()

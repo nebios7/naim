@@ -932,6 +932,26 @@ class Agent:
     PRIVATE_HOME = (".ssh", ".gnupg", ".aws", ".config/gh", "Library/Keychains", "Library/Cookies", "Library/Messages",
                     "Library/Mail", "Library/Safari", "Library/Application Support/Google/Chrome", ".naim/admin")
 
+    @staticmethod
+    def _apostrophe_twin(path):
+        """The Mac writes « Capture d’écran » with a typographic apostrophe; a name typed with ' (or the reverse) is the
+        same file: the one that exists, else None."""
+        for alt in (path.replace("'", "’"), path.replace("’", "'")):
+            if alt != path and os.path.exists(alt):
+                return alt
+        return None
+
+    def _apostrophe_hint(self, command):
+        """A command failed on a name with the wrong apostrophe: the exact path, to use as it is."""
+        found = []
+        for q in re.findall(r'"([^"]+)"|\'([^\']+)\'|(\S*[’\'][^\s"]*)', command):
+            p = next(x for x in q if x) if any(q) else ""
+            p = os.path.expanduser(p.replace("\\ ", " "))
+            twin = self._apostrophe_twin(p) if p else None
+            if twin and twin not in found:
+                found.append(twin)
+        return "".join(f"\n[Le vrai nom a une autre apostrophe : utilise exactement ce chemin, entre guillemets : \"{t}\"]" for t in found)
+
     def _localized(self, path):
         """« ~/Téléchargements/x » → ~/Downloads/x (only right under the home folder, when the French name does not exist)."""
         home = Path.home()
@@ -958,6 +978,8 @@ class Agent:
         path = self._undouble(os.path.expanduser(str(path or ".")))  # « ~/… » is the user's home, as in the Terminal
         path = self._localized(path)
         p = (self.root / path).resolve()
+        if not p.exists() and ("'" in path or "’" in path):  # « Capture d'écran » typed, « Capture d’écran » on disk
+            p = Path(self._apostrophe_twin(str(p)) or p)
         if p != self.root and self.root not in p.parents:
             if read and self._readable_home(p):  # read-only outside the project: writing stays in the project
                 return p
@@ -3117,6 +3139,8 @@ class Agent:
         cut = isinstance(args, dict) and args.pop("_maybe_cut", False)
         try:
             result = fn(**args)
+            if name == "run_command" and isinstance(result, str) and "No such file or directory" in result:
+                result += self._apostrophe_hint(str(args.get("command", "")))
         except TypeError as e:
             if name == "write_file" and "missing" in str(e):
                 # a very long file in one call: its path or its content gets lost on the way — written in parts it works

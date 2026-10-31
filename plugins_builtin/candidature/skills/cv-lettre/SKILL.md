@@ -36,6 +36,10 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
   (l'ordre des rubriques du CV source, ex. ["profil", "competences", "experiences", "Projets", "formations"]).
   Une photo demandée : `"photo"` = le chemin de l'image jointe, ou du CV Word joint (sa photo est prise dedans) ;
   ronde, en haut à droite. N'écris jamais une image avec creer_fichier ou write_file (ce sont des fichiers texte).
+  Où est la photo : 1. le Word joint (read_file finit par « Images dans ce document : … » : donne le .docx) ;
+  2. une image jointe ou un chemin donné par l'utilisateur (copie-le tel quel, entre guillemets) ;
+  3. sinon DEMANDE-la avec ask_user. Ne cherche jamais une photo de la personne sur le Mac : une image au hasard
+  (un schéma, une capture) dans un CV est pire que pas de photo.
   Fidèle = chaque poste, chaque diplôme, chaque projet, chaque date du source, avec ses lignes ; rien de retiré,
   rien d'ajouté. Le script donne les nombres (expériences, formations…) : compare-les avec le source. Pour corriger :
   change cv.json et relance la même commande (jamais d'édition du .html à la main).
@@ -50,6 +54,10 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
 4. Pas de .docx ni de .txt à rendre sauf si l'utilisateur le demande : un .docx joint est une SOURCE de contenu.
 
 ## 4. Livrer et vérifier
+0. Avant de dire « c'est fait » : compare avec la source en nombres (postes, diplômes, projets, comme le script les
+   donne), regarde CHAQUE page avec look_at, et vérifie de tes yeux chaque chose demandée (la photo, la couleur, le
+   destinataire de la lettre, le texte que l'utilisateur a fourni). Tu n'écris « avec photo » que si tu l'as vue.
+   Si quelque chose bloque, dis-le et demande : n'improvise pas un autre format (Word, image) à la place.
 1. Les deux scripts font AUSSI le PDF (style pdf-pro, A4), à côté du .html : leur dernière ligne dit « PDF : <chemin> ».
    Rien à convertir. S'ils disent « PDF non fait », utilise l'outil `convert_document` (un outil, pas une commande du
    Terminal). Si tu modifies un .html après coup, refais son PDF avec la commande que le script a donnée.
