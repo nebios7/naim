@@ -41,6 +41,8 @@ description: Faire ou enrichir un CV et une lettre de motivation, dans le style 
   2. une image jointe ou un chemin donné par l'utilisateur (copie-le tel quel, entre guillemets) ;
   3. sinon DEMANDE-la avec ask_user. Ne cherche jamais une photo de la personne sur le Mac : une image au hasard
   (un schéma, une capture) dans un CV est pire que pas de photo.
+  Une couleur demandée (« trait gris », « en bleu ») : `"couleur": "gris"` dans cv.json (ou moi.json) ; la lettre
+  faite depuis le CV garde sa couleur. Rien de demandé : pas de clé, c'est l'orange.
   Fidèle = chaque poste, chaque diplôme, chaque projet, chaque date du source, avec ses lignes ; rien de retiré,
   rien d'ajouté. Le script donne les nombres (expériences, formations, compétences, langues, autres rubriques, photo) :
   compare CHACUN avec le source. Un 0 ou une rubrique absente alors que le source l'a = le CV n'est pas fini. Pour corriger :

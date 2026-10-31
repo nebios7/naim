@@ -89,7 +89,7 @@ def main():
         import cv_pro
         facts = cv_pro.tidy({**json.loads(cv.read_text()), "kicker": "Candidature"})
         model = cv_pro.MODEL.read_text(errors="replace")
-        head = model[:re.search(r"<body\b[^>]*>", model, re.I).end()].replace("</head>", cv_pro.KEEP + "</head>", 1)
+        head = model[:re.search(r"<body\b[^>]*>", model, re.I).end()].replace("</head>", cv_pro.KEEP + cv_pro.accent(facts.get("couleur")) + "</head>", 1)
         source = f"{head}\n<main>\n{cv_pro.body({k: facts.get(k) for k in ('nom', 'titre', 'kicker', 'photo', 'contact')})}\n</main>\n</body>\n</html>\n"
     else:
         source = cv.read_text(errors="replace")

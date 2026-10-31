@@ -2,7 +2,8 @@
 """pdf-pro: Naim's professional PDFs, with nothing to install (Python's standard library, the Mac's print engine
 naim-pdf, the KaTeX already shipped with Naim).
 
-  pdfpro.py render <page.html> <sortie.pdf>       the theme, the formulas, the coloured code, then the A4 PDF
+  pdfpro.py render <page.html> <sortie.pdf> [couleur]   the theme, the formulas, the coloured code, then the A4 PDF
+                                                  (couleur: gris, bleu, vert, rouge, noir, marine… or #rrggbb; orange by default)
   pdfpro.py chart <bars|hbars|line|donut> <données.json> <sortie.svg> ["titre"] [small]
                                                   a chart in the theme's colours, to put in a <figure>
                                                   (small: for two charts side by side in <div class="grid2">)
@@ -86,7 +87,8 @@ def color_code(body):
 def page(body, title="Document"):
     if re.search(r"<html[\s>]", body, re.I):  # a whole page already: the theme joins its head
         head_extra = f'<style>{(HERE / "theme.css").read_text()}</style>'
-        return re.sub(r"</head>", head_extra + _katex() + "</head>", body, count=1, flags=re.I) if "</head>" in body.lower() else body
+        asked = "".join(re.findall(r"<style>:root\{--clay:[^<]*</style>", body))  # a colour asked (« gris »): after the theme, it wins
+        return re.sub(r"</head>", lambda m: head_extra + asked + _katex() + "</head>", body, count=1, flags=re.I) if "</head>" in body.lower() else body
     t = re.search(r"<h1[^>]*>(.*?)</h1>", body, re.S)
     title = re.sub(r"<[^>]+>", "", t.group(1)).strip() if t else title
     return (f'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{html.escape(title)}</title>'
@@ -107,10 +109,32 @@ def _katex():
             "});</script>")
 
 
-def render(src, out):
+# the accent of the theme (lines, small titles, numbers), orange unless the user asks for another colour
+ACCENTS = {"orange": "#c96442", "gris": "#7a7a74", "noir": "#2b2a28", "bleu": "#3b6ea8", "marine": "#2c4a74",
+           "vert": "#4f8a5b", "rouge": "#b4473f", "bordeaux": "#8a2e3b", "violet": "#7a5aa6", "turquoise": "#2a8c8c",
+           "jaune": "#b7862b", "or": "#a8842c", "rose": "#c25b86", "marron": "#8a5a3c"}
+
+
+def accent_css(name):
+    """« gris », « bleu », « #4a7bd0 »… -> the style that gives the theme that accent ("" for the default orange)."""
+    name = str(name or "").strip().lower()
+    if not name or name == "orange":
+        return ""
+    col = ACCENTS.get(name) or (name if re.fullmatch(r"#[0-9a-f]{6}", name) else None)
+    if not col:
+        sys.exit(f"erreur : couleur inconnue « {name} ». Possibles : {', '.join(ACCENTS)}, ou un code #rrggbb.")
+    r, g, b = (int(col[i:i + 2], 16) for i in (1, 3, 5))
+    soft = "#%02x%02x%02x" % tuple(round(v + (255 - v) * .84) for v in (r, g, b))
+    return f"<style>:root{{--clay:{col};--clay-soft:{soft}}}</style>"
+
+
+def render(src, out, couleur=""):
     src, out = Path(src).expanduser().resolve(), Path(out).expanduser().resolve()
     full = src.with_name(src.stem + ".pro.html")  # next to the page: its images (img/…) keep their relative paths
-    full.write_text(page(src.read_text()))
+    built = page(src.read_text())
+    if couleur:
+        built = re.sub(r"</head>", lambda m: accent_css(couleur) + "</head>", built, count=1, flags=re.I)
+    full.write_text(built)
     r = subprocess.run([str(NAIM_PDF), str(full), str(out), "A4"], capture_output=True, text=True, timeout=180)
     if r.returncode != 0 or not out.is_file():
         sys.exit("erreur : " + (r.stderr or r.stdout).strip()[-400:])
@@ -255,7 +279,7 @@ def chart(kind, data_file, out, title="", size=""):
 if __name__ == "__main__":
     a = sys.argv[1:]
     if len(a) >= 3 and a[0] == "render":
-        render(a[1], a[2])
+        render(a[1], a[2], a[3] if len(a) > 3 else "")
     elif len(a) >= 4 and a[0] == "chart":
         chart(a[1], a[2], a[3], a[4] if len(a) > 4 else "", a[5] if len(a) > 5 else "")
     elif len(a) >= 2 and a[0] == "check":

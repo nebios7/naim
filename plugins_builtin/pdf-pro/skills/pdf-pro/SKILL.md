@@ -9,6 +9,11 @@ C'est le style par défaut de TOUS tes PDF, même quand l'utilisateur ne le nomm
 Un PDF, un Word ou un texte donné « à mettre en PDF » : read_file pour son texte (mot pour mot), puis écris-le en HTML
 avec les classes ci-dessous et `render`. Jamais python-docx ni un .docx au milieu, jamais un CSS à toi.
 
+Une couleur demandée (« trait gris », « en bleu », « couleur bordeaux ») : ajoute-la à la fin de la commande render
+(`pdfpro.py render page.html sortie.pdf gris`) : traits, petits titres et chiffres prennent cette couleur, le reste
+du style ne change pas. Possibles : gris, noir, bleu, marine, vert, rouge, bordeaux, violet, turquoise, jaune, or,
+rose, marron, ou un code #rrggbb. Rien de demandé : orange, ne mets rien.
+
 Tu ne fais PAS de design : le style est déjà fait (`theme.css`, couleurs chaudes, titres élégants, tout en A4).
 Tu écris seulement le contenu en HTML simple, avec les classes ci-dessous, puis l'outil fait le PDF.
 Rien à installer : pas de pip, pas de matplotlib, pas de bibliothèque. L'outil (les chemins exacts) :

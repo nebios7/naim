@@ -808,6 +808,16 @@ class SkillScripts(unittest.TestCase):
         t = "Fais mon CV en PDF avec le style pdf-pro à partir de ce Word, avec ma photo à droite"
         self.assertEqual((extensions.match_skill(t, extensions.HOME, set()) or {}).get("name"), "cv-lettre")  # a style, not the method
 
+    def test_colour_asked(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        self.assertEqual(pp.accent_css(""), "")
+        self.assertIn("--clay:#7a7a74", pp.accent_css("gris"))
+        self.assertIn("--clay:#123456", pp.accent_css("#123456"))
+        page = pp.page('<html><head><style>:root{--clay:#7a7a74;--clay-soft:#eee}</style></head><body>x</body></html>')
+        self.assertGreater(page.rindex("--clay:#7a7a74"), page.index("--clay: #c96442"))  # the colour asked wins over the theme
+
     def test_any_pdf_to_make_is_pdf_pro(self):
         import extensions
         name = lambda t: (extensions.match_skill(t, extensions.HOME, set()) or {}).get("name")  # noqa: E731

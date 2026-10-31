@@ -6,6 +6,7 @@ has two jobs and one diploma: filling it would drop the rest), then the PDF in t
 cv.json (only what the source gives; a missing key is simply not shown):
 {
   "nom": "Prénom NOM", "titre": "Poste visé", "kicker": "Curriculum vitæ", "photo": "/chemin/de/la/photo.jpg",
+  "couleur": "gris",   (facultatif : gris, bleu, vert, rouge, noir, marine… ou #rrggbb ; orange sinon)
   "contact": [["Tél.", "06 …"], ["E-mail", "…"], ["Ville", "…"], ["En ligne", "GitHub", "https://github.com/…"]],
   "profil": "Deux ou trois phrases.",
   "experiences": [{"quand": "2023 — 2025", "poste": "…", "ou": "Entreprise · Ville", "points": ["…", "…"]}],
@@ -43,6 +44,17 @@ TIGHT = ["",
          "<style>@page{margin:12mm 14mm}body{font-size:8.9pt;line-height:1.35}header h1{font-size:21pt}.poste{grid-template-columns:"
          "25mm 1fr;margin-bottom:2mm}.poste h3{font-size:10.3pt}.poste .ou{margin:0 0 .8mm}section.carte{margin-bottom:3mm}"
          "p.profil{font-size:9.2pt}</style>\n"]
+
+
+def accent(name):
+    """The accent the user asked for (« gris », « bleu », #rrggbb), from pdf-pro: "" for its orange."""
+    if not name or not PDFPRO.exists():
+        return ""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("naim_pdfpro", PDFPRO)
+    pro = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pro)
+    return pro.accent_css(name)
 
 
 def esc(t):
@@ -97,7 +109,7 @@ TITLES = {"projets": "Projets", "publications": "Publications", "certifications"
           "centres_interet": "Centres d'intérêt", "interets": "Centres d'intérêt", "loisirs": "Loisirs", "references": "Références"}
 GROUPS = {"basesdedonnees": "Bases de données", "systemes": "Systèmes", "methodes": "Méthodes", "reseaux": "Réseaux",
           "securite": "Sécurité", "logiciels": "Logiciels", "electronique": "Électronique"}
-KNOWN = {"nom", "titre", "kicker", "photo", "contact", "profil", "experiences", "formations", "sections", "competences",
+KNOWN = {"nom", "titre", "kicker", "photo", "couleur", "contact", "profil", "experiences", "formations", "sections", "competences",
          "langues", "ordre"}
 
 
@@ -248,9 +260,10 @@ def main():
     cv = tidy(cv)
     model = MODEL.read_text(errors="replace")
     page = f"<main>\n{body(cv)}\n</main>\n</body>\n</html>\n"
+    color = accent(cv.get("couleur"))  # « trait gris », « en bleu »: the lines and small titles in that colour
 
     def write(level=0):
-        head = model[:re.search(r"<body\b[^>]*>", model, re.I).end()].replace("</head>", KEEP + TIGHT[level] + "</head>", 1)
+        head = model[:re.search(r"<body\b[^>]*>", model, re.I).end()].replace("</head>", KEEP + TIGHT[level] + color + "</head>", 1)
         dst.write_text(f"{head}\n{page}")
     write()
     comp = cv.get("competences") or {}
