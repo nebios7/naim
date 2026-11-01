@@ -3517,7 +3517,8 @@ function renderThread() {
          ["file", "Document", "Fais-moi un PDF d'une page qui présente mon projet"],
          ["script", "Script", "Écris un script Bash qui sauvegarde un dossier chaque jour avec rotation"],
          ["mail2", "E-mail", "Rédige un email professionnel pour relancer un client poliment"],
-         ["bulb", "Expliquer", "Explique async/await en JavaScript avec des exemples simples"]];
+         ["bulb", "Expliquer", "Explique async/await en JavaScript avec des exemples simples"],
+         ["check", "Quiz", "Fais-moi un quiz de 5 questions sur "]];
     const hb = $("#homeBelow"); hb.hidden = false;
     hb.innerHTML = `<div class="hchips">${chips.map(([ic, l, p]) => `<button class="hchip" data-p="${esc(p)}" title="${esc(p)}">${svgI(ic)}${esc(l)}</button>`).join("")}</div>
       ${rec.length ? `<div class="hrec"><div class="hrt">Récents</div>${rec.slice(0, 5).map((c) => `<button class="hrow" data-open="${c.id}">${svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat")}<span class="hrn">${esc((c.title || "Sans titre").replace(/^⏱\s*/, ""))}</span><span class="hrw">${relTime(c.updated)}</span></button>`).join("")}</div>` : ""}`;
