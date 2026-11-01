@@ -617,7 +617,8 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                     total, done = pp.get("total") or 0, (pp.get("processed") or 0)
                     if total > 2000 and time.time() - told > 1.0:
                         told = time.time()
-                        yield {"message": {}, "done": False, "writing": {"reading": True, "done": done, "total": total}}
+                        talk = sum(1 for m in messages if m.get("role") in ("user", "assistant", "tool")) > 2  # a real exchange behind it
+                        yield {"message": {}, "done": False, "writing": {"reading": True, "done": done, "total": total, "talk": talk}}
                     continue
                 if ev.get("error"):  # the engine failed in the middle of the answer: said, not an empty reply
                     err = ev["error"] if isinstance(ev["error"], str) else (ev["error"].get("message") or json.dumps(ev["error"]))
