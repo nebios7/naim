@@ -2252,7 +2252,7 @@ class Agent:
         _, body = ext.parse_skill(Path(s["path"]))
         files = f"\n\nFiles in the skill folder ({Path(s['path']).parent}): " + ", ".join(s["files"]) if s["files"] else ""
         self.emit({"type": "skill", "name": s["name"]})
-        return f"# Skill {s['name']}\n{body}{files}"
+        return f"{ext.skill_situation(s['name'], self.root, getattr(self, "_task_words", None))}# Skill {s['name']}\n{body}{files}"
 
     def create_skill(self, name, description, instructions, scope="utilisateur"):
         preview = f"name: {ext.slugify(name)}\ndescription: {description}\n\n{instructions}"
@@ -3748,7 +3748,7 @@ class Agent:
                                                                    self.root, self.disabled_skills)) or look)):
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
-            task = f"{task}\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
+            task = f"{task}\n\n{ext.skill_situation(sk['name'], self.root, task)}[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
             import libs
             if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
                 task += "\n\n" + lp

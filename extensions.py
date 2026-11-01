@@ -1136,6 +1136,28 @@ SKILL_TRIGGERS = {
 }
 
 
+def skill_situation(name, root, text=None):
+    """What the skill means HERE, said before its method: a course already written in numbered .md chapters in the work
+    folder becomes its PDF in one step (it rewrote 13 chapters by hand for 79 minutes, then the render failed)."""
+    if name != "pdf-pro" or not root:
+        return ""
+    if text is not None and not re.search(r"(?i)\b(cours|chapitres?|le[çc]ons?|\.md|markdown|ces fichiers|tous les fichiers|tout le|du dossier|le pdf du)\b", str(text)):
+        return ""  # another PDF asked in this folder (« mets ce texte en pdf »): not the course
+    try:
+        folder = Path(root)
+        chapters = sorted((f.name for f in folder.glob("*.md") if re.match(r"\d{1,3}[-_ .]", f.name)),
+                          key=lambda n: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", n)])
+    except OSError:
+        return ""
+    if len(chapters) < 2:
+        return ""
+    start = "README.md" if (folder / "README.md").is_file() else chapters[0]
+    return (f"[À FAIRE ICI, avant tout : ce dossier contient déjà un cours écrit en {len(chapters)} chapitres .md "
+            f"({chapters[0]} … {chapters[-1]}). Pour son PDF, NE RELIS PAS et NE RÉÉCRIS PAS les chapitres : un seul appel, "
+            f"convert_document source=\"{start}\" output=\"{folder.name}.pdf\" (il met tout le cours, dans l'ordre, avec "
+            f"couverture et sommaire, au style pdf-pro). Puis look_at du PDF, et donne son chemin.]\n\n")
+
+
 PDF_TOOL_RE = re.compile(r"\b(fusionn\w*|assembl\w*|d[ée]coup\w*|s[ée]par\w*|divis\w*|extrai\w*|compress\w*|all[ée]g\w*|"
                          r"pivot\w*|tourn\w*|rotat\w*|sign\w*|filigrane|watermark|ocr|formulaire|rempli\w*|chiffr\w*|"
                          r"d[ée]verrouill\w*|mot de passe|prot[ée]g\w*|merge|split|pages? \d)")

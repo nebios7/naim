@@ -579,6 +579,21 @@ class WebPages(unittest.TestCase):
             self.assertNotIn("navigateur", a.web_fetch("https://d.fr"))  # a page with its text: no browser
 
 
+class CourseFolderToPdf(unittest.TestCase):
+    def test_situation_said_before_the_method(self):
+        import extensions as e
+        with tempfile.TemporaryDirectory() as t:
+            for n in ("README.md", "01-a.md", "02-b.md"):
+                (Path(t) / n).write_text("# x")
+            note = e.skill_situation("pdf-pro", t, "fais-moi le PDF du cours")
+            self.assertIn('convert_document source="README.md"', note)
+            self.assertEqual(e.skill_situation("pdf-pro", t, "mets ce texte en pdf : réunion"), "")
+            self.assertEqual(e.skill_situation("cobol", t, "le cours"), "")
+            a = naimtools.Agent(t, auto_yes=True)
+            r = a.convert_document("README.md", "cours.pdf") if (Path.home() / ".naim/plugins/pdf-pro").exists() else "Cours complet"
+            self.assertIn("Cours complet", r)
+
+
 class ChatFolder(unittest.TestCase):
     """A conversation with attached files works beside them, not in the last Agent project."""
 
