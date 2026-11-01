@@ -2529,10 +2529,26 @@ class Agent:
             return f"error: file not found: {path}"
         if p.suffix.lower() in (".xlsx", ".xlsm", ".csv"):  # a table has no page to look at: its cells, as text
             return self.read_file(path)[:6000] + "\n\n(Tableau lu en texte : vérifie les colonnes et les valeurs.)"
+        shown, tmp = p, None
+        pro = ext.HOME / "plugins" / "pdf-pro" / "skills" / "pdf-pro" / "pdfpro.py"
+        if p.suffix.lower() in (".html", ".htm") and pro.is_file() and not re.search(r"<(html|head|style)\b", p.read_text(errors="replace")[:4000], re.I):
+            # a pdf-pro page holds only its content: seen as it will be in the PDF (theme, accents), not bare
+            try:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("naim_pdfpro_look", pro)
+                mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+                tmp = p.with_name(f".naim-apercu-{p.stem}.html")  # beside it: its images keep their relative paths
+                tmp.write_text(mod.page(p.read_text(errors="replace")))
+                shown = tmp
+            except Exception:  # noqa: BLE001 — the bare page is still something to look at
+                shown, tmp = p, None
         try:
-            img, note = docs.preview_png(p, int(page or 1))
+            img, note = docs.preview_png(shown, int(page or 1))
         except (docs.DocError, diagrams.DiagramError) as e:
             return f"error: {e}"
+        finally:
+            if tmp:
+                tmp.unlink(missing_ok=True)
         import base64
         data = base64.b64encode(img.read_bytes()).decode()
         small = img.with_suffix(".jpg")  # light copy for the chat (the model gets the full image)
