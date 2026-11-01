@@ -4378,6 +4378,18 @@ function addBot(m, idx) {
         if (idx > 0) { paint(); box.appendChild(fb); }
       }
       $(".delivbox", d)?.remove();
+      // it says a document was made, but none was made in this turn (its command failed): said, never left as a promise
+      { const said = String(r.content || "").match(/\b(pdf|docx|word|excel|xlsx|pptx|powerpoint)\b[^.\n]{0,60}\b(a été |est |sont |bien )?(cré[ée]s?|généré|prêt|complet|terminé|fait|enregistré)/i)
+          || String(r.content || "").match(/\b(cré[ée]|généré|fait)\b[^.\n]{0,30}\b(le |un |du )?(pdf|docx|fichier word|excel|pptx)\b/i);
+        const kind = said && (said[1] || said[3] || "").toLowerCase();
+        const ext = /pdf/.test(kind) ? /^pdf$/ : /docx|word/.test(kind) ? /^docx?$/ : /excel|xlsx/.test(kind) ? /^xlsx?$/ : /pptx|powerpoint/.test(kind) ? /^pptx$/ : /^(pdf|docx|xlsx|pptx)$/;
+        if (said && d === $$("#thread .turn").pop() && !(r.deliverables?.files || []).some((f) => ext.test(String(f.ext || "").toLowerCase()))) {
+          const w = document.createElement("div"); w.className = "cutoff";
+          w.innerHTML = `${svgI("warn")}<span>Naim dit avoir fait ${/pdf/.test(kind) ? "le PDF" : "le document"}, mais aucun fichier de ce type n'a été créé pendant ce travail.</span><button class="btn">Le faire maintenant</button>`;
+          $("button", w).onclick = () => { w.remove(); send(`Le ${/pdf/.test(kind) ? "PDF" : "document"} n'a pas été créé (ta dernière commande a échoué). Fais-le maintenant, vérifie qu'il existe, puis donne-moi son chemin.`); };
+          d.insertBefore(w, $(".msgacts", d));
+        }
+      }
       if (r.deliverables?.files?.length) {
         // a text file already listed in « N fichiers créés » is not shown twice; documents (PDF, Word, images…) always are
         const listed = new Set((r.changes || []).map((c) => String(c.path).split("/").pop()));
