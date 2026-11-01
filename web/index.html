@@ -1074,6 +1074,9 @@ body.haslive .working .wtime { display: none; }
 .diagram .code { margin: 0; border: 0; border-radius: 0; }
 .deliv { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 8px 0 6px; }
 .deliv .dcard { max-width: none; }
+.chcard .chopen { cursor: pointer; border-radius: 6px; } .chcard .chopen:hover { background: var(--hover); }
+.chcard .chmore { display: none; } .chcard.chunfold .chmore { display: flex; }
+.chcard .chall { cursor: pointer; } .chcard .chall:hover { color: var(--text); }
 .deliv.many.folded .dcard:nth-child(n+7) { display: none; }  /* many files: the first six, « Voir les N autres » */
 .dmore { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; padding: 2px 4px; cursor: pointer; margin-bottom: 6px; }
 .dmore:hover { color: var(--text); }
@@ -4334,10 +4337,17 @@ function addBot(m, idx) {
         const card = document.createElement("div"); card.className = "chcard";
         const n = r.changes.length, s = n > 1 ? "s" : "", verb = r.changes.every((c) => c.created) ? "créé" : r.changes.every((c) => c.deleted) ? "supprimé" : "modifié";
         card.innerHTML = `<div class="chhead"><b>${n} fichier${s} ${verb}${s}</b><span class="spacer"></span><button class="btn" data-see>Voir les modifs</button></div>`
-          + r.changes.slice(0, 8).map((c) => `<div class="chrow"><span class="aic">${svgI(/\.(py|js|ts|jsx|tsx|json|html|css|swift|sh|go|rs|java|c|cpp|h|rb|php|sql|yml|yaml|toml)$/i.test(c.path) ? "cmd" : "file")}</span><span class="chpath" title="${esc(c.path)}">${esc(c.path)}</span>${c.created ? '<span class="cbadge new">nouveau</span>' : c.deleted ? '<span class="cbadge del">supprimé</span>' : ""}<span class="add">+${c.added || 0}</span><span class="del">−${c.removed || 0}</span></div>`).join("")
-          + (r.changes.length > 8 ? `<div class="chrow muted">… ${r.changes.length - 8} de plus</div>` : "")
+          + r.changes.map((c, k) => `<div class="chrow${c.deleted ? "" : " chopen"}${k >= 8 ? " chmore" : ""}" data-chpath="${esc(c.path)}" title="${esc(c.path)}${c.deleted ? "" : " — clic : ouvrir · ⌥ clic : montrer dans le Finder"}"><span class="aic">${svgI(/\.(py|js|ts|jsx|tsx|json|html|css|swift|sh|go|rs|java|c|cpp|h|rb|php|sql|yml|yaml|toml)$/i.test(c.path) ? "cmd" : "file")}</span><span class="chpath" title="${esc(c.path)}">${esc(c.path)}</span>${c.created ? '<span class="cbadge new">nouveau</span>' : c.deleted ? '<span class="cbadge del">supprimé</span>' : ""}<span class="add">+${c.added || 0}</span><span class="del">−${c.removed || 0}</span></div>`).join("")
+          + (r.changes.length > 8 ? `<div class="chrow muted chall" data-chall>… ${r.changes.length - 8} de plus</div>` : "")
           + `<div class="chrow chtotal"><span class="chpath">Total</span><span class="add">+${add}</span><span class="del">−${rem}</span></div>`;
         $("[data-see]", card).onclick = () => showPanel("changes");
+        card.addEventListener("click", (e) => {  // a file of the list opens like a card (⌥: in the Finder); « … N de plus » unfolds
+          const all = e.target.closest("[data-chall]");
+          if (all) { const open = card.classList.toggle("chunfold"); all.textContent = open ? "Réduire" : `… ${r.changes.length - 8} de plus`; return; }
+          const row = e.target.closest(".chopen"); if (!row) return;
+          api("/api/reveal", { method: "POST", body: { root: r.deliverables?.root || S.project || "", path: row.dataset.chpath, select: e.altKey } })
+            .then((x) => { if (x && x.ok === false) toast("Fichier introuvable : il a peut-être été déplacé"); });
+        });
         d.insertBefore(card, $(".msgacts", d));
       }
       const box = document.createElement("div"); box.className = "ractions";
