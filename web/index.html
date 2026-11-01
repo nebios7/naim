@@ -1072,7 +1072,11 @@ body.haslive .working .wtime { display: none; }
 .diagram .derr { padding: 10px 14px; font-size: 12.5px; color: var(--danger); background: var(--panel); }
 .diagram.showcode .dview { display: none; } .diagram:not(.showcode) .code { display: none; }
 .diagram .code { margin: 0; border: 0; border-radius: 0; }
-.deliv { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 6px; }
+.deliv { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 8px 0 6px; }
+.deliv .dcard { max-width: none; }
+.deliv.many.folded .dcard:nth-child(n+7) { display: none; }  /* many files: the first six, « Voir les N autres » */
+.dmore { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; padding: 2px 4px; cursor: pointer; margin-bottom: 6px; }
+.dmore:hover { color: var(--text); }
 .dcard { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: min(340px, 100%); padding: 6px 6px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; transition: border-color .15s, background .15s; }
 .dcard:hover { border-color: color-mix(in srgb, var(--muted) 45%, var(--line)); }
 .dcard .dthumb { position: relative; flex: none; width: 34px; height: 40px; border-radius: 5px; background: var(--side); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--muted); }
@@ -3058,13 +3062,19 @@ function delivCards(dl) {
   dl = { ...dl, files: (dl.files || []).filter((f) => !/(^|\/)~\$/.test(f.path)) };  // Office lock files are not deliverables
   // a file outside the folder of the task (~/…, /…: the folder of an attachment): its own folder is its root
   dl.files = dl.files.map((f) => /^(~\/|\/)/.test(f.path) ? { ...f, root: f.path.replace(/\/[^/]*$/, ""), path: f.path.split("/").pop(), shown: f.path } : f);
+  // in order, as in a folder: README first, then 01, 02 … 13 (natural order), the same width for all
+  const name = (f) => f.path.split("/").pop();
+  dl.files.sort((a, b) => (/^readme\b/i.test(name(b)) - /^readme\b/i.test(name(a))) || name(a).localeCompare(name(b), "fr", { numeric: true, sensitivity: "base" }));
+  const many = dl.files.length > 6, kinds = [...new Set(dl.files.map((f) => DELIV_KIND[f.ext] || f.ext.toUpperCase()))];
   const box = document.createElement("div");
-  box.innerHTML = `<div class="delivtitle">Livrables</div><div class="deliv">${dl.files.map((f, i) => {
+  box.innerHTML = `<div class="delivtitle">Livrables${many ? ` <span class="muted">· ${dl.files.length} fichiers ${kinds.length === 1 ? kinds[0] : ""}</span>` : ""}</div><div class="deliv${many ? " many folded" : ""}">${dl.files.map((f, i) => {
     const q = `root=${encodeURIComponent(f.root || dl.root)}&path=${encodeURIComponent(f.path)}`;
     const icon = /^(png|jpe?g|gif|svg)$/.test(f.ext) ? "image" : /^(csv|xlsx)$/.test(f.ext) ? "chart" : f.ext === "zip" ? "compress" : f.ext === "mp4" ? "play" : "file";
     const thumb = /^(pdf|png|jpe?g|gif|svg|docx|pptx)$/.test(f.ext) ? `<img loading="lazy" alt=""${/^(pdf|docx|pptx)$/.test(f.ext) && f.ext !== "pptx" ? ' class="doc"' : ""} src="/api/thumb?${q}&w=260" onerror="this.remove()">` : "";
     return `<div class="dcard" data-i="${i}" data-dopen title="${esc(f.shown || f.path)}"><span class="dthumb">${svgI(icon)}${thumb}</span><span class="dinfo"><b>${esc(f.path.split("/").pop())}</b><small>${DELIV_KIND[f.ext] || f.ext.toUpperCase()} · ${fmtSize(f.size)}</small></span>
-      <span class="dacts"><button data-dfinder title="Montrer dans le Finder">${svgI("folder")}</button><button data-dmore title="Plus d'actions">${svgI("dots")}</button></span></div>`; }).join("")}</div>`;
+      <span class="dacts"><button data-dfinder title="Montrer dans le Finder">${svgI("folder")}</button><button data-dmore title="Plus d'actions">${svgI("dots")}</button></span></div>`; }).join("")}</div>${many ? `<button class="dmore" data-dall>Voir les ${dl.files.length - 6} autres</button>` : ""}`;
+  $("[data-dall]", box)?.addEventListener("click", (e) => { e.stopPropagation(); const g = $(".deliv", box), open = g.classList.toggle("folded");
+    e.currentTarget.textContent = open ? `Voir les ${dl.files.length - 6} autres` : "Réduire"; });
   box.addEventListener("click", (e) => {
     const c = e.target.closest(".dcard"); if (!c) return;
     const f = dl.files[+c.dataset.i], d = { root: f.root || dl.root }, q = `root=${encodeURIComponent(d.root)}&path=${encodeURIComponent(f.path)}`;
@@ -4358,7 +4368,12 @@ function addBot(m, idx) {
         if (idx > 0) { paint(); box.appendChild(fb); }
       }
       $(".delivbox", d)?.remove();
-      if (r.deliverables?.files?.length) { const dv = delivCards(r.deliverables); dv.className = "delivbox"; d.insertBefore(dv, $(".msgacts", d)); }
+      if (r.deliverables?.files?.length) {
+        // a text file already listed in « N fichiers créés » is not shown twice; documents (PDF, Word, images…) always are
+        const listed = new Set((r.changes || []).map((c) => String(c.path).split("/").pop()));
+        const files = r.deliverables.files.filter((f) => !(listed.has(String(f.path).split("/").pop()) && /^(md|markdown|txt|py|js|ts|jsx|tsx|json|html?|css|swift|sh|go|rs|java|c|cpp|h|rb|php|sql|ya?ml|toml|cbl|cob|cpy|jcl)$/i.test(f.ext || "")));
+        if (files.length) { const dv = delivCards({ ...r.deliverables, files }); dv.className = "delivbox"; d.insertBefore(dv, $(".msgacts", d)); }
+      }
       if (box.children.length) d.insertBefore(box, $(".msgacts", d));
       $(".suggest", d)?.remove();
       const sug = suggestionsOf(r.content || "");
