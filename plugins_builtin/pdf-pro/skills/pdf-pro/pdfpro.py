@@ -3,6 +3,8 @@
 naim-pdf, the KaTeX already shipped with Naim).
 
   pdfpro.py render <page.html> <sortie.pdf> [couleur]   the theme, the formulas, the coloured code, then the A4 PDF
+  pdfpro.py render 01.md 02.md … <sortie.pdf> [couleur]  .md files (a course in chapters) -> ONE PDF: cover, contents,
+                                                  one chapter per file in that order (README.md: the title)
                                                   (couleur: gris, bleu, vert, rouge, noir, marine… or #rrggbb; orange by default)
   pdfpro.py chart <bars|hbars|line|donut> <données.json> <sortie.svg> ["titre"] [small]
                                                   a chart in the theme's colours, to put in a <figure>
@@ -41,13 +43,20 @@ KEYWORDS = {
            "inner outer on group by order having limit as distinct count sum avg min max null primary key",
     "bash": "if then else elif fi for while do done case esac function in return export local echo cd",
 }
+KEYWORDS["cobol"] = ("identification division program-id data working-storage linkage file section procedure using "
+                     "pic picture value values move to add subtract multiply divide compute giving display accept if else "
+                     "end-if perform until varying from by times end-perform evaluate when other end-evaluate call goback "
+                     "stop run string delimited size into end-string open close read write rewrite delete input output "
+                     "extend at end not invalid key fd select assign organization sequential indexed relative access "
+                     "record is are copy occurs redefines function set true false zero zeros spaces space")
 KEYWORDS["javascript"] = KEYWORDS["ts"] = KEYWORDS["js"]
 KEYWORDS["sh"] = KEYWORDS["shell"] = KEYWORDS["bash"]
 
 
 def highlight(code, lang):
-    words = set(KEYWORDS.get(lang, KEYWORDS["python"]).split())
-    comment = r"--[^\n]*" if lang == "sql" else r"//[^\n]*|/\*.*?\*/" if lang in ("js", "javascript", "ts") else r"#[^\n]*"
+    words = set(re.split(r"[\s-]+", KEYWORDS.get(lang, KEYWORDS["python"])))
+    comment = (r"--[^\n]*" if lang == "sql" else r"//[^\n]*|/\*.*?\*/" if lang in ("js", "javascript", "ts")
+               else r"\*>[^\n]*|(?:^|(?<=\n)) {6}\*[^\n]*" if lang in ("cobol", "cbl", "cob") else r"#[^\n]*")
     rx = re.compile(rf"(?P<c>{comment})|(?P<s>\"\"\".*?\"\"\"|'''.*?'''|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|`[^`]*`)"
                     r"|(?P<n>\b\d+(?:\.\d+)?\b)|(?P<w>\b[A-Za-z_]\w*\b)(?P<call>\s*\()?", re.S)
     out, last = [], 0
@@ -62,7 +71,7 @@ def highlight(code, lang):
             out.append(f'<span class="n">{m.group("n")}</span>')
         else:
             w = m.group("w")
-            low = w.lower() if lang == "sql" else w
+            low = w.lower() if lang in ("sql", "cobol", "cbl", "cob") else w
             cls = "k" if low in words else "f" if m.group("call") else ""
             out.append(f'<span class="{cls}">{html.escape(w)}</span>' if cls else html.escape(w))
             if m.group("call"):
@@ -81,6 +90,120 @@ def color_code(body):
         head = f'<span class="file">{label.group(1)}</span>' if label else ""
         return f"<pre{attrs}>{head}<code>{highlight(raw.strip(chr(10)), lang.lower())}</code></pre>"
     return re.sub(r'<pre(\s[^>]*class="[^"]*\bcode\b[^"]*"[^>]*)>(.*?)</pre>', one, body, flags=re.S)
+
+
+# ------------------------------------------------------------------ Markdown -> the theme's HTML (a course written in .md files)
+def _inline(t):
+    t = html.escape(t, quote=False)
+    t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+    t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", t)
+    t = re.sub(r"(?<![*\w])\*([^*\s][^*]*?)\*(?!\w)", r"<em>\1</em>", t)
+    return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', t)
+
+
+def md_html(text, shift=1):
+    """Markdown (titles, paragraphs, lists, tables, code blocks, quotes) -> HTML with the theme's classes.
+    shift: « # » becomes <h(1+shift)> (in a chapter, the file's own title is the chapter's)."""
+    out, lines, i = [], text.replace("\r", "").split("\n"), 0
+    para, items, kind = [], [], None
+
+    def flush():
+        nonlocal para, items, kind
+        if para:
+            out.append("<p>" + _inline(" ".join(para)) + "</p>")
+        if items:
+            out.append(f"<{kind}>" + "".join(f"<li>{_inline(x)}</li>" for x in items) + f"</{kind}>")
+        para, items, kind = [], [], None
+    while i < len(lines):
+        ln = lines[i]
+        fence = re.match(r"^\s*```\s*([\w+-]*)", ln)
+        if fence:
+            flush()
+            lang, code, i = (fence.group(1) or "text").lower(), [], i + 1
+            while i < len(lines) and not re.match(r"^\s*```", lines[i]):
+                code.append(lines[i]); i += 1
+            out.append(f'<pre class="code {html.escape(lang)}">{html.escape(chr(10).join(code))}</pre>')
+        elif re.match(r"^#{1,6}\s", ln):
+            flush()
+            n = len(ln) - len(ln.lstrip("#"))
+            out.append(f"<h{min(6, n + shift)}>{_inline(ln[n:].strip())}</h{min(6, n + shift)}>")
+        elif ln.strip().startswith("|"):
+            flush()
+            rows = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                if not re.match(r"^\s*\|?[\s:|-]+\|?\s*$", lines[i]):
+                    rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")])
+                i += 1
+            i -= 1
+            if rows:
+                out.append("<table><thead><tr>" + "".join(f"<th>{_inline(c)}</th>" for c in rows[0]) + "</tr></thead><tbody>"
+                           + "".join("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in r) + "</tr>" for r in rows[1:]) + "</tbody></table>")
+        elif re.match(r"^\s*>\s?", ln):
+            flush()
+            quote = []
+            while i < len(lines) and re.match(r"^\s*>\s?", lines[i]):
+                quote.append(re.sub(r"^\s*>\s?", "", lines[i])); i += 1
+            i -= 1
+            out.append('<div class="callout info"><p>' + _inline(" ".join(quote)) + "</p></div>")
+        elif re.match(r"^\s*([-*+]|\d+[.)])\s+", ln):
+            k = "ol" if re.match(r"^\s*\d", ln) else "ul"
+            if para or (kind and kind != k):
+                flush()
+            kind = k
+            items.append(re.sub(r"^\s*([-*+]|\d+[.)])\s+", "", ln))
+        elif re.match(r"^\s*(-{3,}|\*{3,})\s*$", ln):
+            flush(); out.append("<hr>")
+        elif not ln.strip():
+            flush()
+        elif items and ln.startswith((" ", "\t")):
+            items[-1] += " " + ln.strip()
+        else:
+            if items:
+                flush()
+            para.append(ln.strip())
+        i += 1
+    flush()
+    return "\n".join(out)
+
+
+def render_md(files, out, couleur=""):
+    """Several .md files (a course written chapter by chapter) -> ONE PDF: a cover, a table of contents, one chapter
+    per file in the order given (a README gives the title and the subtitle, it is not a chapter)."""
+    import datetime
+    files = [Path(f).expanduser() for f in files]
+    readme = next((f for f in files if f.name.lower() == "readme.md"), None)
+    chapters = [f for f in files if f is not readme]
+    if not chapters:
+        sys.exit("erreur : aucun chapitre .md à mettre dans le PDF.")
+    texts = [f.read_text(errors="replace") for f in chapters]
+    titles = [(re.search(r"^#\s+(.+)$", t, re.M) or [None, f.stem.replace("-", " ").replace("_", " ")])[1].strip() for t, f in zip(texts, chapters)]
+    common = ""
+    if len(titles) > 1:  # « Cours COBOL - Introduction », « Cours COBOL - Fichiers »: the course's name, said once
+        cut = re.match(r"^(.+?\s[-–—:]\s)", titles[0])
+        if cut and all(t.startswith(cut.group(1)) for t in titles):
+            common = cut.group(1)
+    title, subtitle = re.sub(r"\s[-–—:]\s$", "", common).strip(), ""
+    if readme:
+        rt = readme.read_text(errors="replace")
+        m = re.search(r"^#\s+(.+)$", rt, re.M)
+        title = m.group(1).strip() if m else title
+        para = next((p.strip() for p in re.split(r"\n\s*\n", re.sub(r"^#.*$", "", rt, flags=re.M)) if p.strip() and not p.strip().startswith(("-", "*", "|", "```", ">"))), "")
+        subtitle = re.sub(r"\s*:\s*$", ".", re.sub(r"\s+", " ", para)[:220])  # it introduced a list: a sentence on the cover
+    title = title or titles[0]
+    d = datetime.date.today()
+    when = f"{d.day} {'janvier février mars avril mai juin juillet août septembre octobre novembre décembre'.split()[d.month - 1]} {d.year}"
+    names = [t[len(common):].strip() if common else t for t in titles]
+    body = [f'<section class="cover"><div><div class="kicker">Cours</div><h1>{html.escape(title)}</h1>'
+            + (f'<div class="subtitle">{_inline(subtitle)}</div>' if subtitle else "") + '<div class="band"></div></div>'
+            f'<div class="meta"><div><b>Auteur</b>Naim</div><div><b>Date</b>{when}</div><div><b>Chapitres</b>{len(chapters)}</div></div></section>',
+            '<section class="toc"><h2>Sommaire</h2><ol>' + "".join(f'<li><a href="#c{k + 1}">{html.escape(n)}</a></li>' for k, n in enumerate(names)) + "</ol></section>"]
+    for k, (t, n) in enumerate(zip(texts, names)):
+        rest = re.sub(r"^#\s+.+$", "", t, count=1, flags=re.M)
+        body.append(f'<section class="chapter" id="c{k + 1}"><h2><span class="num">{k + 1:02d}</span>{html.escape(n)}</h2>\n{md_html(rest)}</section>')
+    out = Path(out).expanduser().resolve()
+    page_file = out.with_suffix(".html")
+    page_file.write_text("\n".join(body))
+    render(page_file, out, couleur)
 
 
 # ------------------------------------------------------------------ the page
@@ -278,7 +401,12 @@ def chart(kind, data_file, out, title="", size=""):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    if len(a) >= 3 and a[0] == "render":
+    if len(a) >= 3 and a[0] == "render" and any(x.lower().endswith(".md") for x in a[1:]):  # .md files -> one PDF
+        mds = [x for x in a[1:] if x.lower().endswith(".md")]
+        pdf = next((x for x in a[1:] if x.lower().endswith(".pdf")), None) or sys.exit("erreur : donne le PDF à faire (… cours.pdf).")
+        rest = [x for x in a[1:] if x not in mds and x != pdf]
+        render_md(mds, pdf, rest[0] if rest else "")
+    elif len(a) >= 3 and a[0] == "render":
         render(a[1], a[2], a[3] if len(a) > 3 else "")
     elif len(a) >= 4 and a[0] == "chart":
         chart(a[1], a[2], a[3], a[4] if len(a) > 4 else "", a[5] if len(a) > 5 else "")

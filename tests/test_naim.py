@@ -840,6 +840,27 @@ class SkillScripts(unittest.TestCase):
         t = "Fais mon CV en PDF avec le style pdf-pro à partir de ce Word, avec ma photo à droite"
         self.assertEqual((extensions.match_skill(t, extensions.HOME, set()) or {}).get("name"), "cv-lettre")  # a style, not the method
 
+    def test_markdown_course_to_one_pdf(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pp2", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        h = pp.md_html("## Titre\n\nUn **mot**.\n\n- a\n- b\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n```cobol\n       MOVE 1 TO X.\n```\n\n> Note")
+        for x in ("<h3>Titre</h3>", "<strong>mot</strong>", "<ul><li>a</li><li>b</li></ul>", "<th>A</th>", '<pre class="code cobol">', 'callout info'):
+            self.assertIn(x, h)
+        self.assertIn('<span class="k">MOVE</span>', pp.highlight("       MOVE 1 TO X.", "cobol"))
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="": None):
+            t = Path(t)
+            (t / "README.md").write_text("# Cours X\n\nUn cours sur X couvre :\n\n- a")
+            (t / "01-a.md").write_text("# Cours X - Début\n\nTexte.")
+            (t / "02-b.md").write_text("# Cours X - Suite\n\nTexte.")
+            pp.render_md([t / "README.md", t / "01-a.md", t / "02-b.md"], t / "c.pdf")
+            page = (t / "c.html").read_text()
+        self.assertIn("<h1>Cours X</h1>", page)
+        self.assertIn("Un cours sur X couvre.", page)
+        self.assertIn('<span class="num">01</span>Début', page)
+        self.assertIn('<span class="num">02</span>Suite', page)
+
     def test_colour_asked(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
