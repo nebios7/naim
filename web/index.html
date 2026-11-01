@@ -1323,6 +1323,33 @@ header#chatHeader { overflow: hidden; }
 /* the sweep is sized to the words (not the whole bar width), like « Raisonnement »: the light really crosses them */
 #liveBar .ltext { flex: 0 1 auto; }
 #liveBar .ltime { margin-left: auto; }
+/* the interactive quiz */
+.quizcard { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 10px 0 12px; background: var(--panel); }
+.quizcard.qwait { color: var(--muted); font-size: 13px; }
+.qtabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--hover); margin-bottom: 14px; }
+.qtabs button { border: 0; background: none; color: var(--muted); padding: 4px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; }
+.qtabs button.on { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+.qq { font-size: 1.04em; font-weight: 500; margin: 2px 0 14px; line-height: 1.45; }
+.qopts { display: flex; flex-direction: column; gap: 8px; }
+.qopt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 11px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; cursor: pointer; }
+.qopt:hover:not([disabled]) { border-color: var(--muted); }
+.qopt .qdot { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.qopt.ok { border-color: var(--ok); } .qopt.ok .qdot { border-color: var(--ok); background: var(--ok); box-shadow: inset 0 0 0 3px var(--bg); }
+.qopt.ko { border-color: var(--danger); } .qopt.ko .qdot { border-color: var(--danger); background: var(--danger); box-shadow: inset 0 0 0 3px var(--bg); }
+.qopt.dim { opacity: .55; } .qopt[disabled] { cursor: default; }
+.qhint { margin: 12px 0 0; color: var(--muted); font-size: 13.5px; } .qhint summary { cursor: pointer; } .qhint div { margin-top: 6px; color: var(--text); }
+.qexpl { margin-top: 12px; padding: 10px 12px; border-radius: 9px; font-size: 13.5px; line-height: 1.5; background: var(--code); border-left: 3px solid var(--ok); }
+.qexpl.ko { border-left-color: var(--danger); }
+.qfoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; color: var(--muted); font-size: 13px; }
+.qfoot .btn[disabled] { opacity: .45; }
+.qscore { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 0 6px; }
+.qscore b { font-size: 2em; font-weight: 600; } .qscore span { color: var(--muted); }
+.qflash { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 150px; padding: 18px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--text); font: inherit; cursor: pointer; text-align: center; }
+.qflash.back { background: var(--code); }
+.qflash .qside { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.qflash .qface { font-size: 1.05em; line-height: 1.5; } .qflash .qturn { font-size: 12px; color: var(--muted); }
 /* an answer stopped before the end: one quiet line with « Continuer » */
 .cutoff { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; padding: 8px 10px 8px 12px; border: 1px solid var(--line);
   border-radius: 10px; color: var(--muted); font-size: 13px; background: var(--code); }
@@ -2435,6 +2462,51 @@ function inline(s) {
     .replace(/(^|[\s(«])(https?:\/\/[^\s<«»"]*[^\s<«»".,;:!?)])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => fileChip(codes[+i]) || `<code>${esc(codes[+i])}</code>`);
 }
+// ======================================================================= quiz (skill quiz)
+// a quiz as in a pro assistant: the « Quiz » tab (4 choices, hint, explanation after the answer, score at the end) and
+// « Cartes mémoire » (a card that turns over). Its state lives on the card itself (data-*), drawn again at each click.
+function quizDraw(el) {
+  let q; try { q = JSON.parse(el.dataset.quiz); } catch (e) { return; }
+  const qs = q.questions, cards = Array.isArray(q.cartes) ? q.cartes : [], d = el.dataset;
+  d.tab ??= "quiz"; d.i ??= "0"; d.score ??= "0"; d.card ??= "0";
+  const i = +d.i, n = qs.length, tab = cards.length ? d.tab : "quiz";
+  const tabs = cards.length ? `<div class="qtabs"><button data-qtab="quiz" class="${tab === "quiz" ? "on" : ""}">Quiz</button><button data-qtab="cartes" class="${tab === "cartes" ? "on" : ""}">Cartes mémoire</button></div>` : "";
+  let html = "";
+  if (tab === "cartes") {
+    const k = Math.min(+d.card, cards.length - 1), c = cards[k], back = d.flip === "1";
+    html = `<button class="qflash ${back ? "back" : ""}" data-qflip><span class="qside">${back ? "Réponse" : "Notion"}</span><span class="qface">${esc(back ? c.verso : c.recto)}</span><span class="qturn">${back ? "" : "Clique pour voir la réponse"}</span></button>
+      <div class="qfoot"><span>Carte ${k + 1} sur ${cards.length}</span><span><button class="btn" data-qcard="-1" ${k ? "" : "disabled"}>Précédente</button> <button class="btn" data-qcard="1" ${k < cards.length - 1 ? "" : "disabled"}>Suivante</button></span></div>`;
+  } else if (i >= n) {
+    const sc = +d.score, msg = sc === n ? "Parfait, tout est juste." : sc >= n * 0.6 ? "Bien joué : relis les explications des questions manquées." : "Relis le cours, puis recommence : ça viendra.";
+    html = `<div class="qscore"><b>${sc} / ${n}</b><span>${msg}</span></div><div class="qfoot"><span>${esc(q.titre || "Quiz")}</span><button class="btn" data-qrestart>Recommencer</button></div>`;
+  } else {
+    const it = qs[i], good = +(it.bonne ?? it.reponse ?? 0), picked = d.picked == null ? null : +d.picked;
+    const opts = (it.choix || []).map((c, k) => {
+      const st = picked == null ? "" : k === good ? "ok" : k === picked ? "ko" : "dim";
+      return `<button class="qopt ${st}" data-qopt="${k}" ${picked == null ? "" : "disabled"}><span class="qdot"></span><span>${esc(c)}</span></button>`;
+    }).join("");
+    const expl = picked == null ? "" : `<div class="qexpl ${picked === good ? "ok" : "ko"}"><b>${picked === good ? "Bonne réponse." : `La bonne réponse : ${esc((it.choix || [])[good] || "")}.`}</b> ${esc(it.explication || "")}</div>`;
+    const hint = it.indice && picked == null ? `<details class="qhint"><summary>Afficher l'indice</summary><div>${esc(it.indice)}</div></details>` : "";
+    html = `<div class="qq">${esc(it.q || it.question || "")}</div><div class="qopts">${opts}</div>${hint}${expl}
+      <div class="qfoot"><span>Question ${i + 1} sur ${n}</span><button class="btn ${picked == null ? "" : "primary"}" data-qnext ${picked == null ? "disabled" : ""}>${i === n - 1 ? "Voir le score" : "Suivant"}</button></div>`;
+  }
+  el.innerHTML = tabs + html; el.dataset.ready = "1";
+}
+document.addEventListener("click", (e) => {
+  const el = e.target.closest?.(".quizcard[data-quiz]"); if (!el) return;
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  const d = el.dataset, q = JSON.parse(d.quiz);
+  if (b.dataset.qtab) d.tab = b.dataset.qtab;
+  else if (b.dataset.qopt != null) { d.picked = b.dataset.qopt; if (+b.dataset.qopt === +(q.questions[+d.i].bonne ?? q.questions[+d.i].reponse ?? 0)) d.score = String(+d.score + 1); }
+  else if (b.hasAttribute("data-qnext")) { d.i = String(+d.i + 1); delete d.picked; }
+  else if (b.hasAttribute("data-qrestart")) { d.i = "0"; d.score = "0"; delete d.picked; }
+  else if (b.hasAttribute("data-qflip")) d.flip = d.flip === "1" ? "0" : "1";
+  else if (b.dataset.qcard) { d.card = String(Math.max(0, +d.card + +b.dataset.qcard)); d.flip = "0"; }
+  else return;
+  quizDraw(el);
+});
+new MutationObserver(() => $$(".quizcard[data-quiz]:not([data-ready])").forEach(quizDraw)).observe(document.body, { childList: true, subtree: true });
+
 // a file named by its whole path in an answer (`/Users/…/Fichiers/CV.pdf`): its name, clickable (opens it; ⌥-click:
 // shows it in the Finder), the whole path on hover, as in a pro tool
 function fileChip(t) {
@@ -2497,6 +2569,10 @@ function codeBlock(lang, body, file = "", open = false) {
   if (/^svg$/i.test(lang || "") && !open && /^\s*<svg[\s>]/i.test(body)) {  // a figure: drawn as an image (no script runs)
     return `<figure class="mfig"><img alt="figure" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(body)}"></figure>`
       + `<details class="mfigcode"><summary>Code de la figure</summary>${codeBlockRaw("svg", body, file, open)}</details>`;
+  }
+  if (/^quiz$/i.test(lang || "")) {  // an interactive quiz (skill quiz): a card to tick, drawn by quizDraw
+    if (open) return '<div class="quizcard qwait"><span class="muted">Préparation du quiz…</span></div>';
+    try { const q = JSON.parse(body); if (q && Array.isArray(q.questions) && q.questions.length) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>`; } catch (e) { /* unreadable: shown as written */ }
   }
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
   return codeBlockRaw(lang, body, file, open);

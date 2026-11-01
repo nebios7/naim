@@ -1,0 +1,14 @@
+{
+  "name": "quiz",
+  "version": "1.0",
+  "description": "Un quiz interactif dans la conversation (choix à cocher, indice, explication, score) et des cartes mémoire, à partir d'un cours, d'un document ou d'un sujet.",
+  "skills": "skills",
+  "triggers": {
+    "quiz": "\\b(quiz+e?s?|qcm|questionnaire|cartes? m[ée]moire|flash ?cards?|interroge[- ]?moi|teste[- ]?moi|teste mes connaissances|questions? de r[ée]vision|r[ée]vis\\w* avec (des )?questions)\\b"
+  },
+  "commands": [
+    {"cmd": "/quiz", "arg": "[sujet ou nombre de questions]", "description": "Un quiz interactif sur le cours ou le document de la conversation",
+     "prompt": "Avec le skill quiz, fais-moi un quiz interactif sur le cours ou le document de cette conversation (ou sur ce sujet) :"}
+  ],
+  "priority": true
+}
