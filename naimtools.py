@@ -1244,10 +1244,11 @@ class Agent:
             # a long file written in parts (a course, a report): this part goes after what is already there
             old = p.read_text(errors="replace")
             content = old + ("" if not old or old.endswith("\n") else "\n") + (content or "")
-        elif str(p) in APPENDED and p.is_file():
-            # a file built in parts: a next part written without append would erase every part before it
-            first = next((l.strip() for l in p.read_text(errors="replace").splitlines() if l.strip()), "")
-            if first and first not in (content or ""):
+        elif (str(p) in APPENDED or str(p) in getattr(self, "_rewrites", {})) and p.is_file() and p.read_text(errors="replace").count("\n") >= 60:
+            # a file built in parts, or a long file already written in this task: a next part written without append
+            # would erase everything before it (a course PDF then began at chapter 12)
+            first = next((l.strip() for l in p.read_text(errors="replace").splitlines() if l.strip()), "")[:24]
+            if first and not (content or "").lstrip().startswith(first) and first not in (content or "")[:2000]:
                 return (f"refused: {self.rel(p)} is being written in parts and this would erase its beginning "
                         f"({p.read_text(errors='replace').count(chr(10)) + 1} lines already). To ADD this part at the end: "
                         f"write_file(path=\"{self.rel(p)}\", content=<this part>, append=true). To change a passage: edit_file.")
