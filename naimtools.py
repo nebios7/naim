@@ -374,7 +374,7 @@ def writing_text(w):
     2,1k jetons » while it thinks."""
     if w.get("reading"):  # the engine reads the conversation before writing a word (long after web pages)
         pct = min(99, round(100 * w.get('done', 0) / max(1, w.get('total', 1))))
-        return f"Naim relit la conversation · {pct} %" if w.get("talk") else f"Naim lit ses consignes et ta demande · {pct} %"
+        return f"Naim lit ce qui est nouveau · {pct} %" if w.get("talk") else f"Naim lit ses consignes et ta demande · {pct} %"
     if w.get("think"):
         n = w.get("tokens", 0)
         return f"Naim réfléchit · {n / 1000:.1f}k jetons".replace(".", ",") if n >= 1000 else f"Naim réfléchit · {n} jetons"

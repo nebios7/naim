@@ -614,11 +614,14 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 d0 = (ev.get("choices") or [{}])[0].get("delta") or {}
                 if pp and not (d0.get("content") or d0.get("reasoning_content") or d0.get("tool_calls")):
                     # still reading the conversation (a long one: minutes, after web pages): how far it got
-                    total, done = pp.get("total") or 0, (pp.get("processed") or 0)
-                    if total > 2000 and time.time() - told > 1.0:
+                    # what is already in the engine's memory is not read again: only the new part counts (and is shown
+                    # only when it is long: a step's small result is read in a moment)
+                    cache, total, done = pp.get("cache") or 0, pp.get("total") or 0, pp.get("processed") or 0
+                    new, got = total - cache, (done - cache if done >= cache else done)
+                    if new > 1500 and time.time() - told > 1.0:
                         told = time.time()
                         talk = sum(1 for m in messages if m.get("role") in ("user", "assistant", "tool")) > 2  # a real exchange behind it
-                        yield {"message": {}, "done": False, "writing": {"reading": True, "done": done, "total": total, "talk": talk}}
+                        yield {"message": {}, "done": False, "writing": {"reading": True, "done": max(0, got), "total": new, "talk": talk}}
                     continue
                 if ev.get("error"):  # the engine failed in the middle of the answer: said, not an empty reply
                     err = ev["error"] if isinstance(ev["error"], str) else (ev["error"].get("message") or json.dumps(ev["error"]))
