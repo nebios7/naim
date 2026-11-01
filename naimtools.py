@@ -2470,6 +2470,21 @@ class Agent:
                 # only the content, no style of its own (a pdf-pro page): it gets the pdf-pro look, never a bare one
                 r = subprocess.run([sys.executable, str(pro), "render", str(src), str(dst)], capture_output=True, text=True, timeout=240)
                 return (r.stdout or r.stderr).strip()[-600:] + "\n(Style pdf-pro appliqué : cette page n'a que le contenu.)"
+        if dst.suffix.lower() == ".pdf" and src.is_file() and pro.is_file() and src.suffix.lower() in (
+                ".md", ".markdown", ".txt", ".docx", ".doc", ".rtf", ".odt", ".csv", ".xlsx", ".xlsm", ".pptx"):
+            # any document -> the pdf-pro look (the default of every PDF); a course written in numbered chapters
+            # (README.md, 01-….md, 02-….md…) is made whole, never from one of its files alone
+            srcs, note = [src], ""
+            chapters = sorted((f for f in src.parent.glob("*.md") if re.match(r"\d{1,3}[-_ .]", f.name)),
+                              key=lambda f: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f.name)])
+            if src.suffix.lower() == ".md" and len(chapters) >= 2 and (src.name.lower() == "readme.md" or src in chapters):
+                readme = src.parent / "README.md"
+                srcs = ([readme] if readme.is_file() else []) + chapters
+                note = f"\n(Cours complet : {len(chapters)} chapitres de {src.parent.name}, dans l'ordre, avec couverture et sommaire.)"
+            r = subprocess.run([sys.executable, str(pro), "render", *map(str, srcs), str(dst)], capture_output=True, text=True, timeout=600)
+            if r.returncode == 0 and dst.is_file():
+                return (r.stdout or "").strip()[-600:] + note
+            return f"error: {(r.stderr or r.stdout).strip()[-400:]}"
         try:
             if src.suffix.lower() in (".svg", ".html", ".htm") and dst.suffix.lower() == ".png" or (
                     src.suffix.lower() == ".svg" and dst.suffix.lower() == ".pdf"):
