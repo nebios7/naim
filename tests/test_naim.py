@@ -861,6 +861,23 @@ class SkillScripts(unittest.TestCase):
         self.assertIn('<span class="num">01</span>Début', page)
         self.assertIn('<span class="num">02</span>Suite', page)
 
+    def test_any_document_to_pro_pdf(self):
+        import importlib.util
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("pp3", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        self.assertEqual(pp._caps_titles("PROFIL\nTexte normal.\n06 52 90 96 62"), "## Profil\nTexte normal.\n06 52 90 96 62")
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="": None):
+            t = Path(t)
+            (t / "notes.csv").write_text("Nom;Note\nAlice;15\n")
+            (t / "compte_rendu.txt").write_text("RÉUNION\n\nTexte.\n")
+            pp.render_docs([t / "notes.csv"], t / "notes.pdf")
+            self.assertIn("<th>Nom</th>", (t / "notes.html").read_text())
+            pp.render_docs([t / "compte_rendu.txt"], t / "cr.pdf")
+            page = (t / "cr.html").read_text()
+            self.assertIn("<h1>Compte rendu</h1>", page)
+            self.assertIn("<h2>Réunion</h2>", page)
+
     def test_colour_asked(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")

@@ -6,10 +6,13 @@ description: Faire un PDF professionnel et joli (cours, analyse d'un courrier ou
 # PDF professionnel : un seul style, soigné, prêt à imprimer
 
 C'est le style par défaut de TOUS tes PDF, même quand l'utilisateur ne le nomme pas : jamais un PDF sans style.
-Des fichiers .md déjà écrits (un cours en chapitres : 01-intro.md, 02-…) « en PDF » : UNE commande, sans les relire
-ni les réécrire : `python3 ~/.naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py render README.md 01-*.md 02-*.md … cours.pdf`
-(ou `[0-9][0-9]-*.md`, dans l'ordre ; README.md donne le titre) : couverture, sommaire, un chapitre par fichier, code
-coloré. Puis `check` et look_at. Un mot de couleur à la fin si demandé.
+**Un document déjà écrit « en PDF » (ou « au style pro ») : UNE commande, sans le relire ni le réécrire.**
+`python3 ~/.naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py render <document> <sortie.pdf> [couleur]` prend un .md, .txt,
+.docx, .doc, .rtf, .odt, .pdf, .csv, .xlsx ou .pptx et en fait un PDF pro : ses titres, listes et tableaux gardés.
+Plusieurs documents (un cours en chapitres : `README.md 01-*.md 02-*.md …`, ou des fichiers de formats différents) :
+UN seul PDF avec couverture, sommaire et un chapitre par fichier, dans l'ordre donné. Le PDF de sortie a toujours un
+autre nom que le document donné. Puis `check` et look_at. Tu ne réécris le contenu en HTML que si l'utilisateur veut
+qu'il soit changé, enrichi ou réorganisé (un CV ou une lettre : skill cv-lettre).
 Un PDF, un Word ou un texte donné « à mettre en PDF » : read_file pour son texte (mot pour mot), puis écris-le en HTML
 avec les classes ci-dessous et `render`. Jamais python-docx ni un .docx au milieu, jamais un CSS à toi.
 

@@ -3,8 +3,10 @@
 naim-pdf, the KaTeX already shipped with Naim).
 
   pdfpro.py render <page.html> <sortie.pdf> [couleur]   the theme, the formulas, the coloured code, then the A4 PDF
-  pdfpro.py render 01.md 02.md … <sortie.pdf> [couleur]  .md files (a course in chapters) -> ONE PDF: cover, contents,
-                                                  one chapter per file in that order (README.md: the title)
+  pdfpro.py render <document> <sortie.pdf> [couleur]    a document of any kind -> a pro PDF: .md .txt .docx .doc .rtf
+                                                  .odt .pdf .csv .xlsx .pptx (its titles, lists, tables kept)
+  pdfpro.py render 01.md 02.docx … <sortie.pdf>   several documents -> ONE PDF: cover, contents, one chapter each,
+                                                  in that order (README.md: the title)
                                                   (couleur: gris, bleu, vert, rouge, noir, marine… or #rrggbb; orange by default)
   pdfpro.py chart <bars|hbars|line|donut> <données.json> <sortie.svg> ["titre"] [small]
                                                   a chart in the theme's colours, to put in a <figure>
@@ -166,6 +168,172 @@ def md_html(text, shift=1):
     return "\n".join(out)
 
 
+# ------------------------------------------------------------------ any document -> the theme (Word, PDF, Excel, PowerPoint…)
+DOC_EXTS = (".md", ".markdown", ".txt", ".text", ".html", ".htm", ".docx", ".doc", ".rtf", ".odt", ".pdf", ".csv",
+            ".xlsx", ".xlsm", ".pptx")
+VENV = Path.home() / ".naim/docs-venv/bin/python"  # python-docx, openpyxl, python-pptx: already installed with Naim
+
+_OFFICE = r"""
+import sys, json
+p = sys.argv[1]; ext = p.rsplit(".", 1)[-1].lower(); out = []
+def cell(t): return str(t if t is not None else "").replace("|", "/").replace("\n", " ").strip()
+def table(rows):
+    rows = [r for r in rows if any(cell(c) for c in r)][:300]
+    if not rows: return
+    w = max(len(r) for r in rows)
+    rows = [list(r) + [""] * (w - len(r)) for r in rows]
+    out.append("| " + " | ".join(cell(c) for c in rows[0]) + " |"); out.append("|" + "---|" * w)
+    out.extend("| " + " | ".join(cell(c) for c in r) + " |" for r in rows[1:]); out.append("")
+if ext == "docx":
+    import docx
+    d = docx.Document(p)
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+    for el in d.element.body.iterchildren():
+        tag = el.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            para = Paragraph(el, d); t = para.text.strip(); st = (para.style.name or "").lower() if para.style is not None else ""
+            if not t: out.append(""); continue
+            if st.startswith("title"): out.append("# " + t)
+            elif st.startswith("heading") or st.startswith("titre"):
+                n = "".join(c for c in st if c.isdigit()) or "1"; out.append("#" * min(4, int(n) + 1) + " " + t)
+            elif "list" in st or "liste" in st: out.append("- " + t)
+            else: out.append(t); out.append("")
+        elif tag == "tbl":
+            tb = Table(el, d); table([[c.text for c in r.cells] for r in tb.rows])
+elif ext in ("xlsx", "xlsm"):
+    import openpyxl
+    wb = openpyxl.load_workbook(p, data_only=True, read_only=True)
+    for ws in wb.worksheets:
+        out.append("## " + ws.title); table([list(r) for r in ws.iter_rows(values_only=True)])
+elif ext == "pptx":
+    import pptx
+    prs = pptx.Presentation(p)
+    for k, sl in enumerate(prs.slides, 1):
+        title = sl.shapes.title.text.strip() if sl.shapes.title is not None and sl.shapes.title.has_text_frame else ""
+        out.append(f"# {title}" if k == 1 and title else f"## {k:02d}. {title or 'Diapositive'}")
+        for sh in sl.shapes:
+            if sh == sl.shapes.title: continue
+            if getattr(sh, "has_table", False) and sh.has_table:
+                table([[c.text for c in r.cells] for r in sh.table.rows])
+            elif sh.has_text_frame:
+                for para in sh.text_frame.paragraphs:
+                    t = "".join(r.text for r in para.runs).strip()
+                    if t: out.append("  " * para.level + "- " + t)
+        if sl.has_notes_slide and sl.notes_slide.notes_text_frame.text.strip():
+            out.append(""); out.append("> " + sl.notes_slide.notes_text_frame.text.strip().replace("\n", " "))
+        out.append("")
+print("\n".join(out))
+"""
+
+
+def _pdf_text(f):
+    """The text of a PDF, by Naim's own reader (the Mac's PDFKit), page after page."""
+    sys.path.insert(0, str(APP / "app"))
+    try:
+        import docs
+        text, _ = docs.pdf_text(f)
+    finally:
+        sys.path.pop(0)
+    out = []
+    for page in re.split(r"--- Page \d+ ---", text):
+        lines, para = [l.rstrip() for l in page.split("\n")], []
+        full = max((len(l) for l in lines), default=0)
+        for l in lines + [""]:  # the lines of a paragraph are joined; a line clearly shorter than the page's ends it
+            if not l.strip():
+                if para: out.append(" ".join(para)); para = []
+                continue
+            para.append(l.strip())
+            if len(l) < 0.8 * full and not l.rstrip().endswith("-"):
+                out.append(" ".join(para)); para = []
+        out.append("")
+    return "\n\n".join(x for x in out if x.strip())
+
+
+def _caps_titles(text):
+    """« PROFIL », « EXPÉRIENCE PROFESSIONNELLE » alone on a line (a document without title styles): a title."""
+    def one(m):
+        t = m.group(1).strip()
+        letters = [c for c in t if c.isalpha()]
+        if 2 <= len(t) <= 60 and len(t.split()) <= 7 and letters and all(c.isupper() for c in letters) and not re.search(r"@|\d{2} \d{2}", t):
+            return "## " + t[0] + t[1:].lower()
+        return m.group(0)
+    return re.sub(r"(?m)^(?![#|>\-*+]|\d+[.)] )([^\n]+)$", one, text)
+
+
+def doc_markdown(f):
+    md = _doc_markdown(f)
+    return md if Path(f).suffix.lower() in (".md", ".markdown") else _caps_titles(md)
+
+
+def _doc_markdown(f):
+    """A document as Markdown (its titles, lists and tables kept): .md and .txt as they are, Word, Excel, PowerPoint
+    read with the tools installed with Naim, RTF/ODT/DOC with the Mac's textutil, PDF with its reader, CSV as a table."""
+    f, ext = Path(f).expanduser(), Path(f).suffix.lower()
+    if ext in (".md", ".markdown", ".txt", ".text"):
+        return f.read_text(errors="replace")
+    if ext in (".docx", ".xlsx", ".xlsm", ".pptx") and VENV.exists():
+        r = subprocess.run([str(VENV), "-c", _OFFICE, str(f)], capture_output=True, text=True, timeout=300)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout
+    if ext in (".docx", ".doc", ".rtf", ".odt"):
+        r = subprocess.run(["textutil", "-convert", "txt", "-stdout", str(f)], capture_output=True, text=True, timeout=120)
+        return r.stdout
+    if ext == ".csv":
+        import csv
+        text = f.read_text(errors="replace")
+        rows = list(csv.reader(text.splitlines(), delimiter=";" if text.count(";") > text.count(",") else ","))
+        rows = [r for r in rows if any(c.strip() for c in r)][:500]
+        if not rows:
+            return ""
+        w = max(len(r) for r in rows)
+        rows = [r + [""] * (w - len(r)) for r in rows]
+        return "\n".join(["| " + " | ".join(rows[0]) + " |", "|" + "---|" * w] + ["| " + " | ".join(r) + " |" for r in rows[1:]])
+    if ext == ".pdf":
+        return _pdf_text(f)
+    sys.exit(f"erreur : format {ext} non pris en charge (possibles : {' '.join(DOC_EXTS)}).")
+
+
+def doc_body(f, shift=1):
+    """A document -> HTML in the theme's classes (an HTML page: its body, without its own styles and scripts)."""
+    if Path(f).suffix.lower() in (".html", ".htm"):
+        page = Path(f).expanduser().read_text(errors="replace")
+        m = re.search(r"(?is)<body[^>]*>(.*)</body>", page)
+        body = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", m.group(1) if m else page)
+        return re.sub(r'\s(style|class|bgcolor|color|face|width)="[^"]*"', "", body)
+    return md_html(doc_markdown(f), shift)
+
+
+def render_docs(files, out, couleur=""):
+    """One document -> a pro document (its title in the pro head, then its content); several -> a course (README or a
+    common title on the cover, contents, one chapter per file in the order given)."""
+    files = [Path(f).expanduser() for f in files]
+    if len(files) > 1 or (files and files[0].name.lower() == "readme.md"):
+        return render_md(files, out, couleur)
+    f = files[0]
+    if not f.is_file():
+        sys.exit(f"erreur : fichier introuvable : {f}")
+    import datetime
+    d = datetime.date.today()
+    when = f"{d.day} {'janvier février mars avril mai juin juillet août septembre octobre novembre décembre'.split()[d.month - 1]} {d.year}"
+    body = doc_body(f, shift=0)
+    m = re.search(r"(?is)<h1[^>]*>(.*?)</h1>", body)
+    name = re.sub(r"\s+", " ", f.stem.replace("_", " ").replace("-", " ")).strip()
+    title = re.sub(r"<[^>]+>", "", m.group(1)).strip() if m else (name[:1].upper() + name[1:])
+    if m:
+        body = body[:m.start()] + body[m.end():]
+    head = (f'<header class="prohead"><div class="kicker">{when}</div><h1>{html.escape(title)}</h1><div class="band"></div></header>'
+            "<style>.prohead{margin:0 0 8mm}.prohead .kicker{font-size:9pt;letter-spacing:.14em;text-transform:uppercase;"
+            "color:var(--clay);font-weight:600}.prohead h1{font-size:26pt;line-height:1.15;margin:3mm 0 0}.prohead .band"
+            "{height:3px;width:40mm;background:var(--clay);border-radius:2px;margin-top:5mm}</style>")
+    out = Path(out).expanduser().resolve()
+    page_file = out.with_suffix(".html")
+    if page_file.resolve() == f.resolve():  # never over the document given
+        page_file = out.with_name(out.stem + ".pro-source.html")
+    page_file.write_text(head + "\n" + body)
+    render(page_file, out, couleur)
+
+
 def render_md(files, out, couleur=""):
     """Several .md files (a course written chapter by chapter) -> ONE PDF: a cover, a table of contents, one chapter
     per file in the order given (a README gives the title and the subtitle, it is not a chapter)."""
@@ -175,7 +343,7 @@ def render_md(files, out, couleur=""):
     chapters = [f for f in files if f is not readme]
     if not chapters:
         sys.exit("erreur : aucun chapitre .md à mettre dans le PDF.")
-    texts = [f.read_text(errors="replace") for f in chapters]
+    texts = [doc_markdown(f) if f.suffix.lower() not in (".html", ".htm") else f.read_text(errors="replace") for f in chapters]
     titles = [(re.search(r"^#\s+(.+)$", t, re.M) or [None, f.stem.replace("-", " ").replace("_", " ")])[1].strip() for t, f in zip(texts, chapters)]
     common = ""
     if len(titles) > 1:  # « Cours COBOL - Introduction », « Cours COBOL - Fichiers »: the course's name, said once
@@ -199,7 +367,8 @@ def render_md(files, out, couleur=""):
             '<section class="toc"><h2>Sommaire</h2><ol>' + "".join(f'<li><a href="#c{k + 1}">{html.escape(n)}</a></li>' for k, n in enumerate(names)) + "</ol></section>"]
     for k, (t, n) in enumerate(zip(texts, names)):
         rest = re.sub(r"^#\s+.+$", "", t, count=1, flags=re.M)
-        body.append(f'<section class="chapter" id="c{k + 1}"><h2><span class="num">{k + 1:02d}</span>{html.escape(n)}</h2>\n{md_html(rest)}</section>')
+        inner = doc_body(chapters[k]) if chapters[k].suffix.lower() in (".html", ".htm") else md_html(rest)
+        body.append(f'<section class="chapter" id="c{k + 1}"><h2><span class="num">{k + 1:02d}</span>{html.escape(n)}</h2>\n{inner}</section>')
     out = Path(out).expanduser().resolve()
     page_file = out.with_suffix(".html")
     page_file.write_text("\n".join(body))
@@ -401,11 +570,16 @@ def chart(kind, data_file, out, title="", size=""):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    if len(a) >= 3 and a[0] == "render" and any(x.lower().endswith(".md") for x in a[1:]):  # .md files -> one PDF
-        mds = [x for x in a[1:] if x.lower().endswith(".md")]
-        pdf = next((x for x in a[1:] if x.lower().endswith(".pdf")), None) or sys.exit("erreur : donne le PDF à faire (… cours.pdf).")
-        rest = [x for x in a[1:] if x not in mds and x != pdf]
-        render_md(mds, pdf, rest[0] if rest else "")
+    srcs = [x for x in a[1:-1] if Path(x).suffix.lower() in DOC_EXTS] if len(a) >= 3 else []
+    if a and a[0] == "render" and srcs and not (len(srcs) == 1 and Path(srcs[0]).suffix.lower() in (".html", ".htm")):
+        # documents of any kind (.md, Word, PDF, Excel, PowerPoint, text, CSV) -> one PDF in the theme
+        args = a[1:]
+        pdf = next((x for x in reversed(args) if x.lower().endswith(".pdf") and x not in srcs[:-1]), None)
+        srcs = [x for x in args if Path(x).suffix.lower() in DOC_EXTS and x != pdf]
+        if not pdf or not srcs:
+            sys.exit("erreur : pdfpro.py render <documents…> <sortie.pdf> [couleur]")
+        rest = [x for x in args if x not in srcs and x != pdf]
+        render_docs(srcs, pdf, rest[0] if rest else "")
     elif len(a) >= 3 and a[0] == "render":
         render(a[1], a[2], a[3] if len(a) > 3 else "")
     elif len(a) >= 4 and a[0] == "chart":
