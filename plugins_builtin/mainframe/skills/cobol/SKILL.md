@@ -5,6 +5,10 @@ description: Écrire, compiler et tester du COBOL sur le Mac avec GnuCOBOL (form
 
 # COBOL avec GnuCOBOL
 
+**Une explication demandée** (« explique-moi », « c'est quoi », « comment marche… ») : réponds dans la conversation,
+avec un exemple court en bloc ```cobol (format fixe, colonne 8), sans écrire de fichier. Un fichier et une
+compilation seulement si l'utilisateur veut un programme, ou l'essayer.
+
 `cobc` manquant : Personnaliser › Plugins › mainframe › « Installer les outils » (GnuCOBOL).
 
 ## Format
@@ -12,6 +16,13 @@ description: Écrire, compiler et tester du COBOL sur le Mac avec GnuCOBOL (form
   `-` suite), 8-11 zone A (DIVISION, SECTION, paragraphes, niveaux 01/77), 12-72 zone B, rien après 72.
 - **Libre** : `-free` à la compilation, `>>SOURCE FORMAT FREE` en première ligne.
 Garde le format du fichier existant. Pour un programme destiné au mainframe, toujours le format fixe.
+
+## Pièges fréquents
+- Une FUNCTION prend ses arguments entre parenthèses : `MOVE FUNCTION UPPER-CASE(WS-NOM) TO WS-NOM`.
+- Assembler un texte : `STRING 'Bonjour ' WS-NOM DELIMITED BY SIZE INTO WS-MESSAGE END-STRING`.
+- `SET` : seulement pour les index et les conditions (niveau 88). Une valeur dans une variable : `MOVE`.
+- Un sous-programme appelé avec `CALL 'PROG' USING A B` reçoit A et B en `LINKAGE SECTION` et
+  `PROCEDURE DIVISION USING A B`, et finit par `GOBACK` (pas `STOP RUN`).
 
 ## Squelette
 ```cobol

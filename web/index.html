@@ -4758,7 +4758,11 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "skill": reply.steps.push({ type: "event", icon: "📘", text: `Skill utilisé : ${ev.name}` }); v.event("📘", `Skill utilisé : ${ev.name}`); break;
           case "hook": {  // one of the user's hooks ran: a line of the work, like a skill
             const when = { PreToolUse: "avant", PostToolUse: "après", UserPromptSubmit: "à l'envoi", Stop: "à la fin", SessionStart: "au démarrage", PreCompact: "avant le résumé" }[ev.event] || "";
-            const t = `Hook ${when}${ev.tool ? " " + ev.tool : ""}${ev.blocked ? " · bloqué" : ""}${ev.text ? " — " + ev.text.split("\n")[0].slice(0, 140) : ""}`;
+            // said simply: what was checked and what to fix, not the hook's mechanics (« Hook après write_file · bloqué »)
+            const what = { PostToolUse: "Vérification après l'écriture", PreToolUse: "Vérification avant l'action", UserPromptSubmit: "Règle à l'envoi",
+              Stop: "Vérification de fin", SessionStart: "Au démarrage", PreCompact: "Avant le résumé" }[ev.event] || `Règle ${when}`;
+            const first = ev.text ? ev.text.split("\n")[0].replace(/\s*:\s*$/, "").slice(0, 140) : "";
+            const t = `${what}${ev.blocked ? " · à corriger" : ""}${first ? " — " + first : ""}`;
             reply.steps.push({ type: "event", icon: "🪝", text: t }); v.event("🪝", t); break; }
           case "skill_created": reply.steps.push({ type: "event", icon: "✨", text: `Nouveau skill enregistré : ${ev.name}` }); v.event("✨", `Nouveau skill enregistré : ${ev.name}`); break;
           case "vision": reply.steps.push({ type: "vision", model: ev.model, text: ev.text }); v.vision(ev); break;
