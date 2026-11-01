@@ -3764,7 +3764,7 @@ class Agent:
                                                                    self.root, self.disabled_skills)) or look)):
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
-            task = f"{task}\n\n{ext.skill_situation(sk['name'], self.root, task)}[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
+            task = f"{task}\n\n{ext.skill_situation(sk['name'], self.root, task + " " + str(getattr(self, "_task_words", "") or ""))}[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
             import libs
             if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
                 task += "\n\n" + lp

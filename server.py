@@ -2179,7 +2179,7 @@ class Handler(BaseHTTPRequestHandler):
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
-                                    f"\n\n{ext.skill_situation(sk['name'], helper.root, body["message"])}[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}"
+                                    f"\n\n{ext.skill_situation(sk['name'], helper.root, recent)}[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}"
                                     + (f"\n(Fichiers de cette skill, dans {Path(sk['path']).parent} : {', '.join(sk['files'][:12])})"
                                        if sk.get("files") else ""))
                 import libs
