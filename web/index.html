@@ -2578,8 +2578,19 @@ function codeBlock(lang, body, file = "", open = false) {
       + `<details class="mfigcode"><summary>Code de la figure</summary>${codeBlockRaw("svg", body, file, open)}</details>`;
   }
   if (/^quiz$/i.test(lang || "")) {  // an interactive quiz (skill quiz): a card to tick, drawn by quizDraw
-    if (open) return '<div class="quizcard qwait"><span class="muted">Préparation du quiz…</span></div>';
-    try { const q = JSON.parse(body); if (q && Array.isArray(q.questions) && q.questions.length) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>`; } catch (e) { /* unreadable: shown as written */ }
+    // the JSON may be complete even when the closing ``` was forgotten: the card shows, the words after it too
+    let json = body, after = "";
+    if (open || !/^\s*\{[\s\S]*\}\s*$/.test(body)) {  // still being written, or words after the JSON
+      const i0 = body.indexOf("{"); let depth = 0, str = false, end = -1;
+      for (let i = i0; i0 >= 0 && i < body.length; i++) {
+        const ch = body[i];
+        if (str) { if (ch === "\\") i++; else if (ch === '"') str = false; continue; }
+        if (ch === '"') str = true; else if (ch === "{") depth++; else if (ch === "}" && --depth === 0) { end = i; break; }
+      }
+      if (end < 0) return '<div class="quizcard qwait"><span class="muted">Préparation du quiz…</span></div>';
+      json = body.slice(i0, end + 1); after = body.slice(end + 1).trim();
+    }
+    try { const q = JSON.parse(json); if (q && Array.isArray(q.questions) && q.questions.length) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>` + (after ? md(after) : ""); } catch (e) { if (open) return '<div class="quizcard qwait"><span class="muted">Préparation du quiz…</span></div>'; }
   }
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
   return codeBlockRaw(lang, body, file, open);

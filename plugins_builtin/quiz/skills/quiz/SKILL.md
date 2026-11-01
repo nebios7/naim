@@ -21,7 +21,7 @@ d'écriture. Tu écris une phrase, puis UN bloc ```quiz (du JSON), puis une phra
 - `indice` : aide à réfléchir sans donner la réponse.
 - `explication` : pourquoi c'est la bonne réponse, et ce qui trompe dans les autres (1 à 3 phrases, d'après la source).
 
-## 3. Le bloc (JSON valide : guillemets droits, pas de virgule finale)
+## 3. Le bloc (JSON valide : guillemets droits, pas de virgule finale, et le bloc FERMÉ par ``` sur sa propre ligne)
 ```quiz
 {
   "titre": "Le format SAED",
