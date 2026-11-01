@@ -1,6 +1,6 @@
 {
   "name": "mainframe",
-  "version": "1.1",
+  "version": "1.2",
   "description": "COBOL (compilé et testé sur le Mac avec GnuCOBOL), JCL, DB2, REXX (exécuté avec Regina), PL/I. Vérifie chaque fichier COBOL écrit.",
   "skills": "skills",
   "triggers": {

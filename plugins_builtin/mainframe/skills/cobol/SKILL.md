@@ -24,6 +24,38 @@ Garde le format du fichier existant. Pour un programme destiné au mainframe, to
 - Un sous-programme appelé avec `CALL 'PROG' USING A B` reçoit A et B en `LINKAGE SECTION` et
   `PROCEDURE DIVISION USING A B`, et finit par `GOBACK` (pas `STOP RUN`).
 
+## Appeler un sous-programme (CALL … USING) : l'exemple exact
+L'APPELANT passe ses variables (WORKING-STORAGE, pas de LINKAGE) ; l'APPELÉ les reçoit (LINKAGE SECTION +
+PROCEDURE DIVISION USING), dans le même ordre, et rend la main avec GOBACK. Passage par référence : l'appelé peut
+les modifier.
+```cobol
+      *> PRINCIPAL.cbl : l'appelant
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. PRINCIPAL.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-NOM          PIC X(20) VALUE 'MARIE'.
+       01  WS-AGE          PIC 9(3)  VALUE 30.
+       PROCEDURE DIVISION.
+           CALL 'SALUTER' USING WS-NOM WS-AGE
+           DISPLAY 'Age apres appel : ' WS-AGE
+           STOP RUN.
+```
+```cobol
+      *> SALUTER.cbl : l'appelé
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. SALUTER.
+       DATA DIVISION.
+       LINKAGE SECTION.
+       01  LK-NOM          PIC X(20).
+       01  LK-AGE          PIC 9(3).
+       PROCEDURE DIVISION USING LK-NOM LK-AGE.
+           DISPLAY 'Bonjour ' LK-NOM
+           ADD 1 TO LK-AGE
+           GOBACK.
+```
+Compiler les deux ensemble : `cobc -x -fixed PRINCIPAL.cbl SALUTER.cbl -o principal && ./principal`.
+
 ## Squelette
 ```cobol
        IDENTIFICATION DIVISION.
