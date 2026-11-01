@@ -421,6 +421,10 @@ def accent_css(name):
 
 
 def render(src, out, couleur=""):
+    if not Path(src).expanduser().is_file():  # said plainly (not a Python error), with the file of that name if it is here
+        near = Path(Path(src).name)
+        sys.exit(f"erreur : fichier introuvable : {src} (No such file or directory)."
+                 + (f" Il est ici : {near} — relance avec ce chemin." if near.is_file() else " Vérifie le chemin avec list_files."))
     src, out = Path(src).expanduser().resolve(), Path(out).expanduser().resolve()
     full = src.with_name(src.stem + ".pro.html")  # next to the page: its images (img/…) keep their relative paths
     built = page(src.read_text())

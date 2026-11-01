@@ -965,6 +965,18 @@ class Agent:
                 found.append(twin)
         return "".join(f"\n[Le vrai nom a une autre apostrophe : utilise exactement ce chemin, entre guillemets : \"{t}\"]" for t in found)
 
+    def _folder_twice_hint(self, command):
+        """« cours-cobol/page.html » typed while the work folder IS cours-cobol: write_file put it at its root (it removes
+        the doubled folder), a command does not: the exact path to use."""
+        name, out = self.root.name, []
+        for q in re.findall(r'"([^"]+)"|\'([^\']+)\'|(\S+)', command):
+            p = next((x for x in q if x), "")
+            if p.startswith(name + "/") and not (self.root / p).exists() and (self.root / p[len(name) + 1:]).exists():
+                fixed = p[len(name) + 1:]
+                if fixed not in out:
+                    out.append(fixed)
+        return "".join(f"\n[Le dossier de travail est déjà « {name} » : le fichier est « {f} » (sans « {name}/ » devant). Relance avec ce chemin.]" for f in out)
+
     def _localized(self, path):
         """« ~/Téléchargements/x » → ~/Downloads/x (only right under the home folder, when the French name does not exist)."""
         home = Path.home()
@@ -3235,7 +3247,7 @@ class Agent:
         try:
             result = fn(**args)
             if name == "run_command" and isinstance(result, str) and "No such file or directory" in result:
-                result += self._apostrophe_hint(str(args.get("command", "")))
+                result += self._apostrophe_hint(str(args.get("command", ""))) + self._folder_twice_hint(str(args.get("command", "")))
         except TypeError as e:
             if name == "write_file" and "missing" in str(e):
                 # a very long file in one call: its path or its content gets lost on the way — written in parts it works
