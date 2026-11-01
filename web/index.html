@@ -424,7 +424,8 @@ header select { max-width: 220px; text-overflow: ellipsis; }
 .md a.fchip span, .bubble a.fchip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .md code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .87em; background: var(--code); border: 1px solid var(--line); padding: 0 4px; border-radius: 5px; }
 .md a { color: var(--accent); }
-.md blockquote { margin: 0 0 10px; padding: 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.md blockquote { margin: 0 0 10px; padding: 2px 12px; border-left: 3px solid var(--line); color: var(--muted); background: none; border-radius: 0; }
+.md blockquote > :last-child { margin-bottom: 0; }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .md table { border-collapse: collapse; margin: 0 0 12px; font-size: .93em; display: block; overflow-x: auto; } .md th, .md td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; } .md th { background: var(--side); }
 .code { background: var(--code); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 12px; overflow: hidden; }
@@ -433,6 +434,8 @@ header select { max-width: 220px; text-overflow: ellipsis; }
 .code .bar .cwrit { flex: none; color: var(--muted); font-size: 11.5px; padding: 3px 6px; }
 .code .bar button { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 2px 7px; border-radius: 5px; }
 .code .bar button:hover { color: var(--text); background: var(--hover); }
+.code .bar button.ib { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; padding: 0; }
+.code .bar button.ib svg { width: 14px; height: 14px; }
 .code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font: .87em/1.55 ui-monospace, "SF Mono", Menlo, monospace; }
 .code pre code { background: none; border: 0; padding: 0; font-size: 1em; }
 body.wrapcode .code pre { white-space: pre-wrap; word-break: break-word; }
@@ -2357,6 +2360,11 @@ const curRun = () => (current ? runs[current.id] : null);
 
 // ======================================================================= syntax highlighting
 const KW = new Set(("abstract and as assert async await break case catch class const continue def default defer del do elif else enum export extends extern false final finally fn for foreach from func function go guard if impl implements import in include instanceof interface is lambda let match mod module mut namespace new nil none not null of or override package pass private protected pub public raise readonly return self select static struct super switch template this throw throws trait true try type typedef typeof union unsafe use using val var void volatile when where while with yield require_once require println printf int float double bool boolean char string str long short byte unsigned signed auto None True False").split(" "));
+const COBKW = new Set(("IDENTIFICATION DIVISION PROGRAM ID ENVIRONMENT CONFIGURATION INPUT OUTPUT FILE CONTROL DATA WORKING STORAGE LINKAGE "
+  + "SECTION PROCEDURE USING PIC PICTURE VALUE VALUES MOVE TO ADD SUBTRACT MULTIPLY DIVIDE COMPUTE GIVING DISPLAY ACCEPT IF ELSE END "
+  + "PERFORM UNTIL VARYING FROM BY TIMES EVALUATE WHEN OTHER CALL GOBACK STOP RUN STRING DELIMITED SIZE INTO OPEN CLOSE READ WRITE "
+  + "REWRITE DELETE EXTEND AT NOT INVALID KEY FD SELECT ASSIGN ORGANIZATION SEQUENTIAL INDEXED RELATIVE ACCESS RECORD IS ARE COPY "
+  + "OCCURS REDEFINES FUNCTION SET TRUE FALSE ZERO ZEROS SPACE SPACES COMP EXEC SQL JOB DD DSN DISP SYSOUT PGM CLASS MSGCLASS PROC").split(" "));
 const SQLKW = new Set("SELECT FROM WHERE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE PRIMARY KEY FOREIGN REFERENCES JOIN LEFT RIGHT INNER OUTER ON GROUP BY ORDER HAVING LIMIT AND OR NOT NULL AS DISTINCT COUNT SUM AVG MIN MAX INDEX ALTER DROP IF EXISTS DESC ASC UNIQUE DEFAULT AUTO_INCREMENT INT VARCHAR TEXT DATE".split(" "));
 // shell, like a terminal-aware editor: the command of each segment, keywords, strings, variables, options
 const SH_KW = new Set("for in do done if then else elif fi while until case esac function select time".split(" "));
@@ -2407,7 +2415,7 @@ function highlight(code, lang) {
   if (/^(diff|patch)$/.test(lang)) return diffHtml(code);
   const hashComment = /^(py|python|sh|bash|zsh|shell|rb|ruby|yaml|yml|toml|r|perl|dockerfile|makefile|conf|ini)$/.test(lang);
   const sqlComment = /^(sql|lua|haskell|hs)$/.test(lang);
-  const isSql = lang === "sql";
+  const isSql = lang === "sql", isCob = /^(cobol|cbl|cob|cpy|jcl)$/.test(lang);  // COBOL and JCL: their words in capitals
   const re = new RegExp([
     String.raw`(\/\*[\s\S]*?\*\/)`,
     hashComment ? String.raw`(#.*)` : sqlComment ? String.raw`(--.*)` : String.raw`(\/\/.*)`,
@@ -2423,8 +2431,8 @@ function highlight(code, lang) {
     if (c1 || c2) out += `<span class="hc">${esc(tok)}</span>`;
     else if (s) out += `<span class="hs">${esc(tok)}</span>`;
     else if (n) out += `<span class="hn">${esc(tok)}</span>`;
-    else if (fn) out += KW.has(fn) || (isSql && SQLKW.has(fn.toUpperCase())) ? `<span class="hk">${esc(fn)}</span>` : `<span class="hf">${esc(fn)}</span>`;
-    else if (w) out += KW.has(w) || (isSql && SQLKW.has(w.toUpperCase())) ? `<span class="hk">${esc(w)}</span>` : esc(w);
+    else if (fn) out += KW.has(fn) || (isSql && SQLKW.has(fn.toUpperCase())) || (isCob && COBKW.has(fn.toUpperCase())) ? `<span class="hk">${esc(fn)}</span>` : `<span class="hf">${esc(fn)}</span>`;
+    else if (w) out += KW.has(w) || (isSql && SQLKW.has(w.toUpperCase())) || (isCob && COBKW.has(w.toUpperCase())) ? `<span class="hk">${esc(w)}</span>` : esc(w);
     last = re.lastIndex;
   }
   return out + esc(code.slice(last));
@@ -2603,7 +2611,7 @@ function codeBlock(lang, body, file = "", open = false) {
 }
 function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
-  return `<div class="code${open ? " writing" : ""}"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} ligne${body.split("\n").length > 1 ? "s" : ""}</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">${file ? `✓ Appliquer à ${esc(file.split("/").pop())}` : "⤓ Projet"}</button>` : ""}<button data-save>Enregistrer</button><button data-copy>Copier</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
+  return `<div class="code${open ? " writing" : ""}"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} ligne${body.split("\n").length > 1 ? "s" : ""}</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? (file ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">✓ Appliquer à ${esc(file.split("/").pop())}</button>` : `<button class="ib" data-write data-file="" title="Écrire ce code dans un fichier du projet">${svgI("folder")}</button>`) : ""}<button class="ib" data-save title="Enregistrer dans un fichier">${svgI("download")}</button><button class="ib" data-copy title="Copier">${svgI("copy")}</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
 }
 // redraw an answer without rebuilding what did not change: each top-level block is kept when its HTML is the same, so
 // finished code blocks, their buttons and the text already read stay still while the end of the answer is written
@@ -3014,7 +3022,7 @@ document.addEventListener("click", async (e) => {
   if (!b) return;
   const code = b.closest(".code").querySelector("code");
   const text = code.textContent, lang = code.dataset.lang, ext = EXT[(lang || "").toLowerCase()] || "txt";
-  if (b.hasAttribute("data-copy")) { copyText(text); b.textContent = "Copié ✓"; setTimeout(() => (b.textContent = "Copier"), 1200); }
+  if (b.hasAttribute("data-copy")) { copyText(text); b.innerHTML = svgI("check"); b.title = "Copié"; setTimeout(() => { b.innerHTML = svgI("copy"); b.title = "Copier"; }, 1200); }
   if (b.hasAttribute("data-preview")) showPreview(text, b.closest(".code"));
   if (b.hasAttribute("data-save")) download(ext === "Dockerfile" ? "Dockerfile" : `naim.${ext}`, text);
   if (b.hasAttribute("data-write")) {
@@ -3022,7 +3030,7 @@ document.addEventListener("click", async (e) => {
     if (!name) return;
     const r = await api("/api/file/write", { method: "POST", body: { root: S.project, path: name, content: text } });
     if (r.error) return toast(`Impossible d'écrire ${name} : ${r.error}`);
-    b.textContent = "✓ Appliqué"; setTimeout(() => (b.textContent = `✓ Appliquer à ${name.split("/").pop()}`), 1600);
+    if (!b.classList.contains("ib")) { b.textContent = "✓ Appliqué"; setTimeout(() => (b.textContent = `✓ Appliquer à ${name.split("/").pop()}`), 1600); }
     toast(r.existed ? `${name} remplacé (ancien fichier dans ${r.backup})` : `${name} créé (${r.lines} lignes)`); refreshTreeSoon();
   }
   if (b.hasAttribute("data-run")) {
