@@ -644,7 +644,8 @@ def mac_allow(area):
 def finals(files, root=None):
     """The files to show the user: a PDF hides its drafts (the HTML it was made from, its .pro.html, its page previews,
     the texts, data and scripts written next to it to make it: lettre.txt, textes.json, faire_doc.py); a preview of a
-    document (CV.docx.png) and a file moved away since (mv) are never shown."""
+    document (CV.docx.png), the algorithm .js of a simulation page (tri.js beside tri.html) and a file moved away since
+    (mv) are never shown."""
     def gone(path):
         f = Path(os.path.expanduser(str(path)))
         if not f.is_absolute():
@@ -653,6 +654,8 @@ def finals(files, root=None):
             f = Path(root) / f
         return not f.exists()
     files = [f for f in files if not gone(f["path"]) and not re.search(r"\.(docx?|pdf|pptx?|xlsx?|odt|pages)\.(png|jpe?g)$", str(f["path"]), re.I)]
+    pages = {re.sub(r"\.html?$", "", str(f["path"]), flags=re.I).lower() for f in files if re.search(r"\.html?$", str(f["path"]), re.I)}
+    files = [f for f in files if not (str(f["path"]).lower().endswith(".js") and str(f["path"])[:-3].lower() in pages)]  # a simulation's algo .js
     pdfs = [f["path"] for f in files if str(f["path"]).lower().endswith(".pdf")]
     if not pdfs:
         return files
@@ -1379,6 +1382,19 @@ class Agent:
         return (f" WARNING: {', '.join(missing)} not installed in this project: run `"
                 + (f"cd {rel} && " if rel != "." else "") + f"npm install {' '.join(missing)}` now, before going on.")
 
+    TYPO = {"'": "'’‘ʼ", "’": "'’‘ʼ", "‘": "'’‘ʼ", '"': '"“”«»', "“": '"“”«»', "”": '"“”«»', "-": "-–—", "–": "-–—",
+            "—": "-–—", " ": " \u00a0\u202f", "\u00a0": " \u00a0\u202f", "\u202f": " \u00a0\u202f"}
+
+    @classmethod
+    def _typo_find(cls, text, old):
+        """old_text as written by the model, with ' for ’ (or " for «, - for –, a space for a non-breaking one): the
+        real text when it is found exactly once that way, else None. An edit then works instead of failing."""
+        if not old or not any(ch in cls.TYPO for ch in old):
+            return None
+        pat = "".join(f"[{re.escape(cls.TYPO[ch])}]" if ch in cls.TYPO else re.escape(ch) for ch in old)
+        found = re.findall(pat, text)
+        return found[0] if len(found) == 1 else None
+
     def edit_file(self, path, old_text, new_text):
         p = self.resolve(path)
         if err := self._guard_own_path(p, "Modifier"):
@@ -1387,6 +1403,8 @@ class Agent:
             return f"error: file not found: {path}"
         text = p.read_text()
         n = text.count(old_text)
+        if n == 0 and (real := self._typo_find(text, old_text)):
+            old_text, n = real, 1
         if n != 1:
             return f"error: old_text found {n} times in {path}; it must appear exactly once"
         new = text.replace(old_text, new_text, 1)
@@ -1560,6 +1578,8 @@ class Agent:
         for i, e in enumerate(edits, 1):
             old, rep_ = (e or {}).get("old_text", ""), (e or {}).get("new_text", "")
             n = new.count(old) if old else 0
+            if n == 0 and (real := self._typo_find(new, old)):
+                old, n = real, 1
             if n != 1:
                 return f"error: edit {i}: old_text found {n} times; it must appear exactly once (nothing was changed)"
             new = new.replace(old, rep_, 1)

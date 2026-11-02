@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>Animation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:#12121c;color:#e8e8f2;font-family:Montserrat,system-ui,sans-serif;display:flex;justify-content:center}
+.app{width:100%;max-width:560px;padding:20px 16px 28px}
+h1{font-size:28px;line-height:1.15;text-align:center;margin:8px 0 14px;font-weight:800}
+.sub{text-align:center;letter-spacing:.4em;font-size:13px;color:#aab;font-family:ui-monospace,Menlo,monospace;margin-bottom:10px;text-transform:uppercase}
+.stats{display:flex;gap:14px;justify-content:center;margin-bottom:6px;flex-wrap:wrap}
+.stat{background:#1b1b2a;border:1px solid #2c2c40;border-radius:12px;padding:10px 18px;font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:.12em;color:#aab}
+.stat b{font-size:26px;color:#ffc53d;margin-left:10px;letter-spacing:0}
+#stage{position:relative;height:270px;border-top:1px solid #34344a;margin-top:8px}
+#stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+.slot{position:absolute;bottom:4px;transition:left .38s ease,opacity .3s;padding:0 4px}
+.bar{border:2px solid #4b4b86;background:#2a2a48;border-radius:6px 6px 3px 3px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-weight:700;font-size:20px;transition:background .2s,border-color .2s,box-shadow .2s,height .25s}
+.bar.cmp{background:#25506a;border-color:#5cc8ff}
+.bar.swp{background:#e5566c;border-color:#ff7a8e}
+.bar.key{background:#5a3f9e;border-color:#b69cff;box-shadow:0 0 14px #8f6cff88}
+.bar.ok{background:#3cc46e;border-color:#6fe898;box-shadow:0 0 14px #3cc46e99;color:#06240f}
+.slot.out{opacity:.25}
+#draw{position:absolute;inset:0}
+#floor{height:2px;background:#34344a}
+.code{margin-top:16px;background:#171724;border:1px solid #2c2c40;border-radius:14px;overflow:hidden;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.tab{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid #2c2c40;color:#aab}
+.tab i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.tab span{margin-left:10px;background:#222236;padding:3px 10px;border-radius:6px}
+#lines{overflow-x:auto}
+.ln{display:flex;padding:1px 14px 1px 0;white-space:pre;position:relative;line-height:1.55}
+.ln em{width:36px;text-align:right;color:#667;font-style:normal;padding-right:14px;flex:none}
+.ln.on{background:#3b3220;box-shadow:inset 3px 0 #ffc53d}
+.ln .note{margin-left:auto;color:#ffc53d;padding-left:10px}
+.k{color:#ff79a8}.t{color:#5cc8ff}.n{color:#ffc53d}.c{color:#778;font-style:italic}.f{color:#7ee0a0}.s{color:#e6c07b}
+.vars{display:flex;gap:16px;padding:9px 14px;border-top:1px solid #2c2c40;color:#aab;flex-wrap:wrap;font-family:ui-monospace,Menlo,monospace}
+.vars b{color:#ffc53d;font-weight:600}
+#pass{text-align:center;margin:10px 0 4px;font-family:ui-monospace,Menlo,monospace;font-size:14px}
+#msg{min-height:64px;background:#1b1b2a;border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.45;margin-top:8px}
+#err{display:none;background:#4a1d26;border:1px solid #e5566c;border-radius:12px;padding:12px 14px;margin-top:10px;font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:pre-wrap}
+.ctl{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+button{background:#262640;color:#e8e8f2;border:0;border-radius:10px;padding:10px 14px;font-size:15px;font-weight:600;cursor:pointer}
+button:active{background:#33335a}
+#play{background:#ffc53d;color:#1b1400;min-width:92px}
+input[type=range]{flex:1 1 100%;accent-color:#ffc53d}
+input[type=text]{flex:1;min-width:120px;background:#1b1b2a;color:#e8e8f2;border:1px solid #2c2c40;border-radius:10px;padding:10px;font-size:15px}
+#cible{flex:0 1 90px;min-width:70px}
+</style></head><body><div class="app">
+<h1 id="titre"></h1>
+<div class="sub" id="soustitre"></div>
+<div class="stats" id="stats"></div>
+<div id="stage"><div id="draw"></div><svg id="claw"></svg></div><div id="floor"></div>
+<div class="code"><div class="tab"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span id="fichier"></span></div><div id="lines"></div>
+<div class="vars" id="vars"></div></div>
+<div id="pass"></div>
+<div id="msg"></div>
+<div id="err"></div>
+<div class="ctl">
+<input type="range" id="bar" min="0" max="0" value="0" aria-label="Étape">
+<button id="rst" title="Recommencer">⟲</button><button id="prev" title="Étape précédente">◀</button><button id="play">⏸ Pause</button><button id="next" title="Étape suivante">▶</button><button id="spd" title="Vitesse">1×</button>
+</div>
+<div class="ctl"><input type="text" id="inp" aria-label="Valeurs"><input type="text" id="cible" aria-label="Valeur cherchée" placeholder="cible" hidden><button id="go">Appliquer</button><button id="rnd">Mélanger</button></div>
+</div>
+<script id="algo">
+// ==== ALGO ====
+// ==== FIN ALGO ====
+</script>
+<script id="trace">
+// The engine, part 1 (no page needed: the checker runs it too). The algorithm runs once, for real, on a copy of
+// the values, and every P(...) call records one step: the line, the message, the array as it is, and the rest.
+const LANGS={
+ python:{k:'def return if elif else for while in not and or is break continue pass import from as class with try except finally raise lambda yield global None True False print len range',c:'#'},
+ c:{k:'if else for while do return break continue switch case default struct typedef sizeof void int char float double long short unsigned bool size_t const static true false NULL include',c:'//'},
+ java:{k:'public private protected static void int long double float boolean char String if else for while do return break continue new class true false null switch case default',c:'//'},
+ javascript:{k:'function const let var if else for while do return break continue new class true false null undefined of in switch case default',c:'//'},
+ cobol:{k:'IDENTIFICATION DIVISION PROGRAM-ID DATA WORKING-STORAGE SECTION PROCEDURE PERFORM UNTIL VARYING FROM BY MOVE TO IF ELSE END-IF END-PERFORM ADD SUBTRACT COMPUTE DISPLAY STOP RUN PIC OCCURS GREATER LESS THAN EQUAL AND OR NOT',c:'*>'},
+ pseudo:{k:'algorithme variables variable début debut fin pour de à a faire finpour tant que tantque fintantque si alors sinon finsi retourner renvoyer lire écrire ecrire entier réel reel tableau booléen booleen vrai faux et ou non fonction procédure procedure',c:'//'}
+};
+LANGS.js=LANGS.javascript;LANGS.algo=LANGS.pseudo;LANGS.cpp=LANGS.c;
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function colorLine(line,lang){
+ const L=LANGS[String(lang||'python').toLowerCase()]||LANGS.python,kw=new Set(L.k.split(' ').map(w=>w.toLowerCase()));
+ const ci=line.indexOf(L.c);let code=ci>=0?line.slice(0,ci):line;const com=ci>=0?line.slice(ci):'';
+ const out=code.replace(/("[^"]*"|'[^']*')|(\b\d+(?:\.\d+)?\b)|([A-Za-zÀ-ÿ_][\wÀ-ÿ-]*)(\s*\()?|([^"'\wÀ-ÿ]+)/g,(m,str,num,word,par,other)=>{
+  if(str)return '<span class="s">'+esc(str)+'</span>';
+  if(num)return '<span class="n">'+num+'</span>';
+  if(word){const w=kw.has(word.toLowerCase())?'<span class="k">'+esc(word)+'</span>':par?'<span class="f">'+esc(word)+'</span>':esc(word);return w+(par||'')}
+  return esc(other);
+ });
+ return out+(com?'<span class="c">'+esc(com)+'</span>':'');
+}
+function codeLines(A){const ls=String(A.code||'').replace(/\t/g,'    ').split('\n');while(ls.length&&!ls[0].trim())ls.shift();while(ls.length&&!ls[ls.length-1].trim())ls.pop();return ls}
+function makeTrace(A,vals,cible){
+ const T=[],a=vals.slice(),n=codeLines(A).length;let c=0,s=0;
+ const P=(line,msg,o)=>{
+  o=o||{};
+  if(typeof line!=='number'||line<1||line>n||line!==Math.floor(line))throw new Error('P('+line+', …) : la ligne '+line+' n\'existe pas dans le code (il a '+n+' lignes, de 1 à '+n+').');
+  if(T.length>4000)throw new Error('Plus de 4000 étapes : la boucle ne s\'arrête pas (vérifie la condition de fin).');
+  if(o.c!==undefined)c=o.c;if(o.s!==undefined)s=o.s;
+  T.push({line,msg:String(msg==null?'':msg),a:(o.a||a).slice(),pair:o.pair||null,swap:!!o.swap,ok:o.ok||[],key:o.key==null?null:o.key,
+   out:o.out||[],found:o.found==null?null:o.found,vars:o.vars||{},note:o.note||'',pass:o.pass||'',c,s,done:!!o.done,extra:o.dessin||null});
+ };
+ P.plage=(d,f)=>{const r=[];for(let k=d;k<=f;k++)r.push(k);return r};
+ A.build(a,P,cible);
+ if(!T.length)throw new Error('build n\'a appelé P aucune fois : aucune étape à montrer.');
+ T[T.length-1].done=true;
+ return T;
+}
+</script>
+<script>
+// The engine, part 2: the page. Bars slide when values move, the robot arm follows the pair being compared.
+const A=typeof ALGO!=='undefined'?ALGO:null,$=id=>document.getElementById(id);
+const NAMES=(A&&A.compteurs)||['COMPARAISONS','ÉCHANGES'];
+let S=[],idx=0,playing=true,speeds=[.5,1,2,4],si=1,timer=null,slots={},prevIds=[],nextId=0,vals0=[];
+function showErr(e){$('err').style.display='block';$('err').textContent='Erreur dans l\'algorithme : '+(e&&e.message||e);console.error(e)}
+function init(){
+ if(!A){showErr('ALGO n\'est pas défini (le fichier de l\'algorithme est absent ou a une erreur de syntaxe).');return false}
+ document.title=A.titre||'Animation';$('titre').textContent=A.titre||'';$('soustitre').textContent=A.sous_titre||'';$('fichier').textContent=A.fichier||'';
+ $('stats').innerHTML=NAMES.map((t,k)=>`<div class="stat">${esc(t)}<b id="cnt${k}">0</b></div>`).join('');
+ const L=$('lines');L.innerHTML='';
+ codeLines(A).forEach((h,i)=>{const d=document.createElement('div');d.className='ln';d.innerHTML='<em>'+(i+1)+'</em><span>'+colorLine(h,A.langage)+'</span><span class="note"></span>';L.appendChild(d)});
+ $('inp').value=(A.valeurs||[5,2,8,1,9,3]).join(',');
+ if(A.cible!==undefined){$('cible').hidden=false;$('cible').value=A.cible}
+ return true;
+}
+// the same value moving keeps its bar (it slides); a value copied (a[j+1] = a[j]) gets a new bar for a while
+function ids(arr){
+ const used=new Set(),out=[];
+ arr.forEach((v,pos)=>{let best=-1,bd=1e9;prevIds.forEach((p,q)=>{if(!used.has(p.id)&&p.v===v&&Math.abs(q-pos)<bd){bd=Math.abs(q-pos);best=q}});
+  if(best>=0){used.add(prevIds[best].id);out.push({id:prevIds[best].id,v})}else out.push({id:'n'+(nextId++),v})});
+ prevIds=out;return out;
+}
+function load(vals,cible){
+ vals0=vals;$('err').style.display='none';
+ try{S=makeTrace(A,vals,cible)}catch(e){S=[];showErr(e);return}
+ idx=0;prevIds=[];nextId=0;$('stage').querySelectorAll('.slot').forEach(e=>e.remove());slots={};
+ $('bar').max=S.length-1;render();
+}
+function slotFor(o,n,mx,mn){
+ let d=slots[o.id];
+ if(!d){d=document.createElement('div');d.className='slot';d.innerHTML='<div class="bar"></div>';$('stage').appendChild(d);slots[o.id]=d}
+ d.style.width=100/n+'%';const b=d.firstChild;b.textContent=o.v;
+ const h=typeof o.v==='number'?50+(mx===mn?60:(o.v-mn)/(mx-mn)*150):80;b.style.height=h+'px';return d;
+}
+function render(){
+ const t=S[idx];if(!t)return;
+ $('bar').value=idx;$('cnt0')&&($('cnt0').textContent=t.c);$('cnt1')&&($('cnt1').textContent=t.s);
+ [...$('lines').children].forEach((d,i)=>{const on=t.line===i+1;d.classList.toggle('on',on);d.lastChild.innerHTML=on&&t.note?esc(t.note):''});
+ $('vars').innerHTML=Object.entries(t.vars).map(([k,v])=>`<span>${esc(k)} = <b>${esc(v)}</b></span>`).join('');
+ $('pass').textContent=t.done?(t.pass||'terminé'):t.pass;
+ $('msg').innerHTML=t.msg;
+ if(A.dessiner){$('stage').querySelectorAll('.slot').forEach(e=>e.remove());slots={};$('claw').innerHTML='';try{A.dessiner(t,$('draw'))}catch(e){showErr(e)}return}
+ const n=t.a.length,nums=t.a.filter(v=>typeof v==='number'),mx=Math.max(...nums,...vals0.filter(v=>typeof v==='number')),mn=Math.min(...nums,...vals0.filter(v=>typeof v==='number'));
+ const objs=ids(t.a),live=new Set();
+ objs.forEach((o,pos)=>{
+  const d=slotFor(o,n,mx,mn);live.add(o.id);d.style.left=pos*100/n+'%';d.classList.toggle('out',t.out.includes(pos));
+  const b=d.firstChild;b.className='bar';
+  if(t.found===pos||t.ok.includes(pos))b.classList.add('ok');
+  else if(t.key===pos)b.classList.add('key');
+  else if(t.pair&&t.pair.includes(pos))b.classList.add(t.swap?'swp':'cmp');
+ });
+ for(const id in slots)if(!live.has(id)){slots[id].remove();delete slots[id]}
+ setClaw(t,objs);
+}
+// the robot arm: follows the two cells of `pair`, eased; hidden when there is no pair
+let cur=null,tgt=null,raf=null;
+function setClaw(t,objs){
+ if(!t.pair||t.done){$('claw').innerHTML='';cur=null;return}
+ const n=t.a.length,W=$('stage').clientWidth,sl=W/n,H=$('stage').clientHeight;
+ const h=p=>p>=0&&p<n&&slots[objs[p].id]?slots[objs[p].id].firstChild.offsetHeight+4:40;
+ const p=t.pair[0],q=t.pair.length>1?t.pair[1]:t.pair[0];
+ tgt=[(p+.5)*sl,(q+.5)*sl,H-h(p)-4,H-h(q)-4];
+ if(!cur)cur=tgt.slice();
+ if(!raf)raf=requestAnimationFrame(tick);
+}
+function tick(){
+ raf=null;if(!cur||!tgt)return;let m=0;
+ for(let k=0;k<4;k++){const d=tgt[k]-cur[k];cur[k]+=d*.22;m=Math.max(m,Math.abs(d))}
+ const [x1,x2,y1,y2]=cur,mx=(x1+x2)/2,ty=10,pw=Math.min(30,$('stage').clientWidth/Math.max(1,S[idx].a.length)/2.2);
+ $('claw').innerHTML=`<g stroke="#a99cff" stroke-width="2.5" fill="#12121c" stroke-linecap="round"><line x1="${mx}" y1="${ty}" x2="${x1}" y2="${y1}"/><line x1="${mx}" y1="${ty}" x2="${x2}" y2="${y2}"/><rect x="${mx-16}" y="2" width="32" height="14" rx="5"/><rect x="${x1-pw}" y="${y1-4}" width="${2*pw}" height="7" rx="3"/><rect x="${x2-pw}" y="${y2-4}" width="${2*pw}" height="7" rx="3"/></g>`;
+ if(m>.4)raf=requestAnimationFrame(tick);
+}
+// controls: play / pause, step by step, slider, speed, the user's own values
+function loop(){clearTimeout(timer);if(!playing)return;
+ timer=setTimeout(()=>{if(idx<S.length-1){idx++;render();loop()}else{playing=false;ui()}},750/speeds[si])}
+function ui(){$('play').textContent=playing?'⏸ Pause':(idx>=S.length-1?'⟲ Rejouer':'▶ Lecture')}
+function go(i){idx=Math.max(0,Math.min(S.length-1,i));render();ui()}
+$('play').onclick=()=>{if(!playing&&idx>=S.length-1)idx=0;playing=!playing;render();ui();loop()};
+$('next').onclick=()=>{playing=false;go(idx+1)};$('prev').onclick=()=>{playing=false;go(idx-1)};
+$('rst').onclick=()=>{playing=false;go(0)};
+$('bar').oninput=e=>{playing=false;go(+e.target.value)};
+$('spd').onclick=()=>{si=(si+1)%speeds.length;$('spd').textContent=speeds[si]+'×';loop()};
+function parse(){const v=$('inp').value.split(/[\s,;]+/).filter(Boolean).map(x=>isNaN(+x)?x:+x).slice(0,14);return v.length>=1?v:null}
+function cibleVal(){const x=$('cible').value.trim();return x===''?undefined:isNaN(+x)?x:+x}
+function restart(v){cur=null;load(v,cibleVal());playing=true;ui();loop()}
+$('go').onclick=()=>{const v=parse();if(v)restart(v)};
+$('rnd').onclick=()=>{const v=(parse()||[1,2,3,4,5,6,7,8]).slice().sort(()=>Math.random()-.5);if(A.trie_avant)v.sort((x,y)=>x-y);$('inp').value=v.join(',');restart(v)};
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'&&e.target.type==='text')return;if(e.code==='Space'){e.preventDefault();$('play').click()}if(e.key==='ArrowRight')$('next').click();if(e.key==='ArrowLeft')$('prev').click()});
+addEventListener('resize',()=>S[idx]&&render());
+if(init())restart(parse());
+</script></body></html>

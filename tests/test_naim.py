@@ -1648,3 +1648,71 @@ class Dreaming(unittest.TestCase):
         self.assertFalse(self.d.due({"dreaming": False}, yesterday, idle_s=3600, awake_s=3600, hour=3))
         today = {"date": datetime.now().strftime("%Y-%m-%d"), "date_time": "2000-01-01 03:00"}
         self.assertFalse(self.d.due({}, today, idle_s=9999, awake_s=9999, hour=3))
+
+
+class Simulations(unittest.TestCase):
+    """A simulation page = the fixed engine + a small algorithm file Naim writes; the checker runs it for real and
+    says exactly what is wrong (a broken page used to be rewritten by hand and never animated)."""
+    SK = ROOT / "plugins_builtin/algorithmique/skills/animation-algorithme"
+
+    def run_sim(self, *args):
+        return subprocess.run([sys.executable, str(self.SK / "simulation.py"), *args], capture_output=True, text=True, timeout=120)
+
+    def test_examples_are_right(self):
+        for ex in ("tri-bulles.js", "recherche-dichotomique.js"):
+            with tempfile.TemporaryDirectory() as d:
+                r = self.run_sim("creer", str(self.SK / "exemples" / ex), f"{d}/page.html")
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn("La simulation est juste", r.stdout)
+                page = Path(d, "page.html").read_text()
+                self.assertIn("const ALGO", page)
+                self.assertIn("function makeTrace", page)
+
+    def test_python_in_build_is_caught(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.js").write_text('const ALGO={titre:"x",type:"tri",code:"x",build(a,P){ while (a and P) {} }};')
+            r = self.run_sim("verifier", f"{d}/a.js")
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("syntaxe", r.stdout)
+
+    def test_sort_that_does_not_sort_is_caught(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.js").write_text('const ALGO={titre:"x",type:"tri",valeurs:[3,1,2],code:"for\\nswap",'
+                                       'build(a,P){P(1,"on regarde");P(2,"on échange")}};')
+            r = self.run_sim("verifier", f"{d}/a.js")
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("FAUX", r.stdout)
+
+    def test_html_in_code_and_bad_line_are_caught(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.js").write_text('const ALGO={titre:"x",code:"<span class=\\"k\\">for</span>",build(a,P){P(1,"x")}};')
+            self.assertIn("texte simple", self.run_sim("verifier", f"{d}/a.js").stdout)
+            Path(d, "b.js").write_text('const ALGO={titre:"x",code:"a\\nb",build(a,P){P(7,"x")}};')
+            self.assertIn("la ligne 7 n'existe pas", self.run_sim("verifier", f"{d}/b.js").stdout)
+
+    def test_algo_file_not_a_deliverable(self):
+        with tempfile.TemporaryDirectory() as d:
+            for f in ("tri.js", "tri.html", "app.js"):
+                Path(d, f).write_text("x")
+            shown = [Path(f["path"]).name for f in naimtools.finals([{"path": f"{d}/{x}"} for x in ("tri.js", "tri.html", "app.js")])]
+            self.assertEqual(shown, ["tri.html", "app.js"])
+
+
+class TypographicEdits(unittest.TestCase):
+    """The model writes ' where the file has ’ (or - for —): the edit finds the real text instead of failing (a failed
+    edit made Naim rewrite a whole page by hand)."""
+
+    def test_apostrophe_and_dash(self):
+        text = "<title>Tri à bulles — le robot met de l’ordre</title>"
+        self.assertEqual(naimtools.Agent._typo_find(text, "<title>Tri à bulles - le robot met de l'ordre</title>"), text)
+
+    def test_ambiguous_or_absent_stays_an_error(self):
+        self.assertIsNone(naimtools.Agent._typo_find("l’a et l’a", "l'a"))
+        self.assertIsNone(naimtools.Agent._typo_find("rien", "l'autre"))
+
+    def test_edit_file_uses_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p.html").write_text("<h1>Le robot met de l’ordre</h1>\n")
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None)
+            self.assertTrue(a.edit_file("p.html", "<h1>Le robot met de l'ordre</h1>", "<h1>Tri par insertion</h1>").startswith("ok"))
+            self.assertEqual(Path(d, "p.html").read_text(), "<h1>Tri par insertion</h1>\n")
