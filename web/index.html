@@ -1863,6 +1863,7 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md figure.mgraph figcaption { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font: 13px ui-monospace, Menlo, monospace; }
 .md .vis { margin: 4px 0 6px; }
 .md .vis iframe.visf { display: block; width: 100%; height: 160px; border: 0; background: transparent; }
+.md .vis iframe.simf { max-width: 680px; margin: 0 auto; border: 1px solid #2c2c40; border-radius: 14px; background: #12121c; overflow: hidden; }
 .md .vis.vwait { display: flex; align-items: center; gap: 8px; padding: 18px 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 13.5px; }
 .md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
 .turn.plugcard { align-items: flex-start; }
@@ -2693,9 +2694,16 @@ function algoFrame(algo) {
   if (i < 0 || j < 0) return '<div class="vwait">Le moteur de simulation est introuvable (plugin « algorithmique »).</div>';
   const code = algo.replace(/<\/script/gi, "<\\/script");  // the block cannot close its own script
   const head = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:">`
-    + `<style>:root { color-scheme: dark; } html, body { background: transparent !important; } body { padding: 2px; } .app { background: #12121c; border: 1px solid #2c2c40; border-radius: 16px; max-width: 620px; }</style>` + VIS_HEIGHT;
+    // compact for a conversation: the frame IS the card (one dark background, never a white band), smaller title and stage
+    + `<style>:root { color-scheme: dark; } html, body { background: #12121c !important; margin: 0; } body { display: block !important; }`
+    + ` .app { max-width: none !important; width: 100%; padding: 12px 14px 14px !important; }`
+    + ` h1 { font-size: 19px !important; margin: 2px 0 6px !important; } .sub { font-size: 11px !important; margin-bottom: 6px !important; }`
+    + ` .stats { margin-bottom: 2px !important; } .stat { padding: 5px 12px !important; font-size: 11px !important; }`
+    + ` #stage { height: 210px !important; } #draw svg { height: 100% !important; } .bar { font-size: 16px !important; }`
+    + ` .code { font-size: 12px !important; } #msg { min-height: 62px !important; font-size: 14px !important; padding: 9px 12px !important; }`
+    + ` .ctl { margin-top: 8px !important; } button { padding: 7px 11px !important; font-size: 14px !important; }</style>` + VIS_HEIGHT;
   const doc = (MOTEUR.slice(0, i + START.length) + "\n" + code + "\n" + MOTEUR.slice(j)).replace(/<head[^>]*>/i, (m) => m + head);
-  return `<iframe class="visf simf" sandbox="allow-scripts" title="Simulation" style="color-scheme: dark; height: 760px" srcdoc="${esc(doc)}"></iframe>`;
+  return `<iframe class="visf simf" sandbox="allow-scripts" title="Simulation" style="color-scheme: dark; height: 640px" srcdoc="${esc(doc)}"></iframe>`;
 }
 function visuelDoc(body) {
   const cs = getComputedStyle(document.documentElement);
@@ -2714,9 +2722,12 @@ addEventListener("message", (e) => {
   if (!e.data || e.data.naimVisuel !== 1) return;
   const f = [...document.querySelectorAll("iframe.visf")].find((x) => x.contentWindow === e.source);
   if (!f) return;
-  // it only grows (by more than 3 px): a visual whose height moves while it animates no longer shakes the conversation
-  const h = Math.min(Math.max(+e.data.h || 0, 40), f.classList.contains("simf") ? 1600 : 900), now = parseFloat(f.style.height) || 0;
+  // it grows at once; it shrinks only for a real change of layout (much smaller, held 0.8 s): no white space left under
+  // it, and no shaking while it plays (a message one line shorter does not move the page)
+  const h = Math.min(Math.max(+e.data.h || 0, 40), f.classList.contains("simf") ? 1400 : 900), now = parseFloat(f.style.height) || 0;
+  clearTimeout(f._shrink);
   if (!f.dataset.sized || h > now + 3) { f.dataset.sized = "1"; f.style.height = h + "px"; }
+  else if (h < now - 120) f._shrink = setTimeout(() => { f.style.height = h + "px"; }, 800);  // a real change of layout, not a line of text
 });
 function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
