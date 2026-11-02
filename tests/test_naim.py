@@ -1700,6 +1700,15 @@ class Simulations(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stdout)
             self.assertIn("OK   valeurs [7]", r.stdout)
 
+    def test_page_made_by_a_command_is_shown(self):
+        # the page comes from simulation.py, not write_file: without this only the .js was shown, no page, no preview
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "tri.html").write_text("x")
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None)
+            said = f"Page créée : {Path(d).resolve()}/tri.html\nLa simulation est juste."
+            self.assertEqual([f["path"] for f in a._named_outputs(said, 0, pages=True)], ["tri.html"])
+            self.assertEqual(a._named_outputs(said, 0), [])
+
     def test_algo_file_not_a_deliverable(self):
         with tempfile.TemporaryDirectory() as d:
             for f in ("tri.js", "tri.html", "app.js"):

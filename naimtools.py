@@ -3370,10 +3370,11 @@ class Agent:
                         found.append((st.st_mtime, {"path": self.rel(f), "size": st.st_size, "ext": f.suffix.lower()[1:]}))
         return [x for _, x in sorted(found, key=lambda t: -t[0])[:8]]
 
-    def _named_outputs(self, text, since):
+    def _named_outputs(self, text, since, pages=False):
         """Documents a command names (« PDF : ~/…/CV.pdf ») and made since `since`, wherever they are: the folder of an
-        attachment, not the project, is often where a CV or a letter is written."""
-        exts = "|".join(e[1:] for e in self.DELIVERABLE_EXTS)
+        attachment, not the project, is often where a CV or a letter is written. `pages`: HTML pages too (a simulation
+        page made by simulation.py, never written with write_file)."""
+        exts = "|".join(e[1:] for e in self.DELIVERABLE_EXTS | ({".html", ".htm"} if pages else set()))
         paths = re.findall(r"[\"']((?:~|/)[^\"'\n]+?\.(?:%s))[\"']" % exts, text, re.I)
         paths += re.findall(r"(?<![\w/~.-])((?:~|/)[^\s\"'`]+?\.(?:%s))(?![\w-])" % exts, text, re.I)
         found = []

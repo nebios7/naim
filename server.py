@@ -2502,7 +2502,8 @@ class Handler(BaseHTTPRequestHandler):
                             known = {f["path"] for f in made}
                             new_files = [f for f in helper._deliverables(started) if f["path"] not in known]
                             if name in ("run_command", "convert_document"):  # a PDF written outside the project (an attachment's folder)
-                                new_files += [f for f in helper._named_outputs(" ".join(map(str, args.values())) + "\n" + str(result), started)
+                                new_files += [f for f in helper._named_outputs(" ".join(map(str, args.values())) + "\n" + str(result), started,
+                                                                               pages=name == "run_command")
                                               if f["path"] not in known and all(f["path"] != g["path"] for g in new_files)]
                             if name == "write_file" and args.get("path"):  # a code file too (Calculatrice.java…): shown, with where it is
                                 try:
