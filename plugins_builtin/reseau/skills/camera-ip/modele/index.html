@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caméra</title>
+<style>
+  :root { --bg: #f6f5f2; --panel: #ffffff; --line: #e4e1da; --text: #1f1e1c; --muted: #77746d; --accent: #d97757; --ok: #2f9e5b; --bad: #d1453b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1b1b1a; --panel: #242422; --line: #363532; --text: #ecebe7; --muted: #9b988f; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  header { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--ok); } .dot.rec { background: var(--bad); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .spacer { flex: 1; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px 20px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; display: grid; place-items: center; }
+  video { width: 100%; height: 100%; object-fit: contain; transform-origin: center; }
+  .empty { position: absolute; color: #aaa; font-size: 13px; text-align: center; padding: 20px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+           border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--muted); } button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.recording { background: var(--bad); border-color: var(--bad); color: #fff; }
+  svg.i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 8px 0 3px; }
+  input[type=text], input[type=password], input[type=number], select { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
+           background: var(--bg); color: var(--text); font: inherit; }
+  .row { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+  .check { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text); margin-top: 10px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .err { color: var(--bad); font-size: 12.5px; margin-top: 8px; white-space: pre-wrap; }
+  .meter { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .2s; }
+  .meter.alert i { background: var(--bad); }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .item { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12px; }
+  .item .thumb { aspect-ratio: 16 / 9; background: #111; display: grid; place-items: center; color: #999; cursor: pointer; }
+  .item .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .item .meta { padding: 6px 8px; display: flex; align-items: center; gap: 6px; }
+  .item .meta span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .item button { padding: 3px 6px; }
+  .log { max-height: 160px; overflow: auto; font: 12px ui-monospace, Menlo, monospace; color: var(--muted); }
+  .wide { grid-column: 1 / -1; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; background: #000; max-width: 90vw; }
+  dialog video, dialog img { display: block; max-width: 90vw; max-height: 85vh; }
+</style>
+</head>
+<body>
+<header>
+  <svg class="i" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M16 10l5-3v10l-5-3"/></svg>
+  <h1>Caméra</h1>
+  <span class="pill"><span class="dot" id="dot"></span><span id="status">Arrêtée</span></span>
+  <span class="pill" id="recinfo"></span>
+  <span class="spacer"></span>
+  <span class="pill" id="clock"></span>
+</header>
+
+<main>
+  <section class="card">
+    <div class="stage">
+      <video id="video" muted playsinline></video>
+      <div class="empty" id="empty">Indique l'adresse de la caméra puis « Démarrer ».</div>
+    </div>
+    <div class="bar">
+      <button id="photo" disabled><svg class="i" viewBox="0 0 24 24"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Photo</button>
+      <button id="rec" disabled><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></svg><span>Enregistrer</span></button>
+      <button id="full" disabled><svg class="i" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>Plein écran</button>
+      <span class="spacer"></span>
+      <button id="rot" title="Tourner"><svg class="i" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+      <button id="mirror" title="Miroir"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M8 7l-4 5 4 5zM16 7l4 5-4 5z"/></svg></button>
+    </div>
+  </section>
+
+  <aside>
+    <section class="card">
+      <h2>Connexion</h2>
+      <div class="row">
+        <div><label for="ip">Adresse de la caméra</label><input type="text" id="ip" placeholder="192.168.1.20"></div>
+        <div><label for="port">Port</label><input type="number" id="port" value="554"></div>
+      </div>
+      <label for="user">Identifiant</label><input type="text" id="user" autocomplete="off">
+      <label for="password">Mot de passe</label><input type="password" id="password" autocomplete="off">
+      <label for="path">Chemin du flux</label><input type="text" id="path" placeholder="stream1">
+      <div class="row">
+        <div><label for="transport">Transport</label><select id="transport"><option value="tcp">TCP (stable)</option><option value="udp">UDP</option></select></div>
+        <div></div>
+      </div>
+      <label class="check"><input type="checkbox" id="reencode"> Ré-encoder en H.264 (si l'image ne s'affiche pas)</label>
+      <div class="bar">
+        <button class="primary" id="start">Démarrer</button>
+        <button id="stop" disabled>Arrêter</button>
+      </div>
+      <div class="err" id="err"></div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>Image</h2>
+      <label>Luminosité</label><input type="range" id="bright" min="50" max="200" value="100">
+      <label>Contraste</label><input type="range" id="contrast" min="50" max="200" value="100">
+      <label>Zoom</label><input type="range" id="zoom" min="100" max="300" value="100">
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>Mouvement</h2>
+      <label class="check"><input type="checkbox" id="motion"> Détecter les mouvements</label>
+      <label>Sensibilité</label><input type="range" id="sens" min="1" max="50" value="15">
+      <div class="meter" id="meter"><i></i></div>
+      <label class="check"><input type="checkbox" id="autosnap"> Photo automatique à chaque mouvement</label>
+    </section>
+  </aside>
+
+  <section class="card wide">
+    <h2>Médias <span id="used" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Journal</h2>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+<dialog id="viewer"></dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const video = $("video");
+let st = {}, rot = 0, mirror = false, hls = null;
+
+const log = (t) => { const d = new Date().toLocaleTimeString("fr-FR"); $("log").insertAdjacentHTML("afterbegin", `<div>${d} · ${t.replace(/</g, "&lt;")}</div>`); };
+const api = (path, body) => fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}).then((r) => r.json());
+const size = (n) => n > 1e9 ? (n / 1e9).toFixed(1) + " Go" : n > 1e6 ? (n / 1e6).toFixed(1) + " Mo" : Math.round(n / 1e3) + " ko";
+
+// the connection fields are remembered in this browser — never the password
+for (const k of ["ip", "port", "user", "path", "transport"]) {
+  try { const v = localStorage.getItem("cam." + k); if (v) $(k).value = v; } catch {}
+  $(k).addEventListener("change", () => { try { localStorage.setItem("cam." + k, $(k).value); } catch {} });
+}
+
+function play() {
+  const src = "/hls/live.m3u8?t=" + Date.now();
+  $("empty").textContent = "Connexion au flux…"; $("empty").hidden = false;
+  if (video.canPlayType("application/vnd.apple.mpegurl")) { video.src = src; video.play().catch(() => {}); }   // Safari: HLS natively
+  else if (window.Hls && Hls.isSupported()) { hls && hls.destroy(); hls = new Hls({ liveSyncDuration: 2 }); hls.loadSource(src); hls.attachMedia(video); video.play().catch(() => {}); }
+  else { $("empty").textContent = "Ce navigateur ne lit pas le flux : ouvre la page dans Safari."; }
+}
+video.addEventListener("playing", () => { $("empty").hidden = true; });
+
+async function waitStream(tries = 20) {   // ffmpeg needs a few seconds before the first segments exist
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch("/hls/live.m3u8", { cache: "no-store" });
+    if (r.ok && (await r.text()).includes(".ts")) return true;
+    await new Promise((res) => setTimeout(res, 700));
+    if (!st.running && i > 4) return false;
+  }
+  return false;
+}
+
+$("start").onclick = async () => {
+  $("err").textContent = "";
+  const body = { ip: $("ip").value.trim(), port: +$("port").value || 554, user: $("user").value.trim(), password: $("password").value,
+                 path: $("path").value.trim(), transport: $("transport").value, reencode: $("reencode").checked };
+  if (!body.ip) { $("err").textContent = "Indique l'adresse de la caméra."; return; }
+  const r = await api("/api/start", body);
+  if (r.error) { $("err").textContent = r.error; return; }
+  log(`Démarrage du flux ${body.ip}:${body.port}/${body.path}`);
+  await refresh();
+  if (await waitStream()) play(); else { await refresh(); $("empty").textContent = "Pas d'image."; }
+};
+$("stop").onclick = async () => { await api("/api/stop", {}); video.removeAttribute("src"); video.load(); $("empty").hidden = false; $("empty").textContent = "Flux arrêté."; log("Flux arrêté"); refresh(); };
+$("rec").onclick = async () => {
+  const on = !st.recording; await api("/api/record", { on }); log(on ? "Enregistrement démarré" : "Enregistrement arrêté");
+  await refresh(); if (await waitStream()) play();
+};
+$("photo").onclick = () => snap("Photo");
+$("full").onclick = () => (video.requestFullscreen || video.webkitEnterFullscreen || (() => {})).call(video);
+$("rot").onclick = () => { rot = (rot + 90) % 360; look(); };
+$("mirror").onclick = () => { mirror = !mirror; look(); };
+for (const k of ["bright", "contrast", "zoom"]) $(k).oninput = look;
+function look() {
+  video.style.filter = `brightness(${$("bright").value}%) contrast(${$("contrast").value}%)`;
+  video.style.transform = `rotate(${rot}deg) scale(${$("zoom").value / 100}) scaleX(${mirror ? -1 : 1})`;
+}
+
+async function snap(why) {
+  if (!video.videoWidth) return;
+  const c = document.createElement("canvas"); c.width = video.videoWidth; c.height = video.videoHeight;
+  const g = c.getContext("2d"); g.filter = video.style.filter || "none"; g.drawImage(video, 0, 0);
+  await api("/api/photo", { data: c.toDataURL("image/png") }); log(why + " enregistrée"); refresh();
+}
+
+// motion: two small grey frames compared in the browser; the share of pixels that changed is the level
+const mc = document.createElement("canvas"); mc.width = 64; mc.height = 36; const mg = mc.getContext("2d", { willReadFrequently: true });
+let prev = null, lastSnap = 0;
+setInterval(() => {
+  if (!$("motion").checked || !video.videoWidth) { $("meter").firstElementChild.style.width = "0"; prev = null; return; }
+  mg.drawImage(video, 0, 0, 64, 36); const d = mg.getImageData(0, 0, 64, 36).data, grey = new Uint8Array(64 * 36);
+  for (let i = 0; i < grey.length; i++) grey[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+  if (prev) {
+    let changed = 0; for (let i = 0; i < grey.length; i++) if (Math.abs(grey[i] - prev[i]) > 25) changed++;
+    const level = (changed / grey.length) * 100, limit = 51 - $("sens").value;
+    $("meter").firstElementChild.style.width = Math.min(100, level * 3) + "%"; $("meter").classList.toggle("alert", level > limit / 3);
+    if (level > limit / 3 && Date.now() - lastSnap > 5000) { lastSnap = Date.now(); log("Mouvement détecté"); if ($("autosnap").checked) snap("Photo de mouvement"); }
+  }
+  prev = grey;
+}, 500);
+
+function gallery(list) {
+  $("gallery").innerHTML = list.length ? "" : '<div style="color:var(--muted);font-size:13px">Aucune photo ni vidéo pour l\'instant.</div>';
+  for (const m of list) {
+    const el = document.createElement("div"); el.className = "item";
+    const u = "/medias/" + encodeURIComponent(m.name);
+    el.innerHTML = `<div class="thumb">${m.kind === "photo" ? `<img src="${u}" alt="">` : '<svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px"><path d="M8 5v14l11-7z"/></svg>'}</div>
+      <div class="meta"><span title="${m.name}">${m.name}</span><a href="${u}?dl=1"><button title="Télécharger"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button></a>
+      <button title="Supprimer" data-del><svg class="i" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button></div>`;
+    el.querySelector(".thumb").onclick = () => { $("viewer").innerHTML = m.kind === "photo" ? `<img src="${u}">` : `<video src="${u}" controls autoplay></video>`; $("viewer").showModal(); };
+    el.querySelector("[data-del]").onclick = async () => { if (confirm(`Supprimer ${m.name} ?`)) { await api("/api/delete", { name: m.name }); log(m.name + " supprimé"); refresh(); } };
+    $("gallery").appendChild(el);
+  }
+}
+$("viewer").onclick = (e) => { if (e.target === $("viewer")) { $("viewer").close(); $("viewer").innerHTML = ""; } };
+
+let shown = "";
+async function refresh() {
+  try { st = await api("/api/status"); } catch { $("status").textContent = "Serveur injoignable"; return; }
+  $("dot").className = "dot" + (st.recording ? " rec" : st.running ? " on" : "");
+  $("status").textContent = st.recording ? "Enregistre" : st.running ? "En direct" : "Arrêtée";
+  $("recinfo").textContent = st.recording ? st.file : "";
+  $("rec").classList.toggle("recording", st.recording); $("rec").querySelector("span").textContent = st.recording ? "Arrêter l'enregistrement" : "Enregistrer";
+  for (const b of ["photo", "rec", "full", "stop"]) $(b).disabled = !st.running;
+  if (st.error && st.error !== $("err").dataset.last) { $("err").dataset.last = st.error; $("err").textContent = "Le flux s'est arrêté : " + st.error; log("Erreur : " + st.error.split("\n")[0]); }
+  $("used").textContent = `· ${size(st.used)} utilisés, ${size(st.free)} libres`;
+  const key = JSON.stringify(st.medias.map((m) => m.name)); if (key !== shown) { shown = key; gallery(st.medias); }
+}
+setInterval(refresh, 2000); refresh();
+setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString("fr-FR"); }, 1000);
+</script>
+<script>
+  // other browsers than Safari: hls.js reads the stream (Safari and Naim's preview read it natively)
+  if (!document.createElement("video").canPlayType("application/vnd.apple.mpegurl")) {
+    const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"; document.head.appendChild(s);
+  }
+</script>
+</body>
+</html>

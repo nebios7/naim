@@ -930,6 +930,36 @@ class CheckBeforeDone(unittest.TestCase):
         self.assertIn("self.check_note()", (ROOT / "naimtools.py").read_text())
 
 
+class NetworkAndCamera(unittest.TestCase):
+    """« analyse mon réseau », « une app pour ma caméra »: a read-only scan of the user's own network, a probe for the RTSP
+    path, and a verified camera app to copy (one ffmpeg, its messages in a file so that it never freezes)."""
+
+    def test_triggers(self):
+        import re
+        t = json.loads((ROOT / "plugins_builtin/reseau/plugin.json").read_text())["triggers"]
+        for m in ("analyse mon réseau", "quels appareils sont connectés sur mon réseau", "trouve ma caméra"):
+            self.assertRegex(m, re.compile(t["reseau-local"], re.I))
+        for m in ("fais une application pour voir ma caméra", "ma caméra IP en rtsp", "vidéosurveillance de la maison"):
+            self.assertRegex(m, re.compile(t["camera-ip"], re.I))
+        self.assertNotRegex("explique les réseaux de neurones", re.compile(t["reseau-local"], re.I))
+
+    def test_scan_stays_local_and_read_only(self):
+        src = (ROOT / "plugins_builtin/reseau/skills/reseau-local/scan.py").read_text()
+        self.assertIn("is_private", src)  # never a public address
+        for bad in ("requests.post", "subprocess.run([\"sudo", "nmap"):
+            self.assertNotIn(bad, src)
+
+    def test_camera_template(self):
+        d = ROOT / "plugins_builtin/reseau/skills/camera-ip"
+        srv = (d / "modele/server.py").read_text()
+        self.assertIn("ffmpeg.log", srv)  # not a pipe nobody reads (ffmpeg froze)
+        self.assertNotIn("stderr=subprocess.PIPE", srv)
+        self.assertIn("SIGINT", srv)  # the MP4 closed properly
+        self.assertNotRegex(srv, r"192\.168\.\d+\.\d+")  # no address written in
+        self.assertIn("CAM_PASS", (d / "sonde.py").read_text())  # the login from the environment, never in a file
+        self.assertIn("modele/", (d / "SKILL.md").read_text())
+
+
 class NoLoopsInAnswers(unittest.TestCase):
     """« La solution est … est faux. / La solution est … ? » forty times: a cycle of lines is cut (the first round kept),
     the answer goes on with the tools to compute the result for real, and the old loop is shortened when read again."""
