@@ -1968,7 +1968,13 @@ body:has(#talkBtn.on) #talkGlow { opacity: 1; }
 body:has(#talkBtn.on) #liveBar:not(.writing), body:has(#talkBtn.on) #micBtn { display: none !important; }
 #talkBtn .tw { display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 18px; height: 16px; }
 #talkBtn .tw i { width: 2.4px; height: 6px; border-radius: 2px; background: currentColor; transition: height .25s, width .25s, opacity .25s; }
-#talkBtn .tw i:nth-child(1), #talkBtn .tw i:nth-child(5) { height: 3px; }
+#talkBtn .tw i:nth-child(1), #talkBtn .tw i:nth-child(5) { height: 4px; }
+#talkBtn .tw i:nth-child(2), #talkBtn .tw i:nth-child(4) { height: 8px; }
+/* nothing typed: the round button is the voice, in the send button's place (the arrow comes back when you type) */
+body.voicefirst:not(.busyrun):has(#talkBtn:not([hidden])) #send { display: none !important; }
+body.voicefirst:not(.busyrun) #talkBtn:not([hidden]):not(.on) { width: 32px; height: 32px; border-radius: 999px; background: var(--text); color: var(--bg); opacity: 1; }
+body.voicefirst:not(.busyrun) #talkBtn:not([hidden]):not(.on):hover { transform: scale(1.06); }
+body.voicefirst:not(.busyrun) #talkBtn:not([hidden]):not(.on):hover .tw i { animation: tws .55s ease-in-out infinite alternate; }
 #talkBtn .tw i:nth-child(3) { height: 12px; }
 #talkBtn[data-s=listen] .tw i { background: #e5484d; animation: twl 1.1s ease-in-out infinite; }
 #talkBtn[data-s=speak] .tw i { animation: tws .5s ease-in-out infinite alternate; }
@@ -3693,7 +3699,7 @@ function talkStop() {
   if (!talk.on) return;
   talk.endAfter = false;
   talk.on = false; clearTimeout(talk.timer); stopDictation(); voiceStop();
-  $("#talkBtn").classList.remove("on"); $("#talkBtn").innerHTML = svgI("wave"); $("#talkBtn").title = "Conversation à voix haute : tu parles, Naim répond avec sa voix";
+  $("#talkBtn").classList.remove("on"); $("#talkBtn").innerHTML = `<span class="tw">${"<i></i>".repeat(5)}</span>`; $("#talkBtn").title = "Conversation à voix haute : tu parles, Naim répond avec sa voix";
 }
 // it listens while Naim thinks or writes too (what you say then guides it, « stop » stops it), not while it speaks
 function talkListen() { if (talk.on && !dictation.on) startDictation(); }
@@ -5201,6 +5207,8 @@ function updateSendBtn() {
   const typing = !!$("#input").value.trim(), busy = !!curRun();
   $("#send").textContent = busy && !typing ? "■" : "↑";
   $("#send").title = !busy ? "Envoyer" : typing ? "Envoyer à Naim pendant qu'il travaille (il en tient compte sans s'arrêter)" : "Arrêter (Échap)";
+  // nothing typed, nothing attached, nothing running: the round button is the voice (as in a pro assistant)
+  document.body.classList.toggle("voicefirst", !typing && !busy && !(typeof pending !== "undefined" && pending.length));
 }
 $("#input").addEventListener("input", updateSendBtn);
 $("#send").onclick = () => (curRun() && !$("#input").value.trim() ? stop() : send());
@@ -5678,6 +5686,7 @@ async function addFiles(files) {
   renderPending(); updateCtx();
 }
 function renderPending() {
+  setTimeout(updateSendBtn, 0);  // an attachment: the send arrow comes back
   const box = $("#pending");
   box.innerHTML = pending.map((a, i) => {
     const ext = (String(a.name || "").split(".").pop() || "").toUpperCase().slice(0, 6);
@@ -7973,7 +7982,7 @@ const svgI = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 document.querySelectorAll("[data-ic]").forEach((e) => (e.innerHTML = svgI(e.dataset.ic)));  // the line icons of the page's fixed markup
 if (dictationAvailable()) { const m = $("#micBtn"); m.hidden = false; m.innerHTML = svgI("mic"); m.onclick = () => { if (talk.on) talkStop(); if (dictation.on) { earcon("off"); stopDictation(); } else { earcon("on"); startDictation(); } }; }
 api("/api/tts").then((r) => { if (!r.available || !dictationAvailable()) return;  // speaking needs both: dictation and Naim's voice
-  const t = $("#talkBtn"); t.hidden = false; t.innerHTML = svgI("wave"); t.onclick = () => { earcon(talk.on ? "off" : "on"); talk.on ? talkStop() : talkStart(); }; }).catch(() => {});
+  const t = $("#talkBtn"); t.hidden = false; t.innerHTML = `<span class="tw">${"<i></i>".repeat(5)}</span>`; updateSendBtn(); t.onclick = () => { earcon(talk.on ? "off" : "on"); talk.on ? talkStop() : talkStart(); }; }).catch(() => {});
 // header like a pro IDE: title on the left, tools on the right; mode and model live in the composer
 $(".ctools").insertBefore($("#modelPick"), $("#ctxInfo"));
 fitViewport(); updateTitle();
