@@ -115,14 +115,39 @@ def tri_insertion(a):
 - Chaque ligne importante du code a son `P` au bon numéro : relis les numéros avec le code sous les yeux.
 - Messages en français, courts : ce qui se passe et pourquoi.
 
-## Autre chose que des barres (pile d'appels, arbre, graphe, liste chaînée, Hanoï…)
-Garde le même fichier et le même moteur. Ajoute `type: "autre"` et une fonction `dessiner(etape, zone)` dans
-ALGO : elle dessine l'étape dans `zone` (un `div`, par exemple avec `zone.innerHTML = '<svg …>…</svg>'`).
-Ce que tu passes dans `P(ligne, message, { dessin: {...} })` arrive dans `etape.extra` :
-- **pile d'appels** : `dessin: { pile: ["fact(3)", "fact(2)"] }`, une boîte par appel de bas en haut, celle du dessus surlignée ;
-- **arbre / graphe** : nœuds et arêtes en SVG ; `dessin: { courant: x, visites: [...], file: [...] }` ;
-- **liste chaînée** : des boîtes reliées par des flèches, et le pointeur courant au-dessus.
-Le moteur garde le code surligné, les variables, les messages et les commandes.
+## Autre chose que des barres : tu inventes le dessin
+Le moteur garde ce qui doit toujours marcher (code surligné, variables, messages, lecture / pause / pas à pas,
+valeurs de l'élève). Le DESSIN est à toi : avec `type: "autre"` et une fonction `dessiner(etape, zone)`, tu dessines
+chaque étape comme tu veux, dans le style qui montre le mieux l'idée. Ce que tu passes dans
+`P(ligne, message, { dessin: {...} })` arrive dans `etape.extra` ; `zone` est un `div` (`zone.innerHTML = '<svg …>'`).
+
+**Choisis la forme d'après le sujet** (un tri n'est pas une matrice) :
+| Le sujet | La forme | L'exemple à lire d'abord |
+|---|---|---|
+| tri, recherche dans un tableau | barres (sans `dessiner`) | `exemples/tri-insertion.js`, `exemples/recherche-dichotomique.js` |
+| matrice, tableau 2D, grille, jeu de la vie, morpion, programmation dynamique | grilles de cases | `exemples/produit-matrices.js` |
+| géométrie : théorème, construction, transformation, aire, angle | figure qui se construit | `exemples/pythagore.js` |
+| graphe, réseau, chemin, arbre, parcours (BFS, DFS, Dijkstra) | nœuds et arêtes | `exemples/dijkstra.js` |
+| récursivité, pile d'appels, Hanoï, liste chaînée, file | boîtes empilées ou reliées | invente à partir des précédents |
+
+Lis l'exemple le plus proche (`read_file`, dans le dossier de ce skill : `~/.naim/plugins/algorithmique/skills/animation-algorithme/exemples/`),
+garde son plan (`build` qui exécute pour de vrai, `P` à chaque ligne importante, `dessiner` qui ne fait QUE dessiner
+l'étape reçue), puis invente le dessin du sujet demandé.
+
+**Recettes de dessin** (SVG, `viewBox` puis `style="width:100%;height:260px"`) :
+- **les couleurs du moteur**, pour que tout aille ensemble : fond de case `#1b1b2a`, bord `#34344a`, texte `#e8e8f2`,
+  texte secondaire `#aab` ; regardé `#25506a` / bord `#5cc8ff` (bleu) ; mis de côté, en cours `#5a3f9e` / `#b69cff`
+  (violet) ; fini, juste `#1f5a3a` / `#6fe898` (vert) ; un chiffre important `#ffc53d` (jaune). Rien d'autre :
+  pas de dégradé, pas d'emoji ;
+- **une case** : `<rect rx="8" … stroke-width="2"/>` puis son nombre centré (`text-anchor="middle"`, `font-weight="700"`) ;
+- **un nœud** : `<circle r="24">` avec sa lettre ; une arête : `<line>` dessinée AVANT les nœuds, son poids dans un
+  petit `<rect>` de fond au milieu ;
+- **une figure** : calcule les points à partir des valeurs (à l'échelle), puis cadre le `viewBox` sur tous les points
+  avec une marge : rien n'est coupé, quelles que soient les valeurs ;
+- **les textes** ne se chevauchent pas : une étiquette dans le triangle le long de son côté, une valeur sous son nœud ;
+- **ce qui change** d'une étape à l'autre se voit tout de suite : une couleur, une case qui se remplit, un trait
+  plus épais ; le reste ne bouge pas ;
+- les compteurs du haut : `compteurs: ["MULTIPLICATIONS"]` puis `c: …` dans P ; `compteurs: []` pour aucun.
 
 ## Pour finir
 Donne le chemin de la page et dis comment s'en servir : Espace = lecture / pause, flèches = étape par étape,

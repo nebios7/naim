@@ -693,6 +693,27 @@ class SimulationInTheChat(unittest.TestCase):
                            capture_output=True, text=True, timeout=60)
         self.assertIn("La simulation est juste.", r.stdout + r.stderr)
 
+    def test_creative_examples_are_right(self):
+        sk = ROOT / "plugins_builtin/algorithmique/skills/animation-algorithme"
+        text = (sk / "SKILL.md").read_text()
+        for name in ("produit-matrices", "pythagore", "dijkstra"):
+            self.assertIn(f"exemples/{name}.js", text)  # the skill points to it
+            body = (sk / f"exemples/{name}.js").read_text()
+            self.assertIn("dessiner(t, zone)", body)  # a drawing of its own, not bars
+            r = subprocess.run([sys.executable, str(sk / "simulation.py"), "verifier", str(sk / f"exemples/{name}.js")],
+                               capture_output=True, text=True, timeout=60)
+            self.assertIn("La simulation est juste.", r.stdout + r.stderr, name)
+
+    def test_the_right_skill_is_chosen(self):
+        import extensions as e
+        for m, want in (("Non j’ai besoin que tu me montre le tri avec une simulation visuel", "animation-algorithme"),
+                        ("simule le produit de deux matrices", "animation-algorithme"),
+                        ("montre pythagore avec une animation", "animation-algorithme"),
+                        ("affiche moi l’heure dans un carré visuel beau", "visuel"),
+                        ("utilise le skill visuel pour un compteur", "visuel")):
+            sk = e.match_skill(m)
+            self.assertEqual(sk and sk["name"], want, m)
+
     def test_page_side(self):
         page = (ROOT / "web/index.html").read_text()
         self.assertIn('fetch("/api/moteur-algo")', page)
@@ -905,6 +926,16 @@ class ChatActsUnlessLesson(unittest.TestCase):
         src = (ROOT / "server.py").read_text()
         self.assertIn("if lesson and name not in ANSWER_TOOLS", src)
 
+    def test_a_follow_up_on_a_file_keeps_the_tools(self):
+        import server
+        h = server.Handler.__new__(server.Handler)
+        hist = [{"role": "user", "content": "crée un script calcul.py qui fait la moyenne d'une liste de notes"},
+                {"role": "assistant", "content": "J'ai créé le script calcul.py."}]
+        body = {"message": "je veux que la moyenne soit arrondie à 2 chiffres", "history": hist}
+        self.assertFalse(h.quick_answer(body, False, False, False, False, None))  # not the path without tools
+        self.assertTrue(h.quick_answer({**body, "history": []}, False, False, False, False, None))  # alone: maths
+        self.assertTrue(h.quick_answer({**body, "message": "explique-moi comment marche une boucle for"}, False, False, False, False, None))
+
 
 class AnswerHere(unittest.TestCase):
     """« écris directement dans la session chat »: no switch to the Agent, no file — even for a long course (it once
@@ -920,6 +951,7 @@ class AnswerHere(unittest.TestCase):
             self.assertFalse(naimtools.answer_here(t), t)
 
     def test_no_agent_no_file(self):
+        import server
         import server
         h = server.Handler.__new__(server.Handler)
         with tempfile.TemporaryDirectory() as d:
@@ -941,6 +973,7 @@ class QuickAnswers(unittest.TestCase):
     files, the web, a mail, a server, the Mac keep the tools."""
 
     def test_routing(self):
+        import server
         import server
         h = server.Handler.__new__(server.Handler)
         q = lambda m: h.quick_answer({"message": m, "history": []}, False, bool(server.WEB_NEED_RE.search(m)), False, False, "")  # noqa: E731

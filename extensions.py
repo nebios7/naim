@@ -1271,6 +1271,12 @@ def match_skill(task, root=None, disabled=()):
             if ((s["name"] in SKILL_TRIGGERS or s["name"] in after_specific) and not re.search(rf"\bskills?\W+{re.escape(s['name'].lower())}\b", text)
                     and any(n in by_name and re.search(triggers[n], text) for n in OWN_DOCUMENT)):
                 continue
+            # a name that is an ordinary word (« une simulation visuel ») is not the skill named when its own words do not
+            # match and another skill's do (the algorithm animation, here): that one is what is asked
+            if ("-" not in s["name"] and s["name"] in triggers and not re.search(triggers[s["name"]], text)
+                    and not re.search(rf"\bskills?\W+{re.escape(s['name'].lower())}\b", text)
+                    and any(n != s["name"] and n in by_name and n not in generic and re.search(triggers[n], text) for n in triggers)):
+                continue
             # a subject named inside a document to make (« un cours sur COBOL en PDF »): the document's skill gives the
             # method, the subject's one stays at hand (use_skill)
             fmt = next((n for n in after_specific if n != s["name"] and n in by_name and re.search(triggers[n], text)), None)

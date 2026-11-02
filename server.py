@@ -1898,6 +1898,11 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if answer_here(msg, *[m.get("content") for m in (body.get("history") or [])[-6:] if m.get("role") == "user"]):
             return True  # « écris-le ici » : the answer itself, written right away
+        recent = " ".join(str(m.get("content") or "")[:3000] for m in (body.get("history") or [])[-3:])
+        if self.TOOL_NEED_RE.search(recent) and not pure_question(msg):
+            # the follow-up of a work on files (« je veux que la moyenne soit arrondie à 2 chiffres » after calcul.py was
+            # made): the tools stay — without them it said « j'ai modifié calcul.py » and changed nothing
+            return False
         sk = ext.match_skill(msg)
         if sk and sk["name"] not in ("maths-affichage", "pseudo-code"):
             return False  # a skill that works with tools (a CV, a plan, the Mac…): the usual way
@@ -2212,7 +2217,8 @@ class Handler(BaseHTTPRequestHandler):
                 if sim_here:
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                         "\n\n(Réponds ici, dans la conversation : une phrase, puis UN bloc ```simulation avec const ALGO = { … }, "
-                        "sur le plan de l'exemple du skill. Aucun fichier, aucune commande.)"))
+                        "sur le plan de l'exemple du skill (pour une grille, une figure, un graphe : lis d'abord l'exemple proche avec read_file, "
+                        "puis invente le dessin). Aucun fichier à créer, aucune commande.)"))
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
