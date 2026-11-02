@@ -227,6 +227,13 @@ QUESTION_RE = re.compile(r"\?\s*$|^\W*(?:c'est quoi|qu'est[- ]ce|pourquoi|commen
                          r"est[- ]ce que|explique|dis[- ]moi|parle[- ]moi|à quoi sert|quelle est la diff[ée]rence|c'est quoi la)", re.I)
 
 
+# a lesson or an explanation (« montre-moi comment marche le tri », « c'est quoi une API », « donne un exemple »): the
+# answer goes in the conversation. It is the only case where the Chat does not change files — any other request, Naim
+# judges with its tools (a rule that waited for a work word left « mets le bouton en rouge » without them)
+LESSON_RE = re.compile(r"\b(?:expli\w*|c'?est quoi|qu'?est[- ]ce qu\w*|comment (?:marche|fonctionne|faire|on fait|[çc]a marche|"
+                       r"[çc]a fonctionne)|montre[- ]moi comment|apprends?[- ]moi|enseigne\w*|pourquoi|diff[ée]rences? entre|"
+                       r"cours|le[çc]ons?|r[ée]visions?|exemples?|d[ée]finitions?|signifie|veut dire|[àa] quoi sert)\b", re.I)
+
 # a real piece of work (a project to build, code to compile and test, an app to rebuild): it needs the Agent's loop
 # (task notebook, long runs, compaction), whatever mode the window is in — like an assistant that has one way of working
 PROJECT_WORK_RE = re.compile(
@@ -2221,7 +2228,11 @@ class Handler(BaseHTTPRequestHandler):
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n[Commence ta réponse par une phrase, pour moi, qui dit ce que tu vas faire, puis, dans la même "
                 "réponse, fais-le aussitôt avec tes outils. À la fin, réponds à ma demande.]"))
-        if not file_work and not files:
+        m_ = body["message"] or ""
+        lesson = not file_work and not files and bool(  # a lesson, a question: answered here; anything else may change files
+            plain or in_chat or body.get("_question") or pure_question(m_) or LESSON_RE.search(m_)
+            or (MATH_ASK_RE.search(m_) and not FILE_NAMED_RE.search(m_)))
+        if lesson:
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
                 "Markdown. Ne crée ni ne modifie aucun fichier.)") + (
@@ -2457,7 +2468,7 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "tool", "tool_name": name, "content": "refused: this is a simple message, "
                                      "answer it directly in one or two sentences, without any tool."})
                     continue
-                if not files and not file_work and name not in ANSWER_TOOLS and not name.startswith("mcp__"):
+                if lesson and name not in ANSWER_TOOLS and not name.startswith("mcp__"):
                     refusals += 1
                     # a question or a lesson: the answer goes in the conversation (the tool list stays the same so that
                     # llama.cpp keeps what it already read; only the use is refused). MCP tools always pass: they are

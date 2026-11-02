@@ -817,6 +817,32 @@ class MathsInTheConversation(unittest.TestCase):
             self.assertTrue(self.file_work(m), m)
 
 
+class ChatActsUnlessLesson(unittest.TestCase):
+    """The Chat may change files for any request; only a lesson or a question is answered in the conversation
+    (a rule that waited for a work word left « mets le bouton en rouge » without the tools to do it)."""
+
+    def lesson(self, m):
+        import server as s
+        file_work = bool(s.FILE_WORK_RE.search(m))
+        return not file_work and bool(s.pure_question(m) or s.LESSON_RE.search(m)
+                                      or (s.MATH_ASK_RE.search(m) and not s.FILE_NAMED_RE.search(m)))
+
+    def test_work_without_a_work_word_can_act(self):
+        for m in ("fais que le bouton soit rouge", "mets le titre en gras dans index.html", "le menu doit être à gauche",
+                  "passe le port du serveur à 9000", "tu peux mettre le fond en noir ?", "vas-y"):
+            self.assertFalse(self.lesson(m), m)
+
+    def test_lessons_stay_in_the_conversation(self):
+        for m in ("montre-moi comment marche le tri par insertion en Python", "explique-moi les closures",
+                  "c'est quoi une API REST ?", "donne-moi un exemple de boucle for", "pourquoi mon code est lent",
+                  "quelle est la différence entre une liste et un tuple ?", "pose la multiplication 234 × 12"):
+            self.assertTrue(self.lesson(m), m)
+
+    def test_the_server_uses_it(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn("if lesson and name not in ANSWER_TOOLS", src)
+
+
 class AnswerHere(unittest.TestCase):
     """« écris directement dans la session chat »: no switch to the Agent, no file — even for a long course (it once
     wrote 8 files twice despite it); « test » of maths is not a code test."""
