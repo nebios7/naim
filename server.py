@@ -2440,7 +2440,9 @@ class Handler(BaseHTTPRequestHandler):
                 sig = name + json.dumps(args, sort_keys=True, ensure_ascii=False)[:500]
                 seen_calls[sig] = seen_calls.get(sig, 0) + 1
                 if seen_calls[sig] > 2:  # the same call a third time: it is going round in circles
-                    stuck += seen_calls[sig] == 3  # each action counted once
+                    # each action counted once, then again when it keeps coming back refused (a long skill has 1000
+                    # steps: the same refused check came back 24 times in an hour)
+                    stuck += seen_calls[sig] == 3 or seen_calls[sig] >= 5
                     messages.append({"role": "tool", "tool_name": name, "content": "refused: you already did exactly this twice, "
                                      "its result is above."})
                     messages.append({"role": "user", "content": "Tu répètes la même action : elle ne donnera rien de plus. Passe "
@@ -2519,6 +2521,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "tool_result", "name": name, "result": result[-3000:]})
                 if not result.startswith(("error", "refused", "denied", "blocked", "not allowed")):
                     progress += 1
+                    if name in ("write_file", "edit_file", "multi_edit", "creer_fichier"):
+                        # a file changed: the same check run again (simulation.py creer, the tests) is new, not a loop
+                        for k in [k for k in seen_calls if k.startswith("run_command")]:
+                            del seen_calls[k]
                 if helper._same_error(name, result):
                     result += ("\n\n[STOP: same error twice. Do not call it again. Tell the user the exact error, your "
                                "hypothesis about its cause and what would fix it.]")

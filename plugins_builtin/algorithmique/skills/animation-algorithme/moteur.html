@@ -101,6 +101,7 @@ function makeTrace(A,vals,cible){
  };
  P.plage=(d,f)=>{const r=[];for(let k=d;k<=f;k++)r.push(k);return r};
  A.build(a,P,cible);
+ if(!T.length&&a.length<2)P(n,a.length?'Une seule valeur : rien à faire, elle est déjà à sa place.':'Aucune valeur : rien à faire.',{ok:P.plage(0,a.length-1)});
  if(!T.length)throw new Error('build n\'a appelé P aucune fois : aucune étape à montrer.');
  T[T.length-1].done=true;
  return T;

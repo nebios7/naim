@@ -1690,6 +1690,16 @@ class Simulations(unittest.TestCase):
             Path(d, "b.js").write_text('const ALGO={titre:"x",code:"a\\nb",build(a,P){P(7,"x")}};')
             self.assertIn("la ligne 7 n'existe pas", self.run_sim("verifier", f"{d}/b.js").stdout)
 
+    def test_one_value_needs_no_special_case(self):
+        # a right insertion sort does nothing on [7]: no FAUX for that (Naim went round in circles on it)
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.js").write_text('const ALGO={titre:"x",type:"tri",valeurs:[3,1,2],code:"for\\nwhile\\nplace",'
+                                       'build(a,P){for(let i=1;i<a.length;i++){const v=a[i];let j=i-1;P(1,"on prend");'
+                                       'while(j>=0&&a[j]>v){P(2,"décale");a[j+1]=a[j];j--}a[j+1]=v;P(3,"place")}}};')
+            r = self.run_sim("verifier", f"{d}/a.js")
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("OK   valeurs [7]", r.stdout)
+
     def test_algo_file_not_a_deliverable(self):
         with tempfile.TemporaryDirectory() as d:
             for f in ("tri.js", "tri.html", "app.js"):
