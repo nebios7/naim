@@ -6,6 +6,7 @@ chercher_skill with a few words, then use_skill loads the one it picked. The ind
 is rebuilt only when the folder changes.
 """
 import json
+import math
 import re
 import unicodedata
 from pathlib import Path
@@ -17,7 +18,8 @@ INDEX = LIB / ".index.json"
 SCRIPT_EXTS = {".py", ".sh", ".js", ".mjs", ".ts", ".rb", ".pl", ".swift", ".applescript", ".bash", ".zsh", ".command"}
 STOP = set("""le la les un une des de du d l et ou en au aux pour par sur dans avec sans mon ma mes ton ta tes son sa ses
 ce cette ces qui que quoi comment faire fais fait je tu il on nous vous moi a the of to and or for with in on an is be
-how make create use using""".split())
+how make create use using
+bonjour salut merci stp svp aider aide peux peut veux voudrais pourrais besoin please help hello hi thanks""".split())
 
 
 # the usual words of a French request and their English twins (most skills are written in English), both ways
@@ -38,6 +40,23 @@ FR_EN = {
     "couleur": "color", "police": "font typography", "carte": "map card", "mobile": "mobile ios android",
     "telephone": "phone mobile", "fichier": "file", "dossier": "folder", "pdf": "pdf", "word": "docx word",
     "nettoyer": "clean", "analyse": "analysis analyze", "statistiques": "statistics stats", "prevision": "forecast",
+    "previsionnel": "forecast budget", "depenses": "expenses budget", "referencement": "seo", "prix": "price pricing",
+    "recuperer": "scrape extract", "recupere": "scrape extract", "extraire": "extract", "aspirer": "scrape crawl",
+    "automatiquement": "automation automate", "automatiser": "automation automate", "securiser": "security secure",
+    "securite": "security", "agenda": "calendar schedule", "rendez": "appointment calendar", "conteneur": "container docker",
+    "conteneuriser": "docker container", "requete": "query request", "lente": "slow performance", "optimiser": "optimize performance",
+    "prospection": "outreach cold prospecting", "client": "customer client", "clients": "customers", "transcrire": "transcribe transcription",
+    "transcription": "transcription transcribe", "schema": "diagram", "architecture": "architecture", "unitaires": "unit",
+    "composants": "components", "composant": "component", "reutilisables": "reusable", "accueil": "landing home",
+    "jolie": "design beautiful", "joli": "design beautiful", "explicative": "explainer", "animee": "animated animation",
+    "animation": "animation", "convertir": "convert", "texte": "text", "anglais": "english", "francais": "french",
+    "propre": "clean", "envoyer": "send", "ecrire": "write", "redaction": "writing", "rediger": "write", "corriger": "fix review",
+    "erreur": "error bug", "bogue": "bug", "deboguer": "debug", "ameliorer": "improve", "performance": "performance",
+    "connexion": "login auth", "authentification": "authentication auth", "paiement": "payment", "boutique": "shop ecommerce",
+    "commande": "order command", "stock": "inventory stock", "livre": "book", "article": "article blog", "blog": "blog",
+    "reseaux": "social", "sociaux": "social", "publicite": "ads advertising", "electronique": "electronics hardware",
+    "capteur": "sensor", "carte": "board card map", "microcontroleur": "microcontroller", "mainframe": "mainframe",
+    "cours": "course lesson tutorial", "exercice": "exercise", "examen": "exam quiz", "quiz": "quiz",
 }
 EN_FR = {}
 for _fr, _en in FR_EN.items():
@@ -104,6 +123,7 @@ def count():
 
 SUFFIXES = ("", "s", "es", "e", "ed", "er", "ers", "ing", "ion", "ions", "ent", "ant", "al", "ale", "aux", "ique", "iques", "ic", "ics")
 _TOK = {"stamp": None, "data": []}
+_DF = {}  # in how many skills each word is, for the current library
 
 
 def _tokens():
@@ -124,22 +144,55 @@ def _hit(w, bag):
     return len(root) >= 4 and any(root + suf in bag for suf in SUFFIXES)
 
 
+def _rarity(words, data):
+    """How rare each word is in the library (« arduino » in 3 skills weighs far more than « data » in 900): 1 for a
+    word found in about a third of the skills, up to ~4 for a word found in a handful."""
+    n = max(len(data), 1)
+    out, seen = {}, _DF.setdefault(_TOK["stamp"], {})
+    if len(_DF) > 1:  # the library changed: the counts of the former one go
+        for k in [k for k in _DF if k != _TOK["stamp"]]:
+            del _DF[k]
+    for w in words:
+        if w not in seen:
+            seen[w] = sum(1 for _, (name, desc, head) in data if _hit(w, name) or _hit(w, desc) or _hit(w, head))
+        df = seen[w]
+        out[w] = math.log(1 + n / (1 + df)) / math.log(4)
+        if len(w) < 3 and w not in ACRONYMS and w not in FR_EN:
+            out[w] *= 0.2  # « ça va », « je », « va »: rare in skills, yet they say nothing about the task
+    return out
+
+
+ACRONYMS = set("cv ia ai ui ux js ts go db qa ci cd ml 3d 2d os ip vm pr io ar vr bi hr rh tv".split())
+
+
 def search(query, n=8, min_score=1):
-    """The library's skills that best match the words of the task: name ×4, description ×2, beginning of the text ×1
-    (each French word also looks for its English twin, and the other way round)."""
+    """The library's skills that best match the words of the task: name ×4, description ×2, beginning of the text ×1,
+    each word weighed by its rarity (each French word also looks for its English twin, and the other way round). The
+    same skill met twice (two plugins ship « pdf ») is given once."""
     base = _words(query)
     if not base:
         return []
     words = list(dict.fromkeys(base + [t for w in base for t in (FR_EN.get(w, "").split() + [EN_FR.get(w, "")]) if t]))
+    data = _tokens()
+    weight = _rarity(words, data)
     scored = []
-    for s, (name, desc, head) in _tokens():
+    for s, (name, desc, head) in data:
         score = 0
         for w in words:
-            score += 4 * _hit(w, name) + 2 * _hit(w, desc) + 1 * _hit(w, head)
+            score += weight[w] * (4 * _hit(w, name) + 2 * _hit(w, desc) + 1 * _hit(w, head))
         if score >= min_score:
             scored.append((score, s))
     scored.sort(key=lambda x: -x[0])
-    return [s for _, s in scored[:n]]
+    out, seen = [], set()
+    for _, s in scored:
+        key = (s["name"].lower(), s["description"][:80].lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(s)
+        if len(out) >= n:
+            break
+    return out
 
 
 def suggestion(task):

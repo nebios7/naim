@@ -579,6 +579,77 @@ class WebPages(unittest.TestCase):
             self.assertNotIn("navigateur", a.web_fetch("https://d.fr"))  # a page with its text: no browser
 
 
+class Navigation(unittest.TestCase):
+    """Searching and reading the web like a person: another engine when one says « no result », a long page read part
+    after part, Cmd-F inside a page, and a skills library that weighs rare words."""
+
+    def test_search_falls_back_to_other_engines(self):
+        from unittest import mock
+        import extensions as e
+        one = [{"title": "A", "url": "https://a.fr", "snippet": ""}]
+        bing = [{"title": "A", "url": "https://a.fr", "snippet": ""}, {"title": "B", "url": "https://b.fr", "snippet": ""},
+                {"title": "C", "url": "https://c.fr", "snippet": ""}]
+        with mock.patch("extensions._ddg_html", return_value=[]), mock.patch("extensions._ddg_lite", side_effect=OSError("429")), \
+                mock.patch("extensions._bing", return_value=bing):
+            self.assertEqual([r["url"] for r in e.web_search("prix iphone")], ["https://a.fr", "https://b.fr", "https://c.fr"])
+        with mock.patch("extensions._ddg_html", return_value=one), mock.patch("extensions._ddg_lite", return_value=one), \
+                mock.patch("extensions._bing", return_value=[]):
+            self.assertEqual(len(e.web_search("x")), 1)  # the same page met twice is given once
+        with mock.patch("extensions._ddg_html", side_effect=OSError("down")), mock.patch("extensions._ddg_lite", side_effect=OSError("down")), \
+                mock.patch("extensions._bing", side_effect=OSError("down")):
+            with self.assertRaises(RuntimeError):
+                e.web_search("x")
+
+    def test_bing_real_address(self):
+        from unittest import mock
+        import base64, extensions as e
+        u = "a1" + base64.urlsafe_b64encode(b"https://www.fnac.com/iphone").decode().rstrip("=")
+        page = (f'<ol><li class="b_algo"><h2><a href="https://www.bing.com/ck/a?!&amp;p=1&amp;u={u}&amp;ntb=1">iPhone '
+                '- Fnac</a></h2><p>Le prix</p></li></ol>')
+        with mock.patch("extensions._get", return_value=(page, "text/html", "")):
+            self.assertEqual(e._bing("iphone", 6), [{"title": "iPhone - Fnac", "url": "https://www.fnac.com/iphone", "snippet": "Le prix"}])
+
+    def test_long_page_read_part_after_part(self):
+        from unittest import mock
+        import extensions as e
+        page = "<html><title>Doc</title><main><p>" + "mot " * 7000 + "FIN</p></main></html>"
+        with mock.patch("extensions._get", return_value=(page, "text/html", "https://d.fr/doc")):
+            first = e.web_fetch("https://d.fr/doc")
+            self.assertIn("web_fetch https://d.fr/doc#suite=12000", first)
+            second = e.web_fetch("https://d.fr/doc#suite=24000")
+            self.assertIn("FIN", second)
+            self.assertNotIn("la page continue", second)
+            self.assertIn("fin de la page", e.web_fetch("https://d.fr/doc#suite=99000"))
+
+    def test_find_in_page_and_next_part(self):
+        import browser as br
+        r = {"title": "T", "url": "https://t.fr", "text": "intro " * 3000 + "Le tarif réduit est de 4,50 euros. " + "fin " * 10,
+             "elements": ["[1] lien « Tarifs »", "[2] bouton « OK »"]}
+        found = br.find_in(r, "tarif reduit")
+        self.assertIn("4,50 euros", found)
+        self.assertIn("[1] lien « Tarifs »", found)
+        self.assertNotIn("[2]", found)
+        self.assertIn("rien sur cette page", br.find_in(r, "abonnement"))
+        self.assertIn("action=page target=12000", br.describe(r, full_text=True, limit=12000))
+        self.assertIn("(suite : caractères 12000", br.describe(r, full_text=True, limit=12000, start=12000))
+
+    def test_library_weighs_rare_words_and_ignores_small_talk(self):
+        import skills_bibliotheque as lib
+        data = [({"name": n, "dir": n, "description": d}, (frozenset(n.split("-")), frozenset(d.split()), frozenset()))
+                for n, d in (("data-tools", "data data"), ("arduino-board", "arduino sensor data"), ("lex", "ca lex"))]
+        w = lib._rarity(["data", "arduino", "ca"], data)
+        self.assertGreater(w["arduino"], w["data"])
+        self.assertLess(w["ca"], w["arduino"])  # « ça va » says nothing about the task
+
+    def test_library_gives_a_skill_once(self):
+        from unittest import mock
+        import skills_bibliotheque as lib
+        s = {"name": "pdf", "dir": "pdf", "description": "Work with PDF files", "head": ""}
+        bags = (frozenset({"pdf"}), frozenset({"work", "with", "pdf", "files"}), frozenset())
+        with mock.patch("skills_bibliotheque._tokens", return_value=[(s, bags), (dict(s), bags)]):
+            self.assertEqual(len(lib.search("convertir un pdf")), 1)
+
+
 class CourseFolderToPdf(unittest.TestCase):
     def test_situation_said_before_the_method(self):
         import extensions as e

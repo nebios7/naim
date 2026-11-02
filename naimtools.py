@@ -2258,8 +2258,8 @@ class Agent:
         """The page's text; a page built by JavaScript (a job board, a shop, Salesforce…) is nearly empty without it:
         then it is read again in Naim's own browser, which runs it, with its numbered links to open what it lists."""
         text = ext.web_fetch(url)
-        if text.startswith("error") and not re.search(r"\b(403|429|503)\b", text):
-            return text
+        if text.startswith("error") and not re.search(r"\b(403|429|503)\b", text) or "#suite=" in url:
+            return text  # the next part of a long page: its text is there (a short last part is not a JavaScript page)
         body = text.split("\n\n", 1)[-1]
         if len(re.findall(r"[A-Za-zÀ-ÿ]{3,}", body)) >= 150 and not re.search(r"(?i)enable javascript|activez javascript|javascript (is )?(required|disabled)", body):
             return text
@@ -2821,7 +2821,11 @@ class Agent:
                     return "error: url is required for open"
                 return br.describe(self._browser.send(cmd="open", url=url), full_text=True)
             if action == "page":
-                return br.describe(self._browser.send(cmd="page"), full_text=True, limit=12000)
+                r = self._browser.send(cmd="page")
+                if text:  # « text=tarifs »: where the page says it (Cmd-F)
+                    return br.find_in(r, text)
+                start = int(str(target).strip()) if str(target or "").strip().isdigit() else 0
+                return br.describe(r, full_text=True, limit=12000, start=start)
             if action in ("click", "type", "select"):
                 if not target:
                     return f"error: target is required for {action} (element number or visible text)"

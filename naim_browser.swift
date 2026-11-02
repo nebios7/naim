@@ -32,29 +32,38 @@ let captureJS = """
 })();
 """
 
+// A cookie banner: its « refuse » button is pressed (the most private choice), so that the page itself can be read.
+let cookiesJS = """
+(() => { const want = /^(tout refuser|refuser tout|tout rejeter|rejeter tout|refuser|rejeter|continuer sans accepter|refuser et fermer|je refuse|non merci|reject all|refuse all|decline all|decline|reject|only necessary|only essential|necessary only|n[ée]cessaires uniquement|uniquement les cookies n[ée]cessaires)$/i;
+  const deepAll = (root = document, out = []) => { root.querySelectorAll('button, a, [role=button], input[type=button], input[type=submit]').forEach(e => out.push(e)); root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) deepAll(e.shadowRoot, out); if (e.tagName === 'IFRAME') { try { if (e.contentDocument) deepAll(e.contentDocument, out); } catch (x) {} } }); return out; };
+  const el = deepAll().find(e => { const r = e.getBoundingClientRect(); const t = (e.innerText || e.value || e.getAttribute('aria-label') || '').replace(/[✕×]/g, '').trim().replace(/\\s+/g, ' ');
+    return r.width > 0 && r.height > 0 && want.test(t); });
+  if (!el) return ''; const t = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim(); el.click(); return t; })()
+"""
+
 // Numbered list of what can be clicked or filled, plus the visible text.
 let pageJS = """
-(() => { const deepAll = (sel, root = document, out = []) => { root.querySelectorAll(sel).forEach(e => out.push(e)); root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) deepAll(sel, e.shadowRoot, out); }); return out; };  // inside the shadow roots too (Salesforce, web components)
+(() => { const deepAll = (sel, root = document, out = []) => { root.querySelectorAll(sel).forEach(e => out.push(e)); root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) deepAll(sel, e.shadowRoot, out); if (e.tagName === 'IFRAME') { try { if (e.contentDocument) deepAll(sel, e.contentDocument, out); } catch (x) {} } }); return out; };  // inside the shadow roots (Salesforce, web components) and the frames of the same site too
   const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
   const label = el => { const t = (el.getAttribute('aria-label') || el.innerText || el.value || el.placeholder || el.title || el.alt || el.name || '').trim().replace(/\\s+/g, ' ');
     if (!t && el.id) { const l = document.querySelector('label[for="' + el.id + '"]'); if (l) return l.innerText.trim(); } return t.slice(0, 80); };
   deepAll('[data-naim-id]').forEach(e => e.removeAttribute('data-naim-id'));
-  const els = deepAll('a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=checkbox], [onclick], summary').filter(vis).slice(0, 150);
+  const els = deepAll('a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=checkbox], [onclick], summary').filter(vis).slice(0, 400);
   const items = els.map((el, i) => { el.setAttribute('data-naim-id', i + 1); const tag = el.tagName.toLowerCase();
     const kind = tag === 'a' ? 'lien' : tag === 'button' || el.getAttribute('role') === 'button' ? 'bouton' : tag === 'select' ? 'liste' : tag === 'textarea' ? 'zone de texte' : tag === 'input' ? 'champ ' + (el.type || 'text') : tag;
     const extra = (tag === 'input' || tag === 'textarea') && el.value ? ' = "' + String(el.value).slice(0, 40) + '"' : tag === 'input' && (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? ' ☑' : ' ☐') : el.disabled ? ' (désactivé)' : '';
     const to = tag === 'a' && el.href && !/^javascript:/.test(el.href) && el.href.split('#')[0] !== location.href.split('#')[0] ? ' → ' + el.href.slice(0, 160) : '';  // where a link goes (not back to this page)
     return '[' + (i + 1) + '] ' + kind + ' « ' + label(el) + ' »' + extra + to; });
   const text = (document.body ? document.body.innerText : '').replace(/\\n{3,}/g, '\\n\\n').trim();
-  return JSON.stringify({ title: document.title, url: location.href, text: text.slice(0, 20000), textLength: text.length, elements: items }); })()
+  return JSON.stringify({ title: document.title, url: location.href, text: text.slice(0, 3000000), textLength: text.length, elements: items }); })()
 """
 
 func findJS(_ target: String) -> String {
     let t = target.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
     let lit = String(data: try! JSONSerialization.data(withJSONObject: [t], options: []), encoding: .utf8)!
     return """
-    const deepAll = (sel, root = document, out = []) => { root.querySelectorAll(sel).forEach(e => out.push(e)); root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) deepAll(sel, e.shadowRoot, out); }); return out; };
+    const deepAll = (sel, root = document, out = []) => { root.querySelectorAll(sel).forEach(e => out.push(e)); root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) deepAll(sel, e.shadowRoot, out); if (e.tagName === 'IFRAME') { try { if (e.contentDocument) deepAll(sel, e.contentDocument, out); } catch (x) {} } }); return out; };
     const __t = \(lit)[0]; let el = /^\\d+$/.test(__t) ? deepAll('[data-naim-id="' + __t + '"]')[0] : null;
     if (!el && !/^\\d+$/.test(__t)) { try { el = document.querySelector(__t); } catch (e) {} }
     if (!el) { const want = __t.toLowerCase(); const all = deepAll('a, button, input, textarea, select, label, [role], summary, [onclick], li, td, span, div');
@@ -63,7 +72,7 @@ func findJS(_ target: String) -> String {
     """
 }
 
-class Browser: NSObject, WKNavigationDelegate {
+class Browser: NSObject, WKNavigationDelegate, WKUIDelegate {
     let web: WKWebView
     let window: NSWindow
     var loaded: (() -> Void)?
@@ -79,12 +88,18 @@ class Browser: NSObject, WKNavigationDelegate {
         super.init()
         window.contentView = web
         web.navigationDelegate = self
+        web.uiDelegate = self
         web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15 Naim"
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         if response.isForMainFrame, let h = response.response as? HTTPURLResponse { status = h.statusCode }
         decisionHandler(.allow)
+    }
+    // a link « in a new tab » (target=_blank, window.open): opened in this same page, which has no tabs; before, the click did nothing
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let url = navigationAction.request.url { webView.load(URLRequest(url: url)) }
+        return nil
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { finishLoad() }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { navError = error.localizedDescription; finishLoad() }
@@ -110,6 +125,17 @@ class Browser: NSObject, WKNavigationDelegate {
         }
     }
 
+    func declineCookies(_ then: @escaping ([String: Any]) -> Void) {  // a banner often loads a moment after the page
+        func attempt(_ left: Int) {
+            web.evaluateJavaScript(cookiesJS) { r, _ in
+                if let t = r as? String, !t.isEmpty { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { then(["action": "bandeau cookies refusé (« \(t) »)"]) } }
+                else if left > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { attempt(left - 1) } }
+                else { then([:]) }
+            }
+        }
+        attempt(1)
+    }
+
     func settle(_ then: @escaping () -> Void) {  // after an action: wait for a possible navigation / rendering
         var done = false
         loaded = { if !done { done = true; then() } }
@@ -125,7 +151,7 @@ class Browser: NSObject, WKNavigationDelegate {
         case "open":
             guard let s = c["url"] as? String, let url = URL(string: s.contains("://") ? s : "http://" + s) else { emit(["error": "adresse invalide"]); return }
             status = 0; navError = ""
-            loaded = { if !self.navError.isEmpty { emit(["error": "chargement impossible : \(self.navError)", "url": s]) } else { self.page() } }
+            loaded = { if !self.navError.isEmpty { emit(["error": "chargement impossible : \(self.navError)", "url": s]) } else { self.declineCookies { self.page($0) } } }
             if url.isFileURL { web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent()) } else { web.load(URLRequest(url: url)) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 30) { if self.loaded != nil { self.loaded = nil; emit(["error": "la page ne répond pas (30 s)", "url": s]) } }
         case "page":

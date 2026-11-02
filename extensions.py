@@ -8,6 +8,7 @@ Naim's own home is ~/.naim (override with NAIM_HOME):
   NAIM.md           global instructions applied to every project
 App data (conversations, settings, undo checkpoints) stays in DATA (~/Library/Application Support/Naim).
 """
+import base64
 import hashlib
 import html
 import json
@@ -791,6 +792,25 @@ def _links(page, base, limit=40):
 
 
 def web_search(query, limit=6):
+    """DuckDuckGo, then its light version, then Bing: DuckDuckGo sometimes answers « No results » to a robot (« prix
+    iphone 17 pro ») while the same search has ten results elsewhere — Naim then believed nothing existed."""
+    results, errors = [], []
+    for engine in (_ddg_html, _ddg_lite, _bing):
+        try:
+            found = engine(query, limit)
+        except Exception as e:  # noqa: BLE001 — blocked or down: the next engine
+            errors.append(f"{getattr(engine, '__name__', 'moteur').strip('_')}: {e}")
+            continue
+        known = {r["url"] for r in results}
+        results += [r for r in found if r["url"] not in known]
+        if len(results) >= min(3, limit):
+            break
+    if not results and errors:
+        raise RuntimeError(" ; ".join(errors))
+    return results[:limit]
+
+
+def _ddg_html(query, limit):
     page, _, _ = _get("https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(query))
     results = []
     for m in re.finditer(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>(.*?)(?=<a[^>]+class="result__a"|$)', page, re.S):
@@ -806,9 +826,48 @@ def web_search(query, limit=6):
     return results
 
 
+def _ddg_lite(query, limit):
+    page, _, _ = _get("https://lite.duckduckgo.com/lite/?q=" + urllib.parse.quote(query))
+    results = []
+    for m in re.finditer(r"<a[^>]+href=\"([^\"]+)\"[^>]*class='result-link'[^>]*>(.*?)</a>(.*?)(?=class='result-link'|$)", page, re.S):
+        url, title, rest = html.unescape(m.group(1)), m.group(2), m.group(3)
+        if "duckduckgo.com/y.js" in url:  # ads
+            continue
+        snip = re.search(r"class='result-snippet'[^>]*>(.*?)</td>", rest, re.S)
+        results.append({"title": html_to_text(title), "url": url, "snippet": html_to_text(snip.group(1)) if snip else ""})
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _bing(query, limit):
+    page, _, _ = _get("https://www.bing.com/search?setlang=fr&cc=FR&q=" + urllib.parse.quote(query))
+    results = []
+    for item in re.findall(r'<li class="b_algo"(.*?)</li>\s*(?=<li|</ol)', page, re.S):
+        h = re.search(r'<h2[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', item, re.S)
+        if not h:
+            continue
+        url = html.unescape(h.group(1))
+        u = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("u", [""])[0]
+        if u.startswith("a1"):  # Bing's redirect: the real address, in base64
+            try:
+                url = base64.urlsafe_b64decode(u[2:] + "=" * (-len(u[2:]) % 4)).decode()
+            except ValueError:
+                pass
+        snip = re.search(r"<p[^>]*>(.*?)</p>", item, re.S)
+        results.append({"title": html_to_text(h.group(2)), "url": url, "snippet": html_to_text(snip.group(1)) if snip else ""})
+        if len(results) >= limit:
+            break
+    return results
+
+
 def web_fetch(url, max_chars=12000):
+    """The page's text, part after part: a long page ends with the address of its next part (« …#suite=12000 »), a
+    new address each time, so reading on is never taken for a repeated call."""
     if not re.match(r"^https?://", url):
         return "error: URL invalide (http:// ou https:// attendu)"
+    m = re.search(r"#suite=(\d+)$", url)
+    start, url = (int(m.group(1)), url[:m.start()]) if m else (0, url)
     try:
         body, ctype, final = _get(url)
     except Exception as e:
@@ -818,8 +877,16 @@ def web_fetch(url, max_chars=12000):
     main = _main_part(body) if is_html else body
     text = html_to_text(main) if is_html else body
     head = f"{html_to_text(title.group(1)) if title else final}\n{final}\n\n"
-    out = head + (text[:max_chars] + "\n...(tronqué)" if len(text) > max_chars else text)
-    links = _links(main, final) if is_html else []
+    part = text[start:start + max_chars]
+    if start and not part:
+        return head + f"(fin de la page : elle a {len(text)} caractères, tout est déjà lu)"
+    if start:
+        head += f"(suite : caractères {start} à {start + len(part)} sur {len(text)})\n\n"
+    out = head + part
+    if start + max_chars < len(text):
+        out += (f"\n...(la page continue : {len(text) - start - max_chars} caractères de plus ; pour lire la suite : "
+                f"web_fetch {url}#suite={start + max_chars})")
+    links = _links(main, final) if is_html and not start else []
     return out + ("\n\nLiens de la page (pour en ouvrir un : web_fetch de son adresse) :\n" + "\n".join(links) if links else "")
 
 

@@ -92,7 +92,7 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
 
 # tools kept for a plain question or a lesson in Chat: look things up, never change files
 ANSWER_TOOLS = {"confier_tache", "chercher_conversations", "chercher_sur_mac", "read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
-                "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
+                "browser", "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
 # actions on the Mac itself (printer, apps, settings, music…): Naim does them with its tools, asking when it is sensitive
 MAC_ACTION = (r"mode (sombre|clair|nuit)|th[èe]me (sombre|clair)|airpods|[ée]couteurs|casque (audio|bluetooth)|sortie (audio|son)|verrouill\w* (l'[ée]cran|le mac|mon mac)|([ée]tein[st]|red[ée]marre)\w* (le |mon )?(mac|ordi\w*)|espace (disque|libre)|stockage (du|de mon) mac|m[ée]moire (du|de mon) mac|adresse ip|test de (d[ée]bit|vitesse)|vitesse (de )?(la |ma )?connexion|presse-papiers?|ce que j'ai copi[ée]|app(lication)? raccourcis|lance (le |mon )?raccourci|fond d'[ée]cran|(mets|lance|r[èe]gle|programme)\w* (un |le )?minuteur|minuteur de \d|time machine|[ée]jecte\w*|dans le finder|(cherche|trouve)\w* [^.?!]{0,40}\b(sur|dans) (le |mon )?mac\b|onglets? (de |dans |ouverts? )?(safari|chrome)|safari|whatsapp|itin[ée]raire|comment aller [àa]|ne pas d[ée]ranger|mode concentration|r[ée]glages? syst[èe]me|pr[ée]f[ée]rences syst[èe]me|ajoute (un |ce |le )?contact|(modifi|chang|corrig|remplac|mets? [àa] jour|mettre [àa] jour)\w* [^.?!]{0,40}\bcontacts?\b|fais parler (le )?mac|garde (le mac|l'[ée]cran) allum[ée]|emp[êe]che la veille|"
@@ -2096,6 +2096,8 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             with _lock:
                 _agents.pop(run_id, None)
+            if getattr(helper, "_browser", None):  # the page browser of this reply: closed, never left running
+                helper._browser.close()
 
     def _chat_steps(self, body, messages, options, stop, files, helper, think, repeating, chatfiles, run_id):
         made, mail_error, sent, total_tokens, used_tools, shots, content = [], None, False, 0, False, [], ""
