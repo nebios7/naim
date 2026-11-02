@@ -306,6 +306,20 @@ def doc_body(f, shift=1):
     return md_html(doc_markdown(f), shift)
 
 
+def quiz_order(it):
+    """The same order of the choices as the quiz card (the right answer is not always first)."""
+    choix, h = it.get("choix") or [], 2166136261
+    raw = str(it.get("q") or it.get("question") or "").encode("utf-16-le")  # code units, as the page counts them
+    for i in range(0, len(raw), 2):
+        h = ((h ^ int.from_bytes(raw[i:i + 2], "little")) * 16777619) & 0xFFFFFFFF
+    order = list(range(len(choix)))
+    for i in range(len(order) - 1, 0, -1):
+        h = (((h ^ (h >> 15)) * 2246822507) & 0xFFFFFFFF)
+        j = h % (i + 1)
+        order[i], order[j] = order[j], order[i]
+    return order
+
+
 def render_quiz(src, out, couleur=""):
     """A quiz (the JSON of the interactive card: titre, questions [q, choix, bonne, indice, explication], cartes
     [recto, verso]) -> a pro PDF: one block per question never cut by a page, choices A B C D, the answer key with
@@ -334,13 +348,16 @@ def render_quiz(src, out, couleur=""):
             f'<div class="band"></div><div class="meta">{len(qs)} questions{f" · {len(cards)} cartes mémoire" if cards else ""} · '
             'une seule bonne réponse par question · le corrigé est à la fin</div></header>']
     for k, it in enumerate(qs, 1):
-        choix = "".join(f"<li><b>{L[j]}</b><span>{_inline(str(c))}</span></li>" for j, c in enumerate(it.get("choix") or []))
+        order = quiz_order(it)
+        choix = "".join(f"<li><b>{L[j]}</b><span>{_inline(str((it.get('choix') or [])[o]))}</span></li>" for j, o in enumerate(order))
         ind = f'<div class="ind">Indice : {_inline(str(it["indice"]))}</div>' if it.get("indice") else ""
         body.append(f'<div class="qz"><h3><span class="n">{k}.</span>{_inline(str(it.get("q") or it.get("question") or ""))}</h3><ol>{choix}</ol>{ind}</div>')
     rows = []
     for k, it in enumerate(qs, 1):
-        good = int(it.get("bonne", it.get("reponse", 0)) or 0)
-        ch = (it.get("choix") or [""])[good] if good < len(it.get("choix") or []) else ""
+        orig = int(it.get("bonne", it.get("reponse", 0)) or 0)
+        ch = (it.get("choix") or [""])[orig] if orig < len(it.get("choix") or []) else ""
+        order = quiz_order(it)
+        good = order.index(orig) if orig in order else 0
         rows.append(f"<tr><td>{k}. {L[good] if good < len(L) else '?'}</td><td><strong>{_inline(str(ch))}</strong>"
                     + (f"<br>{_inline(str(it['explication']))}" if it.get("explication") else "") + "</td></tr>")
     body.append('<section class="key"><h2>Corrigé</h2><table><thead><tr><th>Réponse</th><th>Explication</th></tr></thead><tbody>'

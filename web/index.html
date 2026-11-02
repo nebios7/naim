@@ -2480,6 +2480,15 @@ function inline(s) {
 // ======================================================================= quiz (skill quiz)
 // a quiz as in a pro assistant: the « Quiz » tab (4 choices, hint, explanation after the answer, score at the end) and
 // « Cartes mémoire » (a card that turns over). Its state lives on the card itself (data-*), drawn again at each click.
+// the choices in an order of their own, the same each time for a question (the model nearly always puts the right
+// answer first): order[k] = the index in « choix » of the choice shown k-th
+function quizOrder(it) {
+  const choix = it.choix || [], key = String(it.q || it.question || "");
+  let h = 2166136261; for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  const order = choix.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; const j = h % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  return order;
+}
 function quizDraw(el) {
   let q; try { q = JSON.parse(el.dataset.quiz); } catch (e) { return; }
   const qs = q.questions, cards = Array.isArray(q.cartes) ? q.cartes : [], d = el.dataset;
@@ -2495,12 +2504,12 @@ function quizDraw(el) {
     const sc = +d.score, msg = sc === n ? "Parfait, tout est juste." : sc >= n * 0.6 ? "Bien joué : relis les explications des questions manquées." : "Relis le cours, puis recommence : ça viendra.";
     html = `<div class="qscore"><b>${sc} / ${n}</b><span>${msg}</span></div><div class="qfoot"><span>${esc(q.titre || "Quiz")}</span><button class="btn" data-qrestart>Recommencer</button></div>`;
   } else {
-    const it = qs[i], good = +(it.bonne ?? it.reponse ?? 0), picked = d.picked == null ? null : +d.picked;
-    const opts = (it.choix || []).map((c, k) => {
+    const it = qs[i], order = quizOrder(it), good = order.indexOf(+(it.bonne ?? it.reponse ?? 0)), picked = d.picked == null ? null : +d.picked;
+    const opts = order.map((o) => (it.choix || [])[o]).map((c, k) => {
       const st = picked == null ? "" : k === good ? "ok" : k === picked ? "ko" : "dim";
       return `<button class="qopt ${st}" data-qopt="${k}" ${picked == null ? "" : "disabled"}><span class="qdot"></span><span>${esc(c)}</span></button>`;
     }).join("");
-    const expl = picked == null ? "" : `<div class="qexpl ${picked === good ? "ok" : "ko"}"><b>${picked === good ? "Bonne réponse." : `La bonne réponse : ${esc((it.choix || [])[good] || "")}.`}</b> ${esc(it.explication || "")}</div>`;
+    const expl = picked == null ? "" : `<div class="qexpl ${picked === good ? "ok" : "ko"}"><b>${picked === good ? "Bonne réponse." : `La bonne réponse : ${esc((it.choix || [])[order[good]] || "")}.`}</b> ${esc(it.explication || "")}</div>`;
     const hint = it.indice && picked == null ? `<details class="qhint"><summary>Afficher l'indice</summary><div>${esc(it.indice)}</div></details>` : "";
     html = `<div class="qq">${esc(it.q || it.question || "")}</div><div class="qopts">${opts}</div>${hint}${expl}
       <div class="qfoot"><span>Question ${i + 1} sur ${n}</span><button class="btn ${picked == null ? "" : "primary"}" data-qnext ${picked == null ? "disabled" : ""}>${i === n - 1 ? "Voir le score" : "Suivant"}</button></div>`;
@@ -2512,7 +2521,7 @@ document.addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b || b.disabled) return;
   const d = el.dataset, q = JSON.parse(d.quiz);
   if (b.dataset.qtab) d.tab = b.dataset.qtab;
-  else if (b.dataset.qopt != null) { d.picked = b.dataset.qopt; if (+b.dataset.qopt === +(q.questions[+d.i].bonne ?? q.questions[+d.i].reponse ?? 0)) d.score = String(+d.score + 1); }
+  else if (b.dataset.qopt != null) { const it = q.questions[+d.i]; d.picked = b.dataset.qopt; if (quizOrder(it)[+b.dataset.qopt] === +(it.bonne ?? it.reponse ?? 0)) d.score = String(+d.score + 1); }
   else if (b.hasAttribute("data-qnext")) { d.i = String(+d.i + 1); delete d.picked; }
   else if (b.hasAttribute("data-qrestart")) { d.i = "0"; d.score = "0"; delete d.picked; }
   else if (b.hasAttribute("data-qflip")) d.flip = d.flip === "1" ? "0" : "1";
