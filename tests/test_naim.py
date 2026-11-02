@@ -704,6 +704,30 @@ class SimulationInTheChat(unittest.TestCase):
                                capture_output=True, text=True, timeout=60)
             self.assertIn("La simulation est juste.", r.stdout + r.stderr, name)
 
+    def test_a_wrong_block_is_caught(self):
+        import server
+        naim_block = """const ALGO = { titre: "Produit", type: "autre", matriceA: [[1, 2]], code: `
+def f(A):
+    return A`, dessiner(etape, zone) { zone.innerHTML = C.length; } };"""  # what Naim wrote: no build, an undefined C
+        self.assertIn("build", server.check_simulation(naim_block))
+        drawing_breaks = """const ALGO = { titre: "x", type: "autre", valeurs: [1, 2], code: `
+a = 1
+b = 2`, build(a, P) { P(1, "un", { dessin: {} }); P(2, "deux", { dessin: {} }); },
+          dessiner(t, zone) { zone.innerHTML = "<svg>" + C.length + "</svg>"; } };"""
+        self.assertIn("dessiner() plante", server.check_simulation(drawing_breaks))
+        sk = ROOT / "plugins_builtin/algorithmique/skills/animation-algorithme/exemples"
+        self.assertEqual(server.check_simulation((sk / "produit-matrices.js").read_text()), "")
+        self.assertIn("Corrige et redonne ta réponse entière", (ROOT / "server.py").read_text())
+
+    def test_the_closest_example_comes_with_the_request(self):
+        import server
+        for m, want in (("simule le produit de deux matrices", "produit-matrices"), ("montre pythagore en animation", "pythagore"),
+                        ("une simulation de dijkstra", "dijkstra"), ("simule la recherche dichotomique", "recherche-dichotomique"),
+                        ("montre le tri avec une simulation", "tri-insertion")):
+            name, text = server.sim_example(m)
+            self.assertEqual(name, want, m)
+            self.assertIn("const ALGO", text)
+
     def test_the_right_skill_is_chosen(self):
         import extensions as e
         for m, want in (("Non j’ai besoin que tu me montre le tri avec une simulation visuel", "animation-algorithme"),

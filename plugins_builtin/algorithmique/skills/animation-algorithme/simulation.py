@@ -61,6 +61,20 @@ try {
     } catch (e) { c.ok = false; c.pourquoi = String(e && e.message || e); }
     __res.cases.push(c);
   });
+  if (typeof ALGO.dessiner === 'function') {  // the drawing is tried on every step: an error there breaks the page too
+    var TD = makeTrace(ALGO, vals, ALGO.cible), drawn = 0;
+    for (var di = 0; di < TD.length && di < 400; di++) {
+      var zone = {innerHTML: '', textContent: '', style: {}, children: [], appendChild: function (e) { this.children.push(e); return e; },
+                  querySelector: function () { return null; }, querySelectorAll: function () { return []; }};
+      try { ALGO.dessiner(TD[di], zone); }
+      catch (e) { __res.dessin = 'dessiner() plante à l\'étape ' + (di + 1) + ' : ' + String(e && e.message || e)
+                  + " (elle ne reçoit que l'étape : ce que tu passes dans P(…, { dessin: {…} }) arrive dans etape.extra)"; break; }
+      if (zone.innerHTML || zone.children.length) drawn++;
+    }
+    if (!__res.dessin && !drawn) __res.dessin = "dessiner() ne dessine rien : remplis zone.innerHTML (un <svg …>…</svg>)";
+  } else if (ALGO.type === 'autre') {
+    __res.warnings.push('type "autre" sans dessiner(etape, zone) : ce sont des barres qui seront montrées');
+  }
   var never = [];
   lines.forEach(function (l, i) { if (!used[i + 1] && /[A-Za-z0-9]/.test(l) && !/^\s*(\/\/|#|\*>)/.test(l) && l.trim().length > 2 && !/^\s*[{}]\s*$/.test(l)) never.push(i + 1); });
   if (never.length > lines.length / 2) __res.warnings.push('lignes jamais surlignées : ' + never.join(', ') + ' (des P(ligne, …) manquent, ou les numéros sont décalés)');
@@ -140,6 +154,9 @@ def check(path):
             print(f"FAUX {what} → {c['pourquoi']}")
         if c.get("sans_message"):
             print(f"     {c['sans_message']} étape(s) sans message : chaque P(ligne, message) explique ce qui se passe")
+    if res.get("dessin"):
+        good = False
+        print(f"FAUX dessin → {res['dessin']}")
     for w in res["warnings"]:
         print(f"À revoir : {w}")
     print("\nLa simulation est juste." if good else "\nCorrige build() dans le fichier de l'algorithme puis relance.")

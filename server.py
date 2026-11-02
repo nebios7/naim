@@ -41,6 +41,8 @@ import queue
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -183,6 +185,45 @@ def same_again(asked, answer, earlier):
 
 LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, ]+)?je (?:vais(?!\s+(?:bien|mal|mieux|tr[èe]s))|m'en occupe|lance|cr[ée]e|"
                               r"[ée]cris|envoie|renvoie|corrige|r[ée]essaie|m'occupe|passe|commence)\b", re.I)
+
+
+SIM_BLOCK_RE = re.compile(r"```simulation[ \t]*\n(.*?)```", re.S)
+
+
+def sim_dir():
+    """The folder of the animation engine (the user's installed copy first)."""
+    for d in (Path.home() / ".naim/plugins/algorithmique/skills/animation-algorithme",
+              Path(__file__).parent / "plugins_builtin/algorithmique/skills/animation-algorithme"):
+        if (d / "simulation.py").exists():
+            return d
+    return None
+
+
+def sim_example(text):
+    """The verified example closest to what is asked (a grid, a figure, a graph, a search, a sort), as text."""
+    d, t = sim_dir(), text or ""
+    name = ("produit-matrices" if re.search(r"matric|grille|tableau 2d|jeu de la vie|morpion|programmation dynamique", t, re.I)
+            else "pythagore" if re.search(r"g[ée]om[ée]tr|pythagore|thal[èe]s|triangle|cercle|angle|aire|th[ée]or[èe]me|figure", t, re.I)
+            else "dijkstra" if re.search(r"graphe|dijkstra|chemin|r[ée]seau|arbre|parcours|bfs|dfs|n[œo]euds?", t, re.I)
+            else "recherche-dichotomique" if re.search(r"recherche|dichotom|cherche", t, re.I) else "tri-insertion")
+    f = d / "exemples" / f"{name}.js" if d else None
+    return (name, f.read_text(encoding="utf-8")) if f and f.exists() else (None, "")
+
+
+def check_simulation(algo):
+    """Run the engine's checker on a ```simulation block: '' when it is right, else what is wrong (for the model)."""
+    d = sim_dir()
+    if not d:
+        return ""
+    with tempfile.TemporaryDirectory() as tmp:
+        f = Path(tmp) / "algo.js"
+        f.write_text(algo, encoding="utf-8")
+        try:
+            r = subprocess.run([sys.executable, str(d / "simulation.py"), "verifier", str(f)], capture_output=True, text=True, timeout=90)
+        except subprocess.TimeoutExpired:
+            return "l'algorithme ne s'arrête pas (plus de 90 s) : vérifie la condition de fin des boucles"
+    out = (r.stdout + r.stderr).strip()
+    return "" if "La simulation est juste." in out else out[-2500:]
 
 
 def loop_start(text, reps=3):
@@ -2192,7 +2233,7 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = rewrites = loops = 0
+        copies = rewrites = loops = sim_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2277,10 +2318,13 @@ class Handler(BaseHTTPRequestHandler):
                     r"fichiers?|\bpages?\b|\bhtml\b|enregistr|sauvegard|t[ée]l[ée]charg|\w\.(js|html?)\b", body["message"] or "", re.I)
                 file_work = not sim_here  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
                 if sim_here:
+                    ex_name, ex = sim_example(recent)  # the closest verified example comes with the request: its plan is followed
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
-                        "\n\n(Réponds ici, dans la conversation : une phrase, puis UN bloc ```simulation avec const ALGO = { … }, "
-                        "sur le plan de l'exemple du skill (pour une grille, une figure, un graphe : lis d'abord l'exemple proche avec read_file, "
-                        "puis invente le dessin). Aucun fichier à créer, aucune commande.)"))
+                        "\n\n(Réponds ici, dans la conversation : une phrase, puis UN bloc ```simulation avec const ALGO = { … }. "
+                        "Garde EXACTEMENT le plan de l'exemple ci-dessous : les mêmes champs (titre, sous_titre, fichier, langage, type, "
+                        "valeurs, code, build(a, P), et dessiner(t, zone) s'il en a une), build qui exécute pour de vrai et appelle P, "
+                        "dessiner qui ne lit que t.extra. Change le sujet et invente le dessin. Aucun fichier à créer, aucune commande.)"
+                        + (f"\n\n[Exemple vérifié à suivre : exemples/{ex_name}.js]\n```js\n{ex.strip()}\n```" if ex else "")))
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
@@ -2517,6 +2561,20 @@ class Handler(BaseHTTPRequestHandler):
                                  "SMS : chercher_contact ou le numéro que je t'ai donné, puis osascript avec Messages ; appel : "
                                  "open \"tel:<numéro>\"). Ne me dis pas de le faire moi-même. Je validerai si on me le demande."})
                 continue
+            if not calls and not stop.is_set() and sim_checks < 3 and (blk := SIM_BLOCK_RE.search(content)):
+                # a simulation is checked before it is shown as done (run for real, drawn on every step): wrong, it is
+                # taken back and written again, corrected — like a developer who runs the code before handing it over
+                problems = check_simulation(blk.group(1))
+                if problems:
+                    sim_checks += 1
+                    self.event({"type": "retract", "chars": shown})
+                    self.event({"type": "status", "text": "Naim corrige sa simulation…"})
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": "(Vérification de ta simulation : elle ne marche pas encore.\n"
+                                     + problems + "\n\nCorrige et redonne ta réponse entière : une phrase puis le bloc ```simulation "
+                                     "complet, corrigé, sur le plan de l'exemple vérifié.)"})
+                    shown = 0
+                    continue
             if not calls and not stop.is_set() and helper._code_dirty and helper._check_pushbacks < 3:
                 # it changed code and did not run it: it checks before saying it is done (tests, the program), like a developer
                 helper._check_pushbacks += 1

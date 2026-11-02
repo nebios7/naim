@@ -1,6 +1,6 @@
 {
   "name": "algorithmique",
-  "version": "1.5",
+  "version": "1.6",
   "description": "Pseudo-code aux conventions françaises (Algorithme, Si … FinSi, Pour … FinPour), tableaux de trace, passage en Python, et animations pas à pas d'un algorithme (tri, recherche…).",
   "skills": "skills",
   "triggers": {
