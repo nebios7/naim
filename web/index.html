@@ -1861,6 +1861,9 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
   background: var(--code); color: var(--muted); font-size: 13px; }
 .md figure.mgraph svg { display: block; width: 520px; max-width: 100%; height: auto; }
 .md figure.mgraph figcaption { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font: 13px ui-monospace, Menlo, monospace; }
+.md .vis { margin: 4px 0 6px; }
+.md .vis iframe.visf { display: block; width: 100%; height: 160px; border: 0; background: transparent; }
+.md .vis.vwait { display: flex; align-items: center; gap: 8px; padding: 18px 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 13.5px; }
 .md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
 .turn.plugcard { align-items: flex-start; }
 .turn.plugcard .md { min-width: 0; }
@@ -2656,9 +2659,40 @@ function codeBlock(lang, body, file = "", open = false) {
     }
     try { const q = JSON.parse(json); if (q && Array.isArray(q.questions) && q.questions.length) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>` + (after ? md(after) : ""); } catch (e) { if (open) return wait(); }
   }
+  if (/^(visuel|widget)$/i.test(lang || "")) {  // a live visual (a clock, a card, a gauge…): drawn here, in a sealed frame
+    if (open) return `<div class="vis vwait">${liveIcon("write")}<span>Naim dessine le visuel…</span></div>`;
+    // the frame's colour scheme is the page's: otherwise its background is painted opaque (a dark band in dark mode)
+    const dark = document.documentElement.dataset.theme === "dark"
+      || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    return `<div class="vis"><iframe class="visf" sandbox="allow-scripts" title="Visuel" style="color-scheme: ${dark ? "dark" : "light"}" srcdoc="${esc(visuelDoc(body))}"></iframe></div>`
+      + `<details class="mfigcode"><summary>Code du visuel</summary>${codeBlockRaw("html", body, file, open)}</details>`;
+  }
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
   return codeBlockRaw(lang, body, file, open);
 }
+// The page of a visual: Naim's colours and font, nothing it can reach (no network, no Naim, no Mac: only drawing and its
+// own script), and its height told to the conversation so that it shows whole, without a scroll bar
+function visuelDoc(body) {
+  const cs = getComputedStyle(document.documentElement);
+  const v = ["bg", "panel", "side", "hover", "text", "muted", "line", "accent", "code", "brand", "ok", "warn", "danger"]
+    .map((k) => `--${k}: ${cs.getPropertyValue("--" + k).trim()};`).join(" ");
+  const dark = document.documentElement.dataset.theme === "dark"
+    || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const whole = /<html[\s>]/i.test(body);
+  const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:">`
+    + `<style>:root { ${v} color-scheme: ${dark ? "dark" : "light"}; } html, body { margin: 0; background: transparent; color: var(--text);`
+    + ` font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; } body { padding: 4px; } * { box-sizing: border-box; }</style>`
+    + `<scr` + `ipt>(() => { const tell = () => { const b = document.body; if (!b) return;`
+    + ` const h = Math.max(b.scrollHeight, Math.ceil(b.getBoundingClientRect().bottom)) + 8; parent.postMessage({ naimVisuel: 1, h }, "*"); };`
+    + ` addEventListener("DOMContentLoaded", () => { tell(); new ResizeObserver(tell).observe(document.body); });`
+    + ` addEventListener("load", tell); setTimeout(tell, 300); setTimeout(tell, 1200); })();<\/script>`;
+  return whole ? body.replace(/<head[^>]*>/i, (m) => m + head).replace(/^(?![\s\S]*<head)/, head) : `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
+}
+addEventListener("message", (e) => {
+  if (!e.data || e.data.naimVisuel !== 1) return;
+  const f = [...document.querySelectorAll("iframe.visf")].find((x) => x.contentWindow === e.source);
+  if (f) f.style.height = Math.min(Math.max(+e.data.h || 0, 40), 900) + "px";
+});
 function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
   return `<div class="code${open ? " writing" : ""}"><div class="bar"><span>${file ? `<b class="cfile">${esc(file)}</b> · ` : ""}${esc(lang || "texte")} · ${body.split("\n").length} ligne${body.split("\n").length > 1 ? "s" : ""}</span>${PREVIEWABLE.test(lang) ? "<button data-preview>▶ Aperçu</button>" : ""}${RUNNABLE.test(lang) && canWrite ? "<button data-run title='Exécuter dans le terminal du projet'>▶ Exécuter</button>" : ""}${canWrite ? (file ? `<button data-write data-file="${esc(file)}" title="Écrire ce code dans le projet (l'ancien fichier est sauvegardé)">✓ Appliquer à ${esc(file.split("/").pop())}</button>` : `<button class="ib" data-write data-file="" title="Écrire ce code dans un fichier du projet">${svgI("folder")}</button>`) : ""}<button class="ib" data-save title="Enregistrer dans un fichier">${svgI("download")}</button><button class="ib" data-copy title="Copier">${svgI("copy")}</button></div><pre><code data-lang="${esc(lang)}">${highlight(body, lang)}</code></pre></div>`;
@@ -5101,6 +5135,25 @@ async function stream(reply, v, message, hist, extra = {}) {
     reply.stats = { ...(reply.stats || {}), ttft: reply.ttft, total: (Date.now() - reply.time) / 1000,
                     reason: /⏹ Arrêté/.test(reply.content || "") ? "stopped" : reply.stats?.reason };
     v.setStats(reply.stats);
+  }
+  // photos shown while it wrote, then left behind when it went on searching (its first words became a note above its
+  // steps): they come back in the answer, once, if the answer itself has none
+  if (!/!\[[^\]]*\]\(https:\/\//.test(reply.content || "")) {
+    const PIC = /^!\[[^\]]*\]\(https:\/\/[^)\s]+\)\s*$/gm, pics = [];
+    for (const st of reply.steps || []) {
+      if (st.type !== "note" || !PIC.test(st.text || "")) continue;
+      PIC.lastIndex = 0;
+      pics.push(...(st.text.match(PIC) || []).map((x) => x.trim()));
+      st.text = st.text.replace(PIC, "").replace(/\n{3,}/g, "\n\n").trim();
+    }
+    const keep = [...new Set(pics)].slice(0, 6);
+    if (keep.length) {
+      const parts = String(reply.content || "").split(/\n\s*\n/);  // after its first sentence, as the skills ask
+      reply.content = (parts.length > 1 ? [parts[0], keep.join("\n"), ...parts.slice(1)] : [keep.join("\n"), ...parts]).join("\n\n");
+      const urls = new Set(keep.map((x) => x.match(/\((https:[^)\s]+)\)/)[1]));
+      $$(".fnote img.mdimg", v.el || document).forEach((im) => { if (urls.has(im.dataset.u)) im.remove(); });
+      v.setText(reply.content);
+    }
   }
   v.finish();
   delete runs[conv.id];

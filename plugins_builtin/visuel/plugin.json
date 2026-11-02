@@ -1,0 +1,10 @@
+{
+  "name": "visuel",
+  "version": "1.0",
+  "description": "Un visuel vivant affiché directement dans la conversation : horloge, carte, compteur, jauge, petit tableau de bord, mini-outil.",
+  "skills": "skills",
+  "triggers": {
+    "visuel": "\\b(widget|visuels? (beau|belle|joli|jolie|styl\\w*|anim\\w*|vivant)|(beau|belle|joli|jolie|styl[ée]e?) (carr[ée]|cadre|visuel|carte|encadr[ée])|carr[ée] (visuel|beau|joli|styl\\w*)|horloge|compte [àa] rebours|chronom[eè]tre|jauge|(aff?[ci]{1,2}h\\w*|montr\\w*|dessin\\w*|mets|mettre|fais|fait)[^.?!\\n]{0,60}\\b(dans|sur) (le |la )?(chat|conversation|discussion))\\b"
+  },
+  "priority": true
+}

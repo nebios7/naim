@@ -650,6 +650,29 @@ class Navigation(unittest.TestCase):
             self.assertEqual(len(lib.search("convertir un pdf")), 1)
 
 
+class VisualInTheChat(unittest.TestCase):
+    """« l'heure dans un carré beau », « affiche-le dans le chat »: a live visual drawn in the conversation (a ```visuel
+    block), not HTML code to open in the preview."""
+
+    def test_trigger(self):
+        import re
+        m = json.loads((ROOT / "plugins_builtin/visuel/plugin.json").read_text())
+        t = m["triggers"]["visuel"]
+        for yes in ("affiche moi l’heure dans un carré visuel beau", "non tu affcihe sa dans le chat le carré",
+                    "fais une horloge", "un compte à rebours jusqu'à noël"):
+            self.assertRegex(yes, re.compile(t, re.I))
+        for no in ("fais-moi un logo pour ma boutique", "affiche moi l'heure", "afficher les fichiers du dossier"):
+            self.assertNotRegex(no, re.compile(t, re.I))
+
+    def test_skill_example_is_a_visual_block(self):
+        text = (ROOT / "plugins_builtin/visuel/skills/visuel/SKILL.md").read_text()
+        self.assertIn("```visuel", text)
+        self.assertIn("setInterval", text)  # alive: the time is computed, never written in
+        page = (ROOT / "web/index.html").read_text()
+        script = page[page.index("<script>") + 8:]
+        self.assertNotIn("`<script>", script)  # a literal tag there ends Naim's own script in the HTML parser
+
+
 class CourseFolderToPdf(unittest.TestCase):
     def test_situation_said_before_the_method(self):
         import extensions as e
