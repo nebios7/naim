@@ -138,3 +138,57 @@ def find_in(r, words, context=220, most=25):
     return (head + (f"\nÉléments :\n" + "\n".join(els[:40]) if els else "")
             + (f"\nPassages ({len(hits)}{'+' if len(hits) >= most else ''}) — pour lire autour : action=page target=<position> :\n"
                + "\n".join(hits) if hits else ""))
+
+
+# What a person sees at a glance and a page cannot say by itself: measured in the real page (Naim does not see images)
+AUDIT_JS = r"""(() => {
+  const out = [], W = innerWidth, sel = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.classList.length ? '.' + [...e.classList].slice(0, 2).join('.') : '');
+  const vis = (e) => { const s = getComputedStyle(e), r = e.getBoundingClientRect(); return s.display !== 'none' && s.visibility !== 'hidden' && +s.opacity > 0.05 && r.width > 0 && r.height > 0; };
+  const all = [...document.body.querySelectorAll('*')].filter(vis);
+  const over = document.documentElement.scrollWidth - W;
+  if (over > 4) out.push('La page déborde à droite de ' + over + ' px (une barre de défilement horizontale) : ' +
+    all.filter((e) => e.getBoundingClientRect().right > W + 2).slice(0, 3).map(sel).join(', '));
+  const cut = all.filter((e) => e.children.length === 0 && (e.textContent || '').trim().length > 2 && e.scrollWidth > e.clientWidth + 3 && /hidden|clip/.test(getComputedStyle(e).overflow + getComputedStyle(e).overflowX)).slice(0, 4);
+  if (cut.length) out.push('Texte coupé (trop long pour sa boîte) : ' + cut.map((e) => sel(e) + ' « ' + e.textContent.trim().slice(0, 30) + ' »').join(', '));
+  const texts = all.filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 1)).slice(0, 250);
+  const rects = texts.map((e) => e.getBoundingClientRect()), hits = [];
+  for (let i = 0; i < texts.length && hits.length < 3; i++) for (let j = i + 1; j < texts.length && hits.length < 3; j++) {
+    if (texts[i].contains(texts[j]) || texts[j].contains(texts[i])) continue;
+    const a = rects[i], b = rects[j], x = Math.min(a.right, b.right) - Math.max(a.left, b.left), y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+    if (x > 4 && y > 4 && x * y > 0.3 * Math.min(a.width * a.height, b.width * b.height)) hits.push(sel(texts[i]) + ' et ' + sel(texts[j]));
+  }
+  if (hits.length) out.push('Textes qui se chevauchent : ' + hits.join(' ; '));
+  const broken = [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && vis(i));
+  if (broken.length) out.push(broken.length + ' image(s) cassée(s) : ' + broken.slice(0, 3).map((i) => i.getAttribute('src') || '').join(', '));
+  const tiny = texts.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 10);
+  if (tiny.length > 3) out.push(tiny.length + ' textes de moins de 10 px (illisibles)');
+  if ((document.body.innerText || '').trim().length < 15 && !document.querySelector('canvas,svg,img,video,iframe')) out.push('La page est vide (presque aucun texte, rien de dessiné)');
+  return JSON.stringify(out);
+})()"""
+
+
+def audit(url):
+    """The visible problems of a page (overflow, cut or overlapping text, broken images, script errors, empty page), as
+    sentences; [] when it looks right. Opened in a fresh WebKit window of 1280 × 800, closed after."""
+    b = Browser()
+    try:
+        r = b.send(cmd="open", url=url)
+        if r.get("error"):
+            return [f"La page ne s'ouvre pas : {r['error']}"]
+        problems = []
+        if r.get("status") and int(r["status"]) >= 400:
+            problems.append(f"La page répond {r['status']}")
+        res = b.send(cmd="eval", js=AUDIT_JS).get("result") or "[]"
+        try:
+            problems += json.loads(res)
+        except ValueError:
+            pass
+        log = b.send(cmd="console")
+        errs = [e.get("text") or e.get("message") or "" for e in (log.get("log") or []) if e.get("level") == "error"][:3]
+        if errs:
+            problems.append("Erreurs JavaScript : " + " | ".join(str(x)[:160] for x in errs))
+        return problems
+    except Exception:  # noqa: BLE001 — no browser here: no audit, never a crash
+        return []
+    finally:
+        b.close()

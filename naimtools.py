@@ -716,6 +716,8 @@ class Agent:
         self._verify_rounds = 0
         self._swift_dirty = None  # folder of an iOS app whose Swift code changed since the last build_run
         self._code_dirty, self._check_pushbacks = None, 0  # code changed and not run since: checked before « fini »
+        self._fail_streak, self._silent_steps = 0, 0  # failed commands in a row; steps that acted without a word
+        self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
         self.todos, self._todo_pushbacks, self._todo_reminded = [], 0, False
         self.disabled_skills = set(disabled_skills or ())
         self.run_id = run_id or f"run{int(time.time() * 1000)}"
@@ -2232,9 +2234,17 @@ class Agent:
             nxt = next((t for t in clean if t["status"] == "pending"), None)
             if nxt:
                 nxt["status"] = "in_progress"
+        newly_done = sum(t["status"] == "done" for t in clean) > sum(t["status"] == "done" for t in self.todos)
         self.todos = clean
         self.emit({"type": "todos", "todos": clean})
-        return "ok: todo list updated.\n" + self._todo_text()
+        out = "ok: todo list updated.\n" + self._todo_text()
+        if newly_done and self._code_dirty:
+            # a step ticked while its code was never run: a big project is built brick by brick, each one checked —
+            # not 1,000 lines checked at the end
+            out += ("\n\n[Étape cochée, mais son code n'a pas été lancé depuis la modification de " + str(self._code_dirty)
+                    + " : vérifie-le maintenant (run_command : les tests, ou le programme / py_compile / node --check), "
+                    "corrige s'il le faut, puis passe à l'étape suivante.]")
+        return out
 
     def _todo_text(self):
         if not self.todos:
@@ -3214,6 +3224,35 @@ class Agent:
     # a command that only looks (ls, cat, grep…) does not check the code
     LOOK_ONLY_RE = re.compile(r"\s*(?:cd [^&;]+(?:&&|;)\s*)?(?:ls|cat|head|tail|grep|rg|find|echo|pwd|wc|open|which|tree)\b(?!.*(?:&&|;|\|)\s*(?:python|node|npm|pytest|bash|sh|go|cargo|make)\b)")
 
+    def speak_note(self, content, calls):
+        """Several steps that acted without a word: one sentence for the user, like a colleague who says where they are."""
+        self._silent_steps = self._silent_steps + 1 if calls and not (content or "").strip() else 0
+        if self._silent_steps < 3:
+            return ""
+        self._silent_steps = 0
+        return ("\n\n[Pour l'utilisateur : dis-lui maintenant en UNE phrase courte où tu en es (ce qui est fait, ce que tu fais "
+                "ensuite — par exemple « Serveur prêt. Maintenant l'interface. »), puis continue avec tes outils.]")
+
+    def look_note(self):
+        """A web page made or changed in this task: opened in the browser and measured (overflow, cut or overlapping
+        text, broken images, script errors, empty page) — what a person sees at a glance. '' when it looks right."""
+        if not self._page_dirty or self._look_rounds >= 2:
+            return ""
+        page, self._page_dirty = self._page_dirty, None
+        app = next((x for x in reversed(self.started) if x.url and x.proc.poll() is None), None)
+        f = Path(page) if Path(page).is_absolute() else self.root / page
+        url = app.url if app else (f.as_uri() if f.suffix.lower() in (".html", ".htm") and f.exists() else None)
+        if not url:
+            return ""
+        import browser
+        problems = browser.audit(url)
+        if not problems:
+            return ""
+        self._look_rounds += 1
+        self.emit({"type": "status", "text": "Naim regarde sa page et corrige ce qui ne va pas…"})
+        return ("Avant de dire que c'est fini, j'ai ouvert ta page (" + url + ") dans le navigateur et mesuré ce qu'on y voit :\n- "
+                + "\n- ".join(problems) + "\n\nCorrige ces défauts (edit_file), sans casser le reste, puis donne le résultat.")
+
     def check_note(self):
         """Code was changed and not run since: what to run before saying it is done (the project's tests first)."""
         path = Path(self._code_dirty)
@@ -3290,6 +3329,17 @@ class Agent:
             self._swift_dirty = str(args["path"]).split("/Sources/")[0] if "/Sources/" in str(args["path"]) else "."
         if name == "simulator" and args.get("action") in ("build_run", "new_app") and str(result).startswith("ok"):
             self._swift_dirty = None
+        if name == "run_command":
+            failed_run = bool(re.match(r"(error|exit code [1-9])", str(result)))
+            self._fail_streak = self._fail_streak + 1 if failed_run else 0
+            if failed_run and self._fail_streak in (2, 4):
+                # two failures in a row: no third try at random (15 scripts for one equation) — the known method instead
+                result = str(result) + ("\n\n[Deux essais d'affilée ont échoué. Ne réessaie pas au hasard : lis l'erreur ligne par "
+                                        "ligne, puis prends une méthode connue — la recette d'un skill (use_skill), une bibliothèque "
+                                        "standard, ou web_search « <le problème> python » pour la méthode établie — ou simplifie "
+                                        "le script pour isoler ce qui casse.]")
+        if name in ("write_file", "edit_file", "multi_edit") and str(result).startswith("ok") and Path(str(args.get("path", ""))).suffix.lower() in (".html", ".htm", ".css"):
+            self._page_dirty = str(args["path"])
         if name in ("write_file", "edit_file", "multi_edit") and str(result).startswith("ok") and Path(str(args.get("path", ""))).suffix.lower() in self.CHECK_EXTS:
             self._code_dirty = str(args["path"])
         elif name in ("run_command", "start_process") and not self.LOOK_ONLY_RE.match(str(args.get("command") or "")):
@@ -3987,6 +4037,9 @@ class Agent:
                         "simulator action=screenshot pour vérifier que l'écran montre ce qui est demandé. "
                         "Seulement ensuite, donne ton résumé.")})
                     continue
+                if not self.plan and not self.subagent and (seen := self.look_note()):
+                    self.messages.append({"role": "user", "content": seen})
+                    continue
                 if self._code_dirty and not self.plan and not self.subagent and self._check_pushbacks < 3:
                     self._check_pushbacks += 1
                     self.emit({"type": "status", "text": "Naim vérifie son travail…"})
@@ -4126,6 +4179,8 @@ class Agent:
                                    "steps, then follow it one step at a time.)")
                 self._note_progress(name, result)
                 self.messages.append({"role": "tool", "tool_name": name, "content": result})
+            if (say := self.speak_note(content, calls)) and self.messages and self.messages[-1].get("role") == "tool":
+                self.messages[-1]["content"] += say
             self._attach_images()
             if any(c["function"]["name"] not in READ_ONLY for c in calls):
                 self._notebook(getattr(self, "_task_words", ""))

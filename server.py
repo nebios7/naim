@@ -2575,6 +2575,14 @@ class Handler(BaseHTTPRequestHandler):
                                      "complet, corrigé, sur le plan de l'exemple vérifié.)"})
                     shown = 0
                     continue
+            if not calls and not stop.is_set() and (seen := helper.look_note()):
+                # a page made in this reply: looked at in the browser before it is called done (Naim does not see images)
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content})
+                    self.event({"type": "token", "text": "\n\n"})
+                messages.append({"role": "user", "content": seen})
+                force_tool = True
+                continue
             if not calls and not stop.is_set() and helper._code_dirty and helper._check_pushbacks < 3:
                 # it changed code and did not run it: it checks before saying it is done (tests, the program), like a developer
                 helper._check_pushbacks += 1
@@ -2712,6 +2720,8 @@ class Handler(BaseHTTPRequestHandler):
                                "quoi faire, passe à la suite maintenant : plan avec update_todos si le travail est long, puis "
                                "l'écriture.]")
                 messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
+            if (say := helper.speak_note(content, calls)) and messages and messages[-1].get("role") == "tool":
+                messages[-1]["content"] += say  # three steps without a word: one sentence for the user, then on
             # a screenshot or an image looked at: Naim SEES it (only the latest one stays, older ones are dropped)
             imgs, helper._pending_images = getattr(helper, "_pending_images", []), []
             looked, helper._looked = getattr(helper, "_looked", False), False

@@ -930,6 +930,56 @@ class CheckBeforeDone(unittest.TestCase):
         self.assertIn("self.check_note()", (ROOT / "naimtools.py").read_text())
 
 
+class WorksLikeAColleague(unittest.TestCase):
+    """It says where it is after silent steps, stops trying at random after two failures, and looks at a page it made
+    (measured in the browser) before calling it done."""
+
+    def setUp(self):
+        self.t = tempfile.mkdtemp()
+        self.a = naimtools.Agent(self.t, auto_yes=True)
+
+    def test_says_where_it_is(self):
+        calls = [{"function": {"name": "read_file"}}]
+        self.assertEqual(self.a.speak_note("", calls), "")
+        self.assertEqual(self.a.speak_note("", calls), "")
+        self.assertIn("UNE phrase", self.a.speak_note("", calls))  # the third silent step
+        self.assertEqual(self.a.speak_note("Serveur prêt.", calls), "")  # it spoke: the count starts again
+
+    def test_no_third_try_at_random(self):
+        r1 = self.a.call_tool("run_command", {"command": "python3 -c 'import sys; sys.exit(3)'"})
+        self.assertNotIn("Deux essais", r1)
+        r2 = self.a.call_tool("run_command", {"command": "python3 -c 'import sys; sys.exit(4)'"})
+        self.assertIn("Deux essais d'affilée ont échoué", r2)
+        self.a.call_tool("run_command", {"command": "true"})
+        self.assertEqual(self.a._fail_streak, 0)
+
+    def test_looks_at_its_page(self):
+        from unittest import mock
+        self.a.call_tool("write_file", {"path": "index.html", "content": "<p>x</p>"})
+        with mock.patch("browser.audit", return_value=["La page déborde à droite de 320 px"]) as au:
+            note = self.a.look_note()
+        self.assertIn("déborde", note)
+        self.assertTrue(au.call_args[0][0].startswith("file://"))
+        self.assertEqual(self.a.look_note(), "")  # nothing changed since: not looked at again
+        self.a.call_tool("write_file", {"path": "index.html", "content": "<p>y</p>"})
+        with mock.patch("browser.audit", return_value=[]):
+            self.assertEqual(self.a.look_note(), "")  # it looks right: nothing to say
+
+    def test_each_brick_checked(self):
+        self.a.update_todos([{"text": "serveur", "status": "in_progress"}, {"text": "page", "status": "pending"}])
+        self.a.call_tool("write_file", {"path": "app.py", "content": "print(1)\n"})
+        r = self.a.update_todos([{"text": "serveur", "status": "done"}, {"text": "page", "status": "pending"}])
+        self.assertIn("vérifie-le maintenant", r)
+        self.a.call_tool("run_command", {"command": "python3 app.py"})
+        r = self.a.update_todos([{"text": "serveur", "status": "done"}, {"text": "page", "status": "done"}])
+        self.assertNotIn("vérifie-le", r)
+
+    def test_wired(self):
+        self.assertIn("helper.look_note()", (ROOT / "server.py").read_text())
+        self.assertIn("helper.speak_note(", (ROOT / "server.py").read_text())
+        self.assertIn("self.look_note()", (ROOT / "naimtools.py").read_text())
+
+
 class NetworkAndCamera(unittest.TestCase):
     """« analyse mon réseau », « une app pour ma caméra »: a read-only scan of the user's own network, a probe for the RTSP
     path, and a verified camera app to copy (one ffmpeg, its messages in a file so that it never freezes)."""
