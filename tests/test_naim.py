@@ -616,6 +616,33 @@ class InstallAlone(unittest.TestCase):
         self.assertNotEqual(name("installe le skill pdf"), "installer")
 
 
+class Converters(unittest.TestCase):
+    C = Path(__file__).resolve().parents[1] / "plugins_builtin/convertisseurs/skills/convertisseurs/convertir.py"
+
+    def run_conv(self, *a):
+        return subprocess.run([sys.executable, str(self.C), *map(str, a)], capture_output=True, text=True)
+
+    def test_tables_and_safety(self):
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            (t / "n.csv").write_text("Nom;Note\nAlice;15\n")
+            self.assertEqual(self.run_conv(t / "n.csv", t / "n.json").returncode, 0)
+            self.assertEqual(json.loads((t / "n.json").read_text()), [{"Nom": "Alice", "Note": "15"}])
+            r = self.run_conv(t / "n.csv", t / "n.csv")
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("jamais écrasé", r.stderr + r.stdout)
+            self.assertIn("pas pris en charge", self.run_conv(t / "n.csv", t / "n.mp3").stderr)
+
+    def test_routing(self):
+        import extensions as e
+        if "convertisseurs" not in __import__("plugins").triggers():
+            self.skipTest("plugin not installed")
+        name = lambda x: (e.match_skill(x) or {}).get("name")  # noqa: E731
+        self.assertEqual(name("convertis cette photo heic en jpg"), "convertisseurs")
+        self.assertEqual(name("mets ce word en markdown"), "convertisseurs")
+        self.assertEqual(name("fais un document word sur la sécurité"), "word")
+
+
 class ChatFolder(unittest.TestCase):
     """A conversation with attached files works beside them, not in the last Agent project."""
 

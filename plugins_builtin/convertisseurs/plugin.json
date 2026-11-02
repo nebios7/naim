@@ -1,0 +1,10 @@
+{
+  "name": "convertisseurs",
+  "version": "1.0",
+  "description": "Convertir un fichier d'un format à un autre en une commande : images (HEIC, JPG, PNG, WebP…), documents (Word, Markdown, HTML, RTF, PDF), tableurs (CSV, Excel, JSON), audio et vidéo (MP4, MOV, MP3, WAV, GIF).",
+  "skills": "skills",
+  "triggers": {
+    "convertisseurs": "\\b(convert\\w*|transform\\w*|change\\w*|passe\\w*|mets?|met|exporte?\\w*|enregistre\\w*|sauvegarde\\w*)\\b[^.?!\\n]{0,60}\\b(en|au format|vers|à|a)\\s+(\\.?(jpe?g|png|heic|webp|gif|tiff?|bmp|docx?|word|markdown|md|html?|rtf|odt|txt|texte|epub|csv|excel|xlsx|json|mp4|mov|mkv|avi|webm|mp3|wav|m4a|aac|flac|ogg|audio|son|vid[ée]o|image|images|gif anim[ée]))\\b|\\b(heic|webp)\\b[^.?!\\n]{0,40}\\b(jpe?g|png)\\b|\\bextrai\\w*\\s+(le son|l'audio|la musique)\\b"
+  },
+  "priority": true
+}

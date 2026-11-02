@@ -2537,6 +2537,10 @@ class Agent:
                 return diagrams.export_visual(src, dst)
             return docs.convert(src, dst, paper or "A4", orientation or "portrait")
         except (docs.DocError, diagrams.DiagramError) as e:
+            conv = ext.HOME / "plugins" / "convertisseurs" / "skills" / "convertisseurs" / "convertir.py"
+            if "non prise en charge" in str(e) and conv.is_file():  # the universal converter knows many more formats
+                return (f"error: {e}\nUtilise le convertisseur universel (images, documents, tableurs, audio, vidéo) : "
+                        f"python3 {conv} \"{src}\" \"{dst}\"")
             return f"error: {e}"
 
     def make_diagram(self, code, output, theme="default"):

@@ -1176,7 +1176,7 @@ def match_skill(task, root=None, disabled=()):
     by_name = {s["name"]: s for s in skills}
     generic = ("debug", "application-web", "api-rest", "projet-existant")  # broad: only if nothing specialised matches
     # works whose skill makes the document itself, in the asked style (« mon CV, le voici en Word » is a CV to make)
-    OWN_DOCUMENT = ("cv-lettre", "plan-maison")
+    OWN_DOCUMENT = ("cv-lettre", "plan-maison", "convertisseurs")
     first = ("design-style-gitingest", "neobrutalism-ui", "cv-lettre", "plan-maison", "app-macos", "recherche-produits", "animations-web", "react-native", "ci-cd", "veille-email", "tri-emails", "recherche-approfondie", "rapport", "schemas", "visuels", "github")  # "déploiement continu" is CI/CD, not a manual VPS deployment
     triggers = dict(SKILL_TRIGGERS)
     priority, after_specific = [], []
