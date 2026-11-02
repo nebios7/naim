@@ -1,10 +1,10 @@
 {
   "name": "algorithmique",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Pseudo-code aux conventions françaises (Algorithme, Si … FinSi, Pour … FinPour), tableaux de trace, passage en Python, et animations pas à pas d'un algorithme (tri, recherche…).",
   "skills": "skills",
   "triggers": {
-    "animation-algorithme": "\\b(anim\\w*|visualis\\w*|simul\\w*)\\b[^.?!]{0,60}\\b(algorithmes?|tris?|tri [àa] bulles|recherche (dichotomique|lin[ée]aire)|quicksort|tri rapide|tri par (s[ée]lection|insertion|fusion)|r[ée]cursivit[ée]|boucles?)\\b|\\b(tri [àa] bulles|tri par (s[ée]lection|insertion|fusion)|tri rapide|recherche dichotomique)\\b[^.?!]{0,40}\\b(anim\\w*|visuel\\w*|interactif|page)\\b",
+    "animation-algorithme": "\\b(anim\\w*|visualis\\w*|simul\\w*|montre[- ]?moi comment (ça |ca )?(marche|fonctionne)|explique\\w*[^.?!]{0,20}en (le )?montrant|pas [àa] pas)\\b[^.?!]{0,70}\\b(algorithmes?|tris?|tri [àa] bulles|recherche|quicksort|tri rapide|tri par (s[ée]lection|insertion|fusion)|r[ée]cursi\\w*|boucles?|arbres?|graphes?|piles?|files? d'attente|listes? cha[iî]n[ée]es?|parcours|dijkstra|bfs|dfs|hanoi|fibonacci|factorielle|programmes?|code|fonction)\\b|\\b(tri [àa] bulles|tri par (s[ée]lection|insertion|fusion)|tri rapide|recherche dichotomique|arbre binaire|tours de hanoi)\\b[^.?!]{0,40}\\b(anim\\w*|visuel\\w*|interactif|page|simulation)\\b|\\bprogramme qui (explique|montre)\\b[^.?!]{0,40}\\b(fait|ex[ée]cute|calcule)",
     "pseudo-code": "\\b(pseudo[- ]?code|algorithme|algorithmique|organigramme|tableau de trace|finsi|finpour|fintantque|structogramme|lexique des variables)\\b"
   },
   "commands": [

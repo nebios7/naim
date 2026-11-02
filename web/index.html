@@ -3136,6 +3136,7 @@ function delivCards(dl) {
         let n = 1; const next = () => { const i = new Image(); i.onload = () => { document.body.appendChild(i); n++; if (n <= 40) next(); }; i.src = "${location.origin}/api/thumb?${q}&w=1100&page=" + n; }; next();
       </scr${""}ipt></body>`);
       else if (/^(png|jpe?g|gif|svg)$/.test(f.ext)) showImagePreview(`${location.origin}/api/raw?${q}`, f.path.split("/").pop());
+      else if (/^html?$/.test(f.ext)) fetch(`/api/raw?${q}`).then((x) => x.text()).then((h) => showPreview(h)).catch(() => api("/api/reveal", { method: "POST", body: { root: d.root, path: f.path } }));
       else api("/api/reveal", { method: "POST", body: { root: d.root, path: f.path } });
     }
     if (e.target.closest("[data-dfinder]")) api("/api/reveal", { method: "POST", body: { root: d.root, path: f.path, select: true } });
@@ -4434,7 +4435,7 @@ function addBot(m, idx) {
       if (r.deliverables?.files?.length) {
         // a text file already listed in « N fichiers créés » is not shown twice; documents (PDF, Word, images…) always are
         const listed = new Set((r.changes || []).map((c) => String(c.path).split("/").pop()));
-        const files = r.deliverables.files.filter((f) => !(listed.has(String(f.path).split("/").pop()) && /^(md|markdown|txt|py|js|ts|jsx|tsx|json|html?|css|swift|sh|go|rs|java|c|cpp|h|rb|php|sql|ya?ml|toml|cbl|cob|cpy|jcl)$/i.test(f.ext || "")));
+        const files = r.deliverables.files.filter((f) => !(listed.has(String(f.path).split("/").pop()) && /^(md|markdown|txt|py|js|ts|jsx|tsx|json|css|swift|sh|go|rs|java|c|cpp|h|rb|php|sql|ya?ml|toml|cbl|cob|cpy|jcl)$/i.test(f.ext || "")));
         if (files.length) { const dv = delivCards({ ...r.deliverables, files }); dv.className = "delivbox"; d.insertBefore(dv, $(".msgacts", d)); }
       }
       if (box.children.length) d.insertBefore(box, $(".msgacts", d));
@@ -5015,7 +5016,7 @@ async function stream(reply, v, message, hist, extra = {}) {
   }
   // Chat mode: a PDF or an image Naim just created opens in the preview right away
   const made = reply.deliverables?.files?.[0];
-  if (made && S.auto_preview !== false && conv.mode !== "agent" && current === conv && /^(pdf|png|jpe?g|gif|svg)$/.test(made.ext)) {
+  if (made && S.auto_preview !== false && current === conv && (/^html?$/.test(made.ext) || (conv.mode !== "agent" && /^(pdf|png|jpe?g|gif|svg)$/.test(made.ext)))) {
     setTimeout(() => { const boxes = $$(".delivbox"); boxes[boxes.length - 1]?.querySelector("[data-dopen]")?.click(); }, 300);
   }
   if (current === conv) { setBusy(false); updateCtx(); }
