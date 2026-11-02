@@ -901,6 +901,34 @@ class CheckBeforeDone(unittest.TestCase):
         self.assertIn("self.check_note()", (ROOT / "naimtools.py").read_text())
 
 
+class NoLoopsInAnswers(unittest.TestCase):
+    """« La solution est … est faux. / La solution est … ? » forty times: a cycle of lines is cut (the first round kept),
+    the answer goes on with the tools to compute the result for real, and the old loop is shortened when read again."""
+
+    def test_cycle_detected_and_cut(self):
+        import server
+        t = "Intro.\nLa solution est (1, 2) est faux.\nLa solution est (1, 2) ?\n" * 5 + "La sol"
+        self.assertEqual(t[:server.loop_start(t)], "Intro.\nLa solution est (1, 2) est faux.\nLa solution est (1, 2) ?\n")
+        self.assertIsNone(server.loop_start("une première ligne\nune deuxième ligne\nune troisième ligne\n"))
+        self.assertIsNone(server.loop_start("ok\nok\nok\nok\n"))  # short lines (a list of « ok ») are not a loop
+
+    def test_old_loop_shortened(self):
+        import server
+        out = server.collapse_repeats("Début\n" + "La solution est faux.\n" * 40)
+        self.assertEqual(out.count("La solution est faux."), 2)
+        self.assertIn("lignes répétées retirées", out)
+
+    def test_compute_maths_gets_the_tools(self):
+        import server
+        h = server.Handler.__new__(server.Handler)
+        q = lambda m: h.quick_answer({"message": m, "history": []}, False, False, False, False, None)
+        self.assertFalse(q("Trouve tous les couples d'entiers strictement positifs (x,y) qui vérifient x^2 - 61y^2 = 1"))
+        self.assertFalse(q("donne la plus petite solution entière"))
+        self.assertTrue(q("explique-moi le théorème de Pythagore"))
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('"_verify": True', src)  # a loop in a quick answer goes on with the tools
+
+
 class ChatActsUnlessLesson(unittest.TestCase):
     """The Chat may change files for any request; only a lesson or a question is answered in the conversation
     (a rule that waited for a work word left « mets le bouton en rouge » without the tools to do it)."""

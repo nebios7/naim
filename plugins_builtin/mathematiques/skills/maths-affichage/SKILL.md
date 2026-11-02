@@ -17,6 +17,11 @@ L'application dessine quatre choses à ta place : utilise-les toujours.
 
 Jamais de formule dans un bloc de code, jamais de calcul « dessiné » avec des tirets ou des espaces.
 
+**Un résultat dont tu n'es pas sûr se calcule, il ne se devine pas.** Grands nombres, plus petite solution, équation
+de Pell ou diophantienne, nombres premiers, PGCD, « combien de solutions » : calcule-le et vérifie-le avec
+`run_command` (`python3 -c "…"` ou un petit script), puis écris la réponse vérifiée, avec la vérification
+(par exemple $x^2 - 61y^2 = 1$ recalculé). Ne réécris jamais « est-ce juste ? » : vérifie, puis tranche.
+
 ## 1. Formules (LaTeX) — mémo
 
 - Nombres : virgule `0{,}5`, unités `12\ \text{cm}^2`, `\times`, `\div`, `\frac{a}{b}`, `\sqrt{x}`, `\sqrt[3]{x}`, `x^{2}`, `\approx`, `\neq`, `\leq`.

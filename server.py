@@ -185,6 +185,41 @@ LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, 
                               r"[ée]cris|envoie|renvoie|corrige|r[ée]essaie|m'occupe|passe|commence)\b", re.I)
 
 
+def loop_start(text, reps=3):
+    """Where the end of an answer goes round in circles — the same 1 to 4 lines again and again (« La solution est … est
+    faux. / La solution est … ? » forty times) — as the index to cut at (the first round is kept), else None."""
+    pos, lines = 0, []
+    for raw in text.split("\n")[:-1]:  # the line being written does not count yet
+        if raw.strip():
+            lines.append((raw.strip(), pos))
+        pos += len(raw) + 1
+    for period in range(1, 5):
+        k = period * reps
+        if len(lines) < k:
+            break
+        tail = [l for l, _ in lines[-k:]]
+        if all(len(l) > 5 for l in tail) and all(tail[i] == tail[i % period] for i in range(k)):
+            start = len(lines) - k
+            while start - period >= 0 and lines[start - period][0] == lines[start][0]:
+                start -= period
+            return lines[start + period][1]
+    return None
+
+
+def collapse_repeats(text):
+    """An old answer that went round in circles, shortened before it is read again (else the next message gets an empty
+    reply): each line repeated more than twice is kept twice, then a note."""
+    out, seen, dropped = [], {}, 0
+    for line in str(text or "").split("\n"):
+        k = line.strip()
+        seen[k] = seen.get(k, 0) + 1
+        if len(k) > 5 and seen[k] > 2:
+            dropped += 1
+            continue
+        out.append(line)
+    return "\n".join(out) + (f"\n[… {dropped} lignes répétées retirées]" if dropped else "")
+
+
 def ends_announcing(text):
     """The answer ends on what it is going to do (« Je vais maintenant le reformuler… »): the work is not done."""
     last = [s for s in re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip()) if s.strip()][-1:]
@@ -1830,7 +1865,9 @@ class Handler(BaseHTTPRequestHandler):
                        + " ». Réponds à ce message dans ce contexte, en une ou deux phrases (un merci : de rien, et propose "
                          "la suite logique de ce sujet). Ne te présente pas, ne dis pas comment tu vas, ne recommence pas la conversation.]")
         user = {"role": "user", "content": text + spoken + now_note(), **({"images": body["images"]} if body.get("images") else {})}
-        messages = [{"role": "system", "content": system}] + body.get("history", []) + [user]
+        history = [dict(m, content=collapse_repeats(m["content"])) if m.get("role") == "assistant" and isinstance(m.get("content"), str)
+                   and len(m["content"]) > 2000 else m for m in body.get("history", [])]
+        messages = [{"role": "system", "content": system}] + history + [user]
         wants_schedule = bool(SCHEDULE_NEED_RE.search(body["message"] or ""))
         files = wants_file(body["message"], body.get("history")) or bool(FILE_OFFER_RE.search(choice))
         import mailer
@@ -1884,6 +1921,11 @@ class Handler(BaseHTTPRequestHandler):
                           r"d[ée]finis\w*|d[ée]finition|compare\w*|donne[- ]moi|propose\w*|conseil\w*|id[ée]es?|"
                           r"r[ée]vision|cours|le[çc]ons?|exercices?|corrig[ée]s?|qcm|quiz|calcul\w*|r[ée]sou\w*|d[ée]montr\w*|"
                           r"po[eè]me|histoire|blague|lettre de|discours)\b", re.I)
+    # maths whose answer must be computed and checked, not recalled: it gets the tools (python3), never a guess
+    COMPUTE_RE = re.compile(r"\b(trouve\w* (tous|toutes|les|la plus petite|le plus petit)|plus (petite|grande) solution|"
+                            r"solution (fondamentale|enti[èe]re)|entiers? (strictement )?(positifs|naturels)|couples? d'entiers|"
+                            r"pell|diophant\w*|nombres? premiers?|d[ée]compos\w* en (facteurs|produit)|pgcd|ppcm|modulo|"
+                            r"combien (de|d')\s*(solutions|entiers|nombres|fa[çc]ons))\b|\d{6,}", re.I)
     TOOL_NEED_RE = re.compile(r"\b(fichiers?|dossiers?|projet|code source|d[ée]p[ôo]t|github|lance\w*|ex[ée]cute\w*|installe\w*|"
                               r"ouvre\w*|imprime\w*|envoie\w*|t[ée]l[ée]charg\w*|cherche\w*|recherche\w*|internet|web|"
                               r"site|en ligne|m[ée]t[ée]o|actualit\w*|prix|serveur|terminal|commande|capture|[ée]cran|"
@@ -1903,6 +1945,8 @@ class Handler(BaseHTTPRequestHandler):
             # the follow-up of a work on files (« je veux que la moyenne soit arrondie à 2 chiffres » after calcul.py was
             # made): the tools stay — without them it said « j'ai modifié calcul.py » and changed nothing
             return False
+        if self.COMPUTE_RE.search(msg):
+            return False  # a result to compute for real (smallest solution, big numbers…): with Python, checked, like a mathematician with a computer
         sk = ext.match_skill(msg)
         if sk and sk["name"] not in ("maths-affichage", "pseudo-code"):
             return False  # a skill that works with tools (a CV, a plan, the Mac…): the usual way
@@ -1911,6 +1955,7 @@ class Handler(BaseHTTPRequestHandler):
     def chat_fast(self, body, messages, options, stop):
         """The answer streamed with the Chat's instructions and no tools, in its own slot (the method of a matching
         skill, if any, joined to the message): seconds before the first word instead of minutes."""
+        first_messages, first_options = messages, options
         options = {**options, "slot": llamacpp.fast_slot()}
         sk = ext.match_skill(body.get("message") or "")
         if sk:  # its method joins the instructions (not the message): read once, kept while the subject stays the same
@@ -1920,8 +1965,9 @@ class Handler(BaseHTTPRequestHandler):
         # only the words of the conversation: tool calls and their results are not needed to answer here
         messages = [m for m in messages if m.get("role") in ("system", "user", "assistant") and not m.get("tool_calls")]
         think = bool(body.get("think")) and not trivial_message(body["message"])
-        t0, first = time.time(), None
-        for chunk in ollama_chat(body.get("model", "naim"), messages, think=think, stream=True, options=options):
+        t0, first, said = time.time(), None, ""
+        stream = ollama_chat(body.get("model", "naim"), messages, think=think, stream=True, options=options)
+        for chunk in stream:
             if stop.is_set():
                 self.event({"type": "stopped"})
                 break
@@ -1930,11 +1976,27 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "thinking_token", "text": msg["thinking"]})
             if msg.get("content"):
                 first = first or time.time()
+                said += msg["content"]
                 self.event({"type": "token", "text": msg["content"]})
+                if "\n" in msg["content"] and (cut := loop_start(said)) is not None:
+                    # it goes round in circles (unsure of a result it cannot check): the repeats leave the screen, and
+                    # the answer goes on WITH the tools, to compute and check it for real
+                    getattr(stream, "close", lambda: None)()
+                    self.event({"type": "retract", "chars": len(said) - cut})
+                    self.event({"type": "status", "text": "Naim vérifie son calcul…"})
+                    kept = said[:cut].rstrip()
+                    return self.chat_agentic({**body, "_verify": True}, first_messages + [
+                        {"role": "assistant", "content": kept},
+                        {"role": "user", "content": "(Tu tournais en rond : tu répétais la même phrase sans pouvoir trancher. Ne "
+                         "répète rien. Calcule et vérifie le résultat pour de vrai avec run_command (python3 -c « … » ou un "
+                         "petit script), puis continue ta réponse ci-dessus avec le résultat vérifié, clairement.)"}],
+                        first_options, stop)
             if chunk.get("done") and chunk.get("eval_duration"):
                 self.event({"type": "stats", "tokens": chunk.get("eval_count", 0),
                             "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
                             "prompt": chunk.get("prompt_eval_count", 0), "reason": chunk.get("done_reason"), "fast": True})
+        if not said.strip() and not stop.is_set():  # never an empty bubble: say so, instead of nothing
+            self.event({"type": "token", "text": "Je n'ai rien réussi à produire cette fois. Réécris ta demande, ou dis « continue »."})
         self.event({"type": "done"})
 
     def big_work(self, body):
@@ -2130,7 +2192,7 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = rewrites = 0
+        copies = rewrites = loops = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2248,8 +2310,8 @@ class Handler(BaseHTTPRequestHandler):
                 "réponse, fais-le aussitôt avec tes outils. À la fin, réponds à ma demande.]"))
         m_ = body["message"] or ""
         lesson = not file_work and not files and bool(  # a lesson, a question: answered here; anything else may change files
-            plain or in_chat or body.get("_question") or pure_question(m_) or LESSON_RE.search(m_)
-            or (MATH_ASK_RE.search(m_) and not FILE_NAMED_RE.search(m_)))
+            not body.get("_verify") and (plain or in_chat or body.get("_question") or pure_question(m_) or LESSON_RE.search(m_))
+            or (not body.get("_verify") and MATH_ASK_RE.search(m_) and not FILE_NAMED_RE.search(m_)))
         if lesson:
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
@@ -2319,7 +2381,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "status", "text": "Naim allège la conversation pour continuer…"})
                 messages[:], task_at = lighten_conversation(messages, task_at)
                 stream = ollama_chat(body.get("model", "naim"), messages, tools=tools, think=think, stream=True, options=opts)
-            thought = redirected = False
+            thought = redirected = looped = False
+            loop_at = None
             for chunk in stream:
                 if stop.is_set():
                     stream.close()  # hang up: llama.cpp stops writing at once
@@ -2328,8 +2391,15 @@ class Handler(BaseHTTPRequestHandler):
                     stream.close()  # Naim answers: it stops here and goes on with what was just said (at most every 20 s)
                     redirected, last_redirect = True, time.time()
                     break
-                if repeating(content):  # the model loops on the same line (it happens with images): cut at once
+                if repeating(content) or ("\n" in str(chunk.get("message", {}).get("content") or "")
+                                          and (loop_at := loop_start(shown_part(content))) is not None):
+                    # the model loops on the same line or the same few lines: cut at once, the repeats taken back
                     stream.close()
+                    if loop_at is not None and loops < 2:
+                        loops += 1
+                        kept = shown_part(content[:loop_at])
+                        self.event({"type": "retract", "chars": max(0, shown - len(kept))})
+                        shown, content, looped = len(kept), content[:loop_at], True
                     break
                 if copying(content.split("<tool_call")[0]):
                     stream.close()
@@ -2356,6 +2426,13 @@ class Handler(BaseHTTPRequestHandler):
                     prompt_tokens += chunk.get("prompt_eval_count", 0)
                     self.event({"type": "stats", "tokens": total_tokens, "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
                                 "prompt": prompt_tokens, "reason": chunk.get("done_reason")})
+            if looped:
+                looped = False
+                messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": "(Tu tournais en rond : tu répétais les mêmes lignes. Ne les répète "
+                                 "pas. Si un résultat est incertain, vérifie-le avec run_command (python3), puis continue.)"})
+                force_tool = True
+                continue
             if copied:
                 # the old answer goes away from the screen, and it says what it did in THIS turn instead
                 self.event({"type": "retract", "chars": shown})
