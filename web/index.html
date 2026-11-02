@@ -428,6 +428,30 @@ header select { max-width: 220px; text-overflow: ellipsis; }
 .md blockquote > :last-child { margin-bottom: 0; }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .md table { border-collapse: collapse; margin: 0 0 12px; font-size: .93em; display: block; overflow-x: auto; } .md th, .md td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; } .md th { background: var(--side); }
+/* a table as in a spreadsheet: a small bar (rows, Copier, Excel), the header kept in view, numbers on the right */
+.md .tbl { margin: 4px 0 14px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; max-width: 100%; }
+.md .tbl .tbar { display: flex; align-items: center; gap: 4px; padding: 3px 6px 3px 10px; border-bottom: 1px solid var(--line); background: var(--side); font-size: 12px; color: var(--muted); }
+.md .tbl .tcount { margin-right: auto; }
+.md .tbl .tbar .ib { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border: 0; background: none; color: var(--muted); border-radius: 6px; font: inherit; cursor: pointer; }
+.md .tbl .tbar .ib:hover { background: var(--code); color: var(--text); }
+.md .tbl .tbar .ib svg { width: 13px; height: 13px; }
+.md .tbl .tscroll { overflow: auto; max-height: 520px; }
+.md .tbl table { display: table; width: 100%; margin: 0; border: 0 !important; }
+.md .tbl th, .md .tbl td { border: 0; border-bottom: 1px solid var(--line); }
+.md .tbl tbody tr:last-child td { border-bottom: 0; }
+.md .tbl th { position: sticky; top: 0; z-index: 1; font-weight: 600; white-space: nowrap; }
+.md .tbl tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--side) 55%, transparent); }
+.md .tbl tbody tr:hover td { background: var(--code); }
+.md .tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.md .tbl .mid { text-align: center; }
+/* the pages an answer is built on, under it */
+.srcs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; font-size: 12.5px; }
+.srcs .srcl { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); margin-right: 2px; }
+.srcs .srcl svg { width: 13px; height: 13px; }
+.srcs a { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 3px 9px 3px 4px; border: 1px solid var(--line);
+  border-radius: 999px; color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srcs a:hover { background: var(--hover); }
+.srcs a b { display: inline-grid; place-items: center; min-width: 18px; height: 18px; border-radius: 999px; background: var(--side); font-size: 11px; font-weight: 600; }
 .code { background: var(--code); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 12px; overflow: hidden; }
 .code .bar { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); padding: 4px 6px 4px 12px; border-bottom: 1px solid var(--line); }
 .code .bar span { flex: 1; }
@@ -3004,10 +3028,8 @@ function mdBlocks(src) {
       html += ordered ? "</ol>" : "</ul>"; continue;
     }
     if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
-      const row = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => inline(c.trim()));
-      html += "<table><tr>" + row(line).map((c) => `<th>${c}</th>`).join("") + "</tr>"; i += 2;
-      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) html += "<tr>" + row(lines[i++]).map((c) => `<td>${c}</td>`).join("") + "</tr>";
-      html += "</table>"; continue;
+      html += mdTable(line, lines[i + 1], (() => { const body = []; i += 2; while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) body.push(lines[i++]); return body; })());
+      continue;
     }
     if (!line.trim()) { i++; continue; }
     const buf = [];
@@ -3017,6 +3039,64 @@ function mdBlocks(src) {
   }
   return html;
 }
+
+// The pages an answer is built on: those Naim opened (web_fetch, the browser), at most 8, each site once
+function sourcesOf(r) {
+  const out = [], seen = new Set();
+  for (const st of r.steps || []) {
+    if (st.type !== "tool" || /^error/.test(st.result || "")) continue;
+    const a = st.args || {};
+    const url = st.name === "web_fetch" ? a.url : st.name === "browser" && a.action === "open" ? a.url : null;
+    if (!url || !/^https?:\/\//.test(url) || /^https?:\/\/(127\.0\.0\.1|localhost)\b/.test(url)) continue;
+    const clean = url.replace(/#suite=\d+$/, "");
+    let site = ""; try { site = new URL(clean).hostname.replace(/^www\./, ""); } catch (e) { continue; }
+    if (seen.has(clean)) continue;
+    seen.add(clean);
+    const title = st.name === "web_fetch" ? String(st.result || "").split("\n")[0].slice(0, 120) : "";
+    out.push({ url: clean, site, title });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+// A table as in a spreadsheet: its header stays in view, numbers and prices line up on the right, and it is copied
+// (pasted as cells in Excel / Numbers) or saved as a file Excel opens, in one click
+const NUM_CELL = /^[-+−]?\s*(?:[$€£]\s*)?\d[\d\s\u00a0\u202f.,']*(?:\s*(?:[$€£%]|k€|M€|€\s*HT|€\s*TTC|ans?|mois|Go|To|Mo|kg|g|km|m|cm|mm|h|min|s|ms|x|×))?$/i;
+function mdTable(head, sep, body) {
+  const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const heads = cells(head), rows = body.map(cells), aligns = cells(sep);
+  const plain = (c) => c.replace(/\*\*|__|`|~~/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").trim();
+  const num = heads.map((_, k) => {  // a column of numbers (prices, sizes…) unless the separator says how to align it
+    const a = aligns[k] || "";
+    if (/^:-+:$/.test(a)) return "c"; if (/^-+:$/.test(a)) return "r"; if (/^:-+$/.test(a)) return "";
+    const vals = rows.map((r) => plain(r[k] || "")).filter((v) => v && !/^[-—–]$/.test(v));
+    return vals.length && vals.filter((v) => NUM_CELL.test(v)).length >= vals.length * 0.7 ? "r" : "";
+  });
+  const cls = (k) => (num[k] === "r" ? ' class="num"' : num[k] === "c" ? ' class="mid"' : "");
+  const n = rows.length;
+  return `<div class="tbl"><div class="tbar"><span class="tcount">${n} ligne${n > 1 ? "s" : ""}</span>`
+    + `<button class="ib" data-tcopy title="Copier (se colle en cases dans Excel ou Numbers)">${svgI("copy")}<span>Copier</span></button>`
+    + `<button class="ib" data-tcsv title="Enregistrer pour Excel (Téléchargements)">${svgI("download")}<span>Excel</span></button></div>`
+    + `<div class="tscroll"><table><thead><tr>${heads.map((c, k) => `<th${cls(k)}>${inline(c)}</th>`).join("")}</tr></thead><tbody>`
+    + rows.map((r) => `<tr>${heads.map((_, k) => `<td${cls(k)}>${inline(r[k] || "")}</td>`).join("")}</tr>`).join("")
+    + "</tbody></table></div></div>";
+}
+function tableCells(t) {
+  return [...t.querySelectorAll("tr")].map((tr) => [...tr.children].map((c) => c.innerText.replace(/\s+/g, " ").trim()));
+}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-tcopy],[data-tcsv]"); if (!b) return;
+  const t = b.closest(".tbl")?.querySelector("table"); if (!t) return;
+  const grid = tableCells(t);
+  if (b.hasAttribute("data-tcopy")) {
+    if (await copyText(grid.map((r) => r.join("\t")).join("\n"))) { const was = b.innerHTML; b.innerHTML = svgI("check") + "<span>Copié</span>"; setTimeout(() => (b.innerHTML = was), 1300); }
+    return;
+  }
+  // « ; » and a BOM: what Excel opens directly, in French, accents included
+  const q = (v) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const name = (current?.title || "tableau").replace(/[^\p{L}\p{N} _-]+/gu, "").trim().slice(0, 50) || "tableau";
+  download(`${name}.csv`, "\ufeff" + grid.map((r) => r.map(q).join(";")).join("\r\n"), "text/csv");
+});
 
 // ======================================================================= code block actions
 const EXT = { python: "py", py: "py", javascript: "js", js: "js", typescript: "ts", ts: "ts", java: "java", kotlin: "kt", swift: "swift", go: "go", rust: "rs", c: "c", cpp: "cpp", "c++": "cpp", csharp: "cs", cs: "cs", php: "php", ruby: "rb", html: "html", css: "css", sql: "sql", bash: "sh", sh: "sh", shell: "sh", json: "json", yaml: "yml", yml: "yml", markdown: "md", md: "md", xml: "xml", svg: "svg", dockerfile: "Dockerfile" };
@@ -4449,6 +4529,14 @@ function addBot(m, idx) {
         const listed = new Set((r.changes || []).map((c) => String(c.path).split("/").pop()));
         const files = r.deliverables.files.filter((f) => !(listed.has(String(f.path).split("/").pop()) && /^(md|markdown|txt|py|js|ts|jsx|tsx|json|css|swift|sh|go|rs|java|c|cpp|h|rb|php|sql|ya?ml|toml|cbl|cob|cpy|jcl)$/i.test(f.ext || "")));
         if (files.length) { const dv = delivCards({ ...r.deliverables, files }); dv.className = "delivbox"; d.insertBefore(dv, $(".msgacts", d)); }
+      }
+      $(".srcs", d)?.remove();
+      const srcs = sourcesOf(r);
+      if (srcs.length) {  // the pages Naim really opened for this answer (its tools, not what it says): checked in one click
+        const sb = document.createElement("div"); sb.className = "srcs";
+        sb.innerHTML = `<span class="srcl">${svgI("globe")}Sources</span>` + srcs.map((x, k) =>
+          `<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title ? x.title + "\n" + x.url : x.url)}"><b>${k + 1}</b>${esc(x.site)}</a>`).join("");
+        d.insertBefore(sb, $(".msgacts", d));
       }
       if (box.children.length) d.insertBefore(box, $(".msgacts", d));
       $(".suggest", d)?.remove();
