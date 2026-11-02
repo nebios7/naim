@@ -2678,7 +2678,13 @@ function codeBlock(lang, body, file = "", open = false) {
 }
 // The page of a visual: Naim's colours and font, nothing it can reach (no network, no Naim, no Mac: only drawing and its
 // own script), and its height told to the conversation so that it shows whole, without a scroll bar
-const VIS_HEIGHT = `<scr` + `ipt>(() => { const tell = () => { const b = document.body; if (!b) return;`
+// with Naim's zoom (60 %…), WebKit lays the frame's page out narrower than the frame (245 px in 408): it is set back to the
+// frame's width, else a white band on the right (no effect where both agree)
+const VIS_HEIGHT = `<scr` + `ipt>(() => { const fit = () => { const r = document.documentElement;`
+  + ` const v = window.visualViewport, w = Math.ceil((v && v.width) || innerWidth); if (Math.abs(w - r.clientWidth) > 2) r.style.width = w + "px";`
+  + ` r.style.minHeight = Math.ceil((v && v.height) || innerHeight) + "px"; };`
+  + ` addEventListener("resize", fit); addEventListener("DOMContentLoaded", fit); fit(); })();<\/script>`
+  + `<scr` + `ipt>(() => { const tell = () => { const b = document.body; if (!b) return;`
   + ` const h = Math.max(b.scrollHeight, Math.ceil(b.getBoundingClientRect().bottom)) + 8; parent.postMessage({ naimVisuel: 1, h }, "*"); };`
   + ` addEventListener("DOMContentLoaded", () => { tell(); new ResizeObserver(tell).observe(document.body); });`
   + ` addEventListener("load", tell); setTimeout(tell, 300); setTimeout(tell, 1200); })();<\/script>`;
@@ -2695,14 +2701,16 @@ function algoFrame(algo) {
   const code = algo.replace(/<\/script/gi, "<\\/script");  // the block cannot close its own script
   const head = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:">`
     // compact for a conversation: the frame IS the card (one dark background, never a white band), smaller title and stage
-    + `<style>:root { color-scheme: dark; } html, body { background: #12121c !important; margin: 0; } body { display: block !important; }`
+    + `<style>:root { color-scheme: dark; } html, body { background: #12121c !important; margin: 0; } html { min-height: 100%; } body { display: block !important; }`
     + ` .app { max-width: none !important; width: 100%; padding: 12px 14px 14px !important; }`
     + ` h1 { font-size: 19px !important; margin: 2px 0 6px !important; } .sub { font-size: 11px !important; margin-bottom: 6px !important; }`
     + ` .stats { margin-bottom: 2px !important; } .stat { padding: 5px 12px !important; font-size: 11px !important; }`
     + ` #stage { height: 210px !important; } #draw svg { height: 100% !important; } .bar { font-size: 16px !important; }`
     + ` .code { font-size: 12px !important; } #msg { min-height: 62px !important; font-size: 14px !important; padding: 9px 12px !important; }`
     + ` .ctl { margin-top: 8px !important; } button { padding: 7px 11px !important; font-size: 14px !important; }</style>` + VIS_HEIGHT;
-  const doc = (MOTEUR.slice(0, i + START.length) + "\n" + code + "\n" + MOTEUR.slice(j)).replace(/<head[^>]*>/i, (m) => m + head);
+  // no « viewport » line: Naim's web view applied it to the frame and zoomed the whole simulation about twice
+  const doc = (MOTEUR.slice(0, i + START.length) + "\n" + code + "\n" + MOTEUR.slice(j)).replace(/<meta[^>]+name=["']?viewport[^>]*>/gi, "")
+    .replace(/<head[^>]*>/i, (m) => m + head);
   return `<iframe class="visf simf" sandbox="allow-scripts" title="Simulation" style="color-scheme: dark; height: 640px" srcdoc="${esc(doc)}"></iframe>`;
 }
 function visuelDoc(body) {
@@ -2716,6 +2724,7 @@ function visuelDoc(body) {
     + `<style>:root { ${v} color-scheme: ${dark ? "dark" : "light"}; } html, body { margin: 0; background: transparent; color: var(--text);`
     + ` font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; } body { padding: 4px; } * { box-sizing: border-box; }</style>`
     + VIS_HEIGHT;
+  body = body.replace(/<meta[^>]+name=["']?viewport[^>]*>/gi, "");  // the same zoom in a visual written as a whole page
   return whole ? body.replace(/<head[^>]*>/i, (m) => m + head).replace(/^(?![\s\S]*<head)/, head) : `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
 }
 addEventListener("message", (e) => {
@@ -2754,6 +2763,9 @@ function morphChildren(el, from) {
       if (a.nodeType !== 1) { if (a.textContent !== b.textContent) a.textContent = b.textContent; continue; }
       if (a.outerHTML === b.outerHTML || (a.classList.contains("fresh") && a.outerHTML.replace(/ class="fresh"| fresh\b|\bfresh /, "") === b.outerHTML)) continue;
       if (a.tagName === "IMG" && b.tagName === "IMG" && a.dataset.u && a.dataset.u === b.dataset.u) continue;  // the same photo (loaded or not): kept
+      // the same visual or simulation (its height set since): kept as it is — rebuilt, it started again from zero at every
+      // word written after it, and the page shook
+      if (a.tagName === "IFRAME" && b.tagName === "IFRAME" && a.getAttribute("srcdoc") === b.getAttribute("srcdoc")) continue;
       // same kind of block (a paragraph of photos growing, a list getting a new item): updated inside, so what is
       // already shown — a loaded photo — is kept; a code block or anything else is replaced whole
       if (a.tagName === b.tagName && /^(P|UL|OL|LI|DIV|TABLE|THEAD|TBODY|TR|BLOCKQUOTE)$/.test(a.tagName) && !a.classList.contains("code")

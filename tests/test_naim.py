@@ -744,6 +744,9 @@ b = 2`, build(a, P) { P(1, "un", { dessin: {} }); P(2, "deux", { dessin: {} }); 
         self.assertIn("function algoFrame(", page)
         self.assertIn("h > now + 3", page)  # it only grows: an animation no longer shakes the conversation
         self.assertIn("quillText(body.length)", page)  # the quill moves while the block is written
+        self.assertIn('a.getAttribute("srcdoc") === b.getAttribute("srcdoc")', page)  # kept while the answer goes on
+        self.assertIn("name=[\"']?viewport", page)  # no zoom of the frame in Naim's web view
+        self.assertIn("r.style.width = w + ", page)  # under Naim's zoom, WebKit laid the frame's page out too narrow
 
 
 class CourseFolderToPdf(unittest.TestCase):
