@@ -747,6 +747,8 @@ b = 2`, build(a, P) { P(1, "un", { dessin: {} }); P(2, "deux", { dessin: {} }); 
         self.assertIn('a.getAttribute("srcdoc") === b.getAttribute("srcdoc")', page)  # kept while the answer goes on
         self.assertIn("name=[\"']?viewport", page)  # no zoom of the frame in Naim's web view
         self.assertIn("r.style.width = w + ", page)  # under Naim's zoom, WebKit laid the frame's page out too narrow
+        self.assertIn("data-simbig", page)  # « Agrandir »: the simulation at full size in the preview panel
+        self.assertIn("function simBig(", page)
 
 
 class CourseFolderToPdf(unittest.TestCase):

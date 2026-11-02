@@ -1863,6 +1863,10 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md figure.mgraph figcaption { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font: 13px ui-monospace, Menlo, monospace; }
 .md .vis { margin: 4px 0 6px; }
 .md .vis iframe.visf { display: block; width: 100%; height: 160px; border: 0; background: transparent; }
+.md .simbar { display: flex; align-items: center; justify-content: space-between; max-width: 680px; margin: 6px auto 4px; font-size: 12.5px; color: var(--muted); }
+.md .simbar button { display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 3px 9px; font-size: 12.5px; cursor: pointer; }
+.md .simbar button:hover { background: var(--hover); }
+.md .simbar svg { width: 13px; height: 13px; }
 .md .vis iframe.simf { max-width: 680px; margin: 0 auto; border: 1px solid #2c2c40; border-radius: 14px; background: #12121c; overflow: hidden; }
 .md .vis.vwait { display: flex; align-items: center; gap: 8px; padding: 18px 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 13.5px; }
 .md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
@@ -2662,7 +2666,8 @@ function codeBlock(lang, body, file = "", open = false) {
   }
   if (/^simulation$/i.test(lang || "")) {  // an algorithm played step by step (const ALGO = {…}) with the tested engine
     if (open) { quillText(body.length); return `<div class="vis vwait">${liveIcon("write")}<span>Naim prépare la simulation… <span class="muted">${body.split("\n").length} lignes</span></span></div>`; }
-    return `<div class="vis vsim" data-sim="${esc(body)}">${MOTEUR ? algoFrame(body) : `<div class="vwait">${liveIcon("read")}<span>Chargement de la simulation…</span></div>`}</div>`
+    return `<div class="simbar"><span>Simulation</span><button data-simbig title="Ouvrir la simulation en grand dans le panneau de visualisation">${svgI("expand")}Agrandir</button></div>`
+      + `<div class="vis vsim" data-sim="${esc(body)}">${MOTEUR ? algoFrame(body) : `<div class="vwait">${liveIcon("read")}<span>Chargement de la simulation…</span></div>`}</div>`
       + `<details class="mfigcode"><summary>Code de la simulation</summary>${codeBlockRaw("javascript", body, file, open)}</details>`;
   }
   if (/^(visuel|widget)$/i.test(lang || "")) {  // a live visual (a clock, a card, a gauge…): drawn here, in a sealed frame
@@ -2678,9 +2683,9 @@ function codeBlock(lang, body, file = "", open = false) {
 }
 // The page of a visual: Naim's colours and font, nothing it can reach (no network, no Naim, no Mac: only drawing and its
 // own script), and its height told to the conversation so that it shows whole, without a scroll bar
-// with Naim's zoom (60 %…), WebKit lays the frame's page out narrower than the frame (245 px in 408): it is set back to the
-// frame's width, else a white band on the right (no effect where both agree)
-const VIS_HEIGHT = `<scr` + `ipt>(() => { const fit = () => { const r = document.documentElement;`
+// the frame's page takes the frame's real size: with Naim's zoom (60 %…) WebKit laid it out narrower than the frame (a white
+// band on the right). Naim's zoom itself already reaches the frame's content: it scales with the rest of Naim
+const visHeight = () => `<scr` + `ipt>(() => { const fit = () => { const r = document.documentElement;`
   + ` const v = window.visualViewport, w = Math.ceil((v && v.width) || innerWidth); if (Math.abs(w - r.clientWidth) > 2) r.style.width = w + "px";`
   + ` r.style.minHeight = Math.ceil((v && v.height) || innerHeight) + "px"; };`
   + ` addEventListener("resize", fit); addEventListener("DOMContentLoaded", fit); fit(); })();<\/script>`
@@ -2694,6 +2699,19 @@ fetch("/api/moteur-algo").then((r) => r.json()).then((d) => {
   MOTEUR = d.html || "";
   if (MOTEUR) for (const el of document.querySelectorAll(".vsim[data-sim]")) el.innerHTML = algoFrame(el.dataset.sim);
 }).catch(() => {});
+// the simulation in the preview panel, at its full size (the engine's own page, without the compact style of the chat)
+function simBig(algo) {
+  const START = "// ==== ALGO ====", END = "// ==== FIN ALGO ====", i = MOTEUR.indexOf(START), j = MOTEUR.indexOf(END);
+  if (i < 0 || j < 0) return;
+  const doc = (MOTEUR.slice(0, i + START.length) + "\n" + algo.replace(/<\/script/gi, "<\\/script") + "\n" + MOTEUR.slice(j))
+    .replace(/<meta[^>]+name=["']?viewport[^>]*>/gi, "").replace(/<head[^>]*>/i, (m) => m + visHeight().split("<scr" + "ipt>(() => { const tell")[0]);
+  $("#pvBar").classList.remove("image"); setView("chat"); $("#previewBar").hidden = true; $("#preview").removeAttribute("src");
+  pvLast = doc; $("#preview").srcdoc = doc; showPanel("preview");
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-simbig]"); if (!b) return;
+  const v = b.closest(".simbar")?.nextElementSibling; if (v && v.dataset.sim && MOTEUR) simBig(v.dataset.sim);
+});
 function algoFrame(algo) {
   const START = "// ==== ALGO ====", END = "// ==== FIN ALGO ====";
   const i = MOTEUR.indexOf(START), j = MOTEUR.indexOf(END);
@@ -2707,7 +2725,7 @@ function algoFrame(algo) {
     + ` .stats { margin-bottom: 2px !important; } .stat { padding: 5px 12px !important; font-size: 11px !important; }`
     + ` #stage { height: 210px !important; } #draw svg { height: 100% !important; } .bar { font-size: 16px !important; }`
     + ` .code { font-size: 12px !important; } #msg { min-height: 62px !important; font-size: 14px !important; padding: 9px 12px !important; }`
-    + ` .ctl { margin-top: 8px !important; } button { padding: 7px 11px !important; font-size: 14px !important; }</style>` + VIS_HEIGHT;
+    + ` .ctl { margin-top: 8px !important; } button { padding: 7px 11px !important; font-size: 14px !important; }</style>` + visHeight();
   // no « viewport » line: Naim's web view applied it to the frame and zoomed the whole simulation about twice
   const doc = (MOTEUR.slice(0, i + START.length) + "\n" + code + "\n" + MOTEUR.slice(j)).replace(/<meta[^>]+name=["']?viewport[^>]*>/gi, "")
     .replace(/<head[^>]*>/i, (m) => m + head);
@@ -2723,7 +2741,7 @@ function visuelDoc(body) {
   const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:">`
     + `<style>:root { ${v} color-scheme: ${dark ? "dark" : "light"}; } html, body { margin: 0; background: transparent; color: var(--text);`
     + ` font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; } body { padding: 4px; } * { box-sizing: border-box; }</style>`
-    + VIS_HEIGHT;
+    + visHeight();
   body = body.replace(/<meta[^>]+name=["']?viewport[^>]*>/gi, "");  // the same zoom in a visual written as a whole page
   return whole ? body.replace(/<head[^>]*>/i, (m) => m + head).replace(/^(?![\s\S]*<head)/, head) : `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
 }
@@ -8184,6 +8202,7 @@ const RICON = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>',
   warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
   chevd: '<path d="M6 9l6 6 6-6"/>',
+  expand: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
   chevr: '<path d="M9 6l6 6-6 6"/>',
   home: '<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/>',
   map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
