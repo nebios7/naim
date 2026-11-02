@@ -673,6 +673,34 @@ class VisualInTheChat(unittest.TestCase):
         self.assertNotIn("`<script>", script)  # a literal tag there ends Naim's own script in the HTML parser
 
 
+class SimulationInTheChat(unittest.TestCase):
+    """« montre-moi le tri avec une simulation visuel »: a ```simulation block played in the conversation by the tested
+    engine (not a visual made by hand), its example right, and a frame that does not shake the page."""
+
+    def test_trigger_and_inline(self):
+        import re
+        t = json.loads((ROOT / "plugins_builtin/algorithmique/plugin.json").read_text())["triggers"]["animation-algorithme"]
+        for yes in ("Non j’ai besoin que tu me montre le tri avec une simulation visuel", "fais une simulation du tri rapide",
+                    "montre-moi comment marche le tri par insertion en Python"):
+            self.assertRegex(yes, re.compile(t, re.I))
+        self.assertNotRegex("explique le tri", re.compile(t, re.I))
+        self.assertIn("sim_here", (ROOT / "server.py").read_text())
+
+    def test_skill_example_is_right(self):
+        sk = ROOT / "plugins_builtin/algorithmique/skills/animation-algorithme"
+        self.assertIn("```simulation", (sk / "SKILL.md").read_text())
+        r = subprocess.run([sys.executable, str(sk / "simulation.py"), "verifier", str(sk / "exemples/tri-insertion.js")],
+                           capture_output=True, text=True, timeout=60)
+        self.assertIn("La simulation est juste.", r.stdout + r.stderr)
+
+    def test_page_side(self):
+        page = (ROOT / "web/index.html").read_text()
+        self.assertIn('fetch("/api/moteur-algo")', page)
+        self.assertIn("function algoFrame(", page)
+        self.assertIn("h > now + 3", page)  # it only grows: an animation no longer shakes the conversation
+        self.assertIn("quillText(body.length)", page)  # the quill moves while the block is written
+
+
 class CourseFolderToPdf(unittest.TestCase):
     def test_situation_said_before_the_method(self):
         import extensions as e

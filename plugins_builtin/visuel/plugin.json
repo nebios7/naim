@@ -1,6 +1,6 @@
 {
   "name": "visuel",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Un visuel vivant affiché directement dans la conversation : horloge, carte, compteur, jauge, petit tableau de bord, mini-outil.",
   "skills": "skills",
   "triggers": {

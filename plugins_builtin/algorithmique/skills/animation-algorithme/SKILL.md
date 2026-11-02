@@ -5,6 +5,57 @@ description: Une simulation visuelle (page HTML autonome) qui exécute un algori
 
 # Animer un algorithme
 
+## Dans la conversation (le cas normal) : un bloc ```simulation
+Quand on te demande de montrer, simuler ou animer un algorithme dans la conversation, sans demander de fichier ni de
+page : ta réponse est une phrase courte, puis UN bloc ```simulation qui contient l'objet `const ALGO = { … }` (le même
+format que ci-dessous), puis une ou deux phrases pour s'en servir. Naim le joue aussitôt dans la conversation, avec
+le moteur : barres qui glissent, code surligné, variables, lecture / pause / pas à pas / vitesse. Aucun fichier,
+aucune commande, aucun bloc ```visuel ni ```html fait main.
+
+Exemple complet, juste et vérifié (un tri : suis exactement ce plan) :
+```simulation
+const ALGO = {
+  titre: "Chaque carte trouve sa place",
+  sous_titre: "Tri par insertion",
+  fichier: "tri_insertion.py",
+  langage: "python",
+  type: "tri",
+  valeurs: [5, 2, 8, 1, 9, 3],
+  code: `
+def tri_insertion(a):
+    for i in range(1, len(a)):
+        cle = a[i]
+        j = i - 1
+        while j >= 0 and a[j] > cle:
+            a[j + 1] = a[j]
+            a[j] = cle
+            j -= 1
+    return a`,
+  build(a, P) {
+    const n = a.length;
+    for (let i = 1; i < n; i++) {
+      const cle = a[i];
+      P(3, `On prend <b>${cle}</b> et on lui cherche sa place parmi les cases de gauche, déjà triées.`, { key: i, ok: P.plage(0, i - 1), vars: { i, cle } });
+      let j = i - 1;
+      while (j >= 0) {
+        const gt = a[j] > cle;
+        P(5, gt ? `<b>${a[j]} &gt; ${cle}</b> : ${a[j]} doit passer à droite.` : `<b>${a[j]} ≤ ${cle}</b> : ${cle} est à sa place.`,
+          { pair: [j, j + 1], vars: { i, j, cle }, note: `${a[j]} ${gt ? ">" : "≤"} ${cle}` });
+        if (!gt) break;
+        a[j + 1] = a[j]; a[j] = cle;
+        P(7, `On décale : <b>${cle}</b> glisse d'une case vers la gauche.`, { pair: [j, j + 1], swap: true, vars: { i, j, cle } });
+        j--;
+      }
+    }
+    P(9, "Toutes les cartes sont à leur place : le tableau est trié.", { ok: P.plage(0, n - 1) });
+  },
+};
+```
+Une erreur dans `build` s'affiche en rouge dans la simulation : si l'utilisateur te la montre, redonne le bloc entier
+corrigé.
+
+## Une page à garder (seulement si un fichier ou une page est demandé)
+
 La page est faite de deux parties :
 - **le moteur** (`moteur.html`, déjà écrit et testé) : barres qui glissent, bras robot, code coloré automatiquement,
   ligne surlignée, variables, compteurs, lecture / pause / pas à pas / vitesse, valeurs de l'utilisateur ;

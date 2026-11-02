@@ -2659,8 +2659,13 @@ function codeBlock(lang, body, file = "", open = false) {
     }
     try { const q = JSON.parse(json); if (q && Array.isArray(q.questions) && q.questions.length) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>` + (after ? md(after) : ""); } catch (e) { if (open) return wait(); }
   }
+  if (/^simulation$/i.test(lang || "")) {  // an algorithm played step by step (const ALGO = {…}) with the tested engine
+    if (open) { quillText(body.length); return `<div class="vis vwait">${liveIcon("write")}<span>Naim prépare la simulation… <span class="muted">${body.split("\n").length} lignes</span></span></div>`; }
+    return `<div class="vis vsim" data-sim="${esc(body)}">${MOTEUR ? algoFrame(body) : `<div class="vwait">${liveIcon("read")}<span>Chargement de la simulation…</span></div>`}</div>`
+      + `<details class="mfigcode"><summary>Code de la simulation</summary>${codeBlockRaw("javascript", body, file, open)}</details>`;
+  }
   if (/^(visuel|widget)$/i.test(lang || "")) {  // a live visual (a clock, a card, a gauge…): drawn here, in a sealed frame
-    if (open) return `<div class="vis vwait">${liveIcon("write")}<span>Naim dessine le visuel…</span></div>`;
+    if (open) { quillText(body.length); return `<div class="vis vwait">${liveIcon("write")}<span>Naim dessine le visuel… <span class="muted">${body.split("\n").length} lignes</span></span></div>`; }
     // the frame's colour scheme is the page's: otherwise its background is painted opaque (a dark band in dark mode)
     const dark = document.documentElement.dataset.theme === "dark"
       || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -2672,6 +2677,26 @@ function codeBlock(lang, body, file = "", open = false) {
 }
 // The page of a visual: Naim's colours and font, nothing it can reach (no network, no Naim, no Mac: only drawing and its
 // own script), and its height told to the conversation so that it shows whole, without a scroll bar
+const VIS_HEIGHT = `<scr` + `ipt>(() => { const tell = () => { const b = document.body; if (!b) return;`
+  + ` const h = Math.max(b.scrollHeight, Math.ceil(b.getBoundingClientRect().bottom)) + 8; parent.postMessage({ naimVisuel: 1, h }, "*"); };`
+  + ` addEventListener("DOMContentLoaded", () => { tell(); new ResizeObserver(tell).observe(document.body); });`
+  + ` addEventListener("load", tell); setTimeout(tell, 300); setTimeout(tell, 1200); })();<\/script>`;
+// the animation engine of the algorithmique plugin, loaded once: a ```simulation block is its ALGO, played in the answer
+let MOTEUR = "";
+fetch("/api/moteur-algo").then((r) => r.json()).then((d) => {
+  MOTEUR = d.html || "";
+  if (MOTEUR) for (const el of document.querySelectorAll(".vsim[data-sim]")) el.innerHTML = algoFrame(el.dataset.sim);
+}).catch(() => {});
+function algoFrame(algo) {
+  const START = "// ==== ALGO ====", END = "// ==== FIN ALGO ====";
+  const i = MOTEUR.indexOf(START), j = MOTEUR.indexOf(END);
+  if (i < 0 || j < 0) return '<div class="vwait">Le moteur de simulation est introuvable (plugin « algorithmique »).</div>';
+  const code = algo.replace(/<\/script/gi, "<\\/script");  // the block cannot close its own script
+  const head = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:">`
+    + `<style>:root { color-scheme: dark; } html, body { background: transparent !important; } body { padding: 2px; } .app { background: #12121c; border: 1px solid #2c2c40; border-radius: 16px; max-width: 620px; }</style>` + VIS_HEIGHT;
+  const doc = (MOTEUR.slice(0, i + START.length) + "\n" + code + "\n" + MOTEUR.slice(j)).replace(/<head[^>]*>/i, (m) => m + head);
+  return `<iframe class="visf simf" sandbox="allow-scripts" title="Simulation" style="color-scheme: dark; height: 760px" srcdoc="${esc(doc)}"></iframe>`;
+}
 function visuelDoc(body) {
   const cs = getComputedStyle(document.documentElement);
   const v = ["bg", "panel", "side", "hover", "text", "muted", "line", "accent", "code", "brand", "ok", "warn", "danger"]
@@ -2682,16 +2707,16 @@ function visuelDoc(body) {
   const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:">`
     + `<style>:root { ${v} color-scheme: ${dark ? "dark" : "light"}; } html, body { margin: 0; background: transparent; color: var(--text);`
     + ` font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; } body { padding: 4px; } * { box-sizing: border-box; }</style>`
-    + `<scr` + `ipt>(() => { const tell = () => { const b = document.body; if (!b) return;`
-    + ` const h = Math.max(b.scrollHeight, Math.ceil(b.getBoundingClientRect().bottom)) + 8; parent.postMessage({ naimVisuel: 1, h }, "*"); };`
-    + ` addEventListener("DOMContentLoaded", () => { tell(); new ResizeObserver(tell).observe(document.body); });`
-    + ` addEventListener("load", tell); setTimeout(tell, 300); setTimeout(tell, 1200); })();<\/script>`;
+    + VIS_HEIGHT;
   return whole ? body.replace(/<head[^>]*>/i, (m) => m + head).replace(/^(?![\s\S]*<head)/, head) : `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
 }
 addEventListener("message", (e) => {
   if (!e.data || e.data.naimVisuel !== 1) return;
   const f = [...document.querySelectorAll("iframe.visf")].find((x) => x.contentWindow === e.source);
-  if (f) f.style.height = Math.min(Math.max(+e.data.h || 0, 40), 900) + "px";
+  if (!f) return;
+  // it only grows (by more than 3 px): a visual whose height moves while it animates no longer shakes the conversation
+  const h = Math.min(Math.max(+e.data.h || 0, 40), f.classList.contains("simf") ? 1600 : 900), now = parseFloat(f.style.height) || 0;
+  if (!f.dataset.sized || h > now + 3) { f.dataset.sized = "1"; f.style.height = h + "px"; }
 });
 function codeBlockRaw(lang, body, file = "", open = false) {
   const canWrite = !!S.project;
@@ -5401,6 +5426,13 @@ function quillProgress(w) {
   if (dc !== 0 || !quill.at) quill.last = now;
   quill.chars = w.chars || 0; quill.at = now; quill.cmd = w.name === "run_command" || w.name === "start_process";
   quillRun();
+}
+function quillText(n) {  // a visual or a simulation written in the answer: the quill writes at its pace
+  const now = performance.now(), dc = n - (quill.tchars || 0), dt = (now - (quill.tat || 0)) / 1000;
+  if (dc > 0 && dt > 0 && dt < 5) quill.rate = quill.rate ? quill.rate * 0.4 + (dc / dt) * 0.6 : dc / dt;
+  if (dc > 0) quill.last = now;
+  quill.tchars = n; quill.tat = now; quill.cmd = false;
+  setTimeout(quillRun, 0);  // the placeholder is in the page once this render is applied
 }
 function quillRun() {
   if (quill.raf || matchMedia("(prefers-reduced-motion: reduce)").matches) return;

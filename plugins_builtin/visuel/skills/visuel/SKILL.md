@@ -8,6 +8,10 @@ description: Afficher un visuel vivant DANS la conversation (horloge qui avance,
 Le visuel s'affiche DANS la conversation, à la place du bloc : pas de fichier, pas d'outil, pas d'Aperçu, jamais de
 bloc ```html (il resterait du code). Ta réponse : une phrase courte, puis UN bloc ```visuel, puis rien ou une phrase.
 
+## Une simulation d'algorithme : pas ce bloc
+Un tri, une recherche, une boucle, une récursivité à montrer pas à pas : jamais un visuel fait main. C'est un bloc
+```simulation avec `const ALGO = { … }` (skill animation-algorithme), joué par le moteur de Naim.
+
 ## Le bloc
 Du HTML (avec son `<style>` et son `<script>`), sans `<html>` ni `<head>` : il est posé dans une page déjà prête, à la
 police et aux couleurs de Naim. Fermé par ``` sur sa propre ligne.
@@ -26,6 +30,7 @@ police et aux couleurs de Naim. Fermé par ``` sur sa propre ligne.
 - Les chiffres : `font-variant-numeric: tabular-nums` (ils ne sautent pas), gros et fins (`font-size: 56px;
   font-weight: 300; letter-spacing: -1px`) ; le texte secondaire petit, `var(--muted)`, première lettre en majuscule.
 - De l'air : peu d'éléments, bien alignés.
+- Des tailles fixes en px (jamais `vh`, jamais `height: 100%` sur la page) : le visuel ne change pas de hauteur pendant qu'il s'anime.
 
 ## Exemple : l'heure dans un carré
 ```visuel

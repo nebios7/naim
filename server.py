@@ -652,6 +652,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(data)
+        elif path == "/api/moteur-algo":
+            # the tested animation engine (algorithmique plugin): a ```simulation block in an answer is drawn with it
+            eng = next((f for f in (Path.home() / ".naim/plugins/algorithmique/skills/animation-algorithme/moteur.html",
+                                    Path(__file__).parent / "plugins_builtin/algorithmique/skills/animation-algorithme/moteur.html") if f.exists()), None)
+            self.send_json({"html": eng.read_text(encoding="utf-8") if eng else ""})
         elif path == "/api/status":
             models = ollama_models()
             loaded = []
@@ -2200,7 +2205,14 @@ class Handler(BaseHTTPRequestHandler):
             if acting_only and sk and sk["name"] != "mac":
                 sk = None  # acting on an existing file (« imprime mon CV ») needs no skill — except the Mac recipes
             if sk and sk["name"] not in ("debug", "application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):
-                file_work = True  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
+                # an algorithm shown in the conversation is a ```simulation block, played there: no file, unless one is asked
+                sim_here = sk["name"] == "animation-algorithme" and not re.search(
+                    r"fichiers?|\bpages?\b|\bhtml\b|enregistr|sauvegard|t[ée]l[ée]charg|\w\.(js|html?)\b", body["message"] or "", re.I)
+                file_work = not sim_here  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
+                if sim_here:
+                    messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                        "\n\n(Réponds ici, dans la conversation : une phrase, puis UN bloc ```simulation avec const ALGO = { … }, "
+                        "sur le plan de l'exemple du skill. Aucun fichier, aucune commande.)"))
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
                 messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") +
