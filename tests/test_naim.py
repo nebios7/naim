@@ -942,6 +942,15 @@ class NoLoopsInAnswers(unittest.TestCase):
         self.assertEqual(out.count("La solution est faux."), 2)
         self.assertIn("lignes répétées retirées", out)
 
+    def test_maths_recipes_are_right(self):
+        text = (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text()
+        code = text.split("```python\n", 1)[1].split("```", 1)[0]
+        ns = {}
+        exec(code, ns)
+        self.assertEqual(ns["pell"](61), (1766319049, 226153980))
+        self.assertEqual(ns["bezout"](240, 46), (2, -9, 47))
+        self.assertEqual(ns["facteurs"](360), [2, 2, 2, 3, 3, 5])
+
     def test_compute_maths_gets_the_tools(self):
         import server
         h = server.Handler.__new__(server.Handler)

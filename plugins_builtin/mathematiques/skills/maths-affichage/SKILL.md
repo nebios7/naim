@@ -22,6 +22,29 @@ de Pell ou diophantienne, nombres premiers, PGCD, « combien de solutions » : c
 `run_command` (`python3 -c "…"` ou un petit script), puis écris la réponse vérifiée, avec la vérification
 (par exemple $x^2 - 61y^2 = 1$ recalculé). Ne réécris jamais « est-ce juste ? » : vérifie, puis tranche.
 
+Recettes justes (Python seul, sans rien installer) — copie-les, ne les réinvente pas :
+```python
+from math import isqrt, gcd
+def pell(D):              # plus petite solution x > 0, y > 0 de x² − D·y² = 1 (D entier, pas un carré)
+    a0 = isqrt(D); m, d, a = 0, 1, a0
+    p0, p1, q0, q1 = 1, a0, 0, 1
+    while p1 * p1 - D * q1 * q1 != 1:
+        m = d * a - m; d = (D - m * m) // d; a = (a0 + m) // d
+        p0, p1 = p1, a * p1 + p0; q0, q1 = q1, a * q1 + q0
+    return p1, q1          # les autres solutions : (x + y√D)^n
+def bezout(a, b):          # (pgcd, u, v) avec a·u + b·v = pgcd
+    if b == 0: return a, 1, 0
+    g, u, v = bezout(b, a % b); return g, v, u - (a // b) * v
+def premier(n): return n > 1 and all(n % k for k in range(2, isqrt(n) + 1))
+def facteurs(n):
+    f, k = [], 2
+    while k * k <= n:
+        while n % k == 0: f.append(k); n //= k
+        k += 1
+    return f + ([n] if n > 1 else [])
+```
+Par exemple `python3 -c "…recette…; x, y = pell(61); print(x, y, x*x - 61*y*y)"` affiche le résultat ET sa vérification.
+
 ## 1. Formules (LaTeX) — mémo
 
 - Nombres : virgule `0{,}5`, unités `12\ \text{cm}^2`, `\times`, `\div`, `\frac{a}{b}`, `\sqrt{x}`, `\sqrt[3]{x}`, `x^{2}`, `\approx`, `\neq`, `\leq`.
