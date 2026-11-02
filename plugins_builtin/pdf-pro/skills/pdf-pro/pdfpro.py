@@ -26,6 +26,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+def _here(path):
+    """« cours-cobol/x.pdf » typed while already in cours-cobol (and no such sub-folder): x.pdf, here."""
+    p = Path(str(path)).expanduser()
+    if not p.is_absolute() and len(p.parts) > 1 and p.parts[0] == Path.cwd().name and not (Path.cwd() / p.parts[0]).exists():
+        return str(Path(*p.parts[1:]))
+    return str(path)
+
+
 HERE = Path(__file__).resolve().parent
 APP = Path.home() / "Library/Application Support/Naim"
 NAIM_PDF = APP / "bin/naim-pdf"
@@ -641,7 +649,7 @@ def chart(kind, data_file, out, title="", size=""):
 
 
 if __name__ == "__main__":
-    a = sys.argv[1:]
+    a = [_here(x) for x in sys.argv[1:]]
     if len(a) >= 3 and a[0] in ("quiz", "render") and a[1].lower().endswith(".json"):  # a quiz -> its pro PDF
         render_quiz(a[1], a[2], a[3] if len(a) > 3 else "")
         sys.exit(0)

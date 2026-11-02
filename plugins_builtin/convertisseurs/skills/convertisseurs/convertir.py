@@ -27,6 +27,14 @@ VID = {"mp4", "mov", "mkv", "avi", "webm", "m4v"}
 AUD = {"mp3", "wav", "m4a", "aac", "flac", "ogg", "aiff"}
 TAB = {"csv", "xlsx", "json"}
 
+def _here(path):
+    """« cours-cobol/x.pdf » typed while already in cours-cobol (and no such sub-folder): x.pdf, here."""
+    p = Path(str(path)).expanduser()
+    if not p.is_absolute() and len(p.parts) > 1 and p.parts[0] == Path.cwd().name and not (Path.cwd() / p.parts[0]).exists():
+        return str(Path(*p.parts[1:]))
+    return str(path)
+
+
 
 def run(cmd, timeout=900):
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -162,7 +170,7 @@ def main():
     args = [x for i, x in enumerate(sys.argv[1:], 1) if not x.startswith("--") and not (i > 1 and sys.argv[i - 1].startswith("--"))]
     if len(args) < 2:
         sys.exit(__doc__)
-    *srcs, dst = [Path(x).expanduser() for x in args]
+    *srcs, dst = [Path(_here(x)).expanduser() for x in args]
     for s in srcs:
         if not s.is_file():
             sys.exit(f"erreur : fichier introuvable : {s}")

@@ -1001,7 +1001,7 @@ class Agent:
         name, out = self.root.name, []
         for q in re.findall(r'"([^"]+)"|\'([^\']+)\'|(\S+)', command):
             p = next((x for x in q if x), "")
-            if p.startswith(name + "/") and not (self.root / p).exists() and (self.root / p[len(name) + 1:]).exists():
+            if p.startswith(name + "/") and not (self.root / p).exists() and not (self.root / name).exists():  # an input or an output
                 fixed = p[len(name) + 1:]
                 if fixed not in out:
                     out.append(fixed)
@@ -3300,7 +3300,7 @@ class Agent:
             return self.JOINT_KEEP.format(name=hit.name, stem=hit.stem, suffix=hit.suffix)
         try:
             result = fn(**args)
-            if name == "run_command" and isinstance(result, str) and "No such file or directory" in result:
+            if name == "run_command" and isinstance(result, str) and re.search(r"No such file or directory|FileNotFoundError|introuvable", result):
                 result += self._apostrophe_hint(str(args.get("command", ""))) + self._folder_twice_hint(str(args.get("command", "")))
             if name in ("run_command", "process_output") and isinstance(result, str) and re.search(r"No module named|command not found", result):
                 result += self._install_hint(result)
