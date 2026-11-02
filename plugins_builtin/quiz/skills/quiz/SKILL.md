@@ -42,3 +42,11 @@ d'écriture. Tu écris une phrase, puis UN bloc ```quiz (du JSON), puis une phra
 ## 4. Après
 Une phrase : combien de questions, et que l'utilisateur peut demander un quiz plus difficile ou sur une autre partie.
 Ne redonne pas les questions en texte : la carte suffit.
+
+## 5. Le quiz en PDF (« exporte ce quiz en PDF », « imprime-le »)
+Pas de page HTML à écrire, pas de script. Écris le JSON du quiz (le même que le bloc ```quiz) dans `quiz.json`
+(write_file), puis UNE commande :
+`python3 ~/.naim/plugins/pdf-pro/skills/pdf-pro/pdfpro.py quiz quiz.json <nom>.pdf` (une couleur à la fin si demandée).
+Il fait le PDF pro : une question par cadre, jamais coupée par une page, choix A B C D, le corrigé avec les
+explications à la fin, les cartes mémoire. Puis look_at du PDF et son chemin.
+

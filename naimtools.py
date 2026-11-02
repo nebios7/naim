@@ -2483,6 +2483,9 @@ class Agent:
                 # only the content, no style of its own (a pdf-pro page): it gets the pdf-pro look, never a bare one
                 r = subprocess.run([sys.executable, str(pro), "render", str(src), str(dst)], capture_output=True, text=True, timeout=240)
                 return (r.stdout or r.stderr).strip()[-600:] + "\n(Style pdf-pro appliqué : cette page n'a que le contenu.)"
+        if dst.suffix.lower() == ".pdf" and src.is_file() and pro.is_file() and src.suffix.lower() == ".json" and '"questions"' in src.read_text(errors="replace")[:20000]:
+            r = subprocess.run([sys.executable, str(pro), "quiz", str(src), str(dst)], capture_output=True, text=True, timeout=300)  # a quiz: its pro PDF
+            return (r.stdout or "").strip()[-600:] if r.returncode == 0 and dst.is_file() else f"error: {(r.stderr or r.stdout).strip()[-400:]}"
         if dst.suffix.lower() == ".pdf" and src.is_file() and pro.is_file() and src.suffix.lower() in (
                 ".md", ".markdown", ".txt", ".docx", ".doc", ".rtf", ".odt", ".csv", ".xlsx", ".xlsm", ".pptx"):
             # any document -> the pdf-pro look (the default of every PDF); a course written in numbered chapters

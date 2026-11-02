@@ -893,6 +893,20 @@ class SkillScripts(unittest.TestCase):
             self.assertIn("<h1>Compte rendu</h1>", page)
             self.assertIn("<h2>Réunion</h2>", page)
 
+    def test_quiz_to_pro_pdf(self):
+        import importlib.util
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("pp4", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="": None):
+            t = Path(t)
+            (t / "quiz.json").write_text(json.dumps({"titre": "Q", "questions": [{"q": "A ?", "choix": ["x", "y"], "bonne": 1,
+                                                    "indice": "i", "explication": "parce que"}], "cartes": [{"recto": "r", "verso": "v"}]}))
+            pp.render_quiz(t / "quiz.json", t / "q.pdf")
+            page = (t / "q.html").read_text()
+        for x in ('class="qz"', "break-inside:avoid", "<b>A</b>", "Corrigé", "1. B", "parce que", 'class="card"'):
+            self.assertIn(x, page)
+
     def test_colour_asked(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")

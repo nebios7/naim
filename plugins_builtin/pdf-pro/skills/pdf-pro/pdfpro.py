@@ -11,6 +11,8 @@ naim-pdf, the KaTeX already shipped with Naim).
   pdfpro.py chart <bars|hbars|line|donut> <données.json> <sortie.svg> ["titre"] [small]
                                                   a chart in the theme's colours, to put in a <figure>
                                                   (small: for two charts side by side in <div class="grid2">)
+  pdfpro.py quiz <quiz.json> <sortie.pdf> [couleur]   a quiz (the JSON of the quiz card) -> a pro PDF: questions never
+                                                  cut, choices A B C D, the answer key at the end, the memory cards
   pdfpro.py check <sortie.pdf>                    the number of pages and a PNG of page 1 and 2 to look at
 
 page.html holds only the body (cover, sections…): no <html>, no <style> needed. Formulas: <span class="tex">x^2</span>
@@ -304,6 +306,55 @@ def doc_body(f, shift=1):
     return md_html(doc_markdown(f), shift)
 
 
+def render_quiz(src, out, couleur=""):
+    """A quiz (the JSON of the interactive card: titre, questions [q, choix, bonne, indice, explication], cartes
+    [recto, verso]) -> a pro PDF: one block per question never cut by a page, choices A B C D, the answer key with
+    the explanations at the end, the memory cards two by two."""
+    import datetime, json
+    q = json.loads(Path(src).expanduser().read_text(errors="replace"))
+    qs, cards = q.get("questions") or [], q.get("cartes") or []
+    if not qs:
+        sys.exit("erreur : pas de « questions » dans ce quiz.")
+    d = datetime.date.today()
+    when = f"{d.day} {'janvier février mars avril mai juin juillet août septembre octobre novembre décembre'.split()[d.month - 1]} {d.year}"
+    L = "ABCDEFGH"
+    style = ("<style>.qz{break-inside:avoid;page-break-inside:avoid;border:1px solid var(--line);border-radius:6px;padding:4mm 5mm;"
+             "margin:0 0 4mm}.qz h3{margin:0 0 2.5mm;font-size:11.5pt}.qz h3 .n{color:var(--clay);margin-right:2mm}"
+             ".qz ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:1.5mm 6mm}"
+             ".qz li{display:flex;gap:2.5mm;align-items:baseline}.qz li b{display:inline-flex;align-items:center;justify-content:center;"
+             "width:5mm;height:5mm;border:1px solid var(--line);border-radius:50%;font-size:8pt;flex:none;color:var(--muted)}"
+             ".qz .ind{margin-top:2.5mm;font-size:9pt;color:var(--muted)}.qzhead{margin:0 0 7mm}.qzhead .kicker{font-size:9pt;"
+             "letter-spacing:.14em;text-transform:uppercase;color:var(--clay);font-weight:600}.qzhead h1{font-size:26pt;margin:3mm 0 0}"
+             ".qzhead .band{height:3px;width:40mm;background:var(--clay);border-radius:2px;margin:5mm 0 3mm}.qzhead .meta{color:var(--muted);font-size:9.5pt}"
+             ".key{page-break-before:always}.key td:first-child{color:var(--clay);font-weight:600;white-space:nowrap}"
+             ".cards{display:grid;grid-template-columns:1fr 1fr;gap:4mm}.card{break-inside:avoid;page-break-inside:avoid;"
+             "border:1px solid var(--line);border-radius:6px;padding:4mm 5mm}.card b{display:block;margin-bottom:1.5mm}"
+             ".card span{color:var(--muted);font-size:9.5pt}</style>")
+    body = [style, f'<header class="qzhead"><div class="kicker">Quiz · {when}</div><h1>{html.escape(q.get("titre") or "Quiz")}</h1>'
+            f'<div class="band"></div><div class="meta">{len(qs)} questions{f" · {len(cards)} cartes mémoire" if cards else ""} · '
+            'une seule bonne réponse par question · le corrigé est à la fin</div></header>']
+    for k, it in enumerate(qs, 1):
+        choix = "".join(f"<li><b>{L[j]}</b><span>{_inline(str(c))}</span></li>" for j, c in enumerate(it.get("choix") or []))
+        ind = f'<div class="ind">Indice : {_inline(str(it["indice"]))}</div>' if it.get("indice") else ""
+        body.append(f'<div class="qz"><h3><span class="n">{k}.</span>{_inline(str(it.get("q") or it.get("question") or ""))}</h3><ol>{choix}</ol>{ind}</div>')
+    rows = []
+    for k, it in enumerate(qs, 1):
+        good = int(it.get("bonne", it.get("reponse", 0)) or 0)
+        ch = (it.get("choix") or [""])[good] if good < len(it.get("choix") or []) else ""
+        rows.append(f"<tr><td>{k}. {L[good] if good < len(L) else '?'}</td><td><strong>{_inline(str(ch))}</strong>"
+                    + (f"<br>{_inline(str(it['explication']))}" if it.get("explication") else "") + "</td></tr>")
+    body.append('<section class="key"><h2>Corrigé</h2><table><thead><tr><th>Réponse</th><th>Explication</th></tr></thead><tbody>'
+                + "".join(rows) + "</tbody></table></section>")
+    if cards:
+        body.append('<section><h2>Cartes mémoire</h2><div class="cards">' + "".join(
+            f'<div class="card"><b>{_inline(str(c.get("recto", "")))}</b><span>{_inline(str(c.get("verso", "")))}</span></div>' for c in cards)
+            + "</div></section>")
+    out = Path(out).expanduser().resolve()
+    page_file = out.with_suffix(".html")
+    page_file.write_text("\n".join(body))
+    render(page_file, out, couleur)
+
+
 def render_docs(files, out, couleur=""):
     """One document -> a pro document (its title in the pro head, then its content); several -> a course (README or a
     common title on the cover, contents, one chapter per file in the order given)."""
@@ -574,6 +625,9 @@ def chart(kind, data_file, out, title="", size=""):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
+    if len(a) >= 3 and a[0] in ("quiz", "render") and a[1].lower().endswith(".json"):  # a quiz -> its pro PDF
+        render_quiz(a[1], a[2], a[3] if len(a) > 3 else "")
+        sys.exit(0)
     srcs = [x for x in a[1:-1] if Path(x).suffix.lower() in DOC_EXTS] if len(a) >= 3 else []
     if a and a[0] == "render" and srcs and not (len(srcs) == 1 and Path(srcs[0]).suffix.lower() in (".html", ".htm")):
         # documents of any kind (.md, Word, PDF, Excel, PowerPoint, text, CSV) -> one PDF in the theme
