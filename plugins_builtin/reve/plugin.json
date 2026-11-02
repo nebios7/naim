@@ -1,0 +1,18 @@
+{
+  "name": "reve",
+  "version": "1.0",
+  "description": "Le rêve de Naim : la nuit, il relit les moments où on l'a corrigé et sa mémoire, puis propose au matin des règles à ajouter à ses consignes (rien n'est ajouté sans accord).",
+  "skills": "skills",
+  "triggers": {
+    "reve": "\\b(r[êe]ve[- ]?(maintenant|tout de suite)|r[êe]ver (maintenant|cette nuit|la nuit)|(ton|tes|du|le) r[êe]ves? (de la nuit|de cette nuit|de naim)|(ton|tes) r[êe]ves?\\b|as[- ]tu r[êe]v[ée]|fais (un|ton) r[êe]ve|dreaming|qu'as[- ]tu appris (cette nuit|hier|r[ée]cemment)|(tes|les) (r[èe]gles|le[çc]ons) (propos[ée]es|de la nuit)|propose[- ](moi )?des r[èe]gles|relis (mes|nos) corrections)\\b"
+  },
+  "commands": [
+    {
+      "cmd": "/rever",
+      "arg": "",
+      "description": "Naim relit maintenant ce qui est nouveau et propose des règles",
+      "prompt": "Avec le skill reve, rêve maintenant puis présente-moi les règles que tu proposes."
+    }
+  ],
+  "priority": true
+}

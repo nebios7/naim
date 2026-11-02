@@ -1610,6 +1610,17 @@ body.home .empty { margin: 0 auto 22px; }
 .hchip:hover { background: var(--side); border-color: color-mix(in srgb, var(--text) 25%, transparent); }
 .hchip svg { width: 15px; height: 15px; color: var(--muted); }
 .hrec { margin-top: 30px; }
+/* the morning card: what Naim proposes after its dream (until every proposal is answered) */
+.dcard { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: var(--r-m, 12px); padding: 11px 14px; margin: 0 auto 14px; max-width: 560px; font-size: 13.5px; }
+.dcard svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.dcard .dt { flex: 1; min-width: 0; }
+.dcard small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.dprop .sl b { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.dprop .ptext, .dprop .sl small { display: block; }
+.dprop .ptext { font-size: 14px; margin: 2px 0; }
+.dprop .sc { align-self: flex-start; }
+.dprop .dev { margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--line); color: var(--muted); font-size: 12.5px; }
+.dprop .dev div + div { margin-top: 3px; }
 /* the sessions list is already beside the conversation: the home page does not list them a second time */
 body:not(.vnarrow):not(.noside) .hrec { display: none; }
 /* the side panel (changes, files, terminal) open on a window too small for three columns: the sessions list folds
@@ -2350,7 +2361,7 @@ const DEFAULTS = {
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   external_on: false, external_provider: "cli", external_cli: "", external_url: "", external_model: "", external_key: "", external_timeout: 900,
   system_prompt: "", user_name: "", theme: "auto", zoom: 1, font_size: 15, width: "normal", send_key: "enter",
-  notify: true, sound: false, mic_sounds: true, self_check: true, show_stats: true, show_time: false, wrap_code: false, code_light: "naim", code_dark: "naim", code_font: "", code_size: 0, ui_font: "",
+  notify: true, sound: false, mic_sounds: true, self_check: true, dreaming: true, show_stats: true, show_time: false, wrap_code: false, code_light: "naim", code_dark: "naim", code_font: "", code_size: 0, ui_font: "",
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
@@ -3536,10 +3547,11 @@ function renderThread() {
          ["bulb", "Expliquer", "Explique async/await en JavaScript avec des exemples simples"],
          ["check", "Quiz", "Fais-moi un quiz de 5 questions sur "]];
     const hb = $("#homeBelow"); hb.hidden = false;
-    hb.innerHTML = `<div class="hchips">${chips.map(([ic, l, p]) => `<button class="hchip" data-p="${esc(p)}" title="${esc(p)}">${svgI(ic)}${esc(l)}</button>`).join("")}</div>
+    hb.innerHTML = `<div id="dreamCard"></div><div class="hchips">${chips.map(([ic, l, p]) => `<button class="hchip" data-p="${esc(p)}" title="${esc(p)}">${svgI(ic)}${esc(l)}</button>`).join("")}</div>
       ${rec.length ? `<div class="hrec"><div class="hrt">Récents</div>${rec.slice(0, 5).map((c) => `<button class="hrow" data-open="${c.id}">${svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat")}<span class="hrn">${esc((c.title || "Sans titre").replace(/^⏱\s*/, ""))}</span><span class="hrw">${relTime(c.updated)}</span></button>`).join("")}</div>` : ""}`;
     $$(".hchip", hb).forEach((b) => (b.onclick = () => { $("#input").value = b.dataset.p; $("#input").focus(); $("#input").dispatchEvent(new Event("input")); }));
     $$("[data-open]", hb).forEach((b) => (b.onclick = () => openConv(b.dataset.open)));
+    dreamCard();
     heroStart();
     updateCtx();
     return;
@@ -6234,6 +6246,7 @@ const TABS = {
       ${row("Son à la fin d'une réponse", "", sw("sound"))}
       ${row("Sons du micro", "Un petit son quand l'écoute commence et s'arrête", sw("mic_sounds"))}
       ${row("Se vérifier tout seul", "Une fois par jour, quand le Mac est inactif depuis 30 min : 8 essais réels, puis des leçons pour ce qui a raté (~/.naim/lecons.md)", sw("self_check"))}
+      ${row("Rêver la nuit", "Quand le Mac est inactif la nuit, Naim relit les moments où tu l'as corrigé et sa mémoire, puis te propose au matin des règles à ajouter à ses consignes. Rien n'est ajouté sans ton accord.", sw("dreaming"))}
       ${row("Lire les réponses à voix haute", "Avec la voix de Naim, sur ce Mac (voix d'un lecteur de livres audio, Multilingual LibriSpeech, CC BY 4.0). Le bouton ♪ sous chaque réponse la lit aussi à la demande.", sw("voice_auto"))}
 
       ${row("Afficher la vitesse (tokens/s)", "", sw("show_stats"))}
@@ -6364,6 +6377,9 @@ const TABS = {
       ${row("Mémoire automatique", "Après chaque conversation, Naim retient ce que tu dis de durable sur toi (profil, préférences, projets, consignes). Jamais de mots de passe ni de clés.", sw("memory_auto"))}
       ${row("Faits donnés à Naim", "Épinglés d'abord, puis les plus récents. Plus = Naim te connaît mieux, mais chaque réponse est un peu plus lente.", range("memory_limit", 10, 200, 10))}
     </div>
+    <h3 style="margin:22px 0 8px">Rêves de la nuit</h3>
+    <div id="dreamBox"><div class="sgroup"><div class="srow"><div class="sl">Chargement…</div></div></div></div>
+    <h3 style="margin:22px 0 8px">Faits retenus</h3>
     <div class="sgroup" id="memStats"></div>
     <div class="sgroup"><div class="srow"><select id="memCat" style="width:140px">${Object.entries({ profil: "Profil", preferences: "Préférences", projets: "Projets", consignes: "Consignes", autre: "Autre" }).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select><input class="field" id="memNew" placeholder="Ex. : Je préfère le code commenté en français" style="flex:1"><button class="btn primary" id="memAdd">Ajouter</button></div></div>
     <div class="srow" style="padding:0 0 8px"><input class="field" id="memSearch" placeholder="Rechercher dans la mémoire…" style="flex:1"></div>
@@ -7487,8 +7503,49 @@ async function loadBackups() {
     toast("Sauvegarde restaurée : Naim se recharge"); setTimeout(() => location.reload(), 1200);
   }));
 }
+// Naim's dream: at night it reads back the moments it was corrected and proposes rules; nothing is added without a yes
+const dreamOp = (body) => api("/api/dream", { method: "POST", body });
+async function dreamCard() {
+  const box = $("#dreamCard"); if (!box) return;
+  const r = await api("/api/dream").catch(() => null); if (!r || !$("#dreamCard")) return;
+  const n = r.pending.length, rules = r.pending.filter((p) => p.kind === "regle").length;
+  if (!n && !r.state.running) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="dcard">${svgI("moon")}<div class="dt">${r.state.running
+      ? `<b>Naim rêve…</b><small>Il ${esc(r.state.step || "relit ses conversations")}${r.state.total ? ` · ${r.state.done}/${r.state.total}` : ""}</small>`
+      : `<b>Pendant la nuit, Naim a relu ce que tu lui as dit</b><small>${rules ? `${rules} règle${rules > 1 ? "s" : ""} proposée${rules > 1 ? "s" : ""} pour ses consignes` : ""}${rules && n > rules ? " · " : ""}${n > rules ? `${n - rules} fait${n - rules > 1 ? "s" : ""} à retirer de sa mémoire` : ""}</small>`}</div>
+    ${r.state.running ? "" : `<button class="btn primary" id="dreamSee">Voir</button>`}</div>`;
+  const see = $("#dreamSee"); if (see) see.onclick = () => { setView("settings"); showSettingsTab("memory"); setTimeout(() => $("#dreamBox")?.scrollIntoView({ block: "start" }), 300); };
+  clearTimeout(dreamCard.t); if (r.state.running) dreamCard.t = setTimeout(dreamCard, 5000);
+}
+async function loadDreams() {
+  const box = $("#dreamBox"); if (!box) return;
+  const r = await api("/api/dream").catch(() => null); if (!r || !$("#dreamBox")) return;
+  const last = r.last, st = r.state;
+  const head = `<div class="sgroup"><div class="srow"><div class="sl"><b>${st.running ? "Naim rêve en ce moment" : last ? `Dernier rêve : ${esc(last.date_time || last.date)}` : "Naim n'a pas encore rêvé"}</b>
+      <small>${st.running ? `Il ${esc(st.step || "relit ses conversations")}${st.total ? ` · ${st.done}/${st.total}` : ""}…` : last ? `${last.read?.moments || 0} moment${(last.read?.moments || 0) > 1 ? "s" : ""} relu${(last.read?.moments || 0) > 1 ? "s" : ""} dans ${last.read?.conversations || 0} conversation${(last.read?.conversations || 0) > 1 ? "s" : ""}. Il ne relit que ce qui est nouveau depuis.` : "La nuit, quand le Mac est inactif, il relit les moments où tu l'as corrigé. Tu peux aussi le lancer maintenant."}</small></div>
+      <div class="sc"><button class="btn" id="dreamRun" ${st.running ? "disabled" : ""}>Rêver maintenant</button></div></div></div>`;
+  const props = r.pending.map((p) => `<div class="srow dprop" data-d="${esc(p.date)}" data-id="${esc(p.id)}"><div class="sl" style="flex:1;min-width:0">
+      <b>${p.kind === "regle" ? "Règle à ajouter" : "Fait à retirer de la mémoire"}</b><span class="ptext">${esc(p.text)}</span>
+      ${p.why ? `<small>${esc(p.why)}</small>` : ""}
+      ${(p.evidence || []).length ? `<div class="dev">${p.evidence.map((e) => `<div>Tu avais dit : « ${esc(e.user)} »${e.title ? ` · ${esc(e.title)}` : ""}</div>`).join("")}</div>` : ""}</div>
+      <div class="sc">${p.kind === "regle" ? `<button class="btn" data-edit>Modifier</button>` : ""}<button class="btn primary" data-yes>${p.kind === "regle" ? "Ajouter" : "Retirer"}</button><button class="btn" data-no>Refuser</button></div></div>`).join("");
+  box.innerHTML = head + (props ? `<div class="sgroup">${props}</div>` : last && !st.running ? `<div class="sgroup"><div class="srow"><div class="sl"><small>Aucune proposition en attente. Les règles acceptées sont à la fin de <span class="mono">~/.naim/NAIM.md</span>.</small></div></div></div>` : "");
+  $("#dreamRun").onclick = async () => { await dreamOp({ op: "run" }); toast("Naim rêve : il relit ce qui est nouveau"); setTimeout(loadDreams, 800); };
+  $$(".dprop", box).forEach((row) => {
+    const go = async (accept, text) => {
+      const res = await dreamOp({ op: accept ? "accept" : "refuse", date: row.dataset.d, id: row.dataset.id, text });
+      if (!res.ok) return toast("Déjà traitée");
+      toast(accept ? (res.proposal.kind === "regle" ? "Règle ajoutée aux consignes de Naim" : "Fait retiré de la mémoire") : "Refusée : Naim ne la proposera plus");
+      loadDreams(); if (!accept || res.proposal.kind === "retirer") loadMemory();
+    };
+    $("[data-yes]", row).onclick = () => go(true);
+    $("[data-no]", row).onclick = () => go(false);
+    const ed = $("[data-edit]", row); if (ed) ed.onclick = () => { const t = prompt("Règle à ajouter :", $(".ptext", row).textContent); if (t && t.trim()) go(true, t.trim()); };
+  });
+  clearTimeout(loadDreams.t); if (st.running) loadDreams.t = setTimeout(loadDreams, 4000);
+}
 async function loadMemory() {
-  loadStorage(); loadBackups();
+  loadStorage(); loadBackups(); loadDreams();
   const box = $("#memList"); if (!box) return;
   const { facts, cats, progress } = await api("/api/memory");
   const active = facts.filter((f) => f.active !== false), pinned = facts.filter((f) => f.pinned);

@@ -27,6 +27,7 @@ Serves web/index.html and a small API on 127.0.0.1 only:
   GET|PUT /api/mcp, POST /api/mcp/NAME/restart   MCP servers
   GET /api/skills?root=, GET /api/skill?path=, POST /api/skills, PUT /api/skill, DELETE /api/skill?path=
   GET|PUT /api/memory                   long-term memory facts
+  GET|POST /api/dream                   the night's dream: proposed rules, run now, accept / refuse one
   GET /api/project-info?root=           NAIM.md / AGENTS.md of a project
   GET /api/git/status|diff?root=, POST /api/git/commit|branch|init
   GET /api/checkpoints/RUN, POST /api/checkpoints/RUN/restore   undo an agent run
@@ -54,6 +55,7 @@ import computer as cu
 import docs
 import extensions as ext
 import feedback_share
+import dreaming
 import learning
 import model_download
 import memory
@@ -819,6 +821,10 @@ class Handler(BaseHTTPRequestHandler):
             files = [{"name": f.name, "size": f.stat().st_size} for f in sorted(llamacpp.MODELS.glob("*.gguf"))
                      if "mmproj" not in f.name]  # Naim's own model files (the vision part goes with them)
             self.send_json({**llamacpp.SERVER.status(), "log": llamacpp.SERVER.log_tail(), "files": files})
+        elif path == "/api/dream":  # Naim's dream: what it read at night and the rules it proposes
+            d = dreaming.latest()
+            self.send_json({"state": dreaming.STATE, "pending": dreaming.pending(),
+                            "last": d and {k: d.get(k) for k in ("date", "date_time", "read")}})
         elif path == "/api/schedules":
             self.send_json({"tasks": scheduler.load(), "running": scheduler.running_ids(), "pending": scheduler.pending()})
         elif path == "/api/naim-home":
@@ -1292,6 +1298,16 @@ class Handler(BaseHTTPRequestHandler):
                 chat = self._memory_chat(b)
                 threading.Thread(target=memory.extract_from_conversations, args=(CONVS, chat), daemon=True).start()
                 self.send_json({"ok": True, "progress": memory.PROGRESS})
+            else:
+                self.send_json({"error": "opération inconnue"}, 400)
+        elif path == "/api/dream":
+            b = self.read_json()
+            if b.get("op") == "run":  # « rêve maintenant »: the same dream, without waiting for the night
+                threading.Thread(target=dreaming.dream, args=(CONVS, _dream_chat()), daemon=True).start()
+                self.send_json({"ok": True})
+            elif b.get("op") in ("accept", "refuse"):
+                p = dreaming.answer(b.get("date", ""), b.get("id", ""), b["op"] == "accept", b.get("text"))
+                self.send_json({"ok": bool(p), "proposal": p})
             else:
                 self.send_json({"error": "opération inconnue"}, 400)
         elif path == "/api/clipboard":
@@ -3160,6 +3176,15 @@ def _busy():
     return bool(_agents) or bool(scheduler.running_ids())
 
 
+def _dream_chat():
+    """The model call of the dream: Naim's own model, in the background slot (Chat and Agent keep their cache)."""
+    s = _settings()
+    options, _ = model_options({"settings": s, "mode": "chat"})
+    options = {**options, "temperature": 0.2, "num_predict": 900, "slot": llamacpp.bg_slot()}
+    model = s.get("model") or "naim"
+    return lambda msgs: (ollama_chat(model, msgs, options=options) or {}).get("content", "")
+
+
 def warm_voice():
     """Naim's natural voice is heavy to load (~1 min): loaded in the background as soon as Naim opens."""
     try:
@@ -3252,6 +3277,8 @@ def serve(port=8765):
     threading.Thread(target=warm_up, daemon=True, name="naim-warm-up").start()
     threading.Thread(target=warm_voice, daemon=True, name="naim-warm-voice").start()
     scheduler.start_loop(_settings, ollama_chat, Agent, CHAT_PROMPT)
+    dreaming.start_loop(CONVS, _settings, lambda: _busy() or bool(_runs) or naim_check.STATE["running"],
+                        lambda: LAST_ACTIVITY[0], _dream_chat)
     if at := _private("autotrain"):
         at.start_loop(_settings, _busy)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)

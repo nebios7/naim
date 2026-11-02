@@ -1569,3 +1569,82 @@ class AskTheUser(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Dreaming(unittest.TestCase):
+    """At night Naim reads back the user's corrections and proposes rules: only rules with a real source, never one
+    it already follows or one refused before, and nothing written to NAIM.md without the user's yes."""
+
+    def setUp(self):
+        import dreaming
+        import memory
+        import naim_check
+        self.d, self.mem, self.nc = dreaming, memory, naim_check
+        self.tmp = Path(tempfile.mkdtemp())
+        self.saved = (dreaming.DIR, dreaming.NAIM_MD, memory.FILE, memory.LEGACY, naim_check.LESSONS, dreaming.ext.HOME)
+        dreaming.DIR, dreaming.NAIM_MD = self.tmp / "reves", self.tmp / "NAIM.md"
+        memory.FILE, memory.LEGACY, naim_check.LESSONS = self.tmp / "memory.json", self.tmp / "memory.md", self.tmp / "lecons.md"
+        dreaming.ext.HOME = self.tmp
+        dreaming.NAIM_MD.write_text("# Consignes\n\n- Réponds toujours en français, de façon directe et concise.\n")
+        self.convs = self.tmp / "conversations"
+        self.convs.mkdir()
+        t = int(time.time() * 1000)
+        conv = {"id": "c1", "title": "Lettre de motivation", "messages": [
+            {"role": "user", "content": "fais ma lettre en PDF", "time": t},
+            {"role": "assistant", "content": "Voici la lettre en style simple.", "time": t},
+            {"role": "user", "content": "non il a pas mis le style pro !!! je veux toujours le style pro", "time": t},
+            {"role": "assistant", "content": "D'accord.", "time": t},
+            {"role": "user", "content": "merci", "time": t}]}
+        (self.convs / "c1.json").write_text(json.dumps(conv))
+        (self.convs / "s1.json").write_text(json.dumps({**conv, "id": "s1", "scheduled": "x"}))
+
+    def tearDown(self):
+        (self.d.DIR, self.d.NAIM_MD, self.mem.FILE, self.mem.LEGACY, self.nc.LESSONS, self.d.ext.HOME) = self.saved
+
+    def test_moments_are_corrections_only(self):
+        m = self.d.moments(self.convs)
+        self.assertEqual(len(m), 1)  # not the first request, not « merci », not the scheduled run
+        self.assertIn("style pro", m[0]["user"])
+        self.assertIn("style simple", m[0]["naim"])
+
+    def test_rule_needs_a_real_source(self):
+        reply = '{"regles": [{"regle": "Fais toujours les PDF avec le style pro", "sources": [1]},' \
+                ' {"regle": "Invente une règle sans source", "sources": []}, {"regle": "Source hors liste", "sources": [9]}]}'
+        self.assertEqual([r["rule"] for r in self.d._parse(reply, 1)], ["Fais toujours les PDF avec le style pro"])
+
+    def test_dream_then_accept_writes_naim_md(self):
+        rule = "Fais toujours les PDF avec le style pro, sans attendre qu'on le redemande."
+        known = "Réponds toujours en français, de façon directe et concise."
+        reply = json.dumps({"regles": [{"regle": rule, "pourquoi": "Il l'a demandé", "sources": [1]},
+                                       {"regle": known, "sources": [1]}]})
+        d = self.d.dream(self.convs, lambda msgs: reply)
+        rules = [p for p in d["proposals"] if p["kind"] == "regle"]
+        self.assertEqual([p["text"] for p in rules], [rule])  # the rule it already follows is not proposed again
+        self.assertIn("style pro", rules[0]["evidence"][0]["user"])  # the proof is what the user really wrote
+        self.assertNotIn(rule, self.d.NAIM_MD.read_text())  # nothing written before the user's yes
+        self.assertTrue(self.d.answer(d["date"], rules[0]["id"], True))
+        text = self.d.NAIM_MD.read_text()
+        self.assertIn(self.d.SECTION, text)
+        self.assertIn(f"- {rule}", text)
+        self.assertTrue(any(self.tmp.glob("NAIM.md.avant-reve-*")))  # the old NAIM.md is kept aside
+        self.assertIsNone(self.d.answer(d["date"], rules[0]["id"], True))  # answered once only
+
+    def test_refused_never_proposed_again(self):
+        reply = json.dumps({"regles": [{"regle": "Mets toujours le style pro dans les PDF", "sources": [1]}]})
+        d = self.d.dream(self.convs, lambda msgs: reply, since=0)
+        p = next(p for p in d["proposals"] if p["kind"] == "regle")
+        self.d.answer(d["date"], p["id"], False)
+        d2 = self.d.dream(self.convs, lambda msgs: reply, since=0)
+        self.assertEqual(sum(x["kind"] == "regle" for x in d2["proposals"]), 1)
+        self.assertEqual(self.d.pending(), [x | {"date": d2["date"]} for x in d2["proposals"] if x["status"] == "attente"])
+
+    def test_due_at_night_only_when_idle(self):
+        from datetime import datetime, timedelta
+        yesterday = {"date": "2000-01-01", "date_time": (datetime.now() - timedelta(hours=20)).strftime("%Y-%m-%d %H:%M")}
+        self.assertTrue(self.d.due({}, yesterday, idle_s=3600, awake_s=3600, hour=3))
+        self.assertFalse(self.d.due({}, yesterday, idle_s=600, awake_s=3600, hour=3))   # someone is using the Mac
+        self.assertFalse(self.d.due({}, yesterday, idle_s=3600, awake_s=300, hour=3))   # it has just woken up
+        self.assertFalse(self.d.due({}, yesterday, idle_s=3600, awake_s=3600, hour=15))  # daytime, dreamt recently
+        self.assertFalse(self.d.due({"dreaming": False}, yesterday, idle_s=3600, awake_s=3600, hour=3))
+        today = {"date": datetime.now().strftime("%Y-%m-%d"), "date_time": "2000-01-01 03:00"}
+        self.assertFalse(self.d.due({}, today, idle_s=9999, awake_s=9999, hour=3))
