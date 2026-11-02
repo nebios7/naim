@@ -965,6 +965,36 @@ class Agent:
                 found.append(twin)
         return "".join(f"\n[Le vrai nom a une autre apostrophe : utilise exactement ce chemin, entre guillemets : \"{t}\"]" for t in found)
 
+    PIP_NAMES = {"cv2": "opencv-python", "PIL": "pillow", "yaml": "pyyaml", "sklearn": "scikit-learn", "bs4": "beautifulsoup4",
+                 "docx": "python-docx", "pptx": "python-pptx", "fitz": "pymupdf", "dotenv": "python-dotenv", "Crypto": "pycryptodome",
+                 "dateutil": "python-dateutil", "serial": "pyserial", "usb": "pyusb", "magic": "python-magic", "jwt": "pyjwt"}
+    BREW_NAMES = {"cobc": "gnucobol", "rexx": "regina-rexx", "rg": "ripgrep", "fd": "fd", "convert": "imagemagick", "magick": "imagemagick",
+                  "pdftotext": "poppler", "pdftoppm": "poppler", "gs": "ghostscript", "tesseract": "tesseract", "ffmpeg": "ffmpeg",
+                  "ffprobe": "ffmpeg", "pandoc": "pandoc", "jq": "jq", "wget": "wget", "node": "node", "npm": "node", "npx": "node",
+                  "yt-dlp": "yt-dlp", "tree": "tree", "gh": "gh", "sqlite3": "sqlite", "cmake": "cmake", "go": "go", "cargo": "rust"}
+
+    def _install_hint(self, result):
+        """A module or a program missing: the exact way to install it here (the right package name, in the project's
+        environment, or with Homebrew), then to check it works."""
+        mod = re.search(r"No module named ['\"]?([\w.]+)", result)
+        if mod:
+            top = mod.group(1).split(".")[0]
+            pkg = self.PIP_NAMES.get(top, top.replace("_", "-"))
+            if top in ("docx", "pptx", "openpyxl") and (ext.HOME / "docs-venv/bin/python").exists():
+                return (f"\n[Le module « {top} » est déjà prêt dans ~/.naim/docs-venv/bin/python : lance ton script avec ce Python-là, "
+                        "rien à installer.]")
+            venv = ".venv/bin/pip" if (self.root / ".venv/bin/pip").exists() else "python3 -m venv .venv && .venv/bin/pip"
+            return (f"\n[Module manquant « {top} » : installe le paquet « {pkg} » dans l'environnement du projet : {venv} install {pkg} "
+                    f"; puis lance avec .venv/bin/python et vérifie : .venv/bin/python -c \"import {top}\".]")
+        # « zsh: command not found: ffmpeg » (the program is after) before « cobc: command not found » (it is before)
+        cmd = re.search(r"command not found: ?(\S+)", result) or re.search(r"(\S+): command not found", result)
+        name = cmd.group(1) if cmd else ""
+        name = name.strip("'\":")
+        if name in self.BREW_NAMES:
+            return (f"\n[Outil manquant « {name} » : brew install {self.BREW_NAMES[name]} (Homebrew absent : donne à l'utilisateur la "
+                    f"commande de https://brew.sh, il la lance lui-même), puis vérifie : {name} --version.]")
+        return ""
+
     def _folder_twice_hint(self, command):
         """« cours-cobol/page.html » typed while the work folder IS cours-cobol: write_file put it at its root (it removes
         the doubled folder), a command does not: the exact path to use."""
@@ -3268,6 +3298,8 @@ class Agent:
             result = fn(**args)
             if name == "run_command" and isinstance(result, str) and "No such file or directory" in result:
                 result += self._apostrophe_hint(str(args.get("command", ""))) + self._folder_twice_hint(str(args.get("command", "")))
+            if name in ("run_command", "process_output") and isinstance(result, str) and re.search(r"No module named|command not found", result):
+                result += self._install_hint(result)
         except TypeError as e:
             if name == "write_file" and "missing" in str(e):
                 # a very long file in one call: its path or its content gets lost on the way — written in parts it works

@@ -594,6 +594,28 @@ class CourseFolderToPdf(unittest.TestCase):
             self.assertIn("Cours complet", r)
 
 
+class InstallAlone(unittest.TestCase):
+    """A missing module or program: the exact way to install it (right package name, in the project's environment or
+    with Homebrew); install requests go to the installer skill."""
+
+    def test_hints(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), auto_yes=True)
+        self.assertIn("opencv-python", a._install_hint("ModuleNotFoundError: No module named 'cv2'"))
+        self.assertIn(".venv", a._install_hint("No module named 'pandas'"))
+        self.assertIn("brew install ffmpeg", a._install_hint("zsh: command not found: ffmpeg"))
+        self.assertIn("brew install gnucobol", a._install_hint("bash: cobc: command not found"))
+        self.assertEqual(a._install_hint("zsh: command not found: monoutil"), "")
+
+    def test_routing(self):
+        import extensions as e
+        name = lambda t: (e.match_skill(t) or {}).get("name")  # noqa: E731
+        if "installer" not in __import__("plugins").triggers():
+            self.skipTest("installer plugin not installed")
+        self.assertEqual(name("installe ffmpeg"), "installer")
+        self.assertEqual(name("installe ce qu'il faut pour lire des fichiers Excel en Python"), "installer")
+        self.assertNotEqual(name("installe le skill pdf"), "installer")
+
+
 class ChatFolder(unittest.TestCase):
     """A conversation with attached files works beside them, not in the last Agent project."""
 

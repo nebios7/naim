@@ -1,0 +1,10 @@
+{
+  "name": "installer",
+  "version": "1.0",
+  "description": "Installer tout seul ce qu'il faut (paquets Python ou JavaScript, outils du Mac) au bon endroit, puis vérifier que ça marche.",
+  "skills": "skills",
+  "triggers": {
+    "installer": "(?<![\\w-])(install\\w*|r[ée]install\\w*|d[ée]sinstall\\w*)\\b(?![^\\n]{0,80}(github\\.com|skills\\.sh|\\bskill\\b|\\bplugin\\b|\\bconnecteur\\b|\\bmcp\\b))|\\b(module ?not ?found|no module named|command not found|commande introuvable|il (me |te )?(faut|manque) (le module|la (librairie|biblioth[eè]que)|le paquet|l'outil))\\b"
+  },
+  "priority": true
+}
