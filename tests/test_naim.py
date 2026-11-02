@@ -817,6 +817,41 @@ class MathsInTheConversation(unittest.TestCase):
             self.assertTrue(self.file_work(m), m)
 
 
+class CheckBeforeDone(unittest.TestCase):
+    """Code changed and not run since: Naim checks it (the project's tests, else the program) before saying it is done,
+    in the Chat and the Agent; a command that only looks (ls, cat) is not a check."""
+
+    def setUp(self):
+        self.t = tempfile.mkdtemp()
+        self.a = naimtools.Agent(self.t, auto_yes=True)
+
+    def test_an_edit_needs_a_run(self):
+        self.a.call_tool("write_file", {"path": "app.py", "content": "print('ok')\n"})
+        self.assertEqual(self.a._code_dirty, "app.py")
+        self.a.call_tool("run_command", {"command": "ls"})
+        self.assertEqual(self.a._code_dirty, "app.py")  # looking is not checking
+        self.assertIn("python3 -m py_compile app.py", self.a.check_note())
+        self.a.call_tool("run_command", {"command": "python3 app.py"})
+        self.assertIsNone(self.a._code_dirty)
+
+    def test_the_projects_tests_first(self):
+        Path(self.t, "tests").mkdir()
+        self.a.call_tool("write_file", {"path": "lib.py", "content": "x = 1\n"})
+        self.assertIn("pytest", self.a.check_note())
+        Path(self.t, "package.json").write_text('{"scripts": {"test": "jest"}}')
+        self.a.call_tool("write_file", {"path": "a.js", "content": "let x = 1\n"})
+        self.assertIn("npm test", self.a.check_note())
+
+    def test_not_code_needs_nothing(self):
+        for f in ("notes.md", "page.html", "data.csv"):
+            self.a.call_tool("write_file", {"path": f, "content": "x\n"})
+        self.assertIsNone(self.a._code_dirty)
+
+    def test_wired_in_chat_and_agent(self):
+        self.assertIn("helper.check_note()", (ROOT / "server.py").read_text())
+        self.assertIn("self.check_note()", (ROOT / "naimtools.py").read_text())
+
+
 class ChatActsUnlessLesson(unittest.TestCase):
     """The Chat may change files for any request; only a lesson or a question is answered in the conversation
     (a rule that waited for a work word left « mets le bouton en rouge » without the tools to do it)."""

@@ -715,6 +715,7 @@ class Agent:
         self._seen, self._notes, self._loops = {}, [], 0
         self._verify_rounds = 0
         self._swift_dirty = None  # folder of an iOS app whose Swift code changed since the last build_run
+        self._code_dirty, self._check_pushbacks = None, 0  # code changed and not run since: checked before « fini »
         self.todos, self._todo_pushbacks, self._todo_reminded = [], 0, False
         self.disabled_skills = set(disabled_skills or ())
         self.run_id = run_id or f"run{int(time.time() * 1000)}"
@@ -3208,6 +3209,35 @@ class Agent:
             futs = {i: pool.submit(self.call_tool, calls[i]["function"]["name"], self._args_of(calls[i])) for i in idx}
             return {i: f.result() for i, f in futs.items()}
 
+    # code that can be run or checked (Swift has its own build step, web pages their own check)
+    CHECK_EXTS = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".sh", ".rb", ".go", ".rs", ".java", ".c", ".cpp", ".php"}
+    # a command that only looks (ls, cat, grep…) does not check the code
+    LOOK_ONLY_RE = re.compile(r"\s*(?:cd [^&;]+(?:&&|;)\s*)?(?:ls|cat|head|tail|grep|rg|find|echo|pwd|wc|open|which|tree)\b(?!.*(?:&&|;|\|)\s*(?:python|node|npm|pytest|bash|sh|go|cargo|make)\b)")
+
+    def check_note(self):
+        """Code was changed and not run since: what to run before saying it is done (the project's tests first)."""
+        path = Path(self._code_dirty)
+        full = path if path.is_absolute() else self.root / path
+        rel = self.rel(full) if full.exists() else str(path)
+        how = None
+        if (self.root / "package.json").exists():
+            try:
+                if json.loads((self.root / "package.json").read_text()).get("scripts", {}).get("test"):
+                    how = "npm test"
+            except (OSError, ValueError):
+                pass
+        if not how and full.suffix == ".py" and ((self.root / "tests").is_dir() or any(self.root.glob("test_*.py"))):
+            how = "python3 -m pytest -q (ou python3 -m unittest si pytest manque)"
+        if not how:
+            how = {".py": f"python3 -m py_compile {rel}, puis lance-le", ".js": f"node --check {rel}, puis lance-le",
+                   ".mjs": f"node --check {rel}, puis lance-le", ".sh": f"bash -n {rel}"}.get(full.suffix, f"compile ou lance {rel}")
+        last = self._check_pushbacks >= 2
+        return (f"Avant de dire que c'est fini : tu as modifié {rel} sans le lancer depuis. Vérifie-le maintenant avec "
+                f"run_command : {how}. Un programme qui tourne sans fin (un serveur) : lance-le avec start_process, puis "
+                "regarde sa sortie. Si ça échoue, corrige et relance. Ensuite seulement, donne le résultat réel"
+                + (" ; si tu ne peux vraiment pas le vérifier, dis clairement dans ta réponse que ce n'est pas vérifié et pourquoi."
+                   if last else "."))
+
     def call_tool(self, name, args):
         fn = {"list_files": self.list_files, "read_file": self.read_file, "write_file": self.write_file,
               "edit_file": self.edit_file, "search": self.search, "run_command": self.run_command,
@@ -3260,6 +3290,10 @@ class Agent:
             self._swift_dirty = str(args["path"]).split("/Sources/")[0] if "/Sources/" in str(args["path"]) else "."
         if name == "simulator" and args.get("action") in ("build_run", "new_app") and str(result).startswith("ok"):
             self._swift_dirty = None
+        if name in ("write_file", "edit_file", "multi_edit") and str(result).startswith("ok") and Path(str(args.get("path", ""))).suffix.lower() in self.CHECK_EXTS:
+            self._code_dirty = str(args["path"])
+        elif name in ("run_command", "start_process") and not self.LOOK_ONLY_RE.match(str(args.get("command") or "")):
+            self._code_dirty = None  # the code was run after the change (tests, the program, a compile)
         if self.hooks and name in ("write_file", "edit_file") and str(result).startswith("ok") and args.get("path"):
             if h := self._run_hooks(args["path"]):
                 result += "\n" + h
@@ -3458,6 +3492,7 @@ class Agent:
         self._refused = None  # a new request: a former refusal does not block it
         """Run one user task to completion; returns the final answer text."""
         started, self._outcome, self._verified = time.time(), "error", None
+        self._code_dirty, self._check_pushbacks = None, 0
         try:
             return self._run(task, images)
         finally:
@@ -3951,6 +3986,11 @@ class Agent:
                         f"path={self._swift_dirty}, corrige les erreurs de compilation s'il y en a, puis "
                         "simulator action=screenshot pour vérifier que l'écran montre ce qui est demandé. "
                         "Seulement ensuite, donne ton résumé.")})
+                    continue
+                if self._code_dirty and not self.plan and not self.subagent and self._check_pushbacks < 3:
+                    self._check_pushbacks += 1
+                    self.emit({"type": "status", "text": "Naim vérifie son travail…"})
+                    self.messages.append({"role": "user", "content": self.check_note()})
                     continue
                 if self.auto_verify and not self.plan and self._verify_rounds < 3:
                     self.emit({"type": "status", "text": "Vérification de l'application…"})

@@ -2422,6 +2422,16 @@ class Handler(BaseHTTPRequestHandler):
                                  "SMS : chercher_contact ou le numéro que je t'ai donné, puis osascript avec Messages ; appel : "
                                  "open \"tel:<numéro>\"). Ne me dis pas de le faire moi-même. Je validerai si on me le demande."})
                 continue
+            if not calls and not stop.is_set() and helper._code_dirty and helper._check_pushbacks < 3:
+                # it changed code and did not run it: it checks before saying it is done (tests, the program), like a developer
+                helper._check_pushbacks += 1
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content})
+                    self.event({"type": "token", "text": "\n\n"})
+                self.event({"type": "status", "text": "Naim vérifie son travail…"})
+                messages.append({"role": "user", "content": helper.check_note()})
+                force_tool = True
+                continue
             left = [x["text"] for x in (getattr(helper, "todos", None) or []) if x.get("status") not in ("done", "skipped")]
             if not calls and not stop.is_set() and left and progress > todo_push_at:
                 # its own list is not finished (a course: 4 chapters and the PDF still to do) and the last steps moved
