@@ -1065,9 +1065,9 @@ class KnowledgeSpeedAmbiguity(unittest.TestCase):
 
     def test_api_error_sends_to_the_docs(self):
         r = self.a.call_tool("run_command", {"command": "python3 -c 'from math import pell'"})
-        self.assertIn("help(m.f)", r)
+        self.assertRegex(r, r"doc\.py|help\(m\.f\)")  # the documentation tool (or Python's help without the plugin)
         r = self.a.call_tool("run_command", {"command": "python3 -c 'from math import pell'"})
-        self.assertNotIn("help(m.f)", r)  # once is enough
+        self.assertNotRegex(r, r"doc\.py|help\(m\.f\)")  # once is enough
 
     def test_long_code_by_its_plan_then_whole(self):
         body = "\n".join(["<html>", "<head>"] + [f"<p>ligne {i} " + "x" * 40 + "</p>" for i in range(300)] + ['<section id="galerie">']
@@ -1101,6 +1101,30 @@ class KnowledgeSpeedAmbiguity(unittest.TestCase):
         with mock.patch("mailer.find_contact", return_value=people):
             b.chercher_contact("Paul")
         self.assertIsNone(getattr(b, "_which_person", None))  # named in full: no question
+
+
+class Documentation(unittest.TestCase):
+    """Checked in the documentation instead of guessed: the installed Python's own help, a name that does not exist with
+    the near ones, a command's manual."""
+    DOC = ROOT / "plugins_builtin/documentation/skills/documentation/doc.py"
+
+    def run_doc(self, *a):
+        return subprocess.run([sys.executable, str(self.DOC), *a], capture_output=True, text=True, timeout=60)
+
+    def test_installed_python(self):
+        r = self.run_doc("python", "datetime.datetime.strftime")
+        self.assertIn("strftime", r.stdout)
+        r = self.run_doc("python", "datetime.datetime.format_date")
+        self.assertIn("n existe pas", r.stdout + r.stderr)
+
+    def test_command_manual(self):
+        self.assertIn("interpreted", self.run_doc("cmd", "python3").stdout.lower())  # its manual
+
+    def test_skill_and_hint(self):
+        import re
+        t = json.loads((ROOT / "plugins_builtin/documentation/plugin.json").read_text())["triggers"]["documentation"]
+        self.assertRegex("quels sont les paramètres de la fonction round", re.compile(t, re.I))
+        self.assertIn("documentation/doc.py", (ROOT / "naimtools.py").read_text())
 
 
 class NetworkAndCamera(unittest.TestCase):

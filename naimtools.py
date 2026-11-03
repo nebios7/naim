@@ -3488,10 +3488,12 @@ class Agent:
             # a function or option that does not exist as it was thought (« cannot import name 'pell' from 'sympy' »): the
             # installed documentation says what exists — not a third version invented at random
             self._api_hinted = True
+            doc = Path.home() / ".naim/plugins/documentation/skills/documentation/doc.py"
             result = str(result) + ("\n\n[Cette fonction, ce module ou cette option n'existe pas comme tu le crois. Vérifie ce qui "
-                                    "existe vraiment avant de réessayer : `python3 -c \"import m; print(dir(m))\"` ou "
-                                    "`python3 -c \"import m; help(m.f)\"`, `<commande> --help`, `node -e \"console.log(Object.keys(require('m')))\"`, "
-                                    "ou web_search « <module> <fonction> documentation ». Puis utilise le vrai nom.]")
+                                    "existe vraiment avant de réessayer : " + (f"`python3 {doc} python <module.fonction>` (ou cmd <commande>, "
+                                    "node <module>, web <sujet> <mot>) — il donne les noms proches qui existent" if doc.exists() else
+                                    "`python3 -c \"import m; print(dir(m))\"`, `python3 -c \"import m; help(m.f)\"`, `<commande> --help`")
+                                    + ", ou web_search « <module> <fonction> documentation ». Puis utilise le vrai nom.]")
         if name == "run_command":
             failed_run = bool(re.match(r"(error|exit code [1-9])", str(result)))
             self._fail_streak = self._fail_streak + 1 if failed_run else 0

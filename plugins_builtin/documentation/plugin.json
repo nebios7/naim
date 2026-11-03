@@ -1,0 +1,9 @@
+{
+  "name": "documentation",
+  "version": "1.0",
+  "description": "Consulter la documentation au lieu de deviner : l'aide de ce qui est installé sur le Mac (Python, commandes, Node), puis les sites officiels (docs.python.org, MDN, nodejs.org…).",
+  "skills": "skills",
+  "triggers": {
+    "documentation": "\\b(documentation|la doc\\b|doc (de|du|officielle)|syntaxe (de|du|exacte)|(comment|pour) (on )?(utilise[rz]?|appelle[rz]?) (la fonction|la m[ée]thode|le module|la biblioth[èe]que|la commande|l'option)|param[èe]tres? (de|du) (la )?(fonction|m[ée]thode|commande)|options? de la commande|quelle(s)? (fonction|option|m[ée]thode)s? (pour|permet))\\b"
+  }
+}
