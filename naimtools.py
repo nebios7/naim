@@ -719,6 +719,7 @@ class Agent:
         self._fail_streak, self._silent_steps = 0, 0  # failed commands in a row; steps that acted without a word
         self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
         self._lost_content = None  # a write_file that lost its path: its content, kept until the path comes
+        self._link_rounds = 0  # links of the final answer tried before it is given
         self._touched = set()  # files read or written in this request: replacing them is the work, not an accident
         self.prior_text = " ".join(str(m.get("content") or "") for m in (history or []))  # the conversation before it
         self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
@@ -1938,6 +1939,34 @@ class Agent:
         (re.compile(r"\bcsrutil\s+disable\b"), "désactivation de la protection du système"),
     ]
 
+    def link_note(self, content):
+        """The local links of the final answer, opened before it is given: a dead one (no server, a wrong path) goes back to
+        the work. '' when they answer."""
+        import urllib.parse
+        if self._link_rounds >= 2:
+            return ""
+        dead = []
+        for url in dict.fromkeys(u.rstrip(".,;:!?)»*`") for u in URL_RE.findall(content or "")):
+            parts = urllib.parse.urlsplit(url)
+            safe = urllib.parse.urlunsplit(parts._replace(path=urllib.parse.quote(urllib.parse.unquote(parts.path))))
+            try:
+                with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(safe, timeout=3) as r:  # local: no proxy
+                    if r.status < 400:
+                        continue
+            except urllib.error.HTTPError as e:
+                if e.code < 400:
+                    continue
+            except (OSError, ValueError):
+                pass
+            dead.append(url)
+        if not dead:
+            return ""
+        self._link_rounds += 1
+        return ("Avant de dire que c'est fini, j'ai ouvert le lien que tu donnes : " + ", ".join(dead) + " ne répond pas "
+                "(aucun serveur lancé, ou mauvais chemin). Une page HTML seule (même en 3D) n'a pas besoin de serveur : donne "
+                "simplement son fichier. Sinon lance le serveur avec start_process, vérifie que le lien répond (wait, puis "
+                "browser), et redonne le bon lien.")
+
     def other_work(self, p):
         """An existing file that this request never read nor wrote, and that nobody named: another piece of work (the
         camera app's index.html replaced by a 3D scene). Not replaced blindly: read first, or write somewhere else."""
@@ -2022,7 +2051,8 @@ class Agent:
         return None
 
     SERVER_RE = re.compile(r"(^|&&|;|\s)(\S*python3?\s+\S*(app|main|server|manage|run)\.py(\s+runserver)?\s*$|flask\s+run|uvicorn\s|gunicorn\s|"
-                           r"npm\s+(run\s+)?(start|dev|serve)|yarn\s+(start|dev)|node\s+\S*(server|app|index)\.m?js\s*$|php\s+-S\s|rails\s+s)")
+                           r"(npm|pnpm)\s+(run\s+)?(start|dev|serve|preview)|yarn\s+(start|dev)|node\s+\S*(server|app|index)\.m?js\s*$|php\s+-S\s|rails\s+s|"
+                           r"python3?\s+-m\s+http\.server|npx\s+(serve|vite|http-server|live-server)\b|jekyll\s+serve|hugo\s+server)")
 
     def run_command(self, command, stdin=None, timeout=120, description=None):  # description: the step title shown
         if err := self._check_blocked(command) or self._check_env(command) or self._guard_own_command(command):
@@ -3776,6 +3806,7 @@ class Agent:
         self._turn_changes, self._claims_checked, self._turn_started = [], False, time.time()
         self.request_text, self._asked_which = str(task or ""), set()
         self._touched = set()
+        self._link_rounds = 0
         try:
             return self._run(task, images)
         finally:
@@ -4272,6 +4303,9 @@ class Agent:
                     continue
                 if not self.plan and not self.subagent and (seen := self.look_note()):
                     self.messages.append({"role": "user", "content": seen})
+                    continue
+                if not self.plan and not self.subagent and (dead := self.link_note(content)):
+                    self.messages.append({"role": "user", "content": dead})
                     continue
                 if self._code_dirty and not self.plan and not self.subagent and self._check_pushbacks < 3:
                     self._check_pushbacks += 1

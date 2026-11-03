@@ -41,12 +41,34 @@ for (let i = 0; i < 260; i++) {
   if (Math.abs(p.z) > limite * 0.6) cap.z = -Math.sign(p.z) * Math.abs(cap.z);
   p.addScaledVector(cap, 0.32); pts.push(p.clone());
 }
+const COULEUR = 0xe3a0a0;   // la couleur demandée, sinon celle du sujet (tableau « Les couleurs »)
 const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 1200, 0.16, 16, false),
-  new THREE.MeshStandardMaterial({ color: 0xe8846b, roughness: 0.45 }));
+  new THREE.MeshStandardMaterial({ color: COULEUR, roughness: 0.45 }));
 monde.add(tube);
 ```
 Pour un organe ou un objet expliqué (anatomie, machine, planète), ajoute en HTML par-dessus le canvas un titre et 2 ou 3
 phrases simples adaptées à l'âge demandé, pas un schéma.
+
+## Les couleurs
+- **La couleur demandée est appliquée** (« le cœur en rouge » → `color: 0xc0392b`), sur l'objet principal.
+- **Sans couleur demandée, la couleur réelle du sujet**, jamais celle d'un exemple recopié. Quelques repères :
+  | Sujet | Couleur |
+  |---|---|
+  | Cœur, muscle | `0x9e2a2b` (rouge sombre) |
+  | Intestin, estomac | `0xe3a0a0` (rose chair) |
+  | Poumons | `0xe8a5a5` (rose clair) |
+  | Foie | `0x7b2d26` (brun rouge) |
+  | Cerveau | `0xe6b8b0` (rose gris) |
+  | Os, dents | `0xe9e2d0` (ivoire) |
+  | Veines / artères | `0x3b5998` / `0xb22222` |
+  | Terre, océan | `0x2a6fdb` ; végétation `0x3c8d3c` |
+- Plusieurs parties : une couleur par partie, et la même couleur dans la légende HTML.
+
+## Les informations : vérifiées avant d'être écrites
+Un sujet scientifique (anatomie, astronomie, biologie, machine) : avant d'écrire les légendes, fais une recherche
+(`web_search` « <sujet> taille enfant », « <organe> parties ») et prends les chiffres et les noms dans des sources
+sérieuses (encyclopédie, site médical ou scientifique). Écris seulement ce que tu as trouvé, avec des mots adaptés à
+l'âge demandé. Si une valeur n'est pas trouvée, ne l'écris pas : n'invente jamais un chiffre.
 
 ## Ce que le modèle fait déjà (à garder)
 - **three.js en version FIXE** par une importmap (`three@0.185.0`, jamais « latest ») ; les extensions viennent de

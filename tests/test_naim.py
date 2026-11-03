@@ -992,6 +992,30 @@ class WorksLikeAColleague(unittest.TestCase):
         self.a.request_text = "corrige notes.txt"  # named by the user: no question
         self.assertTrue(self.a.call_tool("write_file", {"path": "notes.txt", "content": "y"}).startswith("ok"))
 
+    def test_link_opened_before_given(self):
+        # « Ouvre http://127.0.0.1:5050/intestin-grêle/index.html » with no server behind: the dead link goes back to work
+        import http.server, socketserver, threading
+        note = self.a.link_note("C'est prêt : ouvre http://127.0.0.1:9/intestin-grêle/index.html.")
+        self.assertIn("ne répond pas", note)
+        Path(self.a.root, "page.html").write_text("<p>ok</p>")
+        h = lambda *a, **k: http.server.SimpleHTTPRequestHandler(*a, directory=str(self.a.root), **k)  # noqa: E731
+        with socketserver.TCPServer(("127.0.0.1", 0), h) as srv:
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            port = srv.server_address[1]
+            self.assertEqual(self.a.link_note(f"Ouvre http://127.0.0.1:{port}/page.html."), "")
+            srv.shutdown()
+
+    def test_server_command_goes_to_background(self):
+        from unittest import mock
+        with mock.patch.object(self.a, "start_process", return_value="process p1 running") as sp:
+            r = self.a.call_tool("run_command", {"command": "python3 -m http.server 5050 --directory site"})
+        sp.assert_called_once()
+        self.assertIn("background", r)
+        for c in ("npm run dev", "npx vite", "flask run", "cd app && python3 -m http.server"):
+            self.assertTrue(self.a.SERVER_RE.search(c), c)
+        for c in ("python3 server_test.py", "npm test", "ls http.server"):
+            self.assertFalse(self.a.SERVER_RE.search(c), c)
+
     def test_lost_path_keeps_the_content(self):
         # 957 lines sent without their path: kept, then saved with the path alone — never generated a second time
         page = "<html>\n" + "<p>ligne</p>\n" * 900 + "</html>\n"
@@ -1205,6 +1229,9 @@ class ThreeD(unittest.TestCase):
         s = (ROOT / "plugins_builtin/threejs/skills/threejs-3d/SKILL.md").read_text()
         self.assertIn("TubeGeometry(courbe, segmentsLongueur, rayon, segmentsTour, fermé)", s)
         self.assertIn("propre dossier", s)
+        self.assertIn("La couleur demandée est appliquée", s)  # « le cœur en rouge »: red; not the example's orange
+        self.assertNotIn("0xe8846b", s)
+        self.assertIn("web_search", s)  # the facts of a labelled scene are looked up, never invented
 
     def test_chosen(self):
         import extensions as e, plugins
