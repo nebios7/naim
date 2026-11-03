@@ -718,6 +718,7 @@ class Agent:
         self._code_dirty, self._check_pushbacks = None, 0  # code changed and not run since: checked before « fini »
         self._fail_streak, self._silent_steps = 0, 0  # failed commands in a row; steps that acted without a word
         self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
+        self._lost_content = None  # a write_file that lost its path: its content, kept until the path comes
         self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
         self.request_text, self._asked_which = "", set()  # the user's request; the names already asked about
         self._read_whole = set()  # long code files already shown by their plan: asked again, given whole
@@ -3572,6 +3573,11 @@ class Agent:
                     "arguments; for a long file, write it in parts of about 150 lines: the first with write_file, each next one "
                     "with write_file(path, content=<next part>, append=true).")
         cut = isinstance(args, dict) and args.pop("_maybe_cut", False)
+        if name == "write_file" and isinstance(args, dict) and self._lost_content and args.get("path") \
+                and not str(args.get("content") or "").strip() and not args.get("append"):
+            # the path of the call that lost it: the content kept is written, not generated a second time (957 lines = 30 min)
+            args["content"], cut = self._lost_content
+            self._lost_content = None
         if name == "run_command" and isinstance(args, dict) and (hit := self._joint_hit(args.get("command"))):
             return self.JOINT_KEEP.format(name=hit.name, stem=hit.stem, suffix=hit.suffix)
         try:
@@ -3583,6 +3589,12 @@ class Agent:
         except TypeError as e:
             if name == "write_file" and "missing" in str(e):
                 # a very long file in one call: its path or its content gets lost on the way — written in parts it works
+                content = args.get("content") if isinstance(args, dict) else None
+                if "'path'" in str(e) and isinstance(content, str) and content.strip():
+                    self._lost_content = (content, cut)
+                    return (f"error: your write_file call lost its path, but its content ({content.count(chr(10)) + 1} lines) "
+                            "is kept: do NOT write it again. Call write_file(path=\"<the file>\", content=\"\") — only the "
+                            "path, content empty — and the kept content is saved there.")
                 last = getattr(self, "_last_written", None)
                 to = (f"To add this part at the end of {last}: write_file(path=\"{last}\", content=<this part>, append=true). "
                       if last else "")

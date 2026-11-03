@@ -974,6 +974,17 @@ class WorksLikeAColleague(unittest.TestCase):
             self.assertIn("cassée", self.a.look_note())
         self.assertTrue(au.call_args[0][0].endswith("/index.html"))
 
+    def test_lost_path_keeps_the_content(self):
+        # 957 lines sent without their path: kept, then saved with the path alone — never generated a second time
+        page = "<html>\n" + "<p>ligne</p>\n" * 900 + "</html>\n"
+        r = self.a.call_tool("write_file", {"content": page})
+        self.assertIn("is kept", r)
+        r = self.a.call_tool("write_file", {"path": "landing.html", "content": ""})
+        self.assertTrue(r.startswith("ok"), r)
+        self.assertEqual((Path(self.a.root) / "landing.html").read_text(), page)
+        r = self.a.call_tool("write_file", {"path": "vide.txt", "content": ""})  # kept once only
+        self.assertEqual((Path(self.a.root) / "vide.txt").read_text(), "")
+
     def test_long_page_seen_screen_by_screen(self):
         # a landing page is 4 to 8 screens high: squeezed into one image it was 147 px wide, unreadable (« page incomplète »);
         # and the capture grows the window to the whole page, so a 100vh hero must stay one screen high
