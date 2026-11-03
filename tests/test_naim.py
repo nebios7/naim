@@ -1008,6 +1008,14 @@ class NetworkAndCamera(unittest.TestCase):
         self.assertNotRegex(srv, r"192\.168\.\d+\.\d+")  # no address written in
         self.assertIn("CAM_PASS", (d / "sonde.py").read_text())  # the login from the environment, never in a file
         self.assertIn("modele/", (d / "SKILL.md").read_text())
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cam_modele", d / "modele/server.py")
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        self.assertEqual(m.hide("input rtsp://user:secret@192.0.2.10:554/."), "input rtsp://•••@192.0.2.10:554/.")  # never on screen
+        self.assertIn("stream1", m.PATHS)  # an empty path is found by itself
+        self.assertIn("camera.json", (d / "SKILL.md").read_text())  # pre-filled without reading the long page (4 min)
+        self.assertIn("/api/config", (d / "modele/index.html").read_text())
 
 
 class NoLoopsInAnswers(unittest.TestCase):
