@@ -1055,6 +1055,41 @@ class RightQuestions(unittest.TestCase):
         self.assertIn("ONE question with ask_user", note)
 
 
+class KnowledgeSpeedAmbiguity(unittest.TestCase):
+    """An API that is not what it was thought: the installed documentation first. Files still read whole (nothing is
+    cut). Several contacts: asked before a message or a call."""
+
+    def setUp(self):
+        self.t = tempfile.mkdtemp()
+        self.a = naimtools.Agent(self.t, auto_yes=True)
+
+    def test_api_error_sends_to_the_docs(self):
+        r = self.a.call_tool("run_command", {"command": "python3 -c 'from math import pell'"})
+        self.assertIn("help(m.f)", r)
+        r = self.a.call_tool("run_command", {"command": "python3 -c 'from math import pell'"})
+        self.assertNotIn("help(m.f)", r)  # once is enough
+
+    def test_files_read_whole(self):
+        # « non tu réduis rien »: a long file is read whole when asked (no cut to save time)
+        Path(self.t, "long.txt").write_text("".join(f"ligne {i}\n" for i in range(1, 801)))
+        self.assertIn("ligne 800", self.a.read_file("long.txt"))
+
+    def test_two_contacts_asked_before_sending(self):
+        from unittest import mock
+        people = [{"nom": "Paul Martin", "email": "pm@example.com"}, {"nom": "Paul Durand", "email": "pd@example.com"}]
+        self.a.request_text = "envoie le rapport à Paul"
+        with mock.patch("mailer.find_contact", return_value=people):
+            self.assertIn("ask_user", self.a.chercher_contact("Paul"))
+        r = self.a.call_tool("send_email", {"to": "pd@example.com", "subject": "Rapport", "body": "x"})
+        self.assertIn("plusieurs personnes correspondent", r)
+        self.a._which_person = None  # what ask_user does: the next sending follows the answer
+        b = naimtools.Agent(self.t, auto_yes=True)
+        b.request_text = "envoie le rapport à Paul Durand"
+        with mock.patch("mailer.find_contact", return_value=people):
+            b.chercher_contact("Paul")
+        self.assertIsNone(getattr(b, "_which_person", None))  # named in full: no question
+
+
 class NetworkAndCamera(unittest.TestCase):
     """« analyse mon réseau », « une app pour ma caméra »: a read-only scan of the user's own network, a probe for the RTSP
     path, and a verified camera app to copy (one ffmpeg, its messages in a file so that it never freezes)."""

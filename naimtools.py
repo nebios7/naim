@@ -2929,7 +2929,10 @@ class Agent:
         lines = [f"- {c['nom']} <{c['email']}>" for c in found[:10]]
         lines += [f"- {c['nom']} · téléphone {c['tel']}" + (f" ({c['label']})" if c.get("label") else "") for c in phones[:10]]
         names = {c["nom"] for c in found + phones}
-        return "\n".join(lines) + ("\nPlusieurs personnes : demande à l'utilisateur laquelle." if len(names) > 1 else "") + (
+        if len(names) > 1 and sum(n.lower() in (self.request_text or "").lower() for n in names) != 1:
+            self._which_person = sorted(names)  # a message or a call is held until the user says which one
+        return "\n".join(lines) + ("\nPlusieurs personnes : demande à l'utilisateur laquelle avec ask_user (ces noms en options), "
+                                    "avant d'envoyer ou d'appeler." if len(names) > 1 else "") + (
             "\nPour un SMS, un iMessage ou un appel : utilise le NUMÉRO (jamais le nom)." if phones else "")
 
     def modifier_contact(self, nom, nouveau, ancien=""):
@@ -3329,6 +3332,11 @@ class Agent:
                         f"demande à l'utilisateur lequel avec ask_user (ces fichiers en options), puis fais-le sur celui qu'il choisit.")
         return ""
 
+    API_ERROR_RE = re.compile(r"cannot import name|has no attribute|ModuleNotFoundError|No module named|unexpected keyword argument|"
+                              r"got an unexpected|takes \d+ positional|missing \d+ required|is not a function|is not defined|"
+                              r"Cannot find module|unrecognized (option|arguments?)|[Uu]nknown option|invalid option|illegal option|"
+                              r"command not found|no such option|Unrecognized option")
+
     def speak_note(self, content, calls):
         """Several steps that acted without a word: one sentence for the user, like a colleague who says where they are."""
         self._silent_steps = self._silent_steps + 1 if calls and not (content or "").strip() else 0
@@ -3422,6 +3430,13 @@ class Agent:
                 return f"blocked by the user's hook (PreToolUse): {msg} — do not do it another way; adapt or ask the user."
         if name in ("write_file", "edit_file", "multi_edit", "delete_file") and (which := self.which_file(args.get("path"))):
             return which
+        if name == "ask_user":
+            self._which_person = None  # the user is asked: what is sent next follows the answer
+        elif getattr(self, "_which_person", None) and (name == "send_email" or (name == "run_command" and re.search(
+                r"tel:|facetime|Messages|send .* to (participant|buddy)", str(args.get("command") or ""), re.I))):
+            who = self._which_person
+            return (f"refused: plusieurs personnes correspondent ({', '.join(who[:6])}). Ne choisis pas au hasard : demande à "
+                    "l'utilisateur laquelle avec ask_user (ces noms en options), puis envoie ou appelle celle qu'il choisit.")
         self._allow_once = rule == "allow"
         try:
             result = self._dispatch(name, args, fn)
@@ -3448,6 +3463,15 @@ class Agent:
                     self._turn_changes.append(f"{args.get('path')} : remplacé {str(e.get('old_text'))[:120]!r} par {str(e.get('new_text'))[:200]!r}")
         elif ok and name in ("run_command", "start_process") and re.search(r"\b(cp|mv|mkdir|ln|touch|tee|sed -i|>)\b|>", str(args.get("command") or "")):
             self._turn_changes.append(f"commande : {str(args.get('command'))[:240]}")
+        if name == "run_command" and re.match(r"exit code [1-9]", str(result)) and self.API_ERROR_RE.search(str(result)) \
+                and not getattr(self, "_api_hinted", False):
+            # a function or option that does not exist as it was thought (« cannot import name 'pell' from 'sympy' »): the
+            # installed documentation says what exists — not a third version invented at random
+            self._api_hinted = True
+            result = str(result) + ("\n\n[Cette fonction, ce module ou cette option n'existe pas comme tu le crois. Vérifie ce qui "
+                                    "existe vraiment avant de réessayer : `python3 -c \"import m; print(dir(m))\"` ou "
+                                    "`python3 -c \"import m; help(m.f)\"`, `<commande> --help`, `node -e \"console.log(Object.keys(require('m')))\"`, "
+                                    "ou web_search « <module> <fonction> documentation ». Puis utilise le vrai nom.]")
         if name == "run_command":
             failed_run = bool(re.match(r"(error|exit code [1-9])", str(result)))
             self._fail_streak = self._fail_streak + 1 if failed_run else 0
