@@ -57,9 +57,9 @@ def alive(ip):
     return ip if any(knock(ip, p) for p in (554, 80, 8554, 443)) else None
 
 
-def open_ports(ip, ports=PORTS):
+def open_ports(ip, ports=PORTS, wait=0.35):
     def one(p):
-        return p if knock(ip, p, 0.35) else None
+        return p if knock(ip, p, wait) else None
     with ThreadPoolExecutor(32) as ex:
         return sorted(p for p in ex.map(one, ports) if p)
 
@@ -105,7 +105,8 @@ def main():
         ip = sys.argv[1]
         if not ipaddress.ip_address(ip).is_private:
             sys.exit("Seules les adresses du réseau local (privées) sont testées.")
-        ports = open_ports(ip, {**PORTS, **{p: "" for p in (21, 23, 81, 88, 3000, 5543, 7070, 8001, 8081, 8088, 10554)}})
+        # one device: more time for each port (a camera answers its RTSP port slowly)
+        ports = open_ports(ip, {**PORTS, **{p: "" for p in (21, 23, 81, 88, 3000, 5543, 7070, 8001, 8081, 8088, 10554)}}, wait=1.5)
         print(f"{ip} {host(ip)} — ports ouverts : " + (", ".join(f"{p} {PORTS.get(p, '')}".strip() for p in ports) or "aucun des ports testés"))
         if CAMERA & set(ports):
             print("→ Caméra probable : teste son flux avec le skill camera-ip (sonde.py " + ip + ").")

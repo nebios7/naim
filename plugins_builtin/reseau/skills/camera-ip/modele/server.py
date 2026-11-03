@@ -60,9 +60,25 @@ def stop_locked():
     state.update(running=False, recording=False, file="")
 
 
+def codec(url):
+    """The camera's video format (h264, hevc…), asked once before the first start; '' if it cannot be read."""
+    src = ["-rtsp_transport", cfg.get("transport", "tcp")] if url.startswith("rtsp") else []
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", *src, "-select_streams", "v:0", "-show_entries", "stream=codec_name",
+                            "-of", "csv=p=0", url], capture_output=True, text=True, timeout=12)
+        return r.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
 def start_locked(record):
     global proc
     stop_locked()
+    if not cfg.get("reencode") and "codec" not in cfg:
+        # browsers play H.264 live, not HEVC (H.265, frequent on cheap cameras): re-encoded by itself, nothing to tick
+        cfg["codec"] = codec(source_url(cfg))
+        if cfg["codec"] and cfg["codec"] != "h264":
+            cfg["reencode"] = True
     for f in HLS.glob("*"):
         f.unlink(missing_ok=True)
     url = source_url(cfg)
@@ -76,7 +92,8 @@ def start_locked(record):
         cmd += [*video_out(), "-movflags", "+frag_keyframe+empty_moov", str(MEDIA / name)]
     # its messages go to a file: in a pipe nobody reads, they filled it after a while and ffmpeg froze (no more image)
     proc = subprocess.Popen(cmd, stderr=open(HERE / "ffmpeg.log", "wb"))
-    state.update(running=True, recording=record, file=name, since=int(time.time()), error="")
+    state.update(running=True, recording=record, file=name, since=int(time.time()), error="",
+                 video=cfg.get("codec", ""), reencode=bool(cfg.get("reencode")))
     threading.Thread(target=watch, args=(proc,), daemon=True).start()
 
 

@@ -93,7 +93,7 @@
         <div><label for="transport">Transport</label><select id="transport"><option value="tcp">TCP (stable)</option><option value="udp">UDP</option></select></div>
         <div></div>
       </div>
-      <label class="check"><input type="checkbox" id="reencode"> Ré-encoder en H.264 (si l'image ne s'affiche pas)</label>
+      <label class="check"><input type="checkbox" id="reencode"> Toujours ré-encoder en H.264 (fait tout seul pour une caméra HEVC)</label>
       <div class="bar">
         <button class="primary" id="start">Démarrer</button>
         <button id="stop" disabled>Arrêter</button>
@@ -232,7 +232,7 @@ async function refresh() {
   try { st = await api("/api/status"); } catch { $("status").textContent = "Serveur injoignable"; return; }
   $("dot").className = "dot" + (st.recording ? " rec" : st.running ? " on" : "");
   $("status").textContent = st.recording ? "Enregistre" : st.running ? "En direct" : "Arrêtée";
-  $("recinfo").textContent = st.recording ? st.file : "";
+  $("recinfo").textContent = st.recording ? st.file : st.running && st.video ? `${st.video.toUpperCase()}${st.reencode ? " → H.264" : ""}` : "";
   $("rec").classList.toggle("recording", st.recording); $("rec").querySelector("span").textContent = st.recording ? "Arrêter l'enregistrement" : "Enregistrer";
   for (const b of ["photo", "rec", "full", "stop"]) $(b).disabled = !st.running;
   if (st.error && st.error !== $("err").dataset.last) { $("err").dataset.last = st.error; $("err").textContent = "Le flux s'est arrêté : " + st.error; log("Erreur : " + st.error.split("\n")[0]); }
