@@ -29,7 +29,7 @@ Le modèle a déjà : connexion (adresse, port, identifiant, mot de passe, chemi
 enregistrement MP4, plein écran, rotation, miroir, luminosité, contraste, zoom, détection de mouvement avec photo
 automatique, galerie (voir, télécharger, supprimer), espace disque, journal. Ne le réécris pas : ajoute seulement
 ce que l'utilisateur demande en plus (edit_file), sans casser l'existant. Pré-remplis l'adresse trouvée et le chemin
-dans les `placeholder` de index.html si tu veux, jamais le mot de passe.
+avec `value="…"` dans index.html (un `placeholder` n'est qu'un exemple grisé, il ne remplit rien), jamais le mot de passe. Le chemin peut rester vide : l'application le trouve toute seule.
 
 Ce qui fait que ça marche, à garder si tu modifies :
 - une seule commande ffmpeg à la fois (`start_locked` arrête l'ancienne avant) ; l'enregistrement relance ffmpeg
@@ -42,7 +42,10 @@ Ce qui fait que ça marche, à garder si tu modifies :
 ```bash
 start_process command="python3 server.py" keep=true      # dans <dossier> ; PORT=… pour un autre port
 ```
-Puis `curl -s localhost:8099/api/status`, ouvre http://localhost:8099 dans l'Aperçu, et vérifie le direct
+Le port 8099 déjà pris (une autre application) : le serveur prend tout seul le suivant libre et l'écrit
+(« ouvre http://localhost:8100 ») — utilise CETTE adresse. N'arrête jamais un programme que tu n'as pas lancé sans
+le demander à l'utilisateur.
+Puis `curl -s localhost:<port>/api/status`, ouvre http://localhost:8099 dans l'Aperçu, et vérifie le direct
 (`curl -s localhost:8099/hls/live.m3u8` liste des .ts après quelques secondes). Sans la caméra sous la main, essaie
 avec une vidéo : `ffmpeg -f lavfi -i testsrc=size=640x360:rate=25 -t 20 -c:v libx264 -g 25 -pix_fmt yuv420p test.mp4`
 puis `curl -X POST localhost:8099/api/start -d '{"url": "<chemin>/test.mp4"}'`.

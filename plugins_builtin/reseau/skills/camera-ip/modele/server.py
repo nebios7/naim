@@ -220,8 +220,15 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     if not shutil.which("ffmpeg"):
         raise SystemExit("ffmpeg manque : brew install ffmpeg")
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Caméra : ouvre http://localhost:{PORT} — médias dans {MEDIA}")
+    for port in range(PORT, PORT + 20):  # the port already taken (another app): the next free one, never another's stopped
+        try:
+            srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            break
+        except OSError:
+            continue
+    else:
+        raise SystemExit(f"Aucun port libre entre {PORT} et {PORT + 19}")
+    print(f"Caméra : ouvre http://localhost:{port} — médias dans {MEDIA}", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
