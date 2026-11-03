@@ -293,7 +293,7 @@ READ_ONLY = {"look_at", "list_files", "find_files", "chercher_sur_mac", "cherche
              "mail_inbox"}
 
 PORT_RE = re.compile(r"\b(?:port|listening on|écoute sur)\s*[:=]?\s*(\d{4,5})\b", re.I)
-URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(?::\d+)?[^\s'\"<>)]*")
+URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(?::\d+)?[^\s'\"<>)\x1b]*")  # never the colour code after it
 
 
 RAW_CALL_RE = re.compile(r"<tool_call>\s*<function=([\w.-]+)>(.*?)(?:</function>\s*(?:</tool_call>|$)|$)", re.S)
@@ -719,6 +719,8 @@ class Agent:
         self._fail_streak, self._silent_steps = 0, 0  # failed commands in a row; steps that acted without a word
         self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
         self._lost_content = None  # a write_file that lost its path: its content, kept until the path comes
+        self._touched = set()  # files read or written in this request: replacing them is the work, not an accident
+        self.prior_text = " ".join(str(m.get("content") or "") for m in (history or []))  # the conversation before it
         self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
         self.request_text, self._asked_which = "", set()  # the user's request; the names already asked about
         self._read_whole = set()  # long code files already shown by their plan: asked again, given whole
@@ -1311,6 +1313,8 @@ class Agent:
                 return (f"refused: {self.rel(p)} is being written in parts and this would erase its beginning "
                         f"({p.read_text(errors='replace').count(chr(10)) + 1} lines already). To ADD this part at the end: "
                         f"write_file(path=\"{self.rel(p)}\", content=<this part>, append=true). To change a passage: edit_file.")
+        if not append and (err := self.other_work(p)):
+            return err
         if self.PLACEHOLDER_RE.search(content or ""):
             return ("refused: this content is a placeholder, not the real file. Write the complete, real content "
                     "of the file (or leave it as it is if it is already done).")
@@ -1933,6 +1937,42 @@ class Agent:
         (re.compile(r"\bchmod\s+(-R\s+)?0*00\s+/(\s|$)|\bchown\s+-R\s+\S+\s+/(\s|$)"), "permissions du système détruites"),
         (re.compile(r"\bcsrutil\s+disable\b"), "désactivation de la protection du système"),
     ]
+
+    def other_work(self, p):
+        """An existing file that this request never read nor wrote, and that nobody named: another piece of work (the
+        camera app's index.html replaced by a 3D scene). Not replaced blindly: read first, or write somewhere else."""
+        try:
+            if not p.is_file() or p.stat().st_size == 0 or str(p) in self._touched or str(p) in APPENDED:
+                return ""
+        except OSError:
+            return ""
+        said = f"{self.request_text} {self.prior_text}"
+        if p.name in said or self.rel(p) in said:
+            return ""
+        title = re.search(r"<title>([^<]{1,80})</title>", p.read_text(errors="replace")[:3000], re.I)
+        what = f" (« {title.group(1).strip()} »)" if title else ""
+        return (f"refused: {self.rel(p)} already exists{what} and you have not read it: it is probably another piece of work "
+                f"in this folder. Do not replace it. For a NEW work, put it in its own folder named after it "
+                f"(for example <sujet>/{p.name}); if this file really is the one to change, read_file it first, then edit it.")
+
+    def _copy_over(self, command):
+        """« cp modele.html dossier/index.html » onto another work's file: the same rule as write_file."""
+        import shlex
+        if not re.match(r"\s*(cp|mv)\s", command) or re.search(r"[|;&<>]", command):
+            return ""
+        try:
+            parts = [x for x in shlex.split(command)[1:] if not x.startswith("-")]
+        except ValueError:
+            return ""
+        if len(parts) != 2:
+            return ""
+        try:
+            src, dest = Path(os.path.expandvars(os.path.expanduser(parts[0]))), self.resolve(os.path.expandvars(parts[1]), read=True)
+        except ValueError:
+            return ""
+        if dest.is_dir():
+            dest = dest / src.name
+        return self.other_work(dest)
 
     def _guard_own_path(self, p, verb):
         """Changing a file of Naim itself: only with the user's explicit yes (in every mode). None = allowed."""
@@ -3507,6 +3547,12 @@ class Agent:
                                         "ligne, puis prends une méthode connue — la recette d'un skill (use_skill), une bibliothèque "
                                         "standard, ou web_search « <le problème> python » pour la méthode établie — ou simplifie "
                                         "le script pour isoler ce qui casse.]")
+        if name in ("read_file", "write_file", "edit_file", "multi_edit") and args.get("path") \
+                and not str(result).startswith(("error", "refused", "denied")):
+            try:
+                self._touched.add(str(self.resolve(args["path"], read=True)))
+            except ValueError:
+                pass
         if name in ("write_file", "edit_file", "multi_edit") and str(result).startswith("ok") and Path(str(args.get("path", ""))).suffix.lower() in (".html", ".htm", ".css"):
             self._page_dirty = str(args["path"])
         if name in ("write_file", "edit_file", "multi_edit") and str(result).startswith("ok") and Path(str(args.get("path", ""))).suffix.lower() in self.CHECK_EXTS:
@@ -3580,6 +3626,8 @@ class Agent:
             self._lost_content = None
         if name == "run_command" and isinstance(args, dict) and (hit := self._joint_hit(args.get("command"))):
             return self.JOINT_KEEP.format(name=hit.name, stem=hit.stem, suffix=hit.suffix)
+        if name == "run_command" and isinstance(args, dict) and (err := self._copy_over(str(args.get("command") or ""))):
+            return err
         try:
             result = fn(**args)
             if name == "run_command" and isinstance(result, str) and re.search(r"No such file or directory|FileNotFoundError|introuvable", result):
@@ -3727,6 +3775,7 @@ class Agent:
         self._code_dirty, self._check_pushbacks = None, 0
         self._turn_changes, self._claims_checked, self._turn_started = [], False, time.time()
         self.request_text, self._asked_which = str(task or ""), set()
+        self._touched = set()
         try:
             return self._run(task, images)
         finally:

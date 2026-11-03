@@ -188,6 +188,11 @@ LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, 
 
 
 SIM_BLOCK_RE = re.compile(r"```simulation[ \t]*\n(.*?)```", re.S)
+# a ```mermaid block, with the title line just before it (« **Architecture de la scène :** »)
+MERMAID_BLOCK_RE = re.compile(r"(\n[^\n]{0,80}:\**[ \t]*\n)?\n*```mermaid[ \t]*\n.*?```[ \t]*", re.S)
+DIAGRAM_ASK_RE = re.compile(r"\b(sch[ée]ma\w*|diagramme\w*|organigramme|flowchart|logigramme|graphe|arbre|carte mentale|mind ?map"
+                            r"|mermaid|frise|chronologie|architecture|[ée]tapes? en image|cycle|processus|workflow|s[ée]quence"
+                            r"|gantt|r[ée]seau de|relations? entre)\b", re.I)
 
 
 def sim_dir():
@@ -2151,7 +2156,7 @@ class Handler(BaseHTTPRequestHandler):
         "what was just asked. Ask only when the choice changes the result a lot and you cannot know it (who to send to, which "
         "of several files, a personal value, an action that cannot be undone): then ONE question with ask_user, 2-4 concrete "
         "options, the recommended one first.\nA diagram or schema asked in the "
-        "conversation: draw it IN your reply as a ```mermaid code block (the app shows it as a real diagram, with SVG/PNG "
+        "conversation (only when asked: never add one on your own): draw it IN your reply as a ```mermaid code block (the app shows it as a real diagram, with SVG/PNG "
         "export). Keep it readable: 8-20 boxes, short French labels, no special characters inside labels. When it shows "
         "facts (models, companies, numbers, dates), check them first with web_search: never invent a figure.")
 
@@ -2210,6 +2215,7 @@ class Handler(BaseHTTPRequestHandler):
         run_id = body.get("run_id") or helper.run_id
         helper.set_conversation(body.get("conv_id"))  # its background jobs report there; its own draft folder
         helper._bg_intent = bool(Agent.BG_INTENT_RE.search(body.get("message") or ""))
+        helper.prior_text = " ".join(str(m.get("content") or "") for m in (body.get("history") or []))
         helper.request_text = body.get("message") or ""  # « le fichier de Paul » with two Paul: asked, not chosen at random
         with _lock:
             _agents[run_id] = helper  # « écris pour guider Naim » reaches this reply too
@@ -2539,6 +2545,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "token", "text": clean[shown:]})
                 helper._spoke = True
             content = clean
+            if not calls and MERMAID_BLOCK_RE.search(content) and not DIAGRAM_ASK_RE.search(
+                    " ".join([body["message"] or ""] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
+                                                       if m.get("role") == "user"])):
+                # a diagram nobody asked for (« Architecture de la scène » under a 3D page): noise in the answer, taken out
+                kept = re.sub(r"\n{3,}", "\n\n", MERMAID_BLOCK_RE.sub("", content)).rstrip()
+                self.event({"type": "retract", "chars": max(shown, len(content))})
+                self.event({"type": "token", "text": kept})
+                content, shown = kept, len(kept)
             if not calls and not stop.is_set() and nudges < 2 and (
                     not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400) or ends_announcing(content)
                     or (file_work and not used_tools and asks_permission(content))):

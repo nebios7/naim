@@ -974,6 +974,24 @@ class WorksLikeAColleague(unittest.TestCase):
             self.assertIn("cassée", self.a.look_note())
         self.assertTrue(au.call_args[0][0].endswith("/index.html"))
 
+    def test_another_work_not_replaced(self):
+        # a new 3D scene copied over the camera app's index.html (the last folder used): refused, read first or elsewhere
+        cam = Path(self.a.root) / "index.html"
+        cam.write_text("<html><head><title>Caméra</title></head><body>app</body></html>")
+        self.a.request_text, self.a.prior_text = "fais-moi l'intestin grêle en 3D", ""
+        r = self.a.call_tool("write_file", {"path": "index.html", "content": "<p>3D</p>"})
+        self.assertTrue(r.startswith("refused") and "Caméra" in r and "own folder" in r, r)
+        r = self.a.call_tool("run_command", {"command": f'cp "{cam}" "{self.a.root}/index.html"'})
+        self.assertTrue(r.startswith("refused"), r)
+        r = self.a.call_tool("write_file", {"path": "intestin/index.html", "content": "<p>3D</p>"})  # its own folder: fine
+        self.assertTrue(r.startswith("ok"), r)
+        self.a.call_tool("read_file", {"path": "index.html"})  # read: changing it is the work
+        self.assertTrue(self.a.call_tool("write_file", {"path": "index.html", "content": "<p>v2</p>"}).startswith("ok"))
+        other = Path(self.a.root) / "notes.txt"
+        other.write_text("x")
+        self.a.request_text = "corrige notes.txt"  # named by the user: no question
+        self.assertTrue(self.a.call_tool("write_file", {"path": "notes.txt", "content": "y"}).startswith("ok"))
+
     def test_lost_path_keeps_the_content(self):
         # 957 lines sent without their path: kept, then saved with the path alone — never generated a second time
         page = "<html>\n" + "<p>ligne</p>\n" * 900 + "</html>\n"
@@ -1177,6 +1195,17 @@ class ThreeD(unittest.TestCase):
             self.assertIn(must, m)
         self.assertIn("modele.html", (d / "SKILL.md").read_text())
 
+    def test_framed_and_checked(self):
+        # « l'intestin grêle en 3D »: a tube of 0 sides and 39 units off-centre — three dots passing by. The model centres
+        # and frames whatever is built, and says in the console what is empty, tiny or out of view
+        m = (ROOT / "plugins_builtin/threejs/skills/threejs-3d/modele.html").read_text()
+        for must in ("const monde = new THREE.Group()", "function cadrer(", "cadrer(monde)", "function verifier(",
+                     "sans triangles", "hors du champ", "// ---- la scène", "// ---- fin de la scène"):
+            self.assertIn(must, m)
+        s = (ROOT / "plugins_builtin/threejs/skills/threejs-3d/SKILL.md").read_text()
+        self.assertIn("TubeGeometry(courbe, segmentsLongueur, rayon, segmentsTour, fermé)", s)
+        self.assertIn("propre dossier", s)
+
     def test_chosen(self):
         import extensions as e, plugins
         plugins.ensure_builtin()
@@ -1249,6 +1278,26 @@ class NetworkAndCamera(unittest.TestCase):
         page = (ROOT / "web/index.html").read_text()
         self.assertIn("&& !reply.appUrl)", page)  # the running app stays in the preview, its bare page not opened over it
         self.assertIn("x.cwd === dir", page)  # a click on the page of a running app opens the app
+
+
+class NoUnaskedDiagram(unittest.TestCase):
+    """« l'intestin en 3D » answered with an « Architecture de la scène » mermaid diagram: a diagram nobody asked for is
+    taken out of the answer; asked for, it stays. And a server's URL never carries the colour code printed after it."""
+
+    def test_unasked_diagram_out(self):
+        import server
+        t = ("La page est prête.\n\n**Architecture de la scène :**\n```mermaid\ngraph LR\n    A --> B\n```\n\n"
+             "Glisse pour tourner.")
+        out = server.MERMAID_BLOCK_RE.sub("", t)
+        self.assertNotIn("mermaid", out)
+        self.assertNotIn("Architecture", out)
+        self.assertIn("Glisse pour tourner.", out)
+        self.assertIsNone(server.DIAGRAM_ASK_RE.search("fais-moi l’intestin grêle en 3D d’un enfant de 3 ans"))
+        self.assertIsNotNone(server.DIAGRAM_ASK_RE.search("fais un schéma du cycle de l'eau"))
+        self.assertIn("MERMAID_BLOCK_RE.sub", (ROOT / "server.py").read_text())
+
+    def test_url_without_colour_code(self):
+        self.assertEqual(naimtools.URL_RE.search("Serving at http://localhost:5050/\x1b[0m").group(0), "http://localhost:5050/")
 
 
 class NoLoopsInAnswers(unittest.TestCase):

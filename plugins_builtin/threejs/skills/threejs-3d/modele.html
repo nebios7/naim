@@ -53,15 +53,56 @@ const soleil = new THREE.DirectionalLight(0xffffff, 2.2);
 soleil.position.set(3, 4, 5);
 scene.add(soleil);
 
+// TOUT ce qu'on dessine va dans « monde » : il est centré et cadré d'un coup, quelle que soit sa taille
+const monde = new THREE.Group();
+scene.add(monde);
+
+// ---- la scène : remplace seulement ce bloc ----
 const objet = new THREE.Mesh(
   new THREE.TorusKnotGeometry(1.1, 0.34, 220, 32),
   new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.35, metalness: 0.15 })
 );
-scene.add(objet);
+monde.add(objet);
+// ---- fin de la scène ----
 
 const controles = new OrbitControls(camera, renderer.domElement);
 controles.enableDamping = true;            // le mouvement s'arrête en douceur
-controles.minDistance = 3; controles.maxDistance = 12;
+
+// centre l'objet sur l'origine et recule la caméra pour qu'il remplisse la vue (un objet de 40 unités comme de 0,5)
+function cadrer(groupe) {
+  const boite = new THREE.Box3().setFromObject(groupe);
+  if (boite.isEmpty()) return;
+  const centre = boite.getCenter(new THREE.Vector3());
+  groupe.children.forEach((c) => c.position.sub(centre));
+  const rayon = boite.getBoundingSphere(new THREE.Sphere()).radius;
+  const distance = rayon / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * 1.1;
+  camera.position.set(0, rayon * 0.35, distance);
+  camera.near = distance / 100; camera.far = distance * 10;
+  camera.updateProjectionMatrix();
+  controles.target.set(0, 0, 0);
+  controles.minDistance = distance * 0.4; controles.maxDistance = distance * 3;
+}
+cadrer(monde);
+
+// vérification : ce qui est invisible, minuscule ou hors champ est signalé dans la console (lue avant de dire « fini »)
+function verifier() {
+  monde.updateMatrixWorld(true); camera.updateMatrixWorld();   // positions à jour avant de mesurer
+  monde.traverse((o) => {
+    const g = o.isMesh && o.geometry;
+    if (g && ((g.index && g.index.count === 0) || !g.attributes.position || g.attributes.position.count < 3))
+      console.error(`Objet 3D vide (géométrie ${g.type} sans triangles) : vérifie l'ordre de ses paramètres.`);
+  });
+  const boite = new THREE.Box3().setFromObject(monde);
+  if (boite.isEmpty()) return console.error("Rien à voir : la scène 3D est vide.");
+  const coins = [];
+  for (const x of [boite.min.x, boite.max.x]) for (const y of [boite.min.y, boite.max.y]) for (const z of [boite.min.z, boite.max.z])
+    coins.push(new THREE.Vector3(x, y, z).project(camera));
+  const dedans = coins.filter((v) => Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1 && v.z < 1);
+  const w = Math.min(1, Math.max(...coins.map((v) => v.x))) - Math.max(-1, Math.min(...coins.map((v) => v.x)));
+  const h = Math.min(1, Math.max(...coins.map((v) => v.y))) - Math.max(-1, Math.min(...coins.map((v) => v.y)));
+  if (!dedans.length) console.error("L'objet 3D est hors du champ de la caméra : appelle cadrer(monde) après l'avoir construit.");
+  else if (w * h < 0.04) console.error("L'objet 3D est minuscule à l'écran : appelle cadrer(monde) après l'avoir construit.");
+}
 
 // la taille suit le conteneur (fenêtre, panneau, rotation du téléphone)
 function taille() {
@@ -72,19 +113,24 @@ function taille() {
 }
 new ResizeObserver(taille).observe(box);
 taille();
+verifier();
 
 const temps = new THREE.Timer();           // (three.js signale THREE.Clock comme dépassé)
 renderer.setAnimationLoop((t) => {         // s'arrête tout seul quand l'onglet est caché
   temps.update(t);
   const dt = temps.getDelta();
-  if (!calme) { objet.rotation.x += dt * 0.25; objet.rotation.y += dt * 0.4; }
+  if (!calme) monde.rotation.y += dt * 0.35;   // une rotation lente autour de l'axe vertical : l'objet reste au centre
   controles.update();
   renderer.render(scene, camera);
   window.__images = (window.__images || 0) + 1;   // compteur d'images dessinées (vérification)
 });
 
 // en quittant la page : tout est libéré (mémoire de la carte graphique)
-addEventListener("pagehide", () => { renderer.setAnimationLoop(null); objet.geometry.dispose(); objet.material.dispose(); renderer.dispose(); });
+addEventListener("pagehide", () => {
+  renderer.setAnimationLoop(null);
+  monde.traverse((o) => { o.geometry?.dispose(); [].concat(o.material || []).forEach((m) => m.dispose()); });
+  renderer.dispose();
+});
 </script>
 </body>
 </html>
