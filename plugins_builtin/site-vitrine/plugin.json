@@ -1,0 +1,10 @@
+{
+  "name": "site-vitrine",
+  "version": "1.0",
+  "description": "Site vitrine ou landing page (commerce, artisan, cabinet, restaurant, salon) à partir d'un modèle sobre et éditorial vérifié, pas un gabarit généré.",
+  "skills": "skills",
+  "priority": true,
+  "triggers": {
+    "site-vitrine": "\\b(landing ?page|page d'atterrissage|site vitrine|site (web |internet )?(pour|de) (mon|ma|notre|un|une) (salon|restaurant|caf[ée]|boutique|magasin|commerce|atelier|cabinet|entreprise|soci[ée]t[ée]|association|studio|agence|boulangerie|bar|h[ôo]tel|g[îi]te|club|garage|institut)|site (web |internet )?(d'un|d'une|pour un|pour une) (artisan|coiffeu\\w+|photographe|coach|avocat|m[ée]decin|architecte|plombier|[ée]lectricien|fleuriste|th[ée]rapeute|kin[ée]\\w*)|page (web )?(de pr[ée]sentation|d'accueil) (pour|de) (mon|ma|notre))\\b"
+  }
+}

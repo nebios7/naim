@@ -1185,6 +1185,31 @@ class ThreeD(unittest.TestCase):
         self.assertNotEqual((e.match_skill("affiche-moi l'heure dans un beau carré") or {}).get("name"), "threejs-3d")
 
 
+class ShopWebsite(unittest.TestCase):
+    """« une landing page pour mon salon »: a sober editorial model copied and adapted, not 900 lines written from
+    nothing in the generated look (pink gradients, emoji icons, invented figures)."""
+
+    def test_model_and_skill(self):
+        d = ROOT / "plugins_builtin/site-vitrine/skills/site-vitrine"
+        m = (d / "modele.html").read_text()
+        for must in ("--papier", "--encre", "--accent", "prefers-reduced-motion", ":focus-visible", "@media (max-width"):
+            self.assertIn(must, m)
+        for never in ("linear-gradient", "unsplash", "★", "5000+"):
+            self.assertNotIn(never, m)
+        s = (d / "SKILL.md").read_text()
+        self.assertIn("modele.html", s)
+        self.assertIn("edit_file", s)
+
+    def test_chosen(self):
+        import extensions as e, plugins
+        plugins.ensure_builtin()
+        for m in ("fais-moi une landing page moderne pour mon salon de coiffure à Bordeaux", "un site vitrine pour mon restaurant",
+                  "crée un site web pour mon cabinet d'architecte"):
+            self.assertEqual((e.match_skill(m) or {}).get("name"), "site-vitrine", m)
+        self.assertEqual((e.match_skill("une landing page avec un globe qui tourne en 3d") or {}).get("name"), "threejs-3d")
+        self.assertNotEqual((e.match_skill("améliore le design de mon application") or {}).get("name"), "site-vitrine")
+
+
 class NetworkAndCamera(unittest.TestCase):
     """« analyse mon réseau », « une app pour ma caméra »: a read-only scan of the user's own network, a probe for the RTSP
     path, and a verified camera app to copy (one ffmpeg, its messages in a file so that it never freezes)."""

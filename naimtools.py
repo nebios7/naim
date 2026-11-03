@@ -5252,61 +5252,23 @@ def _user_name():
 
 
 def _welcome(where, engine):
-    """The panel: on the left « Quoi de prévu », the robot, the engine and the folder; on the right the usage
-    figures (like a desktop assistant's « Aperçu »), the last 28 days and the recent conversations. In a narrow
-    terminal, all of it in one column."""
-    cols = min(_cols(), 110)
+    """A plain panel, like a developer tool's: the name and version, a hello, the engine and the folder, then the keys.
+    No mascot: the tool is taken seriously."""
+    cols = _cols() - 1  # as wide as the input box under it
+    w = cols - 4
     name = _user_name()
-    u = _usage()
-    big = lambda n: f"{n / 1e9:.1f} Md" if n >= 1e9 else f"{n / 1e6:.1f} M" if n >= 1e6 else f"{n / 1e3:.1f} k" if n >= 1e3 else str(n)  # noqa: E731
     hello = f"Quoi de prévu, {name} ?" if name else "Quoi de prévu ?"
-    cells = [("Conversations", str(u["conversations"])), ("Messages", f"{u['messages']:,}".replace(",", " ")), ("Jetons", big(u["tokens"])),
-             ("Jours actifs", str(u["days"])), ("Heure de pointe", u["peak"]), ("Modèle favori", u["fav"])]
-    mx = max(1, *u["activity"])
-    heat = "".join(" ░▒▓█"[0 if n == 0 else 1 + min(3, int(3 * n / mx))] for n in u["activity"])
-
-    def grid(width):
-        cw = max(len(l) for l, _ in cells) + 1
-        per = max(1, min(3, width // cw))
-        rows = []
-        for k in range(0, len(cells), per):
-            row = cells[k:k + per]
-            rows.append("".join(_pad(f"{C['grey']}{l}{C['reset']}", cw) for l, _ in row))
-            rows.append("".join(_pad(f"{C['bold']}{C['white']}{v}{C['reset']}", cw) for _, v in row))
-            rows.append("")
-        return rows[:-1]
     title = f" Naim {VERSION} "
-    top = f"{C['grey']}╭───{C['reset']}{C['white']}{title}{C['reset']}{C['grey']}{'─' * max(0, cols - len(title) - 5)}╮{C['reset']}"
+    top = f"{C['grey']}╭─{C['reset']}{C['bold']}{C['white']}{title}{C['reset']}{C['grey']}{'─' * max(0, cols - len(title) - 3)}╮{C['reset']}"
     bottom = f"{C['grey']}╰{'─' * (cols - 2)}╯{C['reset']}"
-    side = lambda txt, w: f"{C['grey']}│{C['reset']} {_pad(_fit(txt, w), w)} {C['grey']}│{C['reset']}"  # noqa: E731
-    centre = lambda txt, w: " " * max(0, (w - _vlen(txt)) // 2) + txt  # noqa: E731
-    if cols < 76:  # narrow: one column
-        w = cols - 4
-        lines = ["", centre(f"{C['bold']}{C['white']}{hello}{C['reset']}", w), ""] + [centre(r, w) for r in _robot()] + \
-                ["", centre(f"{C['grey']}{engine}{C['reset']}", w), ""] + grid(w) + \
-                ["", f"{C['grey']}28 j {C['reset']}{C['white']}{heat[-max(5, w - 6):]}{C['reset']}"]
-        print(top)
-        for l in lines:
-            print(side(l, w))
-        print(bottom)
-        return
-    left_w = 32
-    right_w = cols - left_w - 7
-    left = ["", f"{C['bold']}{C['white']}{hello}{C['reset']}", ""] + \
-           [" " * ((left_w - ROBOT_W) // 2) + r for r in _robot()] + \
-           ["", f"{C['grey']}{engine}{C['reset']}", f"{C['grey']}{where[-left_w:]}{C['reset']}"]
-    left = [centre(l, left_w) if i in (1, len(left) - 2, len(left) - 1) else l for i, l in enumerate(left)]
-    right = [f"{C['white']}Aperçu{C['reset']} {C['grey']}· depuis le début{C['reset']}", ""] + grid(right_w) + \
-            ["", f"{C['grey']}28 derniers jours  {C['reset']}{C['white']}{heat[-max(5, right_w - 20):]}{C['reset']}", ""]
-    for t, a in _recent_conversations(2):
-        right.append(f"{C['grey']}{_pad(t[:right_w - 15], right_w - 13)}{a:>11}{C['reset']}")
-    h = max(len(left), len(right))
-    left += [""] * (h - len(left))
-    right += [""] * (h - len(right))
+    lines = ["", f"{C['white']}{hello}{C['reset']}", "",
+             f"{C['grey']}moteur   {C['reset']}{engine}", f"{C['grey']}dossier  {C['reset']}{where}", ""]
     print(top)
-    for l, r in zip(left, right):
-        print(f"{C['grey']}│{C['reset']} {_pad(_fit(l, left_w), left_w)} {C['grey']}│{C['reset']} {_pad(_fit(r, right_w), right_w)}{C['grey']}│{C['reset']}")
+    for l in lines:
+        print(f"{C['grey']}│{C['reset']} {_pad(_fit(l, w), w)} {C['grey']}│{C['reset']}")
     print(bottom)
+    print(f"  {C['grey']}/ commandes · maj+tab mode d'autorisation · ctrl+d quitter{C['reset']}")
+    print()
 
 
 class _Editor:
@@ -5370,8 +5332,8 @@ class _Editor:
         if self.rx is None:
             self.rx = max(0, cols - 22)
         self.rx = min(self.rx, cols - ROBOT_W - 2)
-        body = self.bot.lines()
-        out = [" " * self.rx + r for r in body]  # the robot on the frame
+        body = []  # nothing above the frame: a plain input box
+        out = []
         out.append(f"{C['grey']}╭{'─' * (cols - 2)}╮{C['reset']}")
         for j, r in enumerate(rows):
             lead = f"{C['white']}›{C['reset']} " if j == 0 else "  "
@@ -5447,8 +5409,6 @@ class _Editor:
         # bracketed paste only: no mouse reporting (it took the scroll wheel from the terminal: no way to scroll back)
         sys.stdout.write("\033[?2004h")
         redraw()
-        if not os.environ.get("NAIM_NO_ANIM"):
-            threading.Thread(target=self._life, args=(redraw,), daemon=True).start()
         try:
             tty.setraw(fd)
             buf, pasting = b"", False
@@ -5647,7 +5607,6 @@ def main():
     where = str(agent.root).replace(str(Path.home()), "~")
     engine = "llama.cpp, sur ce Mac" if opts.get("backend") == "llamacpp" else f"Ollama · {args.model}"
     CLI_STATE["engine"] = "naim · llama.cpp" if opts.get("backend") == "llamacpp" else f"{args.model} · Ollama"
-    _intro()
     _welcome(where, engine)
 
     def run(task):

@@ -1314,6 +1314,10 @@ def match_skill(task, root=None, disabled=()):
     # skill for the style of the page around
     if "threejs-3d" in by_name and re.search(triggers.get("threejs-3d", r"$^"), text):
         return by_name["threejs-3d"]
+    # a landing page or a shop's site: the verified editorial model first (a page written from nothing looks generated);
+    # the design skills stay for interfaces and applications
+    if "site-vitrine" in by_name and re.search(triggers.get("site-vitrine", r"$^"), text):
+        return by_name["site-vitrine"]
     hits = [(m.start(), k, n) for k, n in enumerate(priority) if n in by_name and (m := re.search(triggers[n], text))]
     if hits:
         return by_name[min(hits)[2]]

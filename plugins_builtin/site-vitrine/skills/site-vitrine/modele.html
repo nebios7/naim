@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- À ADAPTER : le nom, la ville, une phrase vraie sur le lieu -->
+<title>Maison Ardoise — Atelier de céramique à Nantes</title>
+<meta name="description" content="Atelier de céramique dans le quartier Feydeau : cours, stages du week-end et pièces façonnées à la main.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Trois couleurs, pas plus : le papier, l'encre, un accent. Changer ces trois lignes suffit pour une autre ambiance. */
+  :root {
+    --papier: #f5f1ea;
+    --encre: #1f1c18;
+    --accent: #a4502c;
+    --gris: color-mix(in srgb, var(--encre) 62%, var(--papier));
+    --trait: color-mix(in srgb, var(--encre) 16%, var(--papier));
+    --fond-photo: color-mix(in srgb, var(--encre) 9%, var(--papier));
+    --titre: "Fraunces", Georgia, serif;
+    --texte: "Instrument Sans", system-ui, sans-serif;
+    --large: min(1180px, 100% - 2 * clamp(20px, 5vw, 56px));
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  body { margin: 0; background: var(--papier); color: var(--encre); font: 400 17px/1.6 var(--texte);
+         -webkit-font-smoothing: antialiased; }
+  img { display: block; max-width: 100%; }
+  a { color: inherit; }
+  .bloc { width: var(--large); margin-inline: auto; }
+  h1, h2, h3 { font-family: var(--titre); font-weight: 400; line-height: 1.05; letter-spacing: -0.015em; margin: 0; }
+  .surtitre { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gris); margin: 0 0 20px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* Bandeau du haut */
+  .haut { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--papier) 92%, transparent);
+          backdrop-filter: blur(8px); border-bottom: 1px solid var(--trait); }
+  .haut .bloc { display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 68px; }
+  .marque { font-family: var(--titre); font-size: 22px; text-decoration: none; }
+  .haut nav { display: flex; gap: 28px; font-size: 15px; }
+  .haut nav a { text-decoration: none; color: var(--gris); }
+  .haut nav a:hover { color: var(--encre); }
+  .lien-fort { font-weight: 500; text-decoration: underline; text-underline-offset: 5px; text-decoration-color: var(--accent);
+               text-decoration-thickness: 2px; }
+  @media (max-width: 760px) { .haut nav { display: none; } }
+
+  /* Ouverture : le titre à gauche, une grande photo à droite */
+  .ouverture { padding: clamp(48px, 8vw, 104px) 0 0; }
+  .ouverture .bloc { display: grid; grid-template-columns: 7fr 5fr; gap: clamp(32px, 5vw, 72px); align-items: end; }
+  .ouverture h1 { font-size: clamp(44px, 7vw, 92px); font-weight: 300; }
+  .ouverture h1 em { font-style: italic; color: var(--accent); }
+  .ouverture p.chapo { font-size: 19px; color: var(--gris); max-width: 34em; margin: 28px 0 36px; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 28px; }
+  .bouton { display: inline-block; background: var(--encre); color: var(--papier); text-decoration: none; font-weight: 500;
+            padding: 15px 26px; border-radius: 2px; transition: background .2s; }
+  .bouton:hover { background: var(--accent); }
+  @media (max-width: 860px) { .ouverture .bloc { grid-template-columns: 1fr; } }
+
+  /* Photos : une vraie image (img) quand on l'a ; sinon un cadre qui dit quelle photo mettre */
+  .photo { margin: 0; }
+  .photo .cadre { aspect-ratio: 4 / 5; background: var(--fond-photo); overflow: hidden; display: grid; place-items: end start; }
+  .photo .cadre img { width: 100%; height: 100%; object-fit: cover; }
+  .photo .cadre span { font-size: 13px; color: var(--gris); padding: 14px 16px; }
+  .photo figcaption { font-size: 13px; color: var(--gris); margin-top: 10px; }
+
+  /* Repères : trois faits utiles sous l'ouverture */
+  .reperes { margin-top: clamp(48px, 7vw, 88px); border-top: 1px solid var(--trait); border-bottom: 1px solid var(--trait); }
+  .reperes .bloc { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .reperes div { padding: 22px 0; }
+  .reperes div + div { border-left: 1px solid var(--trait); padding-left: 28px; }
+  .reperes dt { font-size: 13px; color: var(--gris); }
+  .reperes dd { margin: 4px 0 0; font-weight: 500; }
+  @media (max-width: 700px) { .reperes .bloc { grid-template-columns: 1fr; } .reperes div + div { border-left: 0; padding-left: 0;
+                              border-top: 1px solid var(--trait); } }
+
+  /* Sections : le titre dans une colonne étroite, le contenu à côté */
+  section.partie { padding: clamp(72px, 10vw, 128px) 0; }
+  .partie > .bloc { display: grid; grid-template-columns: 4fr 8fr; gap: clamp(32px, 5vw, 72px); }
+  .partie h2 { font-size: clamp(34px, 4.4vw, 52px); }
+  .partie .num { font-family: var(--titre); color: var(--accent); font-size: 18px; display: block; margin-bottom: 14px; }
+  @media (max-width: 860px) { .partie > .bloc { grid-template-columns: 1fr; } }
+
+  /* Prestations : une carte de menu — nom, phrase, prix — séparée par des traits fins */
+  .carte { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--encre); }
+  .carte li { display: grid; grid-template-columns: 1fr auto; gap: 6px 24px; padding: 22px 0; border-bottom: 1px solid var(--trait); }
+  .carte h3 { font-size: 24px; }
+  .carte .prix { font-family: var(--titre); font-size: 22px; white-space: nowrap; }
+  .carte p { grid-column: 1 / -1; margin: 0; color: var(--gris); max-width: 40em; }
+
+  /* À propos : une citation et deux photos décalées */
+  .apropos blockquote { margin: 0 0 40px; font-family: var(--titre); font-size: clamp(26px, 3vw, 36px); line-height: 1.25;
+                        font-weight: 300; }
+  .apropos .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .apropos .duo .photo:last-child { margin-top: 64px; }
+  .apropos p { color: var(--gris); max-width: 36em; }
+
+  /* Galerie : une grille irrégulière, la première photo plus grande */
+  .galerie { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-top: 8px; }
+  .galerie .photo:nth-child(1) { grid-column: span 4; grid-row: span 2; }
+  .galerie .photo:nth-child(1) .cadre { aspect-ratio: auto; height: 100%; min-height: 420px; }
+  .galerie .photo { grid-column: span 2; }
+  .galerie .photo:nth-child(n+4) { grid-column: span 3; }  /* 5 photos : la grande, deux à côté, deux dessous */
+  .galerie .photo .cadre { aspect-ratio: 1; }
+  .galerie .photo:nth-child(n+4) .cadre { aspect-ratio: 3 / 2; }
+  @media (max-width: 700px) { .galerie { grid-template-columns: 1fr 1fr; } .galerie .photo, .galerie .photo:nth-child(n) {
+                              grid-column: span 1; grid-row: auto; } .galerie .photo:nth-child(1) { grid-column: span 2; }
+                              .galerie .photo:nth-child(1) .cadre { min-height: 0; aspect-ratio: 3 / 2; } }
+
+  /* Avis : des phrases de vrais clients, leur prénom — pas d'étoiles ni d'avatars inventés */
+  .avis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+  .avis figure { margin: 0; border-top: 1px solid var(--encre); padding-top: 20px; }
+  .avis blockquote { margin: 0 0 16px; font-family: var(--titre); font-size: 21px; line-height: 1.35; }
+  .avis figcaption { font-size: 14px; color: var(--gris); }
+  @media (max-width: 860px) { .avis { grid-template-columns: 1fr; } }
+
+  /* Infos pratiques */
+  .infos { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+  .horaires { width: 100%; border-collapse: collapse; }
+  .horaires td { padding: 10px 0; border-bottom: 1px solid var(--trait); }
+  .horaires td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .infos address { font-style: normal; font-size: 19px; line-height: 1.5; margin-bottom: 18px; }
+  @media (max-width: 700px) { .infos { grid-template-columns: 1fr; } }
+
+  /* Appel final */
+  .appel { background: var(--encre); color: var(--papier); padding: clamp(72px, 10vw, 120px) 0; }
+  .appel .bloc { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 32px; }
+  .appel h2 { font-size: clamp(40px, 6vw, 76px); font-weight: 300; max-width: 12em; }
+  .appel .bouton { background: var(--papier); color: var(--encre); }
+  .appel .bouton:hover { background: var(--accent); color: var(--papier); }
+
+  footer { padding: 36px 0; font-size: 14px; color: var(--gris); }
+  footer .bloc { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+</style>
+</head>
+<body>
+
+<header class="haut">
+  <div class="bloc">
+    <a class="marque" href="#">Maison Ardoise</a>
+    <nav aria-label="Navigation principale">
+      <a href="#prestations">Cours</a>
+      <a href="#atelier">L'atelier</a>
+      <a href="#travaux">Travaux</a>
+      <a href="#infos">Infos pratiques</a>
+    </nav>
+    <a class="lien-fort" href="tel:+33240000000">02 40 00 00 00</a>
+  </div>
+</header>
+
+<main>
+  <section class="ouverture">
+    <div class="bloc">
+      <div>
+        <p class="surtitre">Atelier de céramique — Nantes, quartier Feydeau</p>
+        <h1>La terre, le tour, <em>et le temps</em> qu'il faut.</h1>
+        <p class="chapo">Des cours en petits groupes de six, des stages le week-end et des pièces façonnées à la main,
+          cuites dans notre four à bois.</p>
+        <div class="actions">
+          <a class="bouton" href="#infos">Réserver un cours</a>
+          <a class="lien-fort" href="#prestations">Voir les cours et les tarifs</a>
+        </div>
+      </div>
+      <figure class="photo">
+        <div class="cadre"><span>Photo : les mains sur le tour</span></div>
+        <figcaption>L'atelier, rue Kervégan.</figcaption>
+      </figure>
+    </div>
+    <dl class="reperes">
+      <div class="bloc">
+        <div><dt>Aujourd'hui</dt><dd>Ouvert de 10 h à 19 h</dd></div>
+        <div><dt>Adresse</dt><dd>12 rue Kervégan, Nantes</dd></div>
+        <div><dt>Groupes</dt><dd>Six personnes au plus</dd></div>
+      </div>
+    </dl>
+  </section>
+
+  <section class="partie" id="prestations">
+    <div class="bloc">
+      <div>
+        <span class="num">01</span>
+        <h2>Cours et tarifs</h2>
+      </div>
+      <ul class="carte">
+        <li><h3>Initiation au tour</h3><span class="prix">45 €</span>
+          <p>Deux heures pour centrer la terre et monter un premier bol. Tout le matériel est fourni.</p></li>
+        <li><h3>Cours hebdomadaire</h3><span class="prix">160 € / mois</span>
+          <p>Un soir par semaine, du façonnage à l'émaillage, à votre rythme.</p></li>
+        <li><h3>Stage du week-end</h3><span class="prix">220 €</span>
+          <p>Samedi et dimanche, une série de pièces de la première motte à la cuisson.</p></li>
+        <li><h3>Atelier privé</h3><span class="prix">sur devis</span>
+          <p>Pour un anniversaire, une équipe ou une famille, jusqu'à huit personnes.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="partie apropos" id="atelier">
+    <div class="bloc">
+      <div>
+        <span class="num">02</span>
+        <h2>L'atelier</h2>
+      </div>
+      <div>
+        <blockquote>« On vient pour faire un bol. On revient parce qu'ici, personne ne regarde l'heure. »</blockquote>
+        <p>Claire Morvan a ouvert Maison Ardoise en 2016 après dix ans de tournage à Vallauris. L'atelier tient dans une
+          ancienne imprimerie : huit tours, un four à bois et une grande table où l'on prend le café.</p>
+        <div class="duo">
+          <figure class="photo"><div class="cadre"><span>Photo : la grande table</span></div></figure>
+          <figure class="photo"><div class="cadre"><span>Photo : le four à bois</span></div></figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="partie" id="travaux">
+    <div class="bloc">
+      <div>
+        <span class="num">03</span>
+        <h2>Travaux récents</h2>
+      </div>
+      <div class="galerie">
+        <figure class="photo"><div class="cadre"><span>Photo : une série de bols</span></div></figure>
+        <figure class="photo"><div class="cadre"><span>Photo : un vase</span></div></figure>
+        <figure class="photo"><div class="cadre"><span>Photo : l'émaillage</span></div></figure>
+        <figure class="photo"><div class="cadre"><span>Photo : des tasses</span></div></figure>
+        <figure class="photo"><div class="cadre"><span>Photo : le four ouvert</span></div></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="partie">
+    <div class="bloc">
+      <div>
+        <span class="num">04</span>
+        <h2>Ils sont venus</h2>
+      </div>
+      <div class="avis">
+        <figure><blockquote>« Mon premier bol est bancal et c'est mon objet préféré de la maison. »</blockquote>
+          <figcaption>Inès, initiation en mars</figcaption></figure>
+        <figure><blockquote>« Claire explique sans jamais faire à votre place. »</blockquote>
+          <figcaption>Thomas, cours du mardi</figcaption></figure>
+        <figure><blockquote>« Un week-end hors du temps, et six tasses à la clé. »</blockquote>
+          <figcaption>Laure et Marc, stage d'automne</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="partie" id="infos">
+    <div class="bloc">
+      <div>
+        <span class="num">05</span>
+        <h2>Infos pratiques</h2>
+      </div>
+      <div class="infos">
+        <div>
+          <address>12 rue Kervégan<br>44000 Nantes</address>
+          <p><a class="lien-fort" href="https://maps.apple.com/?q=12+rue+Kervégan+Nantes">Voir sur le plan</a></p>
+          <p>Tram 1, arrêt Commerce.<br><a href="mailto:bonjour@maison-ardoise.fr">bonjour@maison-ardoise.fr</a></p>
+        </div>
+        <table class="horaires">
+          <caption class="surtitre" style="text-align:left">Horaires</caption>
+          <tr><td>Lundi</td><td>Fermé</td></tr>
+          <tr><td>Mardi — vendredi</td><td>10 h – 19 h</td></tr>
+          <tr><td>Samedi</td><td>9 h – 18 h</td></tr>
+          <tr><td>Dimanche</td><td>Stages uniquement</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="appel">
+    <div class="bloc">
+      <h2>Une place vous attend autour du tour.</h2>
+      <a class="bouton" href="tel:+33240000000">Appeler l'atelier</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="bloc">
+    <span>© Maison Ardoise</span>
+    <span>12 rue Kervégan, Nantes · 02 40 00 00 00</span>
+  </div>
+</footer>
+
+</body>
+</html>
