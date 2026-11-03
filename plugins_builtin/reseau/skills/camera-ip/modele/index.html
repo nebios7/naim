@@ -144,6 +144,9 @@ for (const k of ["ip", "port", "user", "path", "transport"]) {
   $(k).addEventListener("change", () => { try { localStorage.setItem("cam." + k, $(k).value); } catch {} });
 }
 
+// camera.json (written once next to the server): fills what is still empty
+fetch("/api/config").then((r) => r.json()).then((c) => { for (const k in c) if ($(k) && !$(k).value) $(k).value = c[k]; }).catch(() => {});
+
 function play() {
   const src = "/hls/live.m3u8?t=" + Date.now();
   $("empty").textContent = "Connexion au flux…"; $("empty").hidden = false;

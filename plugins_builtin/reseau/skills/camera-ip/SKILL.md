@@ -25,11 +25,15 @@ les tape dans la page de l'application. La sonde dit le chemin, le format (H.264
 M="$HOME/.naim/plugins/reseau/skills/camera-ip/modele"
 mkdir -p <dossier> && cp "$M/server.py" "$M/index.html" "$M/README.md" <dossier>/
 ```
+Pré-remplir l'adresse trouvée : écris seulement un petit `camera.json` dans <dossier>, par exemple
+`{"ip": "192.168.1.20", "port": 554}` (et `"path"` si la sonde l'a trouvé ; jamais de mot de passe). La page le lit
+toute seule. Ne lis PAS index.html ni server.py pour ça : ce sont de longs fichiers déjà prêts, les lire coûte
+plusieurs minutes pour rien.
+
 Le modèle a déjà : connexion (adresse, port, identifiant, mot de passe, chemin, TCP/UDP, ré-encodage), direct, photo,
 enregistrement MP4, plein écran, rotation, miroir, luminosité, contraste, zoom, détection de mouvement avec photo
 automatique, galerie (voir, télécharger, supprimer), espace disque, journal. Ne le réécris pas : ajoute seulement
-ce que l'utilisateur demande en plus (edit_file), sans casser l'existant. Pré-remplis l'adresse trouvée et le chemin
-avec `value="…"` dans index.html (un `placeholder` n'est qu'un exemple grisé, il ne remplit rien), jamais le mot de passe. Le chemin peut rester vide : l'application le trouve toute seule.
+ce que l'utilisateur demande en plus (edit_file), sans casser l'existant. Le chemin peut rester vide : l'application le trouve toute seule.
 
 Ce qui fait que ça marche, à garder si tu modifies :
 - une seule commande ffmpeg à la fois (`start_locked` arrête l'ancienne avant) ; l'enregistrement relance ffmpeg

@@ -174,6 +174,12 @@ class Handler(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         if p in ("/", "/index.html"):
             return self.file(HERE / "index.html", "text/html; charset=utf-8")
+        if p == "/api/config":  # camera.json beside the server: the fields filled in advance (address, port, path — never a password)
+            try:
+                c = json.loads((HERE / "camera.json").read_text())
+            except (OSError, ValueError):
+                c = {}
+            return self.send(200, {k: c[k] for k in ("ip", "port", "user", "path", "transport") if k in c})
         if p == "/api/status":
             with lock:
                 used = sum(f.stat().st_size for f in MEDIA.iterdir() if f.is_file())

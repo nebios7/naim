@@ -28,7 +28,9 @@ puis lance-le :
 ```bash
 M="$HOME/.naim/plugins/reseau/skills/camera-ip/modele"; cp "$M/server.py" "$M/index.html" "$M/README.md" .
 ```
-puis `start_process command="python3 server.py" keep=true`, et la page sur http://localhost:8099.
+puis écris `camera.json` avec l'adresse trouvée (`{"ip": "…", "port": 554}`, jamais de mot de passe ; ne lis pas
+index.html ni server.py, c'est long et inutile), puis `start_process command="python3 server.py" keep=true`, et la page
+à l'adresse que le serveur écrit (http://localhost:8099, ou le port libre suivant).
 
 ## Les règles
 - Seulement le réseau de l'utilisateur. Jamais d'adresse publique, jamais le réseau de quelqu'un d'autre.
