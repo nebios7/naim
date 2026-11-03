@@ -1016,6 +1016,45 @@ class DebuggingMethod(unittest.TestCase):
         self.assertNotIn('not in ("debug", "application-web"', (ROOT / "server.py").read_text())  # loaded in the Chat too
 
 
+class RightQuestions(unittest.TestCase):
+    """It decides when a sensible default exists, asks (one card, a few choices) when it cannot know, and never asks leave
+    to do what was just asked."""
+
+    def test_permission_question_is_not_a_question(self):
+        import server
+        self.assertTrue(server.asks_permission("Je peux créer le fichier notes.txt avec ta liste. Veux-tu que je le fasse ?"))
+        self.assertFalse(server.asks_permission("Voici le fichier. Veux-tu que j'ajoute une colonne ou un graphique ?"))  # a real choice
+        self.assertFalse(server.asks_permission("Lequel veux-tu : 1) Paul Martin 2) Paul Durand ?"))
+        self.assertIn("asks_permission(content)", (ROOT / "server.py").read_text())
+
+    def test_asks_which_of_several_files(self):
+        d = Path(tempfile.mkdtemp())
+        (d / "clients").mkdir()
+        for n in ("paul_martin.txt", "paul_durand.txt", "rapport.txt"):
+            (d / ("clients" if n.startswith("paul") else ".") / n).write_text("Bonjour\n")
+        a = naimtools.Agent(str(d), auto_yes=True)
+        a.request_text = "ajoute le rapport à la fin du fichier de Paul"
+        r = a.call_tool("edit_file", {"path": "clients/paul_durand.txt", "old_text": "Bonjour", "new_text": "Bonjour Paul"})
+        self.assertIn("plusieurs fichiers correspondent à « paul »", r)
+        self.assertIn("paul_martin.txt", r)
+        self.assertEqual((d / "clients/paul_durand.txt").read_text(), "Bonjour\n")  # nothing changed at random
+        r = a.call_tool("edit_file", {"path": "clients/paul_durand.txt", "old_text": "Bonjour", "new_text": "Bonjour Paul"})
+        self.assertTrue(r.startswith("ok"), r)  # asked once: the chosen one is done
+        b = naimtools.Agent(str(d), auto_yes=True)
+        b.request_text = "ajoute une ligne à paul_martin.txt"
+        self.assertTrue(b.call_tool("edit_file", {"path": "clients/paul_martin.txt", "old_text": "Bonjour", "new_text": "Salut"}).startswith("ok"))
+
+    def test_speak_note_never_glued_to_a_result(self):
+        for f in ("server.py", "naimtools.py"):
+            self.assertNotIn('["content"] += say', (ROOT / f).read_text())
+
+    def test_rule_in_the_chat_note(self):
+        import server
+        note = server.Handler.CHAT_TOOLS_NOTE
+        self.assertIn("never ask leave", note)
+        self.assertIn("ONE question with ask_user", note)
+
+
 class NetworkAndCamera(unittest.TestCase):
     """« analyse mon réseau », « une app pour ma caméra »: a read-only scan of the user's own network, a probe for the RTSP
     path, and a verified camera app to copy (one ffmpeg, its messages in a file so that it never freezes)."""

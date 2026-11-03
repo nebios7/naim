@@ -261,6 +261,19 @@ def collapse_repeats(text):
     return "\n".join(out) + (f"\n[… {dropped} lignes répétées retirées]" if dropped else "")
 
 
+# « Veux-tu que je crée le fichier ? » right after being asked to create it: a question that only asks permission to do
+# what was asked (not a real choice between options)
+PERMISSION_RE = re.compile(r"\b(veux-tu|voulez-vous|souhaites-tu|souhaitez-vous|tu veux|vous voulez|dois-je|faut-il|je peux|puis-je)\s+"
+                           r"(que je|qu'on|le faire|la faire|les faire|commencer|continuer|y aller|proc[ée]der|lancer|cr[ée]er|faire)\b", re.I)
+
+
+def asks_permission(text):
+    """A short answer that ends by asking leave to do the work, without a choice of options in it."""
+    t = (text or "").strip()
+    last = re.split(r"(?<=[.!?…])\s+", t)[-1] if t else ""
+    return len(t) < 500 and last.endswith("?") and bool(PERMISSION_RE.search(last)) and not re.search(r"\bou\b|\b1[.)]|\b2[.)]|\?\s*\n\s*[-*]", t)
+
+
 def ends_announcing(text):
     """The answer ends on what it is going to do (« Je vais maintenant le reformuler… »): the work is not done."""
     last = [s for s in re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip()) if s.strip()][-1:]
@@ -2133,7 +2146,11 @@ class Handler(BaseHTTPRequestHandler):
         "needs an action, a file or fresh information, then give the answer. Never write code meant to create a file "
         "yourself: call the tool. Files you create go in {folder}.\nTo teach, explain or show code, write it IN your reply: "
         "short explanations and complete examples in Markdown code blocks, step by step, then one question to go on. "
-        "Do not create a file for that unless the user asks for a file or a document.\nA diagram or schema asked in the "
+        "Do not create a file for that unless the user asks for a file or a document.\nQuestions: decide yourself when a "
+        "reasonable default exists or the answer is in the files (look first, then say what you chose); never ask leave to do "
+        "what was just asked. Ask only when the choice changes the result a lot and you cannot know it (who to send to, which "
+        "of several files, a personal value, an action that cannot be undone): then ONE question with ask_user, 2-4 concrete "
+        "options, the recommended one first.\nA diagram or schema asked in the "
         "conversation: draw it IN your reply as a ```mermaid code block (the app shows it as a real diagram, with SVG/PNG "
         "export). Keep it readable: 8-20 boxes, short French labels, no special characters inside labels. When it shows "
         "facts (models, companies, numbers, dates), check them first with web_search: never invent a figure.")
@@ -2193,6 +2210,7 @@ class Handler(BaseHTTPRequestHandler):
         run_id = body.get("run_id") or helper.run_id
         helper.set_conversation(body.get("conv_id"))  # its background jobs report there; its own draft folder
         helper._bg_intent = bool(Agent.BG_INTENT_RE.search(body.get("message") or ""))
+        helper.request_text = body.get("message") or ""  # « le fichier de Paul » with two Paul: asked, not chosen at random
         with _lock:
             _agents[run_id] = helper  # « écris pour guider Naim » reaches this reply too
         helper._preload_tool_groups(" ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
@@ -2522,7 +2540,8 @@ class Handler(BaseHTTPRequestHandler):
                 helper._spoke = True
             content = clean
             if not calls and not stop.is_set() and nudges < 2 and (
-                    not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400) or ends_announcing(content)):
+                    not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400) or ends_announcing(content)
+                    or (file_work and not used_tools and asks_permission(content))):
                 # « Je vais envoyer l'e-mail… » without doing it, or an empty reply: do it now
                 nudges += 1
                 if content.strip():
@@ -2726,8 +2745,10 @@ class Handler(BaseHTTPRequestHandler):
                                "quoi faire, passe à la suite maintenant : plan avec update_todos si le travail est long, puis "
                                "l'écriture.]")
                 messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
-            if (say := helper.speak_note(content, calls)) and messages and messages[-1].get("role") == "tool":
-                messages[-1]["content"] += say  # three steps without a word: one sentence for the user, then on
+            if (say := helper.speak_note(content, calls)):
+                # three steps without a word: one sentence for the user — its own message (glued to a file read, it was
+                # copied with the content into the user's file)
+                messages.append({"role": "user", "content": say.strip()})
             # a screenshot or an image looked at: Naim SEES it (only the latest one stays, older ones are dropped)
             imgs, helper._pending_images = getattr(helper, "_pending_images", []), []
             looked, helper._looked = getattr(helper, "_looked", False), False

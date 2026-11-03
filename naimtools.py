@@ -719,6 +719,7 @@ class Agent:
         self._fail_streak, self._silent_steps = 0, 0  # failed commands in a row; steps that acted without a word
         self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
         self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
+        self.request_text, self._asked_which = "", set()  # the user's request; the names already asked about
         self.todos, self._todo_pushbacks, self._todo_reminded = [], 0, False
         self.disabled_skills = set(disabled_skills or ())
         self.run_id = run_id or f"run{int(time.time() * 1000)}"
@@ -3301,6 +3302,33 @@ class Agent:
                 out.append(f"{self.rel(f)} contient : {text.strip()[:600]}")
         return ("\n\nÉTAT RÉEL DES FICHIERS (lu sur le disque, maintenant) :\n- " + "\n- ".join(out)) if out else ""
 
+    # words too common to name one file (« index », « test », « fichier »…)
+    WHICH_IGNORE = {"fichier", "fichiers", "dossier", "index", "test", "tests", "main", "page", "pages", "style", "script", "readme",
+                    "dans", "avec", "pour", "sans", "fait", "faire", "copie", "nouveau", "nouvelle", "data", "config", "notes"}
+
+    def which_file(self, path):
+        """The request names a file by a word (« le fichier de Paul ») that several files share (paul_martin.txt,
+        paul_durand.txt): a refusal that asks which one, once per word; '' when it is clear."""
+        target = Path(str(path or ""))
+        full = target if target.is_absolute() else self.root / target
+        ask = (self.request_text or "").lower()
+        if not ask or not full.exists() or full.name.lower() in ask or full.stem.lower() in ask:
+            return ""
+        for w in re.findall(r"[a-zà-ÿ]{4,}", ask):
+            if w in self._asked_which or w not in full.stem.lower() or w in self.WHICH_IGNORE:
+                continue
+            same = []
+            for f in self.root.rglob("*"):
+                if f.is_file() and w in f.stem.lower() and not any(x in f.parts for x in (".venv", "node_modules", ".git")):
+                    same.append(self.rel(f))
+                if len(same) > 8:
+                    break
+            if len(same) > 1:
+                self._asked_which.add(w)
+                return (f"refused: plusieurs fichiers correspondent à « {w} » : {', '.join(same[:8])}. Ne choisis pas au hasard : "
+                        f"demande à l'utilisateur lequel avec ask_user (ces fichiers en options), puis fais-le sur celui qu'il choisit.")
+        return ""
+
     def speak_note(self, content, calls):
         """Several steps that acted without a word: one sentence for the user, like a colleague who says where they are."""
         self._silent_steps = self._silent_steps + 1 if calls and not (content or "").strip() else 0
@@ -3392,6 +3420,8 @@ class Agent:
                 self.emit({"type": "hook", "event": "PreToolUse", "tool": name, "blocked": blocked, "text": msg})
             if blocked:
                 return f"blocked by the user's hook (PreToolUse): {msg} — do not do it another way; adapt or ask the user."
+        if name in ("write_file", "edit_file", "multi_edit", "delete_file") and (which := self.which_file(args.get("path"))):
+            return which
         self._allow_once = rule == "allow"
         try:
             result = self._dispatch(name, args, fn)
@@ -3633,6 +3663,7 @@ class Agent:
         started, self._outcome, self._verified = time.time(), "error", None
         self._code_dirty, self._check_pushbacks = None, 0
         self._turn_changes, self._claims_checked, self._turn_started = [], False, time.time()
+        self.request_text, self._asked_which = str(task or ""), set()
         try:
             return self._run(task, images)
         finally:
@@ -4272,8 +4303,9 @@ class Agent:
                                    "steps, then follow it one step at a time.)")
                 self._note_progress(name, result)
                 self.messages.append({"role": "tool", "tool_name": name, "content": result})
-            if (say := self.speak_note(content, calls)) and self.messages and self.messages[-1].get("role") == "tool":
-                self.messages[-1]["content"] += say
+            if (say := self.speak_note(content, calls)):
+                # its own message: glued to a tool result (a file read), it was copied with the content into a user's file
+                self.messages.append({"role": "user", "content": say.strip()})
             self._attach_images()
             if any(c["function"]["name"] not in READ_ONLY for c in calls):
                 self._notebook(getattr(self, "_task_words", ""))
