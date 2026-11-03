@@ -1016,6 +1016,9 @@ class NetworkAndCamera(unittest.TestCase):
         self.assertIn("stream1", m.PATHS)  # an empty path is found by itself
         self.assertIn("camera.json", (d / "SKILL.md").read_text())  # pre-filled without reading the long page (4 min)
         self.assertIn("/api/config", (d / "modele/index.html").read_text())
+        page = (ROOT / "web/index.html").read_text()
+        self.assertIn("&& !reply.appUrl)", page)  # the running app stays in the preview, its bare page not opened over it
+        self.assertIn("x.cwd === dir", page)  # a click on the page of a running app opens the app
 
 
 class NoLoopsInAnswers(unittest.TestCase):

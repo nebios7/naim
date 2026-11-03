@@ -3327,7 +3327,14 @@ function delivCards(dl) {
         let n = 1; const next = () => { const i = new Image(); i.onload = () => { document.body.appendChild(i); n++; if (n <= 40) next(); }; i.src = "${location.origin}/api/thumb?${q}&w=1100&page=" + n; }; next();
       </scr${""}ipt></body>`);
       else if (/^(png|jpe?g|gif|svg)$/.test(f.ext)) showImagePreview(`${location.origin}/api/raw?${q}`, f.path.split("/").pop());
-      else if (/^html?$/.test(f.ext)) fetch(`/api/raw?${q}`).then((x) => x.text()).then((h) => showPreview(h)).catch(() => api("/api/reveal", { method: "POST", body: { root: d.root, path: f.path } }));
+      else if (/^html?$/.test(f.ext)) {
+        // the page of an application that runs (its server answers /api…): the application itself, not the bare file —
+        // opened alone it has no server behind it (a camera app showed no image)
+        const dir = `${d.root.replace(/\/$/, "")}/${f.path}`.replace(/\/[^/]*$/, "");
+        api("/api/processes").then((ps) => (ps || []).find((x) => x.running && x.url && (x.cwd === dir || String(x.command || "").includes(dir))))
+          .catch(() => null).then((app) => app ? showPreviewUrl(app.url)
+            : fetch(`/api/raw?${q}`).then((x) => x.text()).then((h) => showPreview(h)).catch(() => api("/api/reveal", { method: "POST", body: { root: d.root, path: f.path } })));
+      }
       else api("/api/reveal", { method: "POST", body: { root: d.root, path: f.path } });
     }
     if (e.target.closest("[data-dfinder]")) api("/api/reveal", { method: "POST", body: { root: d.root, path: f.path, select: true } });
@@ -5235,7 +5242,8 @@ async function stream(reply, v, message, hist, extra = {}) {
   }
   // Chat mode: a PDF or an image Naim just created opens in the preview right away
   const made = reply.deliverables?.files?.[0];
-  if (made && S.auto_preview !== false && current === conv && (/^html?$/.test(made.ext) || (conv.mode !== "agent" && /^(pdf|png|jpe?g|gif|svg)$/.test(made.ext)))) {
+  // (a page of the application that runs is not opened over it: the application already shows)
+  if (made && S.auto_preview !== false && current === conv && ((/^html?$/.test(made.ext) && !reply.appUrl) || (conv.mode !== "agent" && /^(pdf|png|jpe?g|gif|svg)$/.test(made.ext)))) {
     setTimeout(() => { const boxes = $$(".delivbox"); boxes[boxes.length - 1]?.querySelector("[data-dopen]")?.click(); }, 300);
   }
   if (current === conv) { setBusy(false); updateCtx(); }
