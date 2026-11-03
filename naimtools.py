@@ -3574,7 +3574,7 @@ class Agent:
                     "with write_file(path, content=<next part>, append=true).")
         cut = isinstance(args, dict) and args.pop("_maybe_cut", False)
         if name == "write_file" and isinstance(args, dict) and self._lost_content and args.get("path") \
-                and not str(args.get("content") or "").strip() and not args.get("append"):
+                and not str(args.get("content") or "").strip():
             # the path of the call that lost it: the content kept is written, not generated a second time (957 lines = 30 min)
             args["content"], cut = self._lost_content
             self._lost_content = None
@@ -3590,12 +3590,14 @@ class Agent:
             if name == "write_file" and "missing" in str(e):
                 # a very long file in one call: its path or its content gets lost on the way — written in parts it works
                 content = args.get("content") if isinstance(args, dict) else None
+                last = getattr(self, "_last_written", None)
                 if "'path'" in str(e) and isinstance(content, str) and content.strip():
                     self._lost_content = (content, cut)
+                    nxt = (f" If it is the next part of {last}: write_file(path=\"{last}\", content=\"\", append=true)."
+                           if last else "")
                     return (f"error: your write_file call lost its path, but its content ({content.count(chr(10)) + 1} lines) "
                             "is kept: do NOT write it again. Call write_file(path=\"<the file>\", content=\"\") — only the "
-                            "path, content empty — and the kept content is saved there.")
-                last = getattr(self, "_last_written", None)
+                            "path, content empty — and the kept content is saved there." + nxt)
                 to = (f"To add this part at the end of {last}: write_file(path=\"{last}\", content=<this part>, append=true). "
                       if last else "")
                 return ("error: your write_file call lost its " + ("path" if "'path'" in str(e) else "content") +
