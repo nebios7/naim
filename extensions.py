@@ -1310,6 +1310,10 @@ def match_skill(task, root=None, disabled=()):
     if ("debug" in by_name and re.search(triggers["debug"], text)
             and re.search(r"\b(ma|mon|mes|cette|ce) (fonction|script|code|programme|appli\w*|page|bouton|formulaire|boucle|classe|m[ée]thode)\b|\w+\.(py|js|ts|html|css|php|swift|java)\b", text)):
         return by_name["debug"]
+    # 3D asked (« une landing page avec un globe en 3D »): the 3D method first — the hard part; it sends to the design
+    # skill for the style of the page around
+    if "threejs-3d" in by_name and re.search(triggers.get("threejs-3d", r"$^"), text):
+        return by_name["threejs-3d"]
     hits = [(m.start(), k, n) for k, n in enumerate(priority) if n in by_name and (m := re.search(triggers[n], text))]
     if hits:
         return by_name[min(hits)[2]]

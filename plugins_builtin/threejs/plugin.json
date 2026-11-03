@@ -1,0 +1,10 @@
+{
+  "name": "threejs",
+  "version": "1.0",
+  "description": "La 3D dans une page web avec Three.js : scène, lumières, animation, rotation à la souris, modèles 3D, à partir d'un modèle vérifié.",
+  "skills": "skills",
+  "priority": true,
+  "triggers": {
+    "threejs-3d": "\\b(3d|3-d|three\\.?js|webgl|en trois dimensions|en relief|sc[èe]ne 3d|mod[èe]le 3d|objet 3d|animation 3d|globe (terrestre|qui tourne)|plan[èe]tes? (en 3d|qui tourne)|syst[èe]me solaire|cube qui tourne|gltf|glb)\\b"
+  }
+}

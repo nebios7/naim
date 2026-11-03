@@ -1127,6 +1127,26 @@ class Documentation(unittest.TestCase):
         self.assertIn("documentation/doc.py", (ROOT / "naimtools.py").read_text())
 
 
+class ThreeD(unittest.TestCase):
+    """3D in a web page with three.js: a verified model (fixed version, size that follows, reduced motion, cleanup), chosen
+    when 3D is asked, even inside a page design request."""
+
+    def test_model_and_skill(self):
+        d = ROOT / "plugins_builtin/threejs/skills/threejs-3d"
+        m = (d / "modele.html").read_text()
+        self.assertIn("three@0.185.0", m)  # a fixed version, never « latest »
+        for must in ("setAnimationLoop", "ResizeObserver", "prefers-reduced-motion", "dispose()", "THREE.Timer"):
+            self.assertIn(must, m)
+        self.assertIn("modele.html", (d / "SKILL.md").read_text())
+
+    def test_chosen(self):
+        import extensions as e, plugins
+        plugins.ensure_builtin()
+        for m in ("fais-moi un système solaire en 3D", "une landing page avec un globe qui tourne en 3d"):
+            self.assertEqual((e.match_skill(m) or {}).get("name"), "threejs-3d", m)
+        self.assertNotEqual((e.match_skill("affiche-moi l'heure dans un beau carré") or {}).get("name"), "threejs-3d")
+
+
 class NetworkAndCamera(unittest.TestCase):
     """« analyse mon réseau », « une app pour ma caméra »: a read-only scan of the user's own network, a probe for the RTSP
     path, and a verified camera app to copy (one ffmpeg, its messages in a file so that it never freezes)."""

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scène 3D</title>
+<style>
+  :root { --bg: #f6f5f2; --text: #1f1e1c; --muted: #77746d; --line: #e4e1da; --accent: #d97757; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1b1b1a; --text: #ecebe7; --muted: #9b988f; --line: #363532; } }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  #scene { position: relative; width: 100%; height: 100vh; min-height: 360px; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; outline: none; }
+  .titre { position: absolute; left: 24px; top: 20px; pointer-events: none; }
+  .titre h1 { margin: 0; font-size: 22px; font-weight: 600; }
+  .titre p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .repli { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 24px; }
+</style>
+<!-- three.js : une version fixe (jamais « latest »), le module et ses extensions depuis le même endroit -->
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="scene" role="img" aria-label="Un nœud torique qui tourne lentement ; glisser pour le faire pivoter">
+  <div class="titre"><h1>Scène 3D</h1><p>Glisse pour tourner, molette ou pincement pour zoomer</p></div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const box = document.getElementById("scene");
+const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;   // pas de rotation automatique si l'utilisateur le demande
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+} catch (e) {
+  box.insertAdjacentHTML("beforeend", '<div class="repli">La 3D n\'est pas disponible dans ce navigateur (WebGL désactivé).</div>');
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));                  // net sans écraser la carte graphique (écrans Retina)
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+box.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+camera.position.set(0, 1.2, 6);
+
+// lumières : une douce partout + une principale qui fait le relief
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.1));
+const soleil = new THREE.DirectionalLight(0xffffff, 2.2);
+soleil.position.set(3, 4, 5);
+scene.add(soleil);
+
+const objet = new THREE.Mesh(
+  new THREE.TorusKnotGeometry(1.1, 0.34, 220, 32),
+  new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.35, metalness: 0.15 })
+);
+scene.add(objet);
+
+const controles = new OrbitControls(camera, renderer.domElement);
+controles.enableDamping = true;            // le mouvement s'arrête en douceur
+controles.minDistance = 3; controles.maxDistance = 12;
+
+// la taille suit le conteneur (fenêtre, panneau, rotation du téléphone)
+function taille() {
+  const w = box.clientWidth, h = box.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(taille).observe(box);
+taille();
+
+const temps = new THREE.Timer();           // (three.js signale THREE.Clock comme dépassé)
+renderer.setAnimationLoop((t) => {         // s'arrête tout seul quand l'onglet est caché
+  temps.update(t);
+  const dt = temps.getDelta();
+  if (!calme) { objet.rotation.x += dt * 0.25; objet.rotation.y += dt * 0.4; }
+  controles.update();
+  renderer.render(scene, camera);
+  window.__images = (window.__images || 0) + 1;   // compteur d'images dessinées (vérification)
+});
+
+// en quittant la page : tout est libéré (mémoire de la carte graphique)
+addEventListener("pagehide", () => { renderer.setAnimationLoop(null); objet.geometry.dispose(); objet.material.dispose(); renderer.dispose(); });
+</script>
+</body>
+</html>
