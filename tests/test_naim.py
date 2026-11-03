@@ -974,10 +974,26 @@ class WorksLikeAColleague(unittest.TestCase):
         r = self.a.update_todos([{"text": "serveur", "status": "done"}, {"text": "page", "status": "done"}])
         self.assertNotIn("vérifie-le", r)
 
+    def test_summary_checked_against_real_changes(self):
+        page = ('<input id="ip" placeholder="192.0.2.99"><input id="port" value="554"><input id="path" placeholder="stream1">'
+                '<select id="transport"><option value="tcp">TCP (stable)</option><option value="udp">UDP</option></select>')
+        self.a.call_tool("write_file", {"path": "index.html", "content": page})
+        self.a.call_tool("edit_file", {"path": "index.html", "old_text": '<input id="ip" placeholder', "new_text": '<input id="ip" value="192.0.2.10" placeholder'})
+        fix = self.a.verify_summary("Pré-rempli : adresse (192.0.2.10), port (554), chemin (stream1), transport (TCP).\n"
+                                    "À remplir toi-même : identifiant (admin) et mot de passe.")
+        self.assertIn("« stream1 » n'est pas", fix)  # only a placeholder: not filled
+        for there in ("192.0.2.10", "554", "TCP", "admin"):
+            self.assertNotIn(there, fix)  # really there (a select's first option counts) — or the user's own part
+        self.assertIsNone(self.a.verify_summary("Pré-rempli : chemin (stream1)."))  # checked once per request
+        b = naimtools.Agent(self.t, auto_yes=True)
+        self.assertIsNone(b.verify_summary("J'ai modifié le chemin (stream1)."))  # nothing changed: nothing to check against
+
     def test_wired(self):
         self.assertIn("helper.look_note()", (ROOT / "server.py").read_text())
         self.assertIn("helper.speak_note(", (ROOT / "server.py").read_text())
         self.assertIn("self.look_note()", (ROOT / "naimtools.py").read_text())
+        self.assertIn("helper.verify_summary(content)", (ROOT / "server.py").read_text())
+        self.assertIn("self.verify_summary(content)", (ROOT / "naimtools.py").read_text())
 
 
 class NetworkAndCamera(unittest.TestCase):

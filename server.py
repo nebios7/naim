@@ -2606,6 +2606,11 @@ class Handler(BaseHTTPRequestHandler):
                     "sans t'arrêter ni me demander, jusqu'à la dernière ; ta réponse finale viendra quand tout sera fait.")})
                 force_tool = True
                 continue
+            if not calls and not stop.is_set() and (fix := helper.verify_summary(content)):
+                # a value the summary says it put in the files but that is not there (« chemin stream1 pré-rempli » when
+                # only the address was): a precise correction under it, checked by the code
+                self.event({"type": "token", "text": fix})
+                content += fix
             if stop.is_set() or not calls:
                 break
             if any(c["function"]["name"] == "run_command" for c in calls):

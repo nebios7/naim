@@ -718,6 +718,7 @@ class Agent:
         self._code_dirty, self._check_pushbacks = None, 0  # code changed and not run since: checked before « fini »
         self._fail_streak, self._silent_steps = 0, 0  # failed commands in a row; steps that acted without a word
         self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
+        self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
         self.todos, self._todo_pushbacks, self._todo_reminded = [], 0, False
         self.disabled_skills = set(disabled_skills or ())
         self.run_id = run_id or f"run{int(time.time() * 1000)}"
@@ -3224,6 +3225,82 @@ class Agent:
     # a command that only looks (ls, cat, grep…) does not check the code
     LOOK_ONLY_RE = re.compile(r"\s*(?:cd [^&;]+(?:&&|;)\s*)?(?:ls|cat|head|tail|grep|rg|find|echo|pwd|wc|open|which|tree)\b(?!.*(?:&&|;|\|)\s*(?:python|node|npm|pytest|bash|sh|go|cargo|make)\b)")
 
+    # a summary that says what was done (« pré-rempli : … », « j'ai ajouté … », « modifié … »)
+    SUMMARY_CLAIM_RE = re.compile(r"\b(pr[ée]-?rempli\w*|rempli\w*|modifi[ée]\w*|ajout[ée]\w*|configur[ée]\w*|r[ée]gl[ée]\w*|mis [àa] jour|"
+                                  r"chang[ée]\w*|corrig[ée]\w*|remplac[ée]\w*|renomm[ée]\w*|supprim[ée]\w*|activ[ée]\w*|d[ée]sactiv[ée]\w*)\b", re.I)
+
+    def claims_check(self, content):
+        """The values a summary says it put in the files (« pré-rempli : adresse (192.168.1.20), chemin (stream1) ») that are
+        NOT there — looked for in what really changed and in the files as they are now. Checked by the code, not judged by
+        the model: asked « is it right? », it said OK; asked to rewrite, it added new mistakes. [] when all is there."""
+        if not self._turn_changes or getattr(self, "_claims_checked", False):
+            return []
+        self._claims_checked = True
+        # the truth: what changed, the fields of the pages as they are (a placeholder is not a value), and the whole text of
+        # the other files changed in this request (a setting written in server.py or camera.json is there)
+        others = []
+        for f in (p for p in self.root.rglob("*") if p.is_file() and p.stat().st_mtime > self._turn_started and ".venv" not in p.parts
+                  and "node_modules" not in p.parts and p.suffix.lower() not in (".html", ".htm") and p.stat().st_size < 60000):
+            try:
+                others.append(f.read_text(errors="replace"))
+            except OSError:
+                pass
+            if len(others) > 20:
+                break
+        fields = (" ".join(self._turn_changes) + " " + self._real_state()).lower()
+        truth = (fields + " " + " ".join(others)).lower()
+        missing = []
+        for sent in re.split(r"(?<=[.!?])\s+|\n+", content or ""):
+            if not self.SUMMARY_CLAIM_RE.search(sent) or re.search(r"\b(toi-m[êe]me|[àa] (remplir|taper|saisir)|tu (dois|peux)|il (te )?reste)\b", sent, re.I):
+                continue  # what the user is to do is not a claim
+            vals = re.findall(r"\(([^()]{1,60})\)|`([^`]{1,80})`|« ([^»]{1,60}) »|\b(\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?)\b", sent)
+            # « pré-rempli / rempli » is about the fields of a form: only their real values count (the word may well appear
+            # elsewhere in the code, like « stream1 » in the list of paths the server tries)
+            where = fields if re.search(r"\b(pr[ée]-?rempli|rempli)", sent, re.I) else truth
+            for v in {x.strip() for t in vals for x in t if x.strip()}:
+                if re.fullmatch(r"[\w./:-]+", v) and v.lower() not in where and v.lower() not in missing:
+                    missing.append(v)
+        return missing[:6]
+
+    def verify_summary(self, content):
+        """A correction line to add under the summary when it says it put a value that is not in the files, else None."""
+        missing = self.claims_check(content)
+        if not missing:
+            return None
+        return ("\n\n> **Vérification des fichiers** : " + ", ".join(f"« {v} »" for v in missing)
+                + (" n'est pas" if len(missing) == 1 else " ne sont pas") + " dans les fichiers modifiés — à saisir ou régler toi-même.")
+
+    def _real_state(self):
+        """What the changed files hold NOW, read from disk: the fields of a page (filled or empty), small settings files —
+        the ground truth for « pré-rempli … », even in a file copied as it is."""
+        seen, out = set(), []
+        for f in sorted(p for p in self.root.rglob("*") if p.is_file() and p.stat().st_mtime > self._turn_started
+                        and ".venv" not in p.parts and "node_modules" not in p.parts)[:12]:
+            if f in seen:
+                continue
+            seen.add(f)
+            try:
+                text = f.read_text(errors="replace")
+            except OSError:
+                continue
+            if f.suffix.lower() in (".html", ".htm"):
+                fields = []
+                for tag in re.findall(r"<input\b[^>]*>|<select\b.*?</select>|<textarea\b[^>]*>", text, re.I | re.S)[:30]:
+                    fid = re.search(r'\bid="([^"]+)"', tag)
+                    if not fid or re.search(r'type="(checkbox|range|radio|hidden)"', tag):
+                        continue
+                    if tag.lower().startswith("<select"):  # a list: its chosen option, else the first one
+                        opt = re.search(r"<option\b[^>]*\bselected\b[^>]*>(.*?)</option>", tag, re.I | re.S) or re.search(r"<option\b[^>]*>(.*?)</option>", tag, re.I | re.S)
+                        fields.append(f"{fid.group(1)} = « {re.sub(r'<[^>]+>', '', opt.group(1)).strip()} »" if opt else f"{fid.group(1)} = VIDE")
+                        continue
+                    val = re.search(r'\bvalue="([^"]*)"', tag)
+                    fields.append(f"{fid.group(1)} = " + (f"« {val.group(1)} »" if val and val.group(1) else "VIDE"))
+                if fields:
+                    out.append(f"{self.rel(f)}, ses champs maintenant : " + ", ".join(fields))
+            elif f.suffix.lower() in (".json", ".txt", ".cfg", ".ini", ".env", ".toml", ".yaml", ".yml") and len(text) < 1500:
+                out.append(f"{self.rel(f)} contient : {text.strip()[:600]}")
+        return ("\n\nÉTAT RÉEL DES FICHIERS (lu sur le disque, maintenant) :\n- " + "\n- ".join(out)) if out else ""
+
     def speak_note(self, content, calls):
         """Several steps that acted without a word: one sentence for the user, like a colleague who says where they are."""
         self._silent_steps = self._silent_steps + 1 if calls and not (content or "").strip() else 0
@@ -3329,6 +3406,18 @@ class Agent:
             self._swift_dirty = str(args["path"]).split("/Sources/")[0] if "/Sources/" in str(args["path"]) else "."
         if name == "simulator" and args.get("action") in ("build_run", "new_app") and str(result).startswith("ok"):
             self._swift_dirty = None
+        ok = str(result).startswith("ok") or str(result).startswith("exit code 0")
+        if ok and name == "write_file":
+            body = str(args.get("content") or "")
+            self._turn_changes.append(f"{args.get('path')} : fichier écrit ({body.count(chr(10)) + 1} lignes)")
+        elif ok and name == "edit_file":
+            self._turn_changes.append(f"{args.get('path')} : remplacé {str(args.get('old_text'))[:160]!r} par {str(args.get('new_text'))[:240]!r}")
+        elif ok and name == "multi_edit":
+            for e in (args.get("edits") if isinstance(args.get("edits"), list) else [])[:6]:
+                if isinstance(e, dict):
+                    self._turn_changes.append(f"{args.get('path')} : remplacé {str(e.get('old_text'))[:120]!r} par {str(e.get('new_text'))[:200]!r}")
+        elif ok and name in ("run_command", "start_process") and re.search(r"\b(cp|mv|mkdir|ln|touch|tee|sed -i|>)\b|>", str(args.get("command") or "")):
+            self._turn_changes.append(f"commande : {str(args.get('command'))[:240]}")
         if name == "run_command":
             failed_run = bool(re.match(r"(error|exit code [1-9])", str(result)))
             self._fail_streak = self._fail_streak + 1 if failed_run else 0
@@ -3543,6 +3632,7 @@ class Agent:
         """Run one user task to completion; returns the final answer text."""
         started, self._outcome, self._verified = time.time(), "error", None
         self._code_dirty, self._check_pushbacks = None, 0
+        self._turn_changes, self._claims_checked, self._turn_started = [], False, time.time()
         try:
             return self._run(task, images)
         finally:
@@ -4066,6 +4156,9 @@ class Agent:
                         + "\n\nCorrige-les maintenant (un élément absent des documents de l'utilisateur doit être retiré, "
                           "ou demandé avec ask_user), vérifie, puis seulement ensuite donne ton résumé.")})
                     continue
+                if not self.subagent and (fix := self.verify_summary(content)):
+                    content += fix  # a value said to be put but absent from the files: said under the summary, not rewritten
+                    self.messages[-1] = {**self.messages[-1], "content": content}
                 if len(re.sub(r"\W", "", content)) < 12:  # never end in silence: say where the task stands
                     done = [t["text"] for t in self.todos if t["status"] == "done"]
                     left = [t["text"] for t in self.todos if t["status"] not in ("done", "skipped")]
