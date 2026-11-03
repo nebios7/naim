@@ -1639,6 +1639,9 @@ body.home .empty { margin: 0 auto 22px; }
 .dcard svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
 .dcard .dt { flex: 1; min-width: 0; }
 .dcard small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.dcard .dclose { flex: none; background: none; border: 0; padding: 5px; margin-left: -4px; border-radius: 7px; color: var(--muted); cursor: pointer; display: inline-flex; }
+.dcard .dclose:hover { background: var(--side); color: var(--text); }
+.dcard .dclose svg { width: 15px; height: 15px; }
 .dprop .sl b { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
 .dprop .ptext, .dprop .sl small { display: block; }
 .dprop .ptext { font-size: 14px; margin: 2px 0; }
@@ -7732,11 +7735,16 @@ async function dreamCard() {
   const r = await api("/api/dream").catch(() => null); if (!r || !$("#dreamCard")) return;
   const n = r.pending.length, rules = r.pending.filter((p) => p.kind === "regle").length;
   if (!n && !r.state.running) { box.innerHTML = ""; return; }
+  // closed with × : hidden until the night brings other proposals (the list stays in Personnaliser › Mémoire)
+  const sig = r.pending.map((p) => p.id).join(",");
+  let hidden = ""; try { hidden = localStorage.getItem("naim.dreamHidden") || ""; } catch {}
+  if (!r.state.running && sig && hidden === sig) { box.innerHTML = ""; return; }
   box.innerHTML = `<div class="dcard">${svgI("moon")}<div class="dt">${r.state.running
       ? `<b>Naim rêve…</b><small>Il ${esc(r.state.step || "relit ses conversations")}${r.state.total ? ` · ${r.state.done}/${r.state.total}` : ""}</small>`
       : `<b>Pendant la nuit, Naim a relu ce que tu lui as dit</b><small>${rules ? `${rules} règle${rules > 1 ? "s" : ""} proposée${rules > 1 ? "s" : ""} pour ses consignes` : ""}${rules && n > rules ? " · " : ""}${n > rules ? `${n - rules} fait${n - rules > 1 ? "s" : ""} à retirer de sa mémoire` : ""}</small>`}</div>
-    ${r.state.running ? "" : `<button class="btn primary" id="dreamSee">Voir</button>`}</div>`;
+    ${r.state.running ? "" : `<button class="btn primary" id="dreamSee">Voir</button><button class="ib dclose" id="dreamHide" title="Masquer (revient s'il y a de nouvelles propositions)">${svgI("x")}</button>`}</div>`;
   const see = $("#dreamSee"); if (see) see.onclick = () => { setView("settings"); showSettingsTab("memory"); setTimeout(() => $("#dreamBox")?.scrollIntoView({ block: "start" }), 300); };
+  const hide = $("#dreamHide"); if (hide) hide.onclick = () => { try { localStorage.setItem("naim.dreamHidden", sig); } catch {} box.innerHTML = ""; };
   clearTimeout(dreamCard.t); if (r.state.running) dreamCard.t = setTimeout(dreamCard, 5000);
 }
 async function loadDreams() {
