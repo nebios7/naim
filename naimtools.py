@@ -2720,7 +2720,8 @@ class Agent:
                    "image": base64.b64encode(small.read_bytes()).decode() if small.exists() else data})
         if self._can_see():
             self._pending_images, self._looked = [data], True
-            return f"Image de {self.rel(p)} ({note}) : regarde-la ci-après et corrige ce qui ne va pas."
+            note, _, trouble = note.partition("\n")
+            return f"Image de {self.rel(p)} ({note}) : regarde-la ci-après et corrige ce qui ne va pas.{chr(10) + trouble if trouble else ''}"
         return (f"{self.rel(p)} : {note}. (Le modèle actuel ne peut pas voir les images : vérifie le contenu avec "
                 f"read_file.)")
 

@@ -21,6 +21,7 @@ FORMATS = {".svg", ".png", ".pdf"}
 THEMES = {"default", "neutral", "dark", "forest", "base"}
 VH_RE = re.compile(r"(?<![\w-])(\d*\.?\d+)[dsl]?vh\b")  # 100vh, 50dvh…: screen heights in a page's CSS
 SCREEN_H = 800  # a laptop screen, for those heights when a whole page is captured
+LAST_REPORT = {}  # the last page rendered: its errors, its canvases, how many stayed blank
 
 
 class DiagramError(Exception):
@@ -214,4 +215,6 @@ def export_visual(source, output):
                 tmp.unlink(missing_ok=True)
     else:
         raise DiagramError("source d'un visuel : fichier .svg ou .html")
+    global LAST_REPORT
+    LAST_REPORT = info
     return _describe(out, info)

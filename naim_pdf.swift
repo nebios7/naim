@@ -27,6 +27,20 @@ func fail(_ msg: String) -> Never {
     exit(1)
 }
 
+let errorsJS = """
+window.__naimErrors = [];
+addEventListener('error', e => { const t = e.target; __naimErrors.push(t && t !== window && (t.src || t.href)
+  ? 'fichier introuvable : ' + (t.src || t.href) : (e.message || 'erreur') + (e.lineno ? ' (ligne ' + e.lineno + ')' : '')); }, true);
+addEventListener('unhandledrejection', e => __naimErrors.push(String(e.reason && e.reason.message || e.reason)));
+const __naimCE = console.error;
+console.error = function (...a) { __naimErrors.push(a.map(String).join(' ')); return __naimCE.apply(this, a); };
+"""
+
+func jsonList(_ items: [String]) -> String {
+    let data = (try? JSONSerialization.data(withJSONObject: items)) ?? Data("[]".utf8)
+    return String(data: data, encoding: .utf8) ?? "[]"
+}
+
 func done(_ extra: String = "") -> Never {
     print("{\"file\": \"\(output.path)\"\(extra)}")
     exit(0)
@@ -44,6 +58,9 @@ class Renderer: NSObject, WKNavigationDelegate {
         config.userContentController.addUserScript(WKUserScript(
             source: "var s=document.createElement('style');s.textContent='\(css)';document.head.appendChild(s);",
             injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        // what the page itself reports as broken (a script error, a missing file): returned with the image
+        config.userContentController.addUserScript(WKUserScript(source: errorsJS, injectionTime: .atDocumentStart,
+                                                                forMainFrameOnly: true))
         web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         window = NSWindow(contentRect: web.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         super.init()
@@ -126,8 +143,46 @@ class Renderer: NSObject, WKNavigationDelegate {
                     fail("capture impossible : \(err?.localizedDescription ?? "?")")
                 }
                 do { try data.write(to: output) } catch { fail("écriture impossible : \(error.localizedDescription)") }
-                done(", \"width\": \(rep.pixelsWide), \"height\": \(rep.pixelsHigh)")
+                self.report(rep, rect) { extra in
+                    done(", \"width\": \(rep.pixelsWide), \"height\": \(rep.pixelsHigh)" + extra)
+                }
             }
+        }
+    }
+
+    // the page's errors, and each canvas (3D, chart, game) that is one flat colour in the image: nothing drawn in it
+    func report(_ rep: NSBitmapImageRep, _ rect: NSRect, _ then: @escaping (String) -> Void) {
+        // per canvas, the points of a 12 × 12 grid where it is visible (not under a title or a legend)
+        let js = """
+        [(window.__naimErrors || []).slice(0, 12).map(String),
+         [...document.querySelectorAll('canvas')].map(c => { const r = c.getBoundingClientRect(), pts = [];
+           if (r.width < 40 || r.height < 40) return null;
+           for (let i = 1; i < 12; i++) for (let j = 1; j < 12; j++) {
+             const x = r.left + r.width * i / 12, y = r.top + r.height * j / 12;
+             if (document.elementFromPoint(x, y) === c) pts.push([x + scrollX, y + scrollY]); }
+           return pts; }).filter(p => p)]
+        """
+        web.evaluateJavaScript(js) { r, _ in
+            let a = r as? [Any] ?? []
+            let errors = a.first as? [String] ?? []
+            let canvases = (a.count > 1 ? a[1] as? [[[NSNumber]]] : nil) ?? []
+            let k = CGFloat(rep.pixelsWide) / max(rect.width, 1)
+            var blank = 0
+            for pts in canvases {
+                var first: NSColor?, flat = true, seen = 0
+                for pt in pts where pt.count == 2 {
+                    let x = Int((CGFloat(pt[0].doubleValue) - rect.minX) * k), y = Int((CGFloat(pt[1].doubleValue) - rect.minY) * k)
+                    guard x >= 0, y >= 0, x < rep.pixelsWide, y < rep.pixelsHigh,
+                          let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+                    seen += 1
+                    if let f = first {
+                        if abs(f.redComponent - c.redComponent) + abs(f.greenComponent - c.greenComponent)
+                            + abs(f.blueComponent - c.blueComponent) > 0.06 { flat = false }
+                    } else { first = c }
+                }
+                if flat && seen >= 20 { blank += 1 }
+            }
+            then(", \"errors\": \(jsonList(errors)), \"canvas\": \(canvases.count), \"blank\": \(blank)")
         }
     }
 

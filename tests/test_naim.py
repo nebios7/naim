@@ -1045,6 +1045,25 @@ class WorksLikeAColleague(unittest.TestCase):
         short.write_text("<p>une ligne</p>")
         self.assertNotIn("écran", docs.preview_png(short)[1])
 
+    def test_blank_drawing_and_errors_said(self):
+        # a 3D heart whose page never drew anything: the image was an empty dark page and Naim said « il n'apparaît pas »
+        # without knowing why; now the look names the empty canvas, the page's errors, a script that cannot run
+        import docs
+        blank = Path(self.a.root) / "vide.html"
+        blank.write_text("<style>body{margin:0;background:#222}canvas{width:100%;height:400px;display:block}</style>"
+                         "<h1>Titre</h1><canvas></canvas><div style='position:absolute;top:60px'>légende</div>")
+        self.assertIn("VIDE", docs.preview_png(blank)[1])
+        drawn = Path(self.a.root) / "dessin.html"
+        drawn.write_text("<canvas id=c width=600 height=400></canvas><script>const g=c.getContext('2d');"
+                         "g.fillStyle='#c33';g.fillRect(100,100,300,200);</script>")
+        self.assertNotIn("PROBLÈME", docs.preview_png(drawn)[1])
+        broken = Path(self.a.root) / "casse.html"
+        broken.write_text("<p>x</p><script>\nimport * as THREE from 'three';\nfoo();\n</script>"
+                          "<script>undefinedFunction();</script>")
+        note = docs.preview_png(broken)[1]
+        self.assertIn('type="module"', note)
+        self.assertIn("erreurs de la page", note)
+
     def test_each_brick_checked(self):
         self.a.update_todos([{"text": "serveur", "status": "in_progress"}, {"text": "page", "status": "pending"}])
         self.a.call_tool("write_file", {"path": "app.py", "content": "print(1)\n"})

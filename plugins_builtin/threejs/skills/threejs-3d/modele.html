@@ -13,6 +13,9 @@
   .titre { position: absolute; left: 24px; top: 20px; pointer-events: none; }
   .titre h1 { margin: 0; font-size: 22px; font-weight: 600; }
   .titre p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .calque { position: absolute; inset: 0; pointer-events: none; }
+  .etiquette { font-size: 12px; font-weight: 600; color: var(--text); background: color-mix(in srgb, var(--bg) 82%, transparent);
+    border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; white-space: nowrap; transform: translateY(-14px); }
   .repli { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 24px; }
 </style>
 <!-- three.js : une version fixe (jamais « latest »), le module et ses extensions depuis le même endroit -->
@@ -28,6 +31,7 @@
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 
 const box = document.getElementById("scene");
 const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;   // pas de rotation automatique si l'utilisateur le demande
@@ -42,6 +46,9 @@ try {
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));                  // net sans écraser la carte graphique (écrans Retina)
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 box.prepend(renderer.domElement);
+const calque = new CSS2DRenderer();                                     // les noms des parties, posés sur la 3D
+calque.domElement.className = "calque";
+box.append(calque.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
@@ -57,12 +64,23 @@ scene.add(soleil);
 const monde = new THREE.Group();
 scene.add(monde);
 
+// le nom d'une partie, accroché à elle (il la suit quand elle tourne) : etiquette("Aorte", aorte)
+// ou à un point du monde : etiquette("Salon", new THREE.Vector3(2, 1, 3))
+function etiquette(texte, ou) {
+  const div = document.createElement("span");
+  div.className = "etiquette"; div.textContent = texte;
+  const nom = new CSS2DObject(div);
+  if (ou && ou.isObject3D) ou.add(nom); else { nom.position.copy(ou || new THREE.Vector3()); monde.add(nom); }
+  return nom;
+}
+
 // ---- la scène : remplace seulement ce bloc ----
 const objet = new THREE.Mesh(
   new THREE.TorusKnotGeometry(1.1, 0.34, 220, 32),
   new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.35, metalness: 0.15 })
 );
 monde.add(objet);
+etiquette("Nœud torique", objet);
 // ---- fin de la scène ----
 
 const controles = new OrbitControls(camera, renderer.domElement);
@@ -108,12 +126,14 @@ function verifier() {
 function taille() {
   const w = box.clientWidth, h = box.clientHeight;
   renderer.setSize(w, h, false);
+  calque.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(taille).observe(box);
 taille();
 verifier();
+calque.render(scene, camera);
 renderer.render(scene, camera);   // une première image tout de suite : visible dans une capture, même sans animation
 
 const temps = new THREE.Timer();           // (three.js signale THREE.Clock comme dépassé)
@@ -123,6 +143,7 @@ renderer.setAnimationLoop((t) => {         // s'arrête tout seul quand l'onglet
   if (!calme) monde.rotation.y += dt * 0.35;   // une rotation lente autour de l'axe vertical : l'objet reste au centre
   controles.update();
   renderer.render(scene, camera);
+  calque.render(scene, camera);
   window.__images = (window.__images || 0) + 1;   // compteur d'images dessinées (vérification)
 });
 

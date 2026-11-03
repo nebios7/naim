@@ -7,7 +7,9 @@ description: La 3D dans une page web avec Three.js — scène, caméra, lumière
 
 Le modèle vérifié est dans ce skill : `$HOME/.naim/plugins/threejs/skills/threejs-3d/modele.html` (une scène complète
 qui marche : lumières, objet, rotation, souris, taille, mouvement réduit, nettoyage). Copie-le puis change SEULEMENT le bloc
-entre `// ---- la scène` et `// ---- fin de la scène` (avec edit_file) — ne réécris pas la base.
+entre `// ---- la scène` et `// ---- fin de la scène` (avec edit_file) — ne réécris pas la base. **N'écris jamais ce
+fichier en entier avec write_file** et n'ajoute pas un second `<script>` : la base contient le rendu, la taille, le
+cadrage et les noms ; sans elle, rien ne s'affiche (une page vide). Si le fichier est cassé, recopie le modèle.
 
 **Un nouveau travail va dans son propre dossier**, nommé d'après le sujet. N'écrase jamais l'`index.html` d'un autre
 projet.
@@ -23,6 +25,11 @@ maison de 100 m², un pont, un avion, un atome…) :
    lignes avant de coder. Une maison de 100 m² : le sol (10 × 10), les pièces et leurs surfaces (la somme fait 100),
    des murs de 2,5 m de haut et 0,2 m d'épaisseur, les portes et les fenêtres, le toit. Les chiffres que tu ne connais
    pas (taille d'un organe, d'un monument) : `web_search`, jamais inventés.
+   **Regarde une vraie image du sujet avant de coder** (surtout si l'utilisateur en donne une ou le demande) : ouvre la
+   page qu'il donne, ou une recherche d'images libres, puis fais une capture et regarde-la :
+   `browser action=open url=https://commons.wikimedia.org/w/index.php?search=<sujet en anglais>&title=Special:MediaSearch&type=image`
+   puis `browser action=screenshot`. Écris ce que tu vois dans ton plan : les parties, où elles sont les unes par
+   rapport aux autres, leurs proportions, leurs couleurs. Ton modèle 3D suit ce plan, pas ton imagination.
 2. **Choisis pour chaque partie une technique** de la boîte à outils (tableau plus bas) et combine-les.
 3. **Ce que tu ne sais pas faire : cherche l'exemple officiel le plus proche**, dans la même version que le modèle, et
    adapte-le (mots en anglais) :
@@ -35,9 +42,16 @@ maison de 100 m², un pont, un avion, un atome…) :
    vaut mieux qu'un dessin. Cherche `web_search « <sujet> glb CC0 »` (Poly Pizza, Kenney, NIH 3D, Smithsonian 3D,
    modèles d'exemple glTF de Khronos). Vérifie la licence. Demande à l'utilisateur avant de télécharger (nom, source,
    taille), puis charge-le avec `GLTFLoader` dans `monde` et appelle `cadrer(monde)`.
-5. **Construis, puis REGARDE** : `browser` action=screenshot (le modèle dessine une première image tout de suite, donc
-   la capture montre la scène). Compare avec ton plan : la forme ressemble-t-elle au sujet ? les proportions, les
+5. **Construis, puis REGARDE** : `look_at <fichier>` (le modèle dessine une première image tout de suite, donc la
+   capture montre la scène ; look_at dit aussi si la zone 3D est restée vide et quelles erreurs la page a eues). Compare avec ton plan : la forme ressemble-t-elle au sujet ? les proportions, les
    couleurs ? Corrige ce qui ne va pas, puis regarde de nouveau.
+
+## Les noms et les explications
+Quand l'utilisateur veut les noms des parties (ou des explications), la base a déjà ce qu'il faut :
+`etiquette("Aorte", aorte)` accroche un nom à un objet (il le suit quand il tourne) ; `etiquette("Salon", new
+THREE.Vector3(2, 1, 3))` le pose à un point. Donne à chaque partie son propre objet (une variable) pour pouvoir la
+nommer. Les explications plus longues vont dans un petit panneau HTML à côté, aux couleurs de la page (`var(--bg)`,
+`var(--text)`), jamais un fond blanc fixe (illisible en mode sombre).
 
 ## Les trois règles qui évitent une scène vide
 1. **Tout objet va dans `monde`** (`monde.add(...)`), jamais directement dans `scene`. Le modèle appelle ensuite

@@ -1,6 +1,6 @@
 {
   "name": "threejs",
-  "version": "1.5",
+  "version": "1.6",
   "description": "La 3D dans une page web avec Three.js : scène, lumières, animation, rotation à la souris, modèles 3D, à partir d'un modèle vérifié.",
   "skills": "skills",
   "priority": true,

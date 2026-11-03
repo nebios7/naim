@@ -345,7 +345,7 @@ def preview_png(path, page=1, width=1100):
     out = PREVIEWS / f"{key}.png"
     for old in sorted(PREVIEWS.glob("*.png"), key=lambda f: f.stat().st_mtime)[:-60]:
         old.unlink(missing_ok=True)  # keep the cache small
-    note = ""
+    note, trouble = "", ""
     if ext == ".pdf":
         r = subprocess.run([pdf_tool(), str(path), str(out), str(page), str(width)], capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
@@ -359,8 +359,10 @@ def preview_png(path, page=1, width=1100):
             raise DocError("image illisible")
         note = "image"
     elif ext in (".svg", ".html", ".htm"):
+        diagrams.LAST_REPORT = {}
         diagrams.export_visual(path, out)
         note = "rendu de la page" if ext != ".svg" else "rendu du SVG"
+        trouble = page_trouble(diagrams.LAST_REPORT, path) if ext != ".svg" else ""
         w, h = _png_size(out)
         screen = int(w * 1.25)
         if ext != ".svg" and h > screen * 1.2:  # a long page squeezed into one image is unreadable: one screen at a time
@@ -381,7 +383,26 @@ def preview_png(path, page=1, width=1100):
             made[0].replace(out)
         note = "première page (aperçu Quick Look)"
     w, h = _png_size(out)
-    return out, f"{note}, {w}×{h} px"
+    return out, f"{note}, {w}×{h} px{trouble}"
+
+
+SCRIPT_RE = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.S | re.I)
+
+
+def page_trouble(info, path):
+    """What the image alone does not say: the page's errors, a canvas (3D, chart, game) where nothing was drawn."""
+    said = []
+    for attrs, code in SCRIPT_RE.findall(Path(path).read_text(errors="replace")):
+        if not re.search(r"src=|module|importmap", attrs) and re.search(r"^\s*import\s.+\sfrom\s|^\s*import\s+[\"']", code, re.M):
+            said.append('un <script> sans type="module" contient des import : il ne s\'exécute pas du tout')
+            break
+    if info.get("errors"):
+        said.append("erreurs de la page : " + " ; ".join(e[:200].rstrip(".") for e in info["errors"][:6]))
+    if info.get("blank"):
+        said.append(f"{info['blank']} zone(s) de dessin (canvas) VIDE(S) : rien n'y est dessiné, la 3D, le graphique ou "
+                    "le jeu ne s'affiche pas. Trouve la cause (rendu jamais appelé, taille jamais donnée, objet hors champ, "
+                    "erreur) ; si la page vient du modèle d'un skill, repars du modèle et change seulement le bloc prévu")
+    return ("\nPROBLÈME À CORRIGER avant de dire que c'est fini : " + " ; ".join(said) + ".") if said else ""
 
 
 def _png_size(png):
