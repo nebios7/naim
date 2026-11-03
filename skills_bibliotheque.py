@@ -8,6 +8,7 @@ is rebuilt only when the folder changes.
 import json
 import math
 import re
+import shutil
 import unicodedata
 from pathlib import Path
 
@@ -88,8 +89,35 @@ def _stamp():
     return f"{len(_roots())}:{len(dirs)}:{sum(int(d.stat().st_mtime_ns // 1000) for d in dirs)}" if dirs else ""
 
 
+BASE = Path(__file__).with_name("skills_bibliotheque_base")  # skills made for Naim, shipped with it
+_based = False
+
+
+def ensure_base():
+    """The library skills shipped with Naim, copied in once: one the user already has, edited or deleted stays so."""
+    global _based
+    if _based or not BASE.is_dir():
+        return
+    _based = True
+    record = LIB / ".base-installes"
+    try:
+        done = set(record.read_text().split())
+    except OSError:
+        done = set()
+    new = [d for d in sorted(BASE.iterdir()) if (d / "SKILL.md").is_file() and d.name not in done]
+    if not new:
+        return
+    LIB.mkdir(parents=True, exist_ok=True)
+    for d in new:
+        if not (LIB / d.name).exists():
+            shutil.copytree(d, LIB / d.name, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
+        done.add(d.name)
+    record.write_text("\n".join(sorted(done)) + "\n")
+
+
 def index():
     """[{name, dir, description, head, scripts, path}] of every skill in the library (cached)."""
+    ensure_base()
     stamp = _stamp()
     try:
         cached = json.loads(INDEX.read_text())

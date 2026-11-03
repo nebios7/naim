@@ -1268,6 +1268,53 @@ class ThreeD(unittest.TestCase):
         self.assertNotEqual((e.match_skill("affiche-moi l'heure dans un beau carré") or {}).get("name"), "threejs-3d")
 
 
+class NewUserSkills(unittest.TestCase):
+    """What someone who installs Naim from GitHub gets: the plugins and library skills made for Naim in the repository,
+    and the big library offered on the welcome screen, downloaded from its authors' repositories."""
+
+    SCRIPT = r"""
+import sys; sys.path.insert(0, sys.argv[1])
+import extensions as ext, plugins, skills_bibliotheque as lib, skill_hub
+plugins.ensure_builtin()
+print(all((plugins.PLUGINS / n / "plugin.json").is_file() for n in ("ui-ux-pro-max", "essentiels", "threejs", "site-vitrine")))
+n = lib.count()
+print(sorted(d.name for d in lib.LIB.iterdir() if (d / "SKILL.md").is_file())[:3], n)
+import shutil; shutil.rmtree(lib.LIB / "plan-maison"); lib._based = False; lib.ensure_base()
+print((lib.LIB / "plan-maison").exists())
+st = skill_hub.packs_status()
+print([p["id"] for p in st], [p["installed"] for p in st])
+try:
+    skill_hub.install_pack("inconnu")
+except skill_hub.SkillError as e:
+    print("refus", e)
+m = lambda t: (ext.match_skill(t, ext.HOME, set()) or {}).get("name")
+print(m("fais une maquette plus belle de mon application"), m("audit de sécurité de mon site"))
+"""
+
+    def test_shipped_and_offered(self):
+        with tempfile.TemporaryDirectory() as home:
+            r = subprocess.run([sys.executable, "-c", self.SCRIPT, str(ROOT)], capture_output=True, text=True,
+                               env={**os.environ, "NAIM_HOME": home}, timeout=120)
+            out = r.stdout.splitlines()
+            self.assertEqual(out[0], "True", r.stderr[-800:])
+            self.assertIn("animations-web", out[1])
+            self.assertTrue(out[1].endswith(" 15"))
+            self.assertEqual(out[2], "False")  # a shipped skill the user deleted is not put back
+            self.assertIn("'general'", out[3])
+            self.assertIn("[0, 0, 0, 0, 0, 0]", out[3])  # nothing downloaded until the user chooses
+            self.assertTrue(out[4].startswith("refus"))
+            # a trigger of a pack not installed (apple-design) is skipped: the request still gets a skill
+            self.assertEqual(out[5].split()[0], "ui-ux-pro-max")
+            self.assertEqual(out[5].split()[1], "vibesec")
+
+    def test_welcome_screen_offers_the_packs(self):
+        page = (ROOT / "web" / "index.html").read_text()
+        self.assertIn("/api/skills/packs/install", page)
+        self.assertIn("<h2>Les skills</h2>", page)
+        server = (ROOT / "server.py").read_text()
+        self.assertIn('"/api/skills/packs"', server)
+
+
 class ShopWebsite(unittest.TestCase):
     """« une landing page pour mon salon »: a sober editorial model copied and adapted, not 900 lines written from
     nothing in the generated look (pink gradients, emoji icons, invented figures)."""

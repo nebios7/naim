@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>TITRE DU DOCUMENT</title>
+<style>
+  @page { size: A4; margin: 18mm 18mm 20mm; }
+  :root { --ink: #1f1e1d; --muted: #6b6a66; --line: #e3e1d8; --soft: #f6f4ef; }
+  * { box-sizing: border-box; }
+  body { font: 11pt/1.55 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink); margin: 0; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid var(--ink);
+           padding-bottom: 10px; margin-bottom: 22px; }
+  header .doc { font-size: 9pt; color: var(--muted); text-align: right; line-height: 1.4; }
+  h1 { font: 500 22pt/1.15 ui-serif, "New York", Georgia, serif; margin: 0; letter-spacing: -0.3px; }
+  .sous-titre { color: var(--muted); margin: 4px 0 0; font-size: 10.5pt; }
+  h2 { font-size: 12.5pt; margin: 22px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 11pt; margin: 14px 0 4px; }
+  p { margin: 0 0 8px; }
+  ul, ol { margin: 0 0 10px; padding-left: 20px; } li { margin: 2px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 10pt; page-break-inside: avoid; }
+  th { text-align: left; background: var(--soft); font-weight: 600; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+  td.nombre, th.nombre { text-align: right; white-space: nowrap; }
+  tr.total td { font-weight: 600; background: var(--soft); }
+  .encadre { background: var(--soft); border-left: 3px solid var(--ink); padding: 10px 12px; margin: 10px 0 14px; }
+  img, svg { max-width: 100%; height: auto; }
+  figure { margin: 10px 0 16px; page-break-inside: avoid; } figcaption { color: var(--muted); font-size: 9pt; margin-top: 4px; }
+  footer { margin-top: 28px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8.5pt;
+           display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>TITRE DU DOCUMENT</h1>
+    <p class="sous-titre">Sous-titre : pour qui, à quel sujet</p>
+  </div>
+  <div class="doc">DATE<br>Préparé par Naim<br>pour NOM DE L'UTILISATEUR</div>
+</header>
+
+<div class="encadre"><b>En bref :</b> l'essentiel en deux ou trois phrases (ce que contient ce document, la conclusion ou
+ce qui est attendu du lecteur).</div>
+
+<h2>1. Première partie</h2>
+<p>Texte court et clair. Une idée par paragraphe.</p>
+
+<h2>2. Deuxième partie</h2>
+<table>
+  <tr><th>Élément</th><th>Détail</th><th class="nombre">Quantité</th></tr>
+  <tr><td>…</td><td>…</td><td class="nombre">…</td></tr>
+  <tr class="total"><td colspan="2">Total</td><td class="nombre">…</td></tr>
+</table>
+
+<h2>3. Prochaines étapes</h2>
+<ol><li>…</li></ol>
+
+<footer><span>TITRE DU DOCUMENT</span><span>Naim · DATE</span></footer>
+</body>
+</html>

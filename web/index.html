@@ -132,7 +132,7 @@ body .composer:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px 
 .shit small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; }
 .shit mark { background: var(--brand-soft); color: var(--text); border-radius: 3px; }
 #onb { position: fixed; inset: 0; z-index: 60; background: rgb(0 0 0 / .55); display: grid; place-items: center; }
-#onb .card { width: min(560px, 92vw); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 28px 20px; box-shadow: var(--shadow); }
+#onb .card { max-height: 92vh; overflow: auto; width: min(560px, 92vw); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 28px 20px; box-shadow: var(--shadow); }
 #onb .onbsteps { display: flex; flex-direction: row; gap: 6px; margin-bottom: 18px; }
 #onb .onbsteps span { display: block; flex: 1; height: 4px; border-radius: 4px; background: var(--line); }
 #onb .onbsteps span.on { background: var(--brand); }
@@ -142,6 +142,12 @@ body .composer:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px 
 #onb .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
 #onb .row span:first-child { flex: 1; }
 #onb .nav2 { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
+#onb .packs { max-height: 38vh; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+#onb .pack { align-items: flex-start; cursor: pointer; }
+#onb .pack input { margin-top: 3px; accent-color: var(--brand); }
+#onb .pack .pk { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+#onb .pack small { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+#onb .pack .meta { color: var(--muted); font-size: 12px; white-space: nowrap; text-align: right; }
 #onb .logo { width: 64px; height: 64px; margin-bottom: 8px; }
 
 
@@ -5723,11 +5729,20 @@ const SLASH = [
   ["/mcp", "", "Gérer les serveurs MCP", () => naimCmd("mcp")],
   ["/plugin", "marketplace add <lien> | install <nom> | hooks <nom> on|off", "Ajouter une marketplace de plugins et installer un plugin (aussi ceux faits pour d'autres agents de code)", (a) => pluginCmd(a)],
   ["/mods", "show|hide|on|off <nom> | reload", "Les mods de la fenêtre de Naim : les lister, en éteindre un, les recharger", (a) => modsCmd(a)],
+  ["/3d", "<sujet>", "Un objet ou une scène en 3D dans une page web : rotation à la souris, noms des parties", (a) => skillCmd("threejs-3d", a, "/3d un cœur avec ses vaisseaux")],
+  ["/design", "<demande>", "Le design d'une page, d'une application ou d'un composant (UI UX Pro Max)", (a) => skillCmd("ui-ux-pro-max", a, "/design la page d'accueil de mon application")],
+  ["/site", "<commerce>", "Un site vitrine ou une landing page sobre, pas un gabarit généré", (a) => skillCmd("site-vitrine", a, "/site mon salon de coiffure à Lyon")],
+  ["/bibliotheque", "", "Installer des packs de skills (des milliers de savoir-faire en plus)", () => showOnboarding(3)],
   ["/skills", "", "Gérer les skills", () => naimCmd("skills")],
   ["/memory", "", "Voir la mémoire de Naim", () => naimCmd("memory")],
   ["/planifier", "<demande>", "Programmer une tâche récurrente ou à une heure précise", (a) => { schEdit = a ? { prompt: a } : null; setView("schedules"); }],
   ["/help", "", "Toutes les commandes et raccourcis", () => naimCmd("shortcuts")],
 ];
+// a skill behind an easy command name: without a request, an example of what to write
+function skillCmd(name, a, example) {
+  if (!a) return toast(`Écris ta demande après la commande, par exemple : ${example}`);
+  setMode("agent"); send(`Charge le skill « ${name} » avec use_skill puis applique-le : ${a}`);
+}
 let slashSel = 0, slashItems = [];
 async function loadSkillCommands() {
   try {
@@ -6701,7 +6716,7 @@ const TABS = {
       <input type="file" id="voiceFile" accept="audio/*,.m4a,.mp3,.wav,.aac,.caf" hidden>
     </div>
     <div id="ownerBody"><div class="sgroup"><div class="srow"><div class="sl">Chargement…</div></div></div></div>`,
-  about: () => `<h2>À propos</h2><div class="sgroup"><div class="srow"><div class="sl"><b>Écran de bienvenue</b><small>Revoir la présentation : modèle, autorisations, apparence.</small></div><button class="btn" onclick="showOnboarding()">Revoir</button></div></div><div class="sgroup">
+  about: () => `<h2>À propos</h2><div class="sgroup"><div class="srow"><div class="sl"><b>Écran de bienvenue</b><small>Revoir la présentation : modèle, autorisations, skills, apparence.</small></div><button class="btn" onclick="showOnboarding()">Revoir</button></div></div><div class="sgroup">
     ${row("Naim", "Agent de code autonome créé par ABDESSEMED Mohamed · successeur de Mimo.", '<span class="lang">v3</span>')}
     ${row("Modèle Naim 9B", "Réservé à l'application Naim (fenêtre, navigateur, terminal). Installé par l'écran de bienvenue.<span id=\"modelVerDetail\"></span>", '<span class="lang" id="modelVer">…</span>')}
     ${row("Données", "Conversations et réglages : ~/Library/Application Support/Naim", "")}
@@ -8617,13 +8632,13 @@ async function editTags(c) {
 async function showOnboarding(step = 0) {
   $("#onb")?.remove();
   const box = document.createElement("div"); box.id = "onb";
-  const N = 4;
+  const N = 5;
   const nav = (last) => `<div class="nav2">${last ? "<span></span>" : '<button class="ghost" data-onb="skip">Passer</button>'}<div style="display:flex;gap:8px">${step ? '<button class="btn" data-onb="prev">Retour</button>' : ""}<button class="btn primary" data-onb="${last ? "done" : "next"}">${last ? "Commencer" : "Suivant"}</button></div></div>`;
   let body = "";
   if (step === 0) {
     body = `<div class="onbword">Naim</div><h2>Bienvenue dans Naim</h2>
       <p>Naim est un assistant de code qui tourne <b>entièrement sur ton Mac</b>. En mode <b>Chat</b>, il répond et cherche sur le web ; en mode <b>Agent</b>, il crée, modifie, lance et vérifie tes projets tout seul, contrôle l'écran, le simulateur iOS et tes emails si tu l'autorises.</p>
-      <p>En 3 étapes : le modèle, les autorisations, l'apparence.</p>`;
+      <p>En 4 étapes : le modèle, les autorisations, les skills, l'apparence.</p>`;
   } else if (step === 1) {
     const [st, ll] = await Promise.all([api("/api/status").catch(() => ({})), api("/api/llama").catch(() => ({}))]);
     const hw = ll.hardware || {};
@@ -8643,6 +8658,18 @@ async function showOnboarding(step = 0) {
       <div class="row"><span>Accessibilité (clics et frappe)</span><b class="${p.accessibility ? "ok" : "ko"}">${p.accessibility ? "✓" : "✗"}</b></div>
       <div class="row"><span>Simulateurs iOS</span><b>${p.devices || 0}</b></div>
       ${p.screen && p.accessibility ? "" : '<button class="btn" data-onb="perm" style="margin-top:10px">Donner les autorisations…</button>'}`;
+  } else if (step === 3) {
+    const r = await api("/api/skills/packs").catch(() => ({ packs: [] }));
+    const packs = r.packs || [];
+    if (!onbPacks) onbPacks = new Set(packs.filter((p) => p.on && !p.installed).map((p) => p.id));
+    const fmt = (n) => n.toLocaleString("fr-FR");
+    body = `<h2>Les skills</h2><p>Les skills sont les savoir-faire de Naim. Les plus utiles sont déjà là ; la bibliothèque en ajoute des milliers, téléchargés depuis les dépôts de leurs auteurs. Naim les trouve tout seul quand une demande en a besoin.</p>
+      <div class="packs">${packs.map((p) => `<label class="row pack"><input type="checkbox" data-pack="${p.id}" ${onbPacks.has(p.id) ? "checked" : ""}>
+        <span class="pk"><b>${esc(p.title)}</b><small>${esc(p.description)}</small></span>
+        <span class="meta">${p.installed ? `<span class="ok">installé · ${fmt(p.installed)}</span>` : `≈ ${fmt(p.count)} skills`}<br>${esc(p.size)} · ${esc(p.license)}</span></label>`).join("")}</div>
+      <div id="onbPk" style="margin-top:10px"><button class="btn primary" data-onb="packs">Installer la sélection</button>
+        <div class="wbar" style="height:6px;margin-top:8px" hidden><i></i></div><small class="muted" id="onbPkTxt"></small></div>
+      <p style="margin-top:10px;font-size:13px">L'installation continue pendant que tu passes à la suite. Pour en ajouter plus tard : Personnaliser › À propos › Écran de bienvenue.</p>`;
   } else {
     body = `<h2>L'apparence</h2><p>Choisis ton thème et ta couleur. Tout se change ensuite dans Personnaliser.</p>
       <div class="row"><span>Thème</span><div class="seg">${[["auto", "Auto"], ["light", "Clair"], ["dark", "Sombre"]].map(([k, l]) => `<button data-onb-theme="${k}" class="${S.theme === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
@@ -8653,6 +8680,8 @@ async function showOnboarding(step = 0) {
   box.innerHTML = `<div class="card"><div class="onbsteps">${Array.from({ length: N }, (_, i) => `<span class="${i <= step ? "on" : ""}"></span>`).join("")}</div>${body}${nav(step === N - 1)}</div>`;
   document.body.appendChild(box);
   const finish = () => { if ($("#onbName")) S.user_name = $("#onbName").value.trim(); if ($("#onbShare")) S.share_feedback = $("#onbShare").checked; S.onboarded = true; saveSettings(); applySettings(); box.remove(); if (!current) renderThread(); };
+  box.onchange = (e) => { const c = e.target.closest("[data-pack]"); if (c) c.checked ? onbPacks.add(c.dataset.pack) : onbPacks.delete(c.dataset.pack); };
+  if (step === 3) followPacks();
   box.onclick = async (e) => {
     const t = e.target.closest("[data-onb],[data-onb-theme]"); if (!t) return;
     if (t.dataset.onbTheme) { S.theme = t.dataset.onbTheme; saveSettings(); applySettings(); updateRail(); $$("[data-onb-theme]", box).forEach((x) => x.classList.toggle("on", x === t)); return; }
@@ -8673,9 +8702,40 @@ async function showOnboarding(step = 0) {
       };
       tick();
     }
+    else if (a === "packs") {
+      const ids = [...onbPacks];
+      if (!ids.length) { toast("Coche au moins un pack"); return; }
+      const res = await api("/api/skills/packs/install", { method: "POST", body: { ids } }).catch((err) => ({ error: String(err) }));
+      if (res.error && !/en cours/.test(res.error)) { toast(res.error); return; }
+      followPacks();
+    }
     else if (a === "perm") { await api("/api/computer/permissions", { method: "POST", body: {} }); toast("Active « Naim » dans les listes qui s'ouvrent, puis relance Naim"); }
     else finish();
   };
+}
+
+let onbPacks = null;  // the packs ticked on the welcome screen (kept when going back and forth)
+// the library packs being installed: progress under the button, while the welcome screen shows them
+async function followPacks() {
+  const r = await api("/api/skills/packs").catch(() => null);
+  const zone = $("#onbPk"); if (!r || !zone) return;
+  const j = r.job, bar = $(".wbar", zone), txt = $("#onbPkTxt"), btn = $("[data-onb=packs]", zone);
+  if (!j) return;
+  const title = (id) => (r.packs.find((p) => p.id === id) || {}).title || id;
+  bar.hidden = false;
+  if (j.running) {
+    if (btn) { btn.disabled = true; btn.textContent = "Installation…"; }
+    const pct = j.total ? Math.round((j.done / j.total) * 100) : 0;
+    $("i", bar).style.width = pct + "%";
+    txt.textContent = j.current ? `${title(j.current)} : ${j.total ? `${j.done} / ${j.total} skills` : "téléchargement…"}` : "…";
+    setTimeout(followPacks, 1000);
+  } else {
+    $("i", bar).style.width = "100%";
+    txt.textContent = `${j.installed.toLocaleString("fr-FR")} skills installés` + (j.errors.length ? ` · à revoir : ${j.errors.join(" ; ")}` : "");
+    if (btn) { btn.disabled = false; btn.textContent = "Installer la sélection"; }
+    $$("[data-pack]").forEach((c) => { const p = r.packs.find((x) => x.id === c.dataset.pack); const m = c.closest(".pack")?.querySelector(".meta");
+      if (p && p.installed && m) m.innerHTML = `<span class="ok">installé · ${p.installed.toLocaleString("fr-FR")}</span><br>${esc(p.size)} · ${esc(p.license)}`; });
+  }
 }
 
 async function migrateLocal() {

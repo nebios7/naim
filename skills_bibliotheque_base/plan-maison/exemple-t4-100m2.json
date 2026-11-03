@@ -1,0 +1,34 @@
+{
+  "titre": "Maison T4 de plain-pied — 100 m² (10 × 10 m)",
+  "largeur": 10, "profondeur": 10, "hauteur": 2.5, "pente_toit": 35, "debord_toit": 0.5,
+  "pieces": [
+    {"nom": "Séjour / cuisine ouverte", "x": 0, "y": 0, "l": 10, "p": 4, "couleur": "#f4efe6"},
+    {"nom": "Dégagement", "x": 4.5, "y": 4, "l": 1.2, "p": 6, "couleur": "#f2f2ef"},
+    {"nom": "Chambre 2", "x": 0, "y": 4, "l": 4.5, "p": 3},
+    {"nom": "Chambre 3", "x": 0, "y": 7, "l": 4.5, "p": 3},
+    {"nom": "Salle de bain", "x": 5.7, "y": 4, "l": 2.5, "p": 2.5, "couleur": "#eaf1f4"},
+    {"nom": "WC", "x": 8.2, "y": 4, "l": 1.8, "p": 1.3, "couleur": "#eaf1f4"},
+    {"nom": "Cellier", "x": 8.2, "y": 5.3, "l": 1.8, "p": 1.2, "couleur": "#f2f2ef"},
+    {"nom": "Chambre 1 (parents)", "x": 5.7, "y": 6.5, "l": 4.3, "p": 3.5}
+  ],
+  "portes": [
+    {"x": 4.65, "y": 10, "l": 0.9, "mur": "bas", "entree": true},
+    {"x": 4.65, "y": 4, "l": 0.9, "mur": "haut"},
+    {"x": 4.5, "y": 5.2, "l": 0.8, "mur": "droite"},
+    {"x": 4.5, "y": 8.0, "l": 0.8, "mur": "droite"},
+    {"x": 5.7, "y": 4.6, "l": 0.8, "mur": "gauche"},
+    {"x": 5.7, "y": 7.6, "l": 0.8, "mur": "gauche"}
+  ],
+  "fenetres": [
+    {"x": 1.0, "y": 0, "l": 2.4, "mur": "haut"},
+    {"x": 6.6, "y": 0, "l": 2.4, "mur": "haut"},
+    {"x": 0, "y": 1.2, "l": 1.6, "mur": "gauche"},
+    {"x": 0, "y": 4.9, "l": 1.2, "mur": "gauche"},
+    {"x": 0, "y": 7.9, "l": 1.2, "mur": "gauche"},
+    {"x": 1.6, "y": 10, "l": 1.2, "mur": "bas"},
+    {"x": 7.2, "y": 10, "l": 1.4, "mur": "bas"},
+    {"x": 10, "y": 7.6, "l": 1.2, "mur": "droite"},
+    {"x": 10, "y": 4.3, "l": 0.6, "mur": "droite"},
+    {"x": 10, "y": 1.2, "l": 1.6, "mur": "droite"}
+  ]
+}

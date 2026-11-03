@@ -35,14 +35,108 @@ POPULAR = [
 ]
 _cache = {}
 
+# The skills library a new Naim can fetch (welcome screen, Personnaliser): each pack is downloaded from its authors'
+# own repositories, under their license, into the library (found by chercher_skill, never listed in the prompt).
+# « also »: the same repository under an older name (a library filled before it moved still counts as installed)
+PACKS = [
+    {"id": "general", "title": "Bibliothèque générale", "count": 2900, "size": "100 Mo", "license": "MIT", "on": True,
+     "description": "Développement, données, marketing, documents, sécurité, IA… pour presque toute demande.",
+     "sources": ["sickn33/agentic-awesome-skills"], "also": ["sickn33/antigravity-awesome-skills"]},
+    {"id": "ecc", "title": "Développement et vidéo (ECC)", "count": 317, "size": "3 Mo", "license": "MIT", "on": True,
+     "description": "Tests, revue de code, architecture, vidéo (Remotion, Manim), motion design, interfaces animées.",
+     "sources": ["affaan-m/ECC"]},
+    {"id": "officiels", "title": "Skills officiels", "count": 20, "size": "18 Mo", "license": "selon le skill", "on": True,
+     "description": "Word, Excel, PowerPoint, PDF, affiches, thèmes, pages web : les skills publiés par Anthropic.",
+     "sources": ["anthropics/skills"]},
+    {"id": "design", "title": "Design d'interfaces", "count": 28, "size": "2 Mo", "license": "MIT, Apache-2.0",
+     "on": True,
+     "description": "Règles d'Apple, critique et accessibilité d'un design, design system, React et Next.js, "
+                    "décortiquer une app pour la refaire.",
+     "sources": ["dickwu/apple-design-skill", "https://github.com/anthropics/knowledge-work-plugins/tree/main/design",
+                 "vercel-labs/agent-skills", "Jakeschincariol/replica-skill"]},
+    {"id": "applications", "title": "Automatiser des applications", "count": 840, "size": "2 Mo",
+     "license": "voir le dépôt", "on": False,
+     "description": "Gmail, Slack, Notion, Trello, HubSpot… (plus de 800 services) par Composio : un compte Composio "
+                    "est nécessaire.",
+     "sources": ["github:1078079172"]},
+    {"id": "retro", "title": "Rétro-ingénierie", "count": 9, "size": "1 Mo", "license": "Apache-2.0, Unlicense…",
+     "on": False,
+     "description": "Analyser une app Android ou iOS, un binaire (Frida, Ghidra) : pour la sécurité de tes propres "
+                    "logiciels.",
+     "sources": ["P4nda0s/reverse-skills", "SimoneAvogadro/android-reverse-engineering-skill",
+                 "github:1194491216"]},
+]
+
+
+def _repo_key(url):
+    try:
+        p = parse_url(url)  # a repository given by its number is looked up once (installed under its real name)
+    except SkillError:
+        return url.lower()
+    return f"{p[1]}/{p[2]}".lower() if p[0] == "github" else url.lower()
+
+
+def packs_status():
+    """The packs, each with how many of its skills the library already holds."""
+    import skills_bibliotheque
+    held = {}
+    if skills_bibliotheque.LIB.is_dir():
+        for src in skills_bibliotheque.LIB.glob("*/.source"):
+            try:
+                key = _repo_key(src.read_text().split("\n", 1)[0].strip())
+            except OSError:
+                continue
+            held[key] = held.get(key, 0) + 1
+    out = []
+    for pk in PACKS:
+        n = sum(held.get(_repo_key(u), 0) for u in pk["sources"] + pk.get("also", []))
+        out.append({k: v for k, v in pk.items() if k != "also"} | {"installed": n})
+    return out
+
+
+def install_pack(pid, progress=None):
+    """Every skill of a pack's repositories into the library; a source that fails does not stop the others.
+    Returns (installed names, errors)."""
+    pack = next((pk for pk in PACKS if pk["id"] == pid), None)
+    if not pack:
+        raise SkillError(f"pack inconnu : {pid}")
+    got, errors = [], []
+    for url in pack["sources"]:
+        try:
+            names = [s["name"] for s in browse(url)]
+            got += install(url, names, scope="bibliotheque",
+                           progress=(lambda d, t, u=url: progress(u, d, t)) if progress else None)
+        except Exception as e:  # noqa: BLE001 — one repository moved or offline: the others are still installed
+            errors.append(f"{url} : {e}")
+    return got, errors
+
 
 class SkillError(Exception):
     pass
 
 
+_ids = {}  # GitHub repository number -> "owner/repo" (looked up once)
+
+
+def _by_id(num):
+    """A repository by its GitHub number: still found after it is renamed or moved to another owner."""
+    if num not in _ids:
+        import json
+        try:
+            text, _, _ = ext._get(f"https://api.github.com/repositories/{num}", limit=200_000)
+            _ids[num] = json.loads(text)["full_name"]
+        except Exception as e:  # noqa: BLE001
+            raise SkillError(f"dépôt GitHub n° {num} introuvable ({e})")
+    return _ids[num]
+
+
 def parse_url(url):
-    """(owner, repo, ref, subpath) for a GitHub link, or ("raw", url) for a direct SKILL.md link."""
+    """(owner, repo, ref, subpath) for a GitHub link, or ("raw", url) for a direct SKILL.md link.
+    Also « github:<number>[/path] »: a repository by its GitHub number (it survives a rename)."""
     u = url.strip().rstrip("/")
+    m = re.fullmatch(r"github:(\d+)(?:/(.*))?", u)
+    if m:
+        return ("github", *_by_id(m.group(1)).split("/", 1), "HEAD", m.group(2) or "")
     if re.fullmatch(r"[\w.-]+/[\w.-]+", u):
         return ("github", *u.split("/"), "HEAD", "")
     m = re.match(r"https?://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?(?:/(?:tree|blob)/([^/]+)(?:/(.*))?)?$", u)

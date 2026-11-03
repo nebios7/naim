@@ -5359,8 +5359,14 @@ class _Editor:
     """The input of naimtools, drawn and edited like an assistant's: a framed box that grows with the text,
     Naim's robot sitting on it, a menu of commands under « / », the history on ↑ ↓, the permission mode on
     Maj+Tab and a status line. Raw keyboard, everything redrawn in place (no full-screen takeover)."""
+    # a command that is a skill with an easy name: « /3d un cœur avec ses vaisseaux »
+    SKILL_COMMANDS = {"/3d": ("threejs-3d", "un objet ou une scène en 3D dans une page web"),
+                      "/design": ("ui-ux-pro-max", "le design d'une page, d'une application, d'un composant"),
+                      "/site": ("site-vitrine", "un site vitrine ou une landing page")}
     COMMANDS = [("/help", "aide et raccourcis"), ("/reset", "oublier la conversation"), ("/mode", "changer le mode d'autorisation"),
-                ("/contexte", "la place utilisée dans la mémoire de travail"), ("/exit", "quitter Naim")]
+                ("/contexte", "la place utilisée dans la mémoire de travail"),
+                ("/goal", "travailler tout seul jusqu'à l'objectif atteint et vérifié")] + [
+                (k, v[1]) for k, v in SKILL_COMMANDS.items()] + [("/exit", "quitter Naim")]
     MODES = [("demander", "Naim demande avant chaque action"), ("accepter les modifications", "fichiers sans demander, commandes avec"),
              ("tout autoriser", "Naim agit sans demander")]
 
@@ -5694,13 +5700,15 @@ def main():
     _welcome(where, engine)
 
     def run(task):
+        """True when the request went to its end (not stopped with Ctrl+C, no engine error)."""
         SPIN.start()
-        t0 = time.time()
+        t0, ended = time.time(), False
         try:
             if _answer_only(task):
                 _chat_answer(agent, task)
             else:
                 agent.run(task)
+            ended = True
         except KeyboardInterrupt:  # Ctrl+C: the task stops, Naim stays open
             agent.cancel.set()
             SPIN.stop()
@@ -5716,6 +5724,33 @@ def main():
             agent.cancel.clear()
         s = int(time.time() - t0)
         print(f"{C['grey']}  {s // 60} min {s % 60:02d} s · {where}{C['reset']}\n" if s >= 60 else f"{C['grey']}  {s} s · {where}{C['reset']}\n")
+        return ended
+
+    def goal(text, turns=20):
+        """/goal: Naim works turn after turn until the goal is reached and checked (the window's /goal, here)."""
+        note = (f"\n\n[Objectif (/goal) : « {text} ». Travaille jusqu'à ce qu'il soit complètement atteint ET vérifié "
+                "(fichiers présents, programme lancé, tests qui passent). Avance le plus possible dans ce tour, sans me "
+                "redemander ce que tu peux décider. Termine TOUJOURS ta réponse par une de ces deux lignes : « OBJECTIF "
+                "ATTEINT : » suivi des preuves, seulement si tout est fait et vérifié ; sinon « RESTE : » suivi de ce qui "
+                "manque, précisément, en une ligne.]")
+        last, same = "", 0
+        for k in range(turns):
+            print(f"{C['grey']}Objectif · tour {k + 1} / {turns} (Ctrl+C pour l'arrêter){C['reset']}")
+            if not run((text if k == 0 else f"Continue l'objectif (tour {k + 1} / {turns}).") + note):
+                print(f"{C['grey']}Objectif arrêté.{C['reset']}")
+                return
+            reply = next((m.get("content") for m in reversed(agent.messages)
+                          if m.get("role") == "assistant" and isinstance(m.get("content"), str) and m["content"].strip()), "")
+            if re.search(r"OBJECTIF ATTEINT", reply, re.I):
+                print(f"{C['green']}● Objectif atteint.{C['reset']}")
+                return
+            m = re.search(r"RESTE\s*:\s*([^\n]{0,400})", reply, re.I)
+            rest = (m.group(1) if m else reply[-300:]).strip()
+            same, last = (same + 1 if rest and rest == last else 0), rest
+            if same >= 2:
+                print(f"{C['yellow']}● Objectif en pause : Naim tourne en rond ({rest[:120]}).{C['reset']}")
+                return
+        print(f"{C['yellow']}● Objectif en pause : {turns} tours faits. Relance /goal pour continuer.{C['reset']}")
 
     try:
         if args.task:
@@ -5739,8 +5774,25 @@ def main():
             if task == "/contexte":
                 print(f"{C['grey']}{EDITOR.context()} de la mémoire de travail de cette conversation.{C['reset']}")
                 continue
+            if task.split(" ", 1)[0] == "/goal":
+                what = task[5:].strip()
+                if what:
+                    goal(what)
+                else:
+                    print(f"{C['grey']}/goal <objectif> : Naim travaille tout seul, tour après tour (20 au plus), jusqu'à "
+                          f"l'objectif atteint et vérifié. Ex. : /goal le site de mon salon, testé dans le navigateur{C['reset']}")
+                continue
+            if task.split(" ", 1)[0] in EDITOR.SKILL_COMMANDS:
+                cmd, _, what = task.partition(" ")
+                skill, desc = EDITOR.SKILL_COMMANDS[cmd]
+                if not what.strip():
+                    print(f"{C['grey']}{cmd} : {desc}. Écris ce que tu veux après, par exemple {cmd} {'un cœur avec ses vaisseaux' if cmd == '/3d' else 'la page de mon salon de coiffure'}.{C['reset']}")
+                    continue
+                task = f"Charge le skill « {skill} » avec use_skill puis applique-le : {what.strip()}"
             if task in ("?", "/help"):
                 print(f"{C['grey']}Décris ce que tu veux faire, en français : Naim lit, écrit, lance les commandes et vérifie.\n"
+                      "  /goal <objectif> travailler tout seul jusqu'au bout · /3d <sujet> une scène 3D\n"
+                      "  /design <demande> le design d'une interface · /site <commerce> un site vitrine\n"
                       "  Entrée envoyer · \\ puis Entrée nouvelle ligne · ↑ ↓ historique · / commandes (Tab complète)\n"
                       "  Maj+Tab mode d'autorisation · Ctrl+A / Ctrl+E début / fin · Ctrl+U effacer · Ctrl+C arrêter ou quitter"
                       f"{C['reset']}")

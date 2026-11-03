@@ -109,6 +109,7 @@ cp "$here/reference-a4.docx" "$dest/app/" 2>/dev/null || true  # Word template (
 rm -rf "$dest/app/web" && cp -R "$here/web" "$dest/app/web"
 rm -rf "$dest/app/skills_extra" && cp -R "$here/skills_extra" "$dest/app/skills_extra"  # extra files of built-in skills
 rm -rf "$dest/app/plugins_builtin" && cp -R "$here/plugins_builtin" "$dest/app/plugins_builtin"  # plugins shipped with Naim
+rm -rf "$dest/app/skills_bibliotheque_base" && cp -R "$here/skills_bibliotheque_base" "$dest/app/skills_bibliotheque_base"  # library skills made for Naim
 mkdir -p "$dest/app/tools/benchmark" && cp "$here/tools/curate_feedback.py" "$dest/app/tools/" && cp "$here/tools/benchmark/bench.py" "$here/tools/benchmark/results.json" "$dest/app/tools/benchmark/"
 # native helper for screen reading, clicks and PDF reading (rebuilt only when its source changes)
 h="$(shasum "$here/naim_input.swift" | cut -c1-16)"

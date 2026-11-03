@@ -1,0 +1,10 @@
+{
+  "name": "ui-ux-pro-max",
+  "version": "1.0",
+  "description": "UI UX Pro Max : design d'interfaces (pages, applications, composants) à partir d'une base locale de styles, palettes, polices et règles UX, avec un design system généré pour chaque projet. Source : nextlevelbuilder/ui-ux-pro-max-skill (MIT).",
+  "skills": "skills",
+  "triggers": {
+    "ui-ux-pro-max": "\\b(ui/ux|ui ux|\\bux\\b|design system|charte graphique|maquette|landing page|page d'accueil|tableau de bord|dashboard|refonte|redesign|palette (de couleurs?)?|typographi\\w*|accessibilit[ée]|responsive|(beau|belle|joli|jolie|moderne|pro|professionnel\\w*|[ée]l[ée]gant\\w*) (design|interface|site|page|application|appli)|(design|interface|site|page|application|appli) (plus )?(beau|belle|joli|jolie|moderne|pro|professionnel\\w*|[ée]l[ée]gant\\w*)|am[ée]liore\\w* (le |la |l')?(design|interface|style|look)|style (pro|moderne|premium))\\b"
+  },
+  "priority": true
+}

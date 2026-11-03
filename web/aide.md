@@ -16,6 +16,27 @@ comment l'utiliser, comment il fonctionne à l'intérieur, et comment le faire �
 | Plus de réflexion pour un travail difficile | Bouton **Effort** à côté de la jauge : **Élevé** |
 | Voir la place utilisée dans sa mémoire | Clic sur la **jauge** (fenêtre de contexte) |
 
+### Ce que tu peux lui demander
+
+Écris simplement, en français : Naim choisit tout seul la bonne méthode (skill). Quelques exemples :
+
+| Pour… | Écris par exemple… | Commande directe |
+|---|---|---|
+| Une scène en 3D | « le cœur en 3D avec ses vaisseaux et leurs noms », « une maison de 100 m² en 3D » | `/3d` |
+| Un beau design d'interface | « refais la page d'accueil de mon app, plus moderne » | `/design` |
+| Un site vitrine | « un site pour mon salon de coiffure à Lyon » | `/site` |
+| Un document | « mon CV en PDF », « un rapport Word sur… », « un tableau Excel de mes dépenses » | |
+| Un visuel | « une affiche pour la fête du quartier », « un logo pour ma boulangerie » | |
+| Comprendre un algorithme | « montre-moi le tri à bulles en animation » | `/algo` |
+| Des maths | « résous cette équation et trace la courbe » | `/maths` |
+| Un plan de maison | « le plan d'un T4 de 100 m² avec la liste des matériaux » | |
+| Du code | « ajoute une page de connexion à mon app », « corrige ce bug », « lance les tests » | `/test` |
+| Une recherche | « compare les trois meilleurs aspirateurs robots sous 300 € » | `/web` |
+
+**Naim vérifie ce qu'il fait** avant de dire « fini » : il regarde l'image de sa page ou de son document
+(`look_at`) et voit si une zone 3D ou un graphique est resté vide, ou si la page a des erreurs ; il ouvre les liens
+qu'il te donne pour être sûr qu'ils marchent ; il ne remplace jamais le fichier d'un autre travail.
+
 **Au démarrage**, Naim prépare ses consignes (barre latérale : « Naim lit ses consignes… · 47 % »). La première fois
 d'une journée, ou après un changement de skills ou de mémoire, il les lit (1 à 2 min par mode) puis les **garde sur
 le disque** : aux ouvertures suivantes, elles sont rechargées en une seconde.
@@ -35,6 +56,10 @@ le disque** : aux ouvertures suivantes, elles sont rechargées en une seconde.
 | `/review` | Relire les changements en cours |
 | `/commit` | Faire un commit git propre |
 | `/skill <nom> <tâche>` | Utiliser une skill précise |
+| `/3d <sujet>` | Un objet ou une scène en 3D dans une page web : rotation à la souris, vraies dimensions, noms des parties |
+| `/design <demande>` | Le design d'une page, d'une application ou d'un composant (UI UX Pro Max : styles, palettes, polices, règles UX) |
+| `/site <commerce>` | Un site vitrine ou une landing page sobre et soignée, pas un gabarit généré |
+| `/bibliotheque` | Installer des packs de skills : des milliers de savoir-faire en plus (voir **4. Skills**) |
 | `/remember <fait>` | Ajouter à la mémoire de Naim |
 | `/undo` | Annuler les dernières modifications de l'agent |
 | `/web <question>` | Chercher sur le web |
@@ -79,6 +104,8 @@ Ceux installés avec `/plugin install` ont le nom du plugin devant : `/ecc:plan`
 | `naim --web` | Interface dans le navigateur |
 | `naimtools` | Naim dans le terminal (même agent, mêmes outils) |
 | `naimtools` puis `/help`, `/mode`, `/contexte`, `/reset`, `/exit` | Aide, mode d'autorisation, mémoire de travail, oublier, quitter |
+| `naimtools` puis `/goal <objectif>` | Naim travaille tout seul, tour après tour (20 au plus), jusqu'à l'objectif atteint et vérifié ; Ctrl+C l'arrête |
+| `naimtools` puis `/3d`, `/design`, `/site` suivi de ta demande | Les mêmes commandes directes que dans la fenêtre |
 
 Dans `naimtools` : `\` + Entrée pour une nouvelle ligne, ⇧⇥ pour changer le mode d'autorisation.
 
@@ -161,6 +188,24 @@ Un clic : elle continue derrière sans être coupée, Naim passe à la suite et 
 | **Skills actives** `~/.naim/skills` | à chaque conversation | garde-les peu nombreuses |
 | **Bibliothèque** `~/.naim/skills-bibliotheque` | seulement au besoin | autant que tu veux (même des milliers) |
 
+#### La bibliothèque de skills (packs)
+
+Naim arrive avec ses skills et plugins essentiels. La bibliothèque en ajoute **plus de 4 000**, téléchargées depuis
+les dépôts de leurs auteurs (chacune garde sa licence), au premier lancement ou plus tard avec `/bibliotheque`
+(ou Personnaliser › À propos › Écran de bienvenue) :
+
+| Pack | Contenu | Skills |
+|---|---|---|
+| Bibliothèque générale | développement, données, marketing, documents, sécurité, IA… | ≈ 2 900 |
+| Développement et vidéo (ECC) | tests, revue de code, architecture, vidéo (Remotion, Manim), motion design | ≈ 317 |
+| Skills officiels | Word, Excel, PowerPoint, PDF, affiches, thèmes, pages web (Anthropic) | ≈ 20 |
+| Design d'interfaces | règles d'Apple, critique et accessibilité, design system, React et Next.js, Replica | ≈ 28 |
+| Automatiser des applications | Gmail, Slack, Notion, HubSpot… par Composio (compte Composio nécessaire) | ≈ 840 |
+| Rétro-ingénierie | analyser une app Android ou iOS, un binaire, pour la sécurité de tes logiciels | ≈ 9 |
+
+Elles vont dans la bibliothèque : elles ne ralentissent pas Naim, il les trouve seulement quand une demande en a
+besoin. L'installation continue en arrière-plan ; un pack déjà installé est marqué « installé ».
+
 - **Ajouter** : Personnaliser › Skills › lien GitHub › Parcourir › Installer (ou **Tout installer**), en choisissant
   « Installer dans ». Plus de 30 d'un coup en actives : elles vont d'office dans la bibliothèque.
 - **Depuis un fichier de ton Mac** : « installe ce skill ~/Downloads/SKILL.md » (ou le dossier qui le contient) : il
@@ -183,7 +228,12 @@ Un clic : elle continue derrière sans être coupée, Naim passe à la suite et 
 
 Un plugin (`~/.naim/plugins/<nom>/plugin.json`) apporte d'un coup des skills, des serveurs MCP, des commandes `/`,
 des hooks et la liste de ses outils Homebrew. Personnaliser › Plugins : activer, installer les outils, ajouter depuis
-GitHub ou un dossier, retirer (Corbeille). Fournis : **électronique** (Arduino, Raspberry Pi), **mainframe** (COBOL
+GitHub ou un dossier, retirer (Corbeille). Fournis : **threejs** (la 3D : un modèle vérifié, des techniques pour tout
+sujet, les noms des parties, la vérification de la scène), **site-vitrine** (un modèle éditorial sobre), **ui-ux-pro-max**
+(design d'interfaces : styles, palettes, polices, règles UX), **essentiels** (code sécurisé, trouver de nouvelles skills),
+**visuel** (affiches, logos, bannières), **pdf-pro** (le style des PDF), **documentation** (la documentation officielle
+d'une bibliothèque, dont les exemples three.js), **traduction**, **quiz**, **candidature** (CV et lettre), **reseau**
+(caméras, appareils du réseau), **électronique** (Arduino, Raspberry Pi), **mainframe** (COBOL
 vérifié par un hook, JCL, DB2, REXX, PL/I), **algorithmique** (pseudo-code), **mathematiques** (formules : algèbre,
 matrices, vecteurs, dérivées, intégrales, probabilités… ; opérations posées et courbes de fonctions calculées par Naim ;
 figures de géométrie ; énoncé puis corrigé), **naim-mem** (la mémoire des sessions : des hooks

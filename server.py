@@ -470,6 +470,7 @@ APPROVAL_TIMEOUT = 600  # seconds before an unanswered approval counts as "denie
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 _pending = {}  # approval id -> {"event": threading.Event, "allow": bool}
+PACK_JOB = {}  # the library packs being installed (welcome screen): one installation at a time
 INSTALL_JOBS = {}  # big skills installations running in the background: id -> {done, total, installed, error}
 _agents = {}  # run id -> running Agent (to pass it the messages typed while it works)
 _runs = {}     # run id -> threading.Event (stop flag)
@@ -939,6 +940,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/skills":
             settings = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
             self.send_json(ext.list_skills(q.get("root") or None, set(settings.get("disabled_skills") or [])))
+        elif path == "/api/skills/packs":  # the library packs, with what is already installed and a running install
+            job = PACK_JOB if PACK_JOB.get("running") or PACK_JOB.get("finished") else None
+            self.send_json({"packs": skill_hub.packs_status(), "job": job})
         elif path == "/api/skill":
             f = Path(q.get("path", ""))
             ok = f.name == "SKILL.md" and f.is_file()
@@ -1513,6 +1517,29 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "name": dst.name})
         elif path == "/api/skills/popular":
             self.send_json({"sources": skill_hub.POPULAR})
+        elif path == "/api/skills/packs/install":
+            ids = [i for i in (self.read_json().get("ids") or []) if any(pk["id"] == i for pk in skill_hub.PACKS)]
+            if PACK_JOB.get("running"):
+                self.send_json({"error": "une installation est déjà en cours"}, 409)
+            elif not ids:
+                self.send_json({"error": "aucun pack choisi"}, 400)
+            else:
+                PACK_JOB.clear()
+                PACK_JOB.update(running=True, finished=False, ids=ids, current=None, done=0, total=0, installed=0, errors=[])
+
+                def run(ids=ids):
+                    try:
+                        for pid in ids:
+                            PACK_JOB.update(current=pid, done=0, total=0)
+                            got, errors = skill_hub.install_pack(
+                                pid, progress=lambda u, d, t: PACK_JOB.update(done=d, total=t))
+                            PACK_JOB["installed"] += len(got)
+                            PACK_JOB["errors"] += errors
+                    except Exception as e:  # noqa: BLE001
+                        PACK_JOB["errors"].append(str(e))
+                    PACK_JOB.update(running=False, finished=True, current=None)
+                threading.Thread(target=run, daemon=True, name="naim-skill-packs").start()
+                self.send_json({"ok": True})
         elif path in ("/api/sim/relaunch", "/api/sim/save"):
             udid = str(self.read_json().get("udid") or "")
             if not re.fullmatch(r"[0-9A-Fa-f-]{36}", udid):

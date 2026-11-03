@@ -1,0 +1,21 @@
+{
+  "name": "essentiels",
+  "version": "1.0",
+  "description": "Code web sécurisé (vibesec) et trouver puis installer de nouvelles skills (find-skills), chargés tout seuls quand la demande en parle. Avec le pack « Design d'interfaces » de la bibliothèque (écran de bienvenue) : les règles d'Apple, les méthodes de design (critique, accessibilité, design system, textes d'interface, passation, recherche utilisateur, synthèse) et Replica (décortiquer une app pour la refaire), choisis par les mêmes mots.",
+  "skills": "skills",
+  "triggers": {
+    "design-critique": "\\b(critiqu\\w*|avis|revoi[st]|relis|analyse\\w*|qu'en penses[- ]tu|que penses[- ]tu|feedback|retours?)\\b[^.?!]{0,40}\\b(design|maquette|[ée]cran|interface|ui|mockup|figma|page|capture)\\b",
+    "accessibility-review": "\\b(accessibilit[ée]|a11y|wcag|rgaa|lecteur d'[ée]cran|malvoyant\\w*|daltoni\\w*|navigation au clavier)\\b|\\bcontraste\\w*\\b[^.?!]{0,30}\\b(couleur|texte|page|site|appli\\w*|[ée]cran)\\b",
+    "design-system": "\\b(design system|syst[èe]me de design|charte graphique|biblioth[èe]que de composants|design tokens?|guide de style)\\b",
+    "ux-copy": "\\b(microcopie|ux ?writing|ux copy|textes? (d'|de l')(interface|appli\\w*|[ée]cran)|libell[ée]s?|messages? d'erreur|[ée]tat vide|texte du bouton|que doit dire (le|ce) bouton)\\b",
+    "design-handoff": "\\b(handoff|passation|sp[ée]cs? (pour|aux) (les )?d[ée]v\\w*|sp[ée]cifications? (pour|aux) (les )?d[ée]v\\w*|fiche (pour|aux) d[ée]v\\w*)\\b",
+    "user-research": "\\b(recherche utilisateurs?|guide d'entretien|entretiens? utilisateurs?|test d'utilisabilit[ée]|tests? utilisateurs?|questionnaire utilisateur|persona)\\b",
+    "research-synthesis": "\\b(synth[èe]se|synth[ée]tise\\w*|regroupe\\w*)\\b[^.?!]{0,40}\\b(entretiens?|verbatims?|retours? (utilisateurs?|clients?)|questionnaires?|avis clients?|nps)\\b",
+    "apple-design": "\\b(apple|hig|human interface|liquid glass|design (de l'|d'une |d'un |de l')?(interface|app|application|ui|ux)|ui ?/ ?ux|ux ?/ ?ui|interface (soign|[ée]l[ée]gant|belle|jolie|pro)\\w*|maquette|refonte (visuelle|du design)|plus (beau|belle|jolie?)|design (soign|pro|moderne))\\b",
+    "find-skills": "\\b(trouve|cherche|installe)\\w* (une |des |la |les )?skills?\\b|\\bskill (pour|qui)\\b|\\bil existe (une )?skill\\b",
+    "vibesec": "\\b(s[ée]curit[ée]|s[ée]curis\\w*|faille\\w*|vuln[ée]rab\\w*|xss|csrf|injection sql|sql injection|owasp|audit de s[ée]curit[ée]|mots? de passe (hash|chiffr)\\w*|authentification s[ée]curis\\w*|pentest)\\b",
+    "replica-recon": "\\b(d[ée]cortiqu\\w*|reverse|r[ée]tro[- ]?ing[ée]ni\\w*|clone[rz]?|refai\\w*|reconstrui\\w*|reproduis\\w*|refaire)\\b[^.?!]{0,50}\\b(app(li(cation)?)?s?|site|logiciel|saas|plateforme|produit)\\b(?!\\.\\w)(?![^.?!]{0,30}\\b(apk|ipa|binaire|ex[ée]cutable|\\.dll|\\.so)\\b)|\\b(ma (propre )?version de|mon clone de|un clone de)\\b",
+    "replica-diff": "\\b(mon clone|le clone)\\b[^.?!]{0,60}\\b(compar\\w*|ressembl\\w*|manque|parit[ée]|proche)\\b|\\b(compar\\w*)\\b[^.?!]{0,40}\\b(clone)\\b"
+  },
+  "priority": true
+}
