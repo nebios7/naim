@@ -965,6 +965,33 @@ class WorksLikeAColleague(unittest.TestCase):
         with mock.patch("browser.audit", return_value=[]):
             self.assertEqual(self.a.look_note(), "")  # it looks right: nothing to say
 
+    def test_looks_at_its_page_folder_written_twice(self):
+        from unittest import mock
+        name = self.a.root.name  # « site/site/index.html » when already in « site »: the tools find it, so does the look
+        r = self.a.call_tool("write_file", {"path": f"{name}/index.html", "content": "<p>x</p>"})
+        self.assertTrue(r.startswith("ok"), r)
+        with mock.patch("browser.audit", return_value=["1 image(s) cassée(s) : a.jpg"]) as au:
+            self.assertIn("cassée", self.a.look_note())
+        self.assertTrue(au.call_args[0][0].endswith("/index.html"))
+
+    def test_long_page_seen_screen_by_screen(self):
+        # a landing page is 4 to 8 screens high: squeezed into one image it was 147 px wide, unreadable (« page incomplète »);
+        # and the capture grows the window to the whole page, so a 100vh hero must stay one screen high
+        import docs
+        page = Path(self.a.root) / "long.html"
+        page.write_text("<style>body{margin:0}.hero{min-height:100vh;background:#fce}section{height:900px}</style>"
+                        "<div class=hero><h1>Haut</h1></div>" + "<section>bloc</section>" * 5)
+        out, note = docs.preview_png(page, 1)
+        self.assertIn("écran 1 sur", note)
+        self.assertIn("page=2", note)
+        w, h = docs._png_size(out)
+        self.assertGreater(w, 600)
+        _, last = docs.preview_png(page, 99)
+        self.assertIn("fin de la page", last)
+        short = Path(self.a.root) / "court.html"
+        short.write_text("<p>une ligne</p>")
+        self.assertNotIn("écran", docs.preview_png(short)[1])
+
     def test_each_brick_checked(self):
         self.a.update_todos([{"text": "serveur", "status": "in_progress"}, {"text": "page", "status": "pending"}])
         self.a.call_tool("write_file", {"path": "app.py", "content": "print(1)\n"})

@@ -3373,7 +3373,10 @@ class Agent:
             return ""
         page, self._page_dirty = self._page_dirty, None
         app = next((x for x in reversed(self.started) if x.url and x.proc.poll() is None), None)
-        f = Path(page) if Path(page).is_absolute() else self.root / page
+        try:
+            f = self.resolve(page, read=True)  # as the tools found it (a folder written twice, « ~/… »)
+        except ValueError:
+            f = Path(page) if Path(page).is_absolute() else self.root / page
         url = app.url if app else (f.as_uri() if f.suffix.lower() in (".html", ".htm") and f.exists() else None)
         if not url:
             return ""

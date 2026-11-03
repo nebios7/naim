@@ -360,8 +360,18 @@ def preview_png(path, page=1, width=1100):
         note = "image"
     elif ext in (".svg", ".html", ".htm"):
         diagrams.export_visual(path, out)
-        subprocess.run(["sips", "-Z", str(width), str(out)], capture_output=True, timeout=60)
         note = "rendu de la page" if ext != ".svg" else "rendu du SVG"
+        w, h = _png_size(out)
+        screen = int(w * 1.25)
+        if ext != ".svg" and h > screen * 1.2:  # a long page squeezed into one image is unreadable: one screen at a time
+            screens = -(-h // screen)
+            page = max(1, min(int(page or 1), screens))
+            top = (page - 1) * screen  # sips reads an offset of 0 as « centred »: 1 at least
+            subprocess.run(["sips", "-c", str(min(screen, h - top - 1)), str(w), "--cropOffset", str(max(top, 1)), "0", str(out), "--out", str(out)],
+                           capture_output=True, timeout=60)
+            note = (f"écran {page} sur {screens} de la page" +
+                    (f" ; la suite : look_at avec page={page + 1}" if page < screens else " (fin de la page)"))
+        subprocess.run(["sips", "-Z", str(width), str(out)], capture_output=True, timeout=60)
     else:  # Word, PowerPoint, Excel, Pages, Keynote, Numbers, RTF…: Quick Look thumbnail of the first page
         with tempfile.TemporaryDirectory() as tmp:
             r = subprocess.run(["qlmanage", "-t", "-s", str(width), "-o", tmp, str(path)], capture_output=True, timeout=60)
@@ -370,7 +380,11 @@ def preview_png(path, page=1, width=1100):
                 raise DocError(f"aperçu impossible pour {path.name}")
             made[0].replace(out)
         note = "première page (aperçu Quick Look)"
-    with open(out, "rb") as f:
-        head = f.read(24)
-    w, h = int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+    w, h = _png_size(out)
     return out, f"{note}, {w}×{h} px"
+
+
+def _png_size(png):
+    with open(png, "rb") as f:
+        head = f.read(24)
+    return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")

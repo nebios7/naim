@@ -19,6 +19,8 @@ MERMAID_JS = VENDOR / "mermaid.min.js"
 MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"
 FORMATS = {".svg", ".png", ".pdf"}
 THEMES = {"default", "neutral", "dark", "forest", "base"}
+VH_RE = re.compile(r"(?<![\w-])(\d*\.?\d+)[dsl]?vh\b")  # 100vh, 50dvh…: screen heights in a page's CSS
+SCREEN_H = 800  # a laptop screen, for those heights when a whole page is captured
 
 
 class DiagramError(Exception):
@@ -200,7 +202,16 @@ def export_visual(source, output):
                 f'{src.read_text(errors="replace")}</div></body></html>')
         info = _render_page(page, out, workdir=None)
     elif src.suffix.lower() in (".html", ".htm"):
-        info = _run(src, out, "fit")
+        text = src.read_text(errors="replace")
+        if not VH_RE.search(text):
+            info = _run(src, out, "fit")
+        else:  # the capture grows the window to the whole page, so 100vh would become the page height: a real screen's
+            tmp = src.with_name(f".naim-rendu-{src.stem}.html")  # beside it: its images keep their relative paths
+            try:
+                tmp.write_text(VH_RE.sub(lambda m: f"{float(m.group(1)) * SCREEN_H / 100:g}px", text))
+                info = _run(tmp, out, "fit")
+            finally:
+                tmp.unlink(missing_ok=True)
     else:
         raise DiagramError("source d'un visuel : fichier .svg ou .html")
     return _describe(out, info)
