@@ -1056,8 +1056,8 @@ class RightQuestions(unittest.TestCase):
 
 
 class KnowledgeSpeedAmbiguity(unittest.TestCase):
-    """An API that is not what it was thought: the installed documentation first. Files still read whole (nothing is
-    cut). Several contacts: asked before a message or a call."""
+    """An API that is not what it was thought: the installed documentation first. A long code file: its head and plan
+    first, whole when asked again (texts always whole). Several contacts: asked before a message or a call."""
 
     def setUp(self):
         self.t = tempfile.mkdtemp()
@@ -1069,10 +1069,23 @@ class KnowledgeSpeedAmbiguity(unittest.TestCase):
         r = self.a.call_tool("run_command", {"command": "python3 -c 'from math import pell'"})
         self.assertNotIn("help(m.f)", r)  # once is enough
 
-    def test_files_read_whole(self):
-        # « non tu réduis rien »: a long file is read whole when asked (no cut to save time)
-        Path(self.t, "long.txt").write_text("".join(f"ligne {i}\n" for i in range(1, 801)))
-        self.assertIn("ligne 800", self.a.read_file("long.txt"))
+    def test_long_code_by_its_plan_then_whole(self):
+        body = "\n".join(["<html>", "<head>"] + [f"<p>ligne {i} " + "x" * 40 + "</p>" for i in range(300)] + ['<section id="galerie">']
+                         + [f"<p>suite {i} " + "x" * 40 + "</p>" for i in range(300)] + ["<script>", "function demarrer() {}", "</script>"])
+        Path(self.t, "page.html").write_text(body)
+        r = self.a.read_file("page.html")
+        self.assertIn("les 150 premières sont montrées", r)
+        self.assertIn('<section id="galerie">', r)  # in the plan, with its line number
+        self.assertIn("function demarrer", r)
+        self.assertNotIn("suite 299", r)
+        self.assertIn("suite 299", self.a.read_file("page.html"))  # asked again: whole — nothing is ever refused
+        self.assertIn("suite 299", naimtools.Agent(self.t, auto_yes=True).read_file("page.html", offset=550, limit=100))
+
+    def test_texts_and_short_files_whole(self):
+        Path(self.t, "long.txt").write_text("".join(f"ligne {i} du livre à résumer\n" for i in range(1, 2001)))
+        self.assertIn("ligne 2000", self.a.read_file("long.txt"))  # a text to read: always whole
+        Path(self.t, "court.py").write_text("x = 1\n" * 40)
+        self.assertEqual(self.a.read_file("court.py"), "x = 1\n" * 40)
 
     def test_two_contacts_asked_before_sending(self):
         from unittest import mock

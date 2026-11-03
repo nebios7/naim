@@ -720,6 +720,7 @@ class Agent:
         self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
         self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
         self.request_text, self._asked_which = "", set()  # the user's request; the names already asked about
+        self._read_whole = set()  # long code files already shown by their plan: asked again, given whole
         self.todos, self._todo_pushbacks, self._todo_reminded = [], 0, False
         self.disabled_skills = set(disabled_skills or ())
         self.run_id = run_id or f"run{int(time.time() * 1000)}"
@@ -1217,6 +1218,14 @@ class Agent:
                 return src
         return None
 
+    # code and pages only (a text or a document to read is always given whole), beyond ~20,000 characters (over a minute of
+    # reading here): first its head and its plan
+    LONG_READ, LONG_HEAD = 20000, 150
+    PLAN_EXTS = {".html", ".htm", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".css", ".scss", ".py", ".swift", ".java", ".kt", ".go",
+                 ".rs", ".php", ".rb", ".c", ".cpp", ".h", ".vue", ".svelte"}
+    OUTLINE_RE = re.compile(r"^\s*(def |class |async def |function |export |const \w+\s*=\s*(\(|async|function)|@app\.|"
+                            r"<(section|header|main|aside|footer|nav|form|script|style|h[1-3])\b|<\w+[^>]*\bid=\"|[A-Z_]{3,}\s*=|\w[\w.#:-]*\s*\{\s*$|func |struct |fn |impl )")
+
     def _read_lines(self, p, offset, limit):
         """Lines offset… of a text file (1 = the first), numbered like « cat -n »; read as a stream, so a log of
         several Go costs only the lines asked for."""
@@ -1263,6 +1272,17 @@ class Agent:
                     f"pour trouver la ligne d'abord.]")
         text = p.read_text(errors="replace")
         self._remember_read(p, text)
+        if (len(text) > self.LONG_READ and p.suffix.lower() in self.PLAN_EXTS and str(p) not in self._read_whole):
+            # a long code file or page (700 lines: 4 minutes of reading on this Mac): its head and the plan of the rest
+            # first; asked again, it is given whole — nothing is ever refused, only a needless full read avoided
+            self._read_whole.add(str(p))
+            lines = text.split("\n")
+            head = "\n".join(f"{i:>6}\t{l[:300]}" for i, l in enumerate(lines[:self.LONG_HEAD], 1))
+            plan = [f"{i:>6}\t{l.strip()[:120]}" for i, l in enumerate(lines, 1) if i > self.LONG_HEAD and self.OUTLINE_RE.search(l)][:100]
+            return (head + f"\n\n[… {self.rel(p)} a {len(lines)} lignes : les {self.LONG_HEAD} premières sont montrées, puis le plan "
+                    "du reste (ligne, début) :]\n" + "\n".join(plan)
+                    + "\n\n[Lis la partie utile avec read_file offset=<ligne> limit=<nombre>, ou cherche avec search. Pour tout le "
+                    "fichier, refais read_file sans offset : il viendra en entier.]")
         return text
 
     PLACEHOLDER_RE = re.compile(r"^\s*<(already written|\d+ lignes écrites)|\(ancien résultat raccourci\)|Résumé de mes étapes précédentes")
