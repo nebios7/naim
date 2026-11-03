@@ -11,7 +11,7 @@ quelques ports connus, rien d'autre, et seulement sur le réseau local (adresses
 ```bash
 S="$HOME/.naim/plugins/reseau/skills/reseau-local"
 python3 "$S/scan.py"                    # tout le réseau : adresse, nom, type, ports ouverts (~10 à 30 s)
-python3 "$S/scan.py" 192.168.1.140      # un appareil, ses ports en détail
+python3 "$S/scan.py" 192.168.1.20      # un appareil, ses ports en détail
 ```
 
 ## Lire le résultat
@@ -21,6 +21,14 @@ python3 "$S/scan.py" 192.168.1.140      # un appareil, ses ports en détail
 - **imprimante** : 631 ou 9100. **ordinateur / NAS** : 445. **Raspberry / Linux** : 22 (SSH).
 - Le **nom** vient de la box (par exemple « ipcam-… », « raspberrypi », « iPhone-de-… ») : il dit souvent ce qu'est l'appareil.
 - Un appareil connu de la box mais sans port ouvert : éteint, en veille, ou qui ne répond pas. Dis-le simplement.
+
+## Une application pour une caméra trouvée
+N'écris pas l'application toi-même (pas d'OpenCV, pas de Flask) : le skill **camera-ip** a un modèle vérifié. Copie-le,
+puis lance-le :
+```bash
+M="$HOME/.naim/plugins/reseau/skills/camera-ip/modele"; cp "$M/server.py" "$M/index.html" "$M/README.md" .
+```
+puis `start_process command="python3 server.py" keep=true`, et la page sur http://localhost:8099.
 
 ## Les règles
 - Seulement le réseau de l'utilisateur. Jamais d'adresse publique, jamais le réseau de quelqu'un d'autre.

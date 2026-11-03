@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Find the video stream of an IP camera: tries the usual RTSP paths with ffprobe and says which one answers.
 
-    CAM_USER=admin CAM_PASS=… python3 sonde.py 192.168.1.140 [port]
+    CAM_USER=admin CAM_PASS=… python3 sonde.py 192.168.1.20 [port]
 
 The login is read from the environment (asked to the user), never written in a file nor shown. Read-only: each try
 only opens the stream for a few seconds, one at a time (most cameras accept a single connection).

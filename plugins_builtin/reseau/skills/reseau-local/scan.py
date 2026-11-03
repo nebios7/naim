@@ -2,7 +2,7 @@
 """The devices of the user's OWN local network, read-only: who answers, their name, their open service ports.
 
     python3 scan.py                 the whole local network (the Mac's own /24), about 10 s
-    python3 scan.py 192.168.1.140   one device, its ports in detail
+    python3 scan.py 192.168.1.20   one device, its ports in detail
 
 Nothing is changed and nothing is sent but a ping and a connection attempt on a few well-known ports: it only looks.
 It never leaves the local network (private addresses only).

@@ -1,13 +1,17 @@
 {
   "name": "reseau",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Le réseau local (les appareils connectés, trouver une caméra, une imprimante, un Raspberry) et les caméras IP (voir le flux, enregistrer, photos, détection de mouvement) dans une application web locale.",
   "skills": "skills",
   "triggers": {
-    "reseau-local": "\\b(r[ée]seau (local|wi-?fi|de la maison)|appareils? (sont |qui sont )?(connect[ée]s?|sur (le|mon) r[ée]seau)|qui est connect[ée]|scann?\\w* (le |mon )?r[ée]seau|analys\\w* (le |mon )?r[ée]seau|adresses? ip (des|de mes) appareils|trouve\\w* (ma|la|une) (cam[ée]ra|imprimante|raspberry)|sur (ma|la) box)\\b",
-    "camera-ip": "\\b(cam[ée]ras? (ip|wi-?fi|de surveillance|r[ée]seau)|ipcam|rtsp|onvif|flux (vid[ée]o|rtsp)|vid[ée]osurveillance|(app\\w*|interface|tableau de bord) (pour|de) (ma|la) cam[ée]ra|voir (ma|la) cam[ée]ra|enregistr\\w* (ma|la) cam[ée]ra)\\b"
+    "camera-ip": "\\b(cam[ée]ras? (ip|wi-?fi|de surveillance|r[ée]seau)|ipcam|rtsp|onvif|flux (vid[ée]o|rtsp)|vid[ée]osurveillance|voir (ma|la) cam[ée]ra|enregistr\\w* (ma|la) cam[ée]ra)\\b|\\b(app\\w*|interface|tableau de bord|page|site|programme|logiciel)\\b[^.?!]{0,80}\\bcam[ée]ra\\b|\\bcam[ée]ra\\b[^.?!]{0,80}\\b(app\\w*|interface|tableau de bord|en direct|enregistr\\w*|regarder|voir)\\b",
+    "reseau-local": "\\b(r[ée]seau (local|wi-?fi|de la maison)|appareils? (sont |qui sont )?(connect[ée]s?|sur (le|mon) r[ée]seau)|qui est connect[ée]|scann?\\w* (le |mon )?r[ée]seau|analys\\w* (le |mon )?r[ée]seau|adresses? ip (des|de mes) appareils|trouve\\w* (ma|la|une) (cam[ée]ra|imprimante|raspberry)|sur (ma|la) box)\\b"
   },
   "tools": [
-    {"cmd": "ffmpeg", "brew": "ffmpeg", "why": "lire le flux de la caméra, le montrer dans le navigateur et l'enregistrer"}
+    {
+      "cmd": "ffmpeg",
+      "brew": "ffmpeg",
+      "why": "lire le flux de la caméra, le montrer dans le navigateur et l'enregistrer"
+    }
   ]
 }

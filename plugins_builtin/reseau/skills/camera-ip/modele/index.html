@@ -88,7 +88,7 @@
       </div>
       <label for="user">Identifiant</label><input type="text" id="user" autocomplete="off">
       <label for="password">Mot de passe</label><input type="password" id="password" autocomplete="off">
-      <label for="path">Chemin du flux</label><input type="text" id="path" placeholder="stream1">
+      <label for="path">Chemin du flux</label><input type="text" id="path" placeholder="vide = trouvé tout seul (stream1, live…)">
       <div class="row">
         <div><label for="transport">Transport</label><select id="transport"><option value="tcp">TCP (stable)</option><option value="udp">UDP</option></select></div>
         <div></div>
@@ -170,7 +170,7 @@ $("start").onclick = async () => {
   if (!body.ip) { $("err").textContent = "Indique l'adresse de la caméra."; return; }
   const r = await api("/api/start", body);
   if (r.error) { $("err").textContent = r.error; return; }
-  log(`Démarrage du flux ${body.ip}:${body.port}/${body.path}`);
+  log(body.path ? `Démarrage du flux ${body.ip}:${body.port}/${body.path}` : `Recherche du chemin du flux de ${body.ip}…`);
   await refresh();
   if (await waitStream()) play(); else { await refresh(); $("empty").textContent = "Pas d'image."; }
 };
@@ -233,6 +233,7 @@ async function refresh() {
   $("dot").className = "dot" + (st.recording ? " rec" : st.running ? " on" : "");
   $("status").textContent = st.recording ? "Enregistre" : st.running ? "En direct" : "Arrêtée";
   $("recinfo").textContent = st.recording ? st.file : st.running && st.video ? `${st.video.toUpperCase()}${st.reencode ? " → H.264" : ""}` : "";
+  if (st.running && st.path && !$("path").value) { $("path").value = st.path; try { localStorage.setItem("cam.path", st.path); } catch {} log("Chemin trouvé : " + st.path); }
   $("rec").classList.toggle("recording", st.recording); $("rec").querySelector("span").textContent = st.recording ? "Arrêter l'enregistrement" : "Enregistrer";
   for (const b of ["photo", "rec", "full", "stop"]) $(b).disabled = !st.running;
   if (st.error && st.error !== $("err").dataset.last) { $("err").dataset.last = st.error; $("err").textContent = "Le flux s'est arrêté : " + st.error; log("Erreur : " + st.error.split("\n")[0]); }

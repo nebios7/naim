@@ -11,6 +11,7 @@ The camera's address and login are typed in the page: nothing is written in this
 """
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -40,6 +41,33 @@ def source_url(c):
         return c["url"]
     cred = (quote(c.get("user", ""), safe="") + (":" + quote(c["password"], safe="") if c.get("password") else "") + "@") if c.get("user") else ""
     return f"rtsp://{cred}{c['ip']}:{int(c.get('port') or 554)}/{c.get('path', '').lstrip('/')}"
+
+
+# the stream paths of the common brands, tried in turn when the path is left empty
+PATHS = ["stream1", "live", "h264", "11", "stream2", "onvif1", "live/ch00_0", "ch0_0.h264", "live.sdp", "Streaming/Channels/101",
+         "cam/realmonitor?channel=1&subtype=0", "h264Preview_01_main", "videoMain", "media/video1", "unicast", ""]
+
+
+def hide(text):
+    """Never a password on the screen: rtsp://user:pass@ip → rtsp://•••@ip (ffmpeg writes the whole address in its errors)."""
+    return re.sub(r"(rtsp://)[^@/\s]+@", r"\1•••@", text or "")
+
+
+def find_path():
+    """The path left empty: the usual ones tried with ffprobe, one at a time (one connection), the first that answers."""
+    for path in PATHS:
+        url = source_url({**cfg, "path": path})
+        try:
+            r = subprocess.run(["ffprobe", "-v", "error", "-rtsp_transport", cfg.get("transport") or "tcp", "-select_streams", "v:0",
+                                "-show_entries", "stream=codec_name", "-of", "csv=p=0", url], capture_output=True, text=True, timeout=8)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if r.returncode == 0 and r.stdout.strip():
+            cfg["codec"] = r.stdout.strip()
+            return path
+        if "401" in r.stderr:
+            return None  # the login is refused: no use trying other paths
+    return None
 
 
 def video_out():
@@ -74,6 +102,13 @@ def codec(url):
 def start_locked(record):
     global proc
     stop_locked()
+    if not cfg.get("url") and not cfg.get("path") and "found" not in cfg:
+        cfg["found"] = find_path()  # « Chemin du flux » left empty: found by itself
+        if cfg["found"] is None:
+            state.update(running=False, error="Aucun chemin de flux connu ne répond : vérifie l'identifiant et le mot de passe, "
+                                              "ou indique le chemin (il est dans l'application ou la notice de la caméra).")
+            return
+        cfg["path"] = cfg["found"]
     if not cfg.get("reencode") and "codec" not in cfg:
         # browsers play H.264 live, not HEVC (H.265, frequent on cheap cameras): re-encoded by itself, nothing to tick
         cfg["codec"] = codec(source_url(cfg))
@@ -93,7 +128,7 @@ def start_locked(record):
     # its messages go to a file: in a pipe nobody reads, they filled it after a while and ffmpeg froze (no more image)
     proc = subprocess.Popen(cmd, stderr=open(HERE / "ffmpeg.log", "wb"))
     state.update(running=True, recording=record, file=name, since=int(time.time()), error="",
-                 video=cfg.get("codec", ""), reencode=bool(cfg.get("reencode")))
+                 video=cfg.get("codec", ""), reencode=bool(cfg.get("reencode")), path=cfg.get("path", ""))
     threading.Thread(target=watch, args=(proc,), daemon=True).start()
 
 
@@ -103,7 +138,7 @@ def watch(p):
     err = (HERE / "ffmpeg.log").read_text(errors="replace").strip() if (HERE / "ffmpeg.log").exists() else ""
     with lock:
         if proc is p:
-            state.update(running=False, recording=False, error=err[-400:] or "le flux s'est arrêté")
+            state.update(running=False, recording=False, error=hide(err[-400:]) or "le flux s'est arrêté")
 
 
 def medias():
