@@ -108,6 +108,11 @@ NOT_NOW_RE = re.compile(r"\bn['’e]\s*(?:\w+\s+){0,2}?(?:pas|rien|plus|jamais)\
 # making something new (a skill's job), as opposed to acting on a file that already exists
 MAKE_RE = re.compile(r"\b(cr[ée]e[rz]?|fais|faire|fait|g[ée]n[èe]re[rz]?|dessine[rz]?|[ée]cri[st]|[ée]crire|r[ée]dige[rz]?|"
                      r"pr[ée]pare[rz]?|construi\w*|con[çc]oi\w*|plans?|sch[ée]mas?|nouveau|nouvelle)\b", re.I)
+# a new work with its own subject (« génère-moi un cours de médecine »): not a follow-up of the work before it,
+# so it does not inherit that work's skill (the 3D of the heart asked just before) — « fais-en un autre » does
+NEW_WORK_RE = re.compile(r"\b(cr[ée]e[rz]?|fai[st]|faire|g[ée]n[èe]re[rz]?|dessine[rz]?|[ée]cri[st]|[ée]crire|r[ée]dige[rz]?|"
+                         r"pr[ée]pare[rz]?|donne[rz]?|construi[st]|r[ée]alise[rz]?|produi[st])\b(?:[\s'’-]+[\wÀ-ÿ]+){0,2}?"
+                         r"[\s'’-]+(un|une|des|deux|trois|quatre|cinq|\d+)\b(?![\s'’-]+autres?\b)", re.I)
 # the user wants files made or changed (a document, their project), not only an answer
 FILE_WORK_RE = re.compile(r"\b(?:r?ajout\w*|chang\w*|remplac\w*|rectifi\w*|refai\w*|retouch\w*|corrig\w*)\b|images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
@@ -2331,7 +2336,8 @@ class Handler(BaseHTTPRequestHandler):
             recent = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
                                                     if m.get("role") == "user"])
             sk = (ext.match_skill(body["message"], helper.root, helper.disabled_skills)
-                  or (ext.match_skill(recent, helper.root, helper.disabled_skills) if file_work else None))
+                  or (ext.match_skill(recent, helper.root, helper.disabled_skills)
+                      if file_work and not NEW_WORK_RE.search(body["message"] or "") else None))
             generic_app = bool(sk and sk["name"] == "application-web" and not re.search(
                 r"\b(web|site|page|flask|fastapi|django|navigateur)\b", body["message"] or "", re.I))
             if generic_app:

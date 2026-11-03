@@ -1064,6 +1064,44 @@ class WorksLikeAColleague(unittest.TestCase):
         self.assertIn('type="module"', note)
         self.assertIn("erreurs de la page", note)
 
+    def test_model_base_kept(self):
+        # a medicine course: the 3D model copied, two edits guessed (not found), then the whole page rewritten without
+        # its base (drawing, size, framing): nothing showed. Now the base stays, the error shows the block to change
+        model = ROOT / "plugins_builtin/threejs/skills/threejs-3d/modele.html"
+        page = Path(self.a.root) / "cours" / "index.html"
+        page.parent.mkdir()
+        page.write_text(model.read_text())
+        self.a.call_tool("read_file", {"path": "cours/index.html"})
+        r = self.a.call_tool("write_file", {"path": "cours/index.html", "content": "<!doctype html><canvas></canvas><script type=module>"
+                             "import * as THREE from 'three'; const scene = new THREE.Scene();</script>" + "x" * 3000})
+        self.assertTrue(r.startswith("refused"), r)
+        self.assertIn("(naim:bloc)", r)
+        r = self.a.call_tool("edit_file", {"path": "cours/index.html", "old_text": "const scene = new THREE.Scene();\nconst camera = 1;",
+                                           "new_text": "x"})
+        self.assertIn("TorusKnotGeometry", r)  # the block's real text, to replace it whole
+        r = self.a.call_tool("edit_file", {"path": "cours/index.html", "old_text": "new THREE.TorusKnotGeometry(1.1, 0.34, 220, 32)",
+                                           "new_text": "new THREE.SphereGeometry(1, 64, 32)"})
+        self.assertTrue(r.startswith("ok"), r)
+        r = self.a.call_tool("edit_file", {"path": "cours/index.html", "old_text": "new ResizeObserver(taille).observe(box);\n",
+                                           "new_text": ""})
+        self.assertTrue(r.startswith("refused"), r)
+        r = self.a.call_tool("edit_file", {"path": "cours/index.html", "old_text": "<title>Scène 3D</title>", "new_text": "<title>Le cœur</title>"})
+        self.assertTrue(r.startswith("ok"), r)  # the page around the base (title, texts) stays free
+
+    def test_drawing_left_empty_seen_before_done(self):
+        page = Path(self.a.root) / "vide3d.html"
+        page.write_text("<style>body{margin:0;background:#222}canvas{width:100%;height:500px;display:block}</style><canvas></canvas>"
+                        "<script>console.error('THREE.Object3D.add: object not an instance of THREE.Object3D.')</script>")
+        said = self.a._drawing_trouble(page)
+        self.assertTrue(any("VIDE" in x for x in said), said)
+        self.assertTrue(any("Object3D" in x for x in said), said)
+
+    def test_new_work_does_not_inherit_the_skill(self):
+        import server
+        self.assertTrue(server.NEW_WORK_RE.search("ok génère moi un cours médecine 1ère année"))
+        self.assertFalse(server.NEW_WORK_RE.search("fais-en un autre en bleu"))
+        self.assertFalse(server.NEW_WORK_RE.search("ajoute les noms des veines"))
+
     def test_each_brick_checked(self):
         self.a.update_todos([{"text": "serveur", "status": "in_progress"}, {"text": "page", "status": "pending"}])
         self.a.call_tool("write_file", {"path": "app.py", "content": "print(1)\n"})

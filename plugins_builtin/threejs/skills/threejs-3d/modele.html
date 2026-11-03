@@ -74,14 +74,14 @@ function etiquette(texte, ou) {
   return nom;
 }
 
-// ---- la scène : remplace seulement ce bloc ----
+// ---- la scène : remplace seulement ce bloc ---- (naim:bloc)
 const objet = new THREE.Mesh(
   new THREE.TorusKnotGeometry(1.1, 0.34, 220, 32),
   new THREE.MeshStandardMaterial({ color: 0xd97757, roughness: 0.35, metalness: 0.15 })
 );
 monde.add(objet);
 etiquette("Nœud torique", objet);
-// ---- fin de la scène ----
+// ---- fin de la scène ---- (naim:fin-bloc)
 
 const controles = new OrbitControls(camera, renderer.domElement);
 controles.enableDamping = true;            // le mouvement s'arrête en douceur

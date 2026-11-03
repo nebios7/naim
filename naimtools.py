@@ -1316,6 +1316,8 @@ class Agent:
                         f"write_file(path=\"{self.rel(p)}\", content=<this part>, append=true). To change a passage: edit_file.")
         if not append and (err := self.other_work(p)):
             return err
+        if not append and (err := self.base_lost(p, content or "")):
+            return err
         if self.PLACEHOLDER_RE.search(content or ""):
             return ("refused: this content is a placeholder, not the real file. Write the complete, real content "
                     "of the file (or leave it as it is if it is already done).")
@@ -1437,8 +1439,14 @@ class Agent:
         if n == 0 and (real := self._typo_find(text, old_text)):
             old_text, n = real, 1
         if n != 1:
-            return f"error: old_text found {n} times in {path}; it must appear exactly once"
+            block = re.search(r"[^\n]*\(naim:bloc\)[^\n]*\n(.*?)\n[^\n]*\(naim:fin-bloc\)", text, re.S) if n == 0 else None
+            # a model's block guessed instead of read: its exact text, to replace it whole (old_text = these lines)
+            return (f"error: old_text found {n} times in {path}; it must appear exactly once"
+                    + (f". The block to change is exactly (between « (naim:bloc) » and « (naim:fin-bloc) »):\n"
+                       f"{block.group(1)[:3000]}" if block else ""))
         new = text.replace(old_text, new_text, 1)
+        if err := self.base_lost(p, new):
+            return err
         diff = "".join(difflib.unified_diff(text.splitlines(True), new.splitlines(True),
                                             f"a/{self.rel(p)}", f"b/{self.rel(p)}"))
         if not self.approve(f"Éditer {self.rel(p)}", diff):
@@ -1614,6 +1622,8 @@ class Agent:
             if n != 1:
                 return f"error: edit {i}: old_text found {n} times; it must appear exactly once (nothing was changed)"
             new = new.replace(old, rep_, 1)
+        if err := self.base_lost(p, new):
+            return err
         diff = "".join(difflib.unified_diff(text.splitlines(True), new.splitlines(True), f"a/{self.rel(p)}", f"b/{self.rel(p)}"))
         if not self.approve(f"Éditer {self.rel(p)} ({len(edits)} modifications)", diff):
             return "denied by the user"
@@ -1966,6 +1976,29 @@ class Agent:
                 "(aucun serveur lancé, ou mauvais chemin). Une page HTML seule (même en 3D) n'a pas besoin de serveur : donne "
                 "simplement son fichier. Sinon lance le serveur avec start_process, vérifie que le lien répond (wait, puis "
                 "browser), et redonne le bon lien.")
+
+    def base_lost(self, p, new):
+        """A page copied from a skill's model keeps that model's base (drawing, size, framing, checks): only its block
+        marked « (naim:bloc) » … « (naim:fin-bloc) » is the work. A 3D heart rewritten from scratch drew nothing."""
+        try:
+            old = p.read_text(errors="replace") if p.is_file() else ""
+        except OSError:
+            return ""
+        if "(naim:bloc)" not in old or "(naim:fin-bloc)" not in old:
+            return ""
+        bare = lambda l: re.sub(r"\s+//\s.*$", "", l).strip()  # noqa: E731 — a comment changed is not the base lost
+        head = old.split("(naim:bloc)", 1)[0].rsplit('<script type="module">', 1)[-1].splitlines()
+        tail = old.split("(naim:fin-bloc)", 1)[1].split("</script>", 1)[0].splitlines()[1:]
+        base = [bare(l) for l in head + tail if bare(l) and not bare(l).startswith(("import ", "//"))]
+        have = {bare(l) for l in new.splitlines()}
+        lost = [l for l in base if l not in have] + [m for m in ("(naim:bloc)", "(naim:fin-bloc)") if m not in new]
+        if not lost:
+            return ""
+        return (f"refused: {self.rel(p)} comes from a skill's model, and this would remove its base ({len(lost)} line(s), "
+                f"e.g. « {lost[0][:90]} »): the drawing, the size, the framing and the checks are there, without them "
+                "nothing shows. Change ONLY the block between the line « (naim:bloc) » and the line « (naim:fin-bloc) », "
+                "with edit_file (read_file shows its exact text; an import line may be added at the top). Do not add a "
+                "second <script>. If the file is broken, copy the skill's model again (its cp command), then edit the block.")
 
     def other_work(self, p):
         """An existing file that this request never read nor wrote, and that nobody named: another piece of work (the
@@ -3454,12 +3487,33 @@ class Agent:
             return ""
         import browser
         problems = browser.audit(url)
+        if not app and re.search(r"<canvas|WebGLRenderer|getContext\(", f.read_text(errors="replace")):
+            problems += [x for x in self._drawing_trouble(f) if x not in problems]
         if not problems:
             return ""
         self._look_rounds += 1
         self.emit({"type": "status", "text": "Naim regarde sa page et corrige ce qui ne va pas…"})
         return ("Avant de dire que c'est fini, j'ai ouvert ta page (" + url + ") dans le navigateur et mesuré ce qu'on y voit :\n- "
                 + "\n- ".join(problems) + "\n\nCorrige ces défauts (edit_file), sans casser le reste, puis donne le résultat.")
+
+    @staticmethod
+    def _drawing_trouble(f):
+        """A page that draws (3D, chart, game): rendered once, its script errors and a drawing area left empty — what
+        the browser's measures miss (a 3D heart that drew nothing passed as « correct »)."""
+        import tempfile
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                diagrams.LAST_REPORT = {}
+                diagrams.export_visual(f, Path(tmp) / "rendu.png")
+                info = diagrams.LAST_REPORT
+        except Exception:  # noqa: BLE001 — no render, no verdict: the other checks still run
+            return []
+        out = [f"erreur de la page : {e[:200]}" for e in (info.get("errors") or [])[:4]]
+        if info.get("blank"):
+            out.append("la zone de dessin (la 3D, le graphique) est VIDE : rien ne s'affiche. Cherche pourquoi (une erreur "
+                       "ci-dessus, le rendu jamais appelé, la base du modèle supprimée) ; si la page vient du modèle d'un "
+                       "skill, recopie le modèle et change seulement son bloc")
+        return out
 
     def check_note(self):
         """Code was changed and not run since: what to run before saying it is done (the project's tests first)."""
