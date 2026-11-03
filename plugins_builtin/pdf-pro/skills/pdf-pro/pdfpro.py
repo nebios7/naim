@@ -503,6 +503,9 @@ def render(src, out, couleur=""):
                  + (f" Il est ici : {near} — relance avec ce chemin." if near.is_file() else " Vérifie le chemin avec list_files."))
     src, out = Path(src).expanduser().resolve(), Path(out).expanduser().resolve()
     full = src.with_name(src.stem + ".pro.html")  # next to the page: its images (img/…) keep their relative paths
+    naim = _naim_docs()
+    if naim:  # its diagrams drawn again from their kept code, in today's style (never an old image)
+        naim._fresh_diagrams(src.read_text(errors="replace"), src.parent)
     built = page(src.read_text())
     if couleur:
         built = re.sub(r"</head>", lambda m: accent_css(couleur) + "</head>", built, count=1, flags=re.I)
@@ -512,6 +515,22 @@ def render(src, out, couleur=""):
         sys.exit("erreur : " + (r.stderr or r.stdout).strip()[-400:])
     info = json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
     print(f"PDF : {out} ({info.get('pages', '?')} pages). Vérifie-le : pdfpro.py check \"{out}\"")
+    said = naim._figure_trouble(src.read_text(errors="replace"), src.parent) if naim else []
+    if said:  # an image missing, or one image under several subjects
+        print("PROBLÈME À CORRIGER avant de dire que c'est fini : " + " ; ".join(said) + ".")
+
+
+def _naim_docs():
+    """Naim's document tools (its diagrams, the figures check), where Naim is installed; None elsewhere."""
+    for d in (Path(__file__).resolve().parents[4], Path.home() / "Library/Application Support/Naim/app"):
+        if (d / "docs.py").is_file():
+            sys.path.insert(0, str(d))
+            try:
+                import docs
+                return docs if hasattr(docs, "_figure_trouble") else None
+            except Exception:  # noqa: BLE001 — the PDF is made without these checks
+                return None
+    return None
 
 
 def check(pdf):

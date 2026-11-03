@@ -1088,6 +1088,33 @@ class WorksLikeAColleague(unittest.TestCase):
         r = self.a.call_tool("edit_file", {"path": "cours/index.html", "old_text": "<title>Scène 3D</title>", "new_text": "<title>Le cœur</title>"})
         self.assertTrue(r.startswith("ok"), r)  # the page around the base (title, texts) stays free
 
+    def test_edit_shown_at_its_line(self):
+        # the change is shown as in a code review: it needs the line where it starts in the file
+        (Path(self.a.root) / "app.py").write_text("a = 1\nb = 2\nc = 3\n")
+        self.assertEqual(self.a.edit_line("edit_file", {"path": "app.py", "old_text": "c = 3"}), 3)
+        self.assertIsNone(self.a.edit_line("edit_file", {"path": "app.py", "old_text": "absent"}))
+        page = (ROOT / "web" / "index.html").read_text()
+        self.assertIn("function diffView(", page)
+        self.assertIn("line: a.line", page)
+
+    def test_code_coloured_by_a_library(self):
+        # highlight.js (downloaded once, kept with Naim) colours the code; Naim's own colouring when it is not there
+        import diagrams
+        self.assertTrue(diagrams.HLJS_URL.startswith("https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/"))
+        page = (ROOT / "web" / "index.html").read_text()
+        self.assertIn('"/vendor/highlight.min.js"', page)
+        self.assertIn("hljsReady && hl && window.hljs.getLanguage(hl)", page)
+        self.assertIn('"/vendor/highlight.min.js"', (ROOT / "server.py").read_text())
+
+    def test_own_new_file_is_not_ambiguous(self):
+        # « plusieurs fichiers correspondent à « cours » » refused the edit of the course page Naim had just written
+        for n in ("cours_anatomie.html", "cours_complet.page1.png"):
+            (Path(self.a.root) / n).write_text("x")
+        self.a.request_text = "fais-moi un cours complet de médecine"
+        self.a.call_tool("write_file", {"path": "cours_complet.html", "content": "<p>cours</p>"})
+        r = self.a.call_tool("edit_file", {"path": "cours_complet.html", "old_text": "<p>cours</p>", "new_text": "<p>Cours</p>"})
+        self.assertTrue(r.startswith("ok"), r)
+
     def test_drawing_left_empty_seen_before_done(self):
         page = Path(self.a.root) / "vide3d.html"
         page.write_text("<style>body{margin:0;background:#222}canvas{width:100%;height:500px;display:block}</style><canvas></canvas>"
@@ -1351,6 +1378,72 @@ print(m("fais une maquette plus belle de mon application"), m("audit de sécurit
         self.assertIn("<h2>Les skills</h2>", page)
         server = (ROOT / "server.py").read_text()
         self.assertIn('"/api/skills/packs"', server)
+
+
+class DiagramStyle(unittest.TestCase):
+    """Naim's diagrams in the style of its PDFs: groups on one cream with a small accent title, white boxes, light
+    arrows; colours a diagram asks for brought into the PDF's soft tones. In a PDF made from
+    Markdown, the diagram is drawn, not its « ![…](…) » text."""
+
+    def test_groups_get_tones_and_colours_fit_the_palette(self):
+        import diagrams
+        code = ("flowchart LR\n  subgraph a[\"Bouche\"]\n    B1[Alimentation]\n  end\n  subgraph b[\"Estomac\"]\n"
+                "    E1[Digestion]\n  end\n  B1 --> E1\n  classDef organ fill:#ffe0e0,stroke:#c2185b\n  class B1,E1 organ\n")
+        out = diagrams.house_code(code)
+        self.assertNotIn("#ffe0e0", out)  # one colour on every box says nothing: the plain style of the PDF instead
+        self.assertNotIn("organ", out)
+        self.assertNotIn("style a ", out)  # no bright colour per group: all on the PDF's cream
+        red = diagrams.house_code("flowchart LR\n  A --> B\n  classDef art fill:#ff0000\n  class A art\n")
+        self.assertIn("classDef art fill:#f6e1df,stroke:#c98a84", red)  # a red stays a red, in the PDF's soft tone
+        self.assertIn("classDef bleu", red)
+        self.assertEqual(diagrams.house_code("sequenceDiagram\n  A->>B: x\n"), "sequenceDiagram\n  A->>B: x\n")
+
+    def test_markdown_course_has_the_course_layout(self):
+        # a course converted from Markdown looked unlike the courses made from the model: now cover, Auteur / Date,
+        # numbered chapters, every time
+        import docs
+        md = ("# Cours de Médecine - Première Année\n## Anatomie de l'appareil digestif\n\n---\n\n### Introduction\n\nTexte.\n\n"
+              "### Le schéma\n\n![Digestif](s.png)\n\n### Les étapes\n\n- Bouche\n- Estomac\n")
+        page = docs.pro_html(md, "cours")
+        self.assertIn('class="cover"', page)
+        self.assertIn("<b>Auteur</b>Naim", page)
+        self.assertIn("Cours · Première Année", page)
+        self.assertIn('<span class="num">03</span>Les étapes', page)
+        self.assertNotIn('class="cover"', docs.pro_html("# Facture 12\n\nMontant : 30 €", "facture"))
+
+    def test_document_with_diagrams_follows_the_document_skill(self):
+        import extensions as e
+        name = lambda t: (e.match_skill(t, e.HOME, set()) or {}).get("name")  # noqa: E731
+        self.assertEqual(name("un cours de médecine 1re année en PDF avec des schémas dans le pdf"), "pdf-pro")
+        self.assertEqual(name("fais-moi un schéma de mon architecture"), "schemas")
+
+    def test_false_figures_said(self):
+        # a medicine course: the digestive diagram put under « appareil urinaire » and « appareil génital », and an image
+        # that did not exist under four subjects — now said when the PDF is made
+        import docs
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+            (base / "digestif.png").write_bytes(b"x")
+            page = ('<img src="digestif.png" alt="Schéma de l\'appareil urinaire"><img src="digestif.png" alt="Schéma de l\'appareil génital">'
+                    '<img src="absent.png" alt="Système nerveux">')
+            said = " ".join(docs._figure_trouble(page, base))
+            self.assertIn("absent.png", said)
+            self.assertIn("2 sujets différents", said)
+            self.assertEqual(docs._figure_trouble('<img src="digestif.png" alt="Appareil digestif">', base), [])
+
+    def test_free_image_tool_ready(self):
+        tool = ROOT / "plugins_builtin/pdf-pro/skills/pdf-pro/images.py"
+        r = subprocess.run([sys.executable, str(tool)], capture_output=True, text=True, timeout=30)
+        self.assertIn("chercher", r.stderr + r.stdout)  # its usage, without the network
+        self.assertIn("images.py", (ROOT / "plugins_builtin/pdf-pro/skills/pdf-pro/SKILL.md").read_text())
+
+    def test_markdown_image_drawn_in_the_pdf(self):
+        import docs
+        page = docs.markdown_html("# Cours\n\n![Appareil digestif](schemas/digestif.png)\n\nTexte ![petit](a.png) ici.")
+        self.assertIn('<figure', page)
+        self.assertIn('<img src="schemas/digestif.png"', page)
+        self.assertIn('alt="Appareil digestif"', page)
+        self.assertNotIn("![", page)
 
 
 class ShopWebsite(unittest.TestCase):

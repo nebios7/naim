@@ -43,6 +43,26 @@ def mermaid_js():
     return MERMAID_JS
 
 
+HLJS_JS = VENDOR / "highlight.min.js"
+HLJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"  # BSD-3, the common languages
+
+
+def highlight_js():
+    """Local copy of highlight.js (code coloured in the window: Python, JavaScript, HTML, Swift, SQL…), downloaded
+    once, then read from the Mac."""
+    if HLJS_JS.exists() and HLJS_JS.stat().st_size > 50_000:
+        return HLJS_JS
+    VENDOR.mkdir(parents=True, exist_ok=True)
+    tmp = HLJS_JS.with_suffix(".part")
+    try:
+        with urllib.request.urlopen(HLJS_URL, timeout=60) as r, open(tmp, "wb") as f:
+            shutil.copyfileobj(r, f)
+    except OSError as e:
+        raise DiagramError(f"téléchargement de highlight.js impossible ({e})")
+    tmp.replace(HLJS_JS)
+    return HLJS_JS
+
+
 KATEX_DIR = VENDOR / "katex"
 KATEX_URL = "https://registry.npmjs.org/katex/-/katex-0.16.11.tgz"
 KATEX_FILE_RE = re.compile(r"(katex\.min\.(js|css)|fonts/KaTeX_[A-Za-z0-9_-]+\.woff2)")
@@ -118,7 +138,88 @@ def _clean(code):
     return code.strip()
 
 
+# Naim's own style for diagrams (the default), the one of its PDFs (pdf-pro theme.css): warm and quiet — groups on
+# one cream with a hairline border and a small title in the accent (like the date above a PDF's title), white boxes
+# with a thin warm border, light arrows, the title in the PDF's serif. Colour only where it means something (an
+# artery, a danger), in the PDF's soft tones: a colour a diagram asks for is brought into them.
+INK, MUTED, LINE, CREAM, ACCENT = "#1f1e1d", "#6b6a65", "#e6e2d8", "#faf7f1", "#c96442"
+SERIF = '"Iowan Old Style", "Charter", "Palatino", Georgia, serif'
+HOUSE_VARS = {"background": "#ffffff", "fontSize": "17px", "primaryColor": "#ffffff", "primaryTextColor": INK,
+              "primaryBorderColor": "#d3ccbd", "secondaryColor": CREAM, "tertiaryColor": CREAM, "lineColor": "#aaa396",
+              "textColor": INK, "titleColor": INK, "clusterBkg": CREAM, "clusterBorder": LINE,
+              "edgeLabelBackground": "#ffffff", "nodeTextColor": INK, "mainBkg": "#ffffff", "noteBkgColor": "#f4e3db",
+              "noteBorderColor": "#e6c9bb", "noteTextColor": INK, "actorBkg": "#ffffff", "actorBorder": "#d3ccbd",
+              "actorTextColor": INK, "signalColor": MUTED, "signalTextColor": INK, "labelBoxBkgColor": CREAM,
+              "labelBoxBorderColor": LINE, "pie1": ACCENT, "pie2": "#4f7fae", "pie3": "#6f8452", "pie4": "#b7862b",
+              "pie5": "#8a7f72", "pie6": "#b4473f", "pie7": "#a99f8f", "pie8": "#d9d2c3", "pieStrokeColor": "#ffffff"}
+HOUSE_CSS = (".node rect,.node polygon,.node circle,.node path{stroke-width:1px} .node rect{rx:6px;ry:6px}"
+             ".cluster rect{rx:10px;ry:10px;stroke-width:1px}"
+             f".cluster-label text,.cluster text{{fill:{ACCENT}!important;font-size:11px;font-weight:600;"
+             "letter-spacing:.14em;text-transform:uppercase}"
+             ".flowchart-link,.edgePath .path{stroke-width:1.2px} .marker{fill:#aaa396;stroke:#aaa396}"
+             f".edgeLabel,.edgeLabel text{{fill:{MUTED};color:{MUTED};font-size:13px}}"
+             f".titleText,.flowchartTitleText{{font-family:{SERIF}!important;font-size:22px;font-weight:500;fill:{INK}}}")
+# the palette a diagram's own colours are brought into (pdf-pro's soft tones): (fill, border, text)
+TONES = {"rouge": ("#f6e1df", "#c98a84", "#7e2b25"), "bleu": ("#e5edf5", "#9db5cf", "#2c4a74"),
+         "vert": ("#e9eee0", "#a9b894", "#44552f"), "ambre": ("#f5ecd9", "#d6bb86", "#6e4f14"),
+         "violet": ("#eeeaf2", "#b7abc9", "#4f3a73"), "turquoise": ("#e4efec", "#9cc0b6", "#2f5c52"),
+         "accent": ("#f4e3db", ACCENT, INK), "doux": (CREAM, "#e0d9cb", MUTED), "fonce": (INK, INK, "#ffffff")}
+_HEX_RE = re.compile(r"fill\s*:\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b")
+
+
+def _tone(hexa):
+    """The house tone nearest to a colour: by its hue, grey when it has none."""
+    import colorsys
+    h = hexa if len(hexa) == 6 else "".join(c * 2 for c in hexa)
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    hue, light, sat = colorsys.rgb_to_hls(r, g, b)
+    if sat < 0.15 or (light > 0.93 and sat < 0.5 and max(r, g, b) - min(r, g, b) < 0.06):
+        return "fonce" if light < 0.3 else "doux"
+    deg = hue * 360
+    return ("rouge" if deg < 20 or deg >= 330 else "ambre" if deg < 65 else "vert" if deg < 150 else
+            "turquoise" if deg < 190 else "bleu" if deg < 255 else "violet")
+
+
+def house_code(code):
+    """A flowchart in Naim's style: its classDef / style colours brought into the house palette, and the house
+    classes (rouge, bleu, vert, ambre, violet, turquoise, accent, doux, fonce) ready to use with « class X rouge »."""
+    if not re.match(r"\s*(?:---[\s\S]*?---\s*)?(flowchart|graph)\b", code):
+        return code
+
+    def tone_props(name):
+        fill, stroke, text = TONES[name]
+        return f"fill:{fill},stroke:{stroke},color:{text}"
+
+    def fix(m):
+        head, props = m.group(1), m.group(2)
+        found = _HEX_RE.search(props)
+        if not found:
+            return m.group(0)
+        rest = ",".join(x for x in props.split(",") if x.split(":")[0].strip() not in ("fill", "stroke", "color", "stroke-width"))
+        return f"{head} {tone_props(_tone(found.group(1)))}" + (f",{rest}" if rest else "")
+    out = re.sub(r"^(\s*(?:classDef|style)\s+\S+)\s+(.+)$", fix, code, flags=re.M)
+    # one colour put on every box of a diagram with groups says nothing: it gives way to the plain style
+    if len(re.findall(r"^\s*subgraph\b", out, re.M)) >= 2:
+        own = [n for n in re.findall(r"^\s*classDef\s+(\S+)", out, re.M) if n not in TONES]
+        if len(own) == 1:
+            out = re.sub(rf"^\s*classDef\s+{re.escape(own[0])}\b.*$\n?", "", out, flags=re.M)
+            out = re.sub(rf"^\s*class\s+[\w,\s-]+\s+{re.escape(own[0])}\s*$\n?", "", out, flags=re.M)
+            out = out.replace(f":::{own[0]}", "")
+    defined = set(re.findall(r"^\s*classDef\s+(\S+)", out, re.M))
+    extra = "\n".join(f"  classDef {n} {tone_props(n)}" for n in TONES if n not in defined)
+    return out.rstrip() + "\n" + extra + "\n"
+
+
 def mermaid_page(code, theme="default", background="white", zoom=1):
+    if theme == "default":  # Naim's own style
+        code = house_code(code)
+        style = (f"theme: 'base', themeVariables: {json.dumps(HOUSE_VARS)}, themeCSS: {json.dumps(HOUSE_CSS)},")
+        # Mermaid packs groups one against the other: each frame drawn a little inside, so they breathe
+        inset = ("document.querySelectorAll('#naim-capture .cluster > rect').forEach(r => { const g = 6;"
+                 " for (const [k, d] of [['x', g], ['y', g], ['width', -2 * g], ['height', -2 * g]])"
+                 " r.setAttribute(k, parseFloat(r.getAttribute(k)) + d); });")
+    else:
+        style, inset = f"theme: {json.dumps(theme)},", ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
 html,body{{margin:0;background:{background}}} #naim-capture{{display:inline-block;padding:16px;background:{background};zoom:{zoom}}}
 #naim-capture svg{{max-width:none !important;height:auto}}</style>
@@ -129,10 +230,13 @@ window.__naimWait = true;
 (async () => {{
   try {{
     const txt = document.createElement('textarea'); txt.innerHTML = document.getElementById('src').textContent;
-    mermaid.initialize({{startOnLoad: false, theme: {json.dumps(theme)}, securityLevel: 'strict',
-      fontFamily: '-apple-system, Helvetica, Arial, sans-serif', flowchart: {{htmlLabels: false}}}});
+    mermaid.initialize({{startOnLoad: false, securityLevel: 'strict', {style}
+      fontFamily: '-apple-system, "SF Pro Text", Helvetica, Arial, sans-serif',
+      flowchart: {{htmlLabels: false, curve: 'basis', nodeSpacing: 34, rankSpacing: 44, padding: 12, diagramPadding: 6,
+        subGraphTitleMargin: {{top: 16, bottom: 8}}}}}});
     const {{svg}} = await mermaid.render('naim-diagram', txt.value);
     document.getElementById('naim-capture').innerHTML = svg;
+    {inset}
     window.__naimReady = true;
   }} catch (e) {{ window.__naimError = 'Mermaid : ' + (e && e.message ? e.message : e); }}
 }})();

@@ -654,6 +654,13 @@ def finals(files, root=None):
             f = Path(root) / f
         return not f.exists()
     files = [f for f in files if not gone(f["path"]) and not re.search(r"\.(docx?|pdf|pptx?|xlsx?|odt|pages)\.(png|jpe?g)$", str(f["path"]), re.I)]
+    seen, once = set(), []
+    for f in files:  # the same file named twice (« x.png » and « schemas/x.png »): shown once
+        key = (Path(str(f["path"])).name.lower(), f.get("size"))
+        if key not in seen:
+            seen.add(key)
+            once.append(f)
+    files = once
     pages = {re.sub(r"\.html?$", "", str(f["path"]), flags=re.I).lower() for f in files if re.search(r"\.html?$", str(f["path"]), re.I)}
     files = [f for f in files if not (str(f["path"]).lower().endswith(".js") and str(f["path"])[:-3].lower() in pages)]  # a simulation's algo .js
     pdfs = [f["path"] for f in files if str(f["path"]).lower().endswith(".pdf")]
@@ -662,10 +669,22 @@ def finals(files, root=None):
     stems = {re.sub(r"\.pdf$", "", p, flags=re.I) for p in pdfs}
     folder = lambda p: os.path.dirname(os.path.expanduser(str(p))).lower()  # the Mac ignores case: naim = Naim
     beside = {folder(p) for p in pdfs}
+    # the images a PDF holds (the diagram of a course): named in the page or Markdown it was made from
+    inside = set()
+    for f in files:
+        if str(f["path"]).lower().endswith((".md", ".markdown", ".html", ".htm")) and folder(f["path"]) in beside:
+            fp = Path(os.path.expanduser(str(f["path"])))
+            fp = fp if fp.is_absolute() or not root else Path(root) / fp
+            try:
+                inside |= {Path(x).name.lower() for x in re.findall(r"(?:\]\(|src=[\"'])([^)\"'\s]+\.(?:png|jpe?g|svg|gif|webp))", fp.read_text(errors="replace"), re.I)}
+            except OSError:
+                pass
+
     def draft(path):
         low = str(path).lower()
         return (low.endswith((".html", ".htm")) or any(re.fullmatch(re.escape(s) + r"\.page\d+\.png", str(path), re.I) for s in stems)
-                or (low.endswith((".txt", ".json", ".py", ".sh")) and folder(path) in beside))
+                or (low.endswith((".txt", ".json", ".py", ".sh", ".md", ".markdown", ".mmd")) and folder(path) in beside)
+                or (Path(low).name in inside))
     return [f for f in files if not draft(f["path"])]
 
 
@@ -3434,6 +3453,19 @@ class Agent:
     WHICH_IGNORE = {"fichier", "fichiers", "dossier", "index", "test", "tests", "main", "page", "pages", "style", "script", "readme",
                     "dans", "avec", "pour", "sans", "fait", "faire", "copie", "nouveau", "nouvelle", "data", "config", "notes"}
 
+    def edit_line(self, name, args):
+        """Where an edit starts in its file (line number), shown with the change as in a code review; None if unknown."""
+        if name not in ("edit_file", "multi_edit"):
+            return None
+        old = args.get("old_text") if name == "edit_file" else next((e.get("old_text") for e in args.get("edits") or []
+                                                                      if isinstance(e, dict) and e.get("old_text")), None)
+        try:
+            text = self.resolve(args.get("path", ""), read=True).read_text(errors="replace")
+        except (OSError, ValueError):
+            return None
+        i = text.find(old) if isinstance(old, str) and old else -1
+        return text.count("\n", 0, i) + 1 if i >= 0 else None
+
     def which_file(self, path):
         """The request names a file by a word (« le fichier de Paul ») that several files share (paul_martin.txt,
         paul_durand.txt): a refusal that asks which one, once per word; '' when it is clear."""
@@ -3442,6 +3474,9 @@ class Agent:
         ask = (self.request_text or "").lower()
         if not ask or not full.exists() or full.name.lower() in ask or full.stem.lower() in ask:
             return ""
+        touched = getattr(self, "_touched", set())
+        if str(full) in touched or str(full.resolve()) in touched:
+            return ""  # a file made or read in this request (the course page just written): it is the one, no question
         for w in re.findall(r"[a-zà-ÿ]{4,}", ask):
             if w in self._asked_which or w not in full.stem.lower() or w in self.WHICH_IGNORE:
                 continue
@@ -4478,7 +4513,9 @@ class Agent:
                         self._outcome = "loop"
                         return text
                 secret = args.get("text") if name == "computer" and args.get("sensitive") and args.get("action") == "type" else None
-                self.emit({"type": "tool", "name": name, "args": {**args, "text": "••••••"} if secret else args})
+                line = self.edit_line(name, args)
+                self.emit({"type": "tool", "name": name, "args": {**args, "text": "••••••"} if secret else
+                           ({**args, "line": line} if line else args)})
                 result = forced if forced is not None else ready[i] if i in ready else self.call_tool(name, args)
                 if secret:  # a password typed by Naim stays out of the chat, the history and the learning examples
                     result = result.replace(secret, "••••••")

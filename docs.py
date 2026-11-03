@@ -199,7 +199,7 @@ def pdf_tool():
 
 
 def markdown_html(text, title="Document"):
-    """Minimal Markdown -> styled HTML (titles, lists, bold, italic, code, links, tables)."""
+    """Minimal Markdown -> styled HTML (titles, lists, bold, italic, code, links, images, tables)."""
     import html as H
     out, in_list, table = [], None, []
 
@@ -208,6 +208,8 @@ def markdown_html(text, title="Document"):
         s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
         s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
         s = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", s)
+        # an image (a diagram in a course): drawn, not its Markdown text printed in the PDF
+        s = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", r'<img src="\2" alt="\1" style="max-width:100%;height:auto">', s)
         return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
 
     def flush_table():
@@ -235,6 +237,10 @@ def markdown_html(text, title="Document"):
             out.append(f"<h{len(h.group(1))}>{inline(h.group(2))}</h{len(h.group(1))}>")
         elif re.match(r"^\s*(---|\*\*\*)\s*$", line):
             out.append("<hr>")
+        elif (im := re.match(r"^\s*!\[([^\]]*)\]\(([^)\s]+)\)\s*$", line)):
+            # an image alone: a figure (no caption under it — a diagram already has its title, said twice it looks amateur)
+            out.append(f'<figure style="margin:10pt 0;text-align:center;break-inside:avoid">'
+                       f'<img src="{H.escape(im.group(2))}" alt="{H.escape(im.group(1))}" style="max-width:100%;height:auto"></figure>')
         elif line.strip():
             out.append(f"<p>{inline(line)}</p>")
     flush_table()
@@ -270,6 +276,9 @@ def pro_html(text, title="Document"):
     else:
         m = re.search(r"<body[^>]*>(.*)</body>", markdown_html(text, title), re.S | re.I)
         body = m.group(1) if m else text
+        course = _as_course(body, text)
+        if course:  # a course, a lesson, a revision sheet: the pdf-pro course every time (cover, contents, chapters)
+            return pro.page(course, title)
         # the first title as the pdf-pro head: the small clay line above, the band under it (as the covers, compact)
         import datetime
         d = datetime.date.today()
@@ -280,6 +289,127 @@ def pro_html(text, title="Document"):
                 "color:var(--clay);font-weight:600}.prohead h1{font-size:26pt;line-height:1.15;margin:3mm 0 0}.prohead .band"
                 "{height:3px;width:40mm;background:var(--clay);border-radius:2px;margin-top:5mm}</style>") + body
     return pro.page(body, title)
+
+
+COURSE_RE = re.compile(r"\b(cours|le[çc]ons?|fiche de r[ée]vision|polycopi\w*|support de cours|module|tutoriel|formation)\b", re.I)
+
+
+def _as_course(body, md):
+    """A course written in Markdown -> the pdf-pro course (the model every course follows): a cover (kicker, title,
+    subtitle, Auteur / Date / Durée), a contents page, one numbered chapter per « ## ». None when it is not a course
+    (one title, then its chapters). A PDF made from Markdown looked different from one made from the model."""
+    import datetime
+    import html as H
+    h1 = re.search(r"<h1[^>]*>(.*?)</h1>", body, re.S)
+    if not h1 or not COURSE_RE.search(re.sub(r"<[^>]+>", "", h1.group(1)) + " " + md[:300]):
+        return None
+    rest = body[h1.end():]
+    sub = ""
+    first = re.match(r"\s*(?:<hr>\s*)*<h2[^>]*>(.*?)</h2>", rest, re.S)
+    if first and not re.search(r"<h2", rest[first.end():first.end() + 400]) and re.match(r"\s*(?:<hr>\s*)*<h[23]", rest[first.end():]):
+        sub, rest = first.group(1), rest[first.end():]  # a second title right under the first one: the subtitle
+    rest = re.sub(r"<hr>", "", rest)
+    lv = "h2" if "<h2" in rest else "h3"  # the chapters: the biggest titles left (« ## », or « ### » under a subtitle)
+    parts = re.split(rf"(<{lv}[^>]*>.*?</{lv}>)", rest, flags=re.S)
+    intro, chapters = parts[0], [(parts[i], parts[i + 1] if i + 1 < len(parts) else "") for i in range(1, len(parts), 2)]
+    if len(chapters) < 2:
+        return None
+    d = datetime.date.today()
+    when = f"{d.day} {'janvier février mars avril mai juin juillet août septembre octobre novembre décembre'.split()[d.month - 1]} {d.year}"
+    level = re.search(r"\b((?:\d+(?:re|ère|e)|premi[eè]re|deuxi[eè]me|troisi[eè]me|quatri[eè]me|cinqui[eè]me)\s+ann[ée]e|"
+                      r"niveau\s+\w+|d[ée]butant|interm[ée]diaire|avanc[ée])\b",
+                      re.sub(r"<[^>]+>", " ", h1.group(1) + " " + sub + " " + md[:400]), re.I)
+    dur = re.search(r"^\s*(?:\*\*)?Dur[ée]e(?:\*\*)?\s*:\s*(?:\*\*)?\s*(.+)$", md, re.M | re.I)
+    meta = [("Auteur", "Naim"), ("Date", when)] + ([("Durée", H.escape(dur.group(1).strip(" *")))] if dur else [])
+    cover = ('<section class="cover"><div><div class="kicker">Cours' + (f" · {H.escape(level.group(1))}" if level else "")
+             + f'</div><h1>{h1.group(1)}</h1>' + (f'<div class="subtitle">{sub}</div>' if sub else "")
+             + '<div class="band"></div></div><div class="meta">'
+             + "".join(f"<div><b>{k}</b>{v}</div>" for k, v in meta) + "</div></section>")
+    names = [re.sub(r"<[^>]+>", "", h) for h, _ in chapters]
+    # a short course: its chapters follow one another (one per page left them nearly empty), no contents page
+    short = len(re.sub(r"<[^>]+>|\s+", " ", rest)) < 6000 or len(chapters) < 3
+    toc = "" if short else ('<section class="toc"><h2>Sommaire</h2><ol>'
+                            + "".join(f'<li><a href="#c{i}">{n}</a></li>' for i, n in enumerate(names, 1)) + "</ol></section>")
+    flow = ' style="page-break-before:auto;break-before:auto;margin-top:9mm"' if short else ""
+    out = "".join(f'<section class="chapter" id="c{i}"{flow}><h2><span class="num">{i:02d}</span>{n}</h2>'
+                  + (f'<p class="lead">{re.sub(r"<[^>]+>", "", intro).strip()}</p>' if i == 1 and re.sub(r"<[^>]+>|\s", "", intro) else "")
+                  + content + "</section>" for i, (n, (_, content)) in enumerate(zip(names, chapters), 1))
+    return cover + toc + out
+
+
+def _figure_trouble(page, base):
+    """The figures of a document checked: an image that does not exist (an empty frame in the PDF), and ONE image put
+    under several different subjects (the digestive system shown as « appareil urinaire » and « système nerveux »)."""
+    import html as H
+    said, uses = [], {}
+    for tag in re.findall(r"<img\b[^>]*>", page, re.I):
+        src = re.search(r"""src=["']([^"']+)["']""", tag)
+        if not src or re.match(r"[a-z]+:", src.group(1)):
+            continue
+        alt = re.search(r"""alt=(["'])(.*?)\1""", tag)  # « l'appareil urinaire »: the apostrophe is part of it
+        uses.setdefault(src.group(1), []).append(H.unescape(alt.group(2)).strip() if alt else "")
+    missing = [x for x in uses if not (base / x).is_file()]
+    if missing:
+        said.append("image(s) introuvable(s), le cadre est vide dans le PDF : " + ", ".join(missing[:6])
+                    + " — fais chaque schéma (make_diagram vers ce fichier) ou retire la figure")
+    for x, alts in uses.items():
+        subjects = {a.lower() for a in alts if a}
+        if len(subjects) > 1:
+            said.append(f"la même image {x} est mise pour {len(subjects)} sujets différents ("
+                        + ", ".join(sorted(subjects)[:4]) + ") : c'est faux pour tous sauf un. Fais un schéma par sujet, "
+                        "chacun dans son fichier, avec son propre contenu")
+    return said
+
+
+def _fresh_diagrams(page, base):
+    """The diagrams a PDF shows, drawn again from their kept code (.mmd) just before: an image made in an older style
+    (yellow boxes, titles on the line) never comes back into a new document. One without its code stays as it is."""
+    import diagrams
+    for src in dict.fromkeys(re.findall(r"""<img[^>]+src=["']([^"':]+\.png)["']""", page, re.I)):
+        img = base / src
+        code = img.with_suffix(".mmd")
+        if not code.is_file():  # a copy of a diagram kept elsewhere in the work folder (schemas/x.mmd for ./x.png)
+            code = next((c for c in base.rglob(img.stem + ".mmd") if ".git" not in c.parts), None)
+        if code and code.is_file() and img.parent.is_dir():
+            try:
+                diagrams.render(code.read_text(errors="replace"), img)
+            except Exception:  # noqa: BLE001 — the old image is better than none
+                pass
+
+
+def _true_size(page, base):
+    """Naim's diagrams and images are drawn at twice their size (sharp in print): shown at their real size in the
+    PDF, not squeezed from their pixel width (a diagram's text came out at 8 px)."""
+    def sized(m):
+        src = m.group(1)
+        f = (base / src) if not re.match(r"[a-z]+:", src) else None
+        if not f or not f.is_file() or f.suffix.lower() != ".png" or "width=" in m.group(0):
+            return m.group(0)
+        w, _ = _png_size(f)
+        return m.group(0).replace("<img ", f'<img width="{w // 2}" ', 1) if w >= 800 else m.group(0)
+    return re.sub(r'<img src="([^"]+)"[^>]*>', sized, page)
+
+
+_BLANK_SEEN = {}
+
+
+def _blank_pdf(pdf, page=None):
+    """A PDF with no text at all, made from a page that has some: an empty print (it said « 2 pages » and was blank)."""
+    pdf = Path(pdf)
+    if page is not None:
+        _BLANK_SEEN.pop(str(pdf), None)
+    if str(pdf) in _BLANK_SEEN:
+        return _BLANK_SEEN[str(pdf)]
+    try:
+        if not pdf.is_file() or pdf.stat().st_size > 8000:
+            blank = False
+        else:
+            had_text = page is None or len(re.sub(r"<[^>]+>|\s+", "", Path(page).read_text(errors="replace"))) > 40
+            blank = had_text and not pdf_text(pdf)[0].strip()
+    except Exception:  # noqa: BLE001 — no verdict: not called empty
+        blank = False
+    _BLANK_SEEN[str(pdf)] = blank
+    return blank
 
 
 def convert(src, dst, paper="A4", orientation="portrait"):
@@ -298,7 +428,7 @@ def convert(src, dst, paper="A4", orientation="portrait"):
                 page = src  # keep it next to its images / CSS
             elif a in (".md", ".markdown"):
                 page = src.with_name(f".{src.stem}-naim.html")
-                page.write_text(pro_html(src.read_text(errors="replace"), src.stem))
+                page.write_text(_true_size(pro_html(src.read_text(errors="replace"), src.stem), src.parent))
             elif a in TEXTUTIL_IN:
                 page = Path(tmp) / "page.html"
                 r = subprocess.run(["textutil", "-convert", "html", str(src), "-output", str(page)], capture_output=True, timeout=120)
@@ -308,16 +438,26 @@ def convert(src, dst, paper="A4", orientation="portrait"):
                 page.write_text(html.replace("</head>", "<style>@page{size:A4;margin:16mm}body{-webkit-print-color-adjust:exact}</style></head>", 1))
             else:
                 raise DocError(f"conversion {a} -> PDF non prise en charge (formats : .html .md .docx .doc .rtf .odt .txt)")
+            page_text = page.read_text(errors="replace")
+            _fresh_diagrams(page_text, src.parent)
             try:
-                r = subprocess.run([pdf_tool(), str(page), str(dst), paper, orientation], capture_output=True, text=True, timeout=120)
+                for _ in range(2):  # a PDF that came out empty (WebKit busy printing elsewhere): made again once
+                    r = subprocess.run([pdf_tool(), str(page), str(dst), paper, orientation], capture_output=True, text=True, timeout=120)
+                    if r.returncode != 0 or not _blank_pdf(dst, page):
+                        break
             finally:
                 if page.name.endswith("-naim.html"):
                     page.unlink(missing_ok=True)
         if r.returncode != 0:
             raise DocError("création du PDF impossible : " + r.stderr.strip()[-300:])
+        if _blank_pdf(dst):
+            raise DocError(f"le PDF {dst.name} est sorti vide (aucun texte) : relance convert_document ; si ça recommence, "
+                           "vérifie la page source avec look_at")
         import json
         pages = json.loads(r.stdout).get("pages", 0)
-        return f"{dst} créé ({pages} page{'s' if pages > 1 else ''}, {dst.stat().st_size // 1024} Ko)"
+        said = _figure_trouble(page_text, src.parent)
+        return (f"{dst} créé ({pages} page{'s' if pages > 1 else ''}, {dst.stat().st_size // 1024} Ko)"
+                + (f"\nPROBLÈME À CORRIGER avant de dire que c'est fini : {' ; '.join(said)}." if said else ""))
     if b in TEXTUTIL_OUT and a in TEXTUTIL_IN:
         r = subprocess.run(["textutil", "-convert", TEXTUTIL_OUT[b], str(src), "-output", str(dst)], capture_output=True, timeout=120)
         if r.returncode != 0:

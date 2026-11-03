@@ -70,6 +70,18 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
   `<span class="tag ok">payé</span>` (ok, warn, danger, info).
 - Figure : `<figure><img src="graphique.svg"><figcaption><b>Figure 1</b> — …</figcaption></figure>` ;
   deux côte à côte : `<div class="grid2"><figure>…</figure><figure>…</figure></div>` (graphiques faits avec `small`).
+- **Une vraie image pour expliquer** (une planche d'anatomie, une photo, une carte, un appareil) : un cours,
+  un exposé ou un rapport en a dès qu'elle aide à comprendre. Prends-la sur Wikimedia Commons (images libres) :
+  ```bash
+  python3 "$T/images.py" chercher "human heart anatomy diagram fr" 6     # mots en anglais ; « fr » = légendes en français
+  python3 "$T/images.py" prendre 2 <ton dossier>/coeur.jpg                # l'image, son crédit et la figure HTML à coller
+  ```
+  Choisis celle dont la description montre VRAIMENT le sujet (jamais l'image d'un autre organe), une image par
+  sujet, puis colle la figure donnée : sa légende dit en français ce qu'elle montre, et garde le crédit (auteur,
+  licence) sous l'image. Regarde-la avec look_at avant de l'utiliser.
+- Schéma d'étapes, de flux, d'organisation (la digestion, un processus, une architecture) : `make_diagram` vers
+  `<ton dossier>/schema.png` (son style est déjà celui de ce thème), puis `<figure><img src="schema.png"></figure>`
+  dans la page, sans légende qui répète son titre. Un cours qui demande des schémas les a DANS le PDF.
 - Schéma, plan, figure de géométrie : un SVG dans la page (`<figure><svg viewBox=…>`) avec les couleurs du thème :
   traits `#1f1e1d` ou `#6b6a65`, accent `#c96442`, bleu `#4f7fae`, vert `#6f8452`, or `#b7862b`,
   fonds doux `#f6f2ea`, `#e5edf5`, `#e9eee0`. Coter les longueurs, nommer les points (A, B, C), légender.

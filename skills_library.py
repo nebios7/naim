@@ -181,7 +181,7 @@ Pour livrer l'analyse en PDF : skill pdf-pro (même style que tous les PDF de Na
    planning → `gantt` ; idées → `mindmap` ; chronologie → `timeline` ; répartition → `pie`.
 3. Un schéma complet a TOUJOURS : un **titre** (en tête du code, voir ci-dessous), des **textes en français clairs**
    (« Base de données des clients », pas `db1`), des **groupes** par couche (subgraph), des **flèches nommées** (ce qui
-   passe : « commande », « HTTPS »), des **couleurs par couche** (classDef) et, s'il y a plusieurs formes ou couleurs,
+   passe : « commande », « HTTPS »), des **couleurs** (le style de Naim les donne : voir « Le style ») et, s'il y a plusieurs formes ou couleurs,
    une **légende** (un subgraph « Légende »). 12 boîtes au plus : au-delà, faire deux schémas.
 4. `make_diagram` code=… output=`docs/architecture.png` (PNG pour un mail ou un document, SVG pour le web, PDF pour
    imprimer). Le code est gardé tout seul à côté (`docs/architecture.mmd`) : c'est lui qu'on modifie ensuite.
@@ -214,7 +214,11 @@ Pas de jargon sans l'expliquer (API = « le programme qui reçoit les demandes �
 - Formes : `[rectangle]`, `(arrondi)`, `[(base de données)]`, `{décision}`, `((cercle))`, `[/entrée/]`.
 - Flèches : `-->`, avec texte `-->|HTTP JSON|`, pointillés `-.->`, épaisse `==>`.
 - Groupes : `subgraph front["Application iOS"]` … `end`. Un subgraph = une couche (client, serveur, données).
-- Couleurs : `classDef db fill:#e8f1fb,stroke:#1f5fa8` puis `class db1,db2 db`.
+- **Le style est celui de Naim** (le même que ses PDF) : chaque groupe (subgraph) reçoit tout seul sa couleur douce,
+  ses boîtes en blanc bordées de cette couleur. N'écris PAS de `classDef` à toi ni de couleurs en code (#…). Pour
+  qu'une boîte DISE quelque chose par sa couleur (artère / veine, danger, validé), une classe toute prête :
+  `class a1,a2 rouge` (aussi `bleu`, `vert`, `ambre`, `violet`, `turquoise`, `accent` pour la boîte importante,
+  `doux` pour une boîte secondaire, `fonce`), et dis-le dans la légende.
 
 ## Modèles
 ```
@@ -235,13 +239,11 @@ flowchart LR
   ios -->|HTTPS JSON| api
   api -->|vérifie| auth
   api -->|lit et écrit| db
-  classDef front fill:#e8f1fb,stroke:#1f5fa8
-  classDef back fill:#eaf7ea,stroke:#2e7d32
-  class web,ios front
-  class api,auth back
+  class web,ios bleu
+  class api,auth vert
   subgraph legende["Légende"]
-    l1["Bleu : ce que voit l'utilisateur"]:::front
-    l2["Vert : le serveur"]:::back
+    l1["Bleu : ce que voit l'utilisateur"]:::bleu
+    l2["Vert : le serveur"]:::vert
     l3[("Cylindre : les données")]
   end
 ```

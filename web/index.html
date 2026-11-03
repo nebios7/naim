@@ -485,6 +485,33 @@ details.think div { white-space: pre-wrap; border-left: 2px solid var(--line); p
 .step .st { font-size: 12px; color: var(--muted); }
 .step pre, .approval pre { margin: 0; padding: 8px 10px; border-top: 1px solid var(--line); max-height: 320px; overflow: auto; font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; background: var(--code); }
 .approval pre { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
+/* a change as in a code review: the file, line numbers, the code in its colours, a bar on the changed lines and
+   the words that changed brought out */
+.dview { --dv-add: rgba(46, 160, 67, .16); --dv-addbar: #3fb950; --dv-addw: rgba(46, 160, 67, .38);
+  --dv-del: rgba(248, 81, 73, .14); --dv-delbar: #f85149; --dv-delw: rgba(248, 81, 73, .36);
+  --dv-k: #c678dd; --dv-s: #98c379; --dv-f: #61afef; --dv-n: #56b6c2; --dv-c: #7f848e; --dv-t: #e5c07b;
+  margin: 6px 0 2px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--code); overflow: hidden; }
+:root[data-theme="light"] .dview { --dv-add: rgba(46, 160, 67, .13); --dv-addbar: #2da44e; --dv-addw: rgba(46, 160, 67, .30);
+  --dv-del: rgba(207, 34, 46, .10); --dv-delbar: #cf222e; --dv-delw: rgba(207, 34, 46, .26);
+  --dv-k: #a626a4; --dv-s: #50a14f; --dv-f: #4078f2; --dv-n: #0184bc; --dv-c: #a0a1a7; --dv-t: #c18401; --dv-body: var(--code); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .dview { --dv-add: rgba(46, 160, 67, .13); --dv-addbar: #2da44e; --dv-addw: rgba(46, 160, 67, .30);
+  --dv-del: rgba(207, 34, 46, .10); --dv-delbar: #cf222e; --dv-delw: rgba(207, 34, 46, .26);
+  --dv-k: #a626a4; --dv-s: #50a14f; --dv-f: #4078f2; --dv-n: #0184bc; --dv-c: #a0a1a7; --dv-t: #c18401; --dv-body: var(--code); } }
+.dview .dpath { padding: 10px 14px 8px; font: 13px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+.dview table { width: 100%; border-collapse: collapse; font: 13.5px/1.75 ui-monospace, "SF Mono", Menlo, monospace; }
+.dview td { padding: 0 14px 0 0; vertical-align: top; }
+.dview td.n { width: 1%; min-width: 38px; padding: 0 14px 0 12px; text-align: right; color: var(--muted); opacity: .75; user-select: none;
+  font-variant-numeric: tabular-nums; border-left: 4px solid transparent; }
+.dview td.c { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); padding-left: 2ch; text-indent: -2ch; }
+.dview tr.a td { background: var(--dv-add); } .dview tr.a td.n { border-left-color: var(--dv-addbar); }
+.dview tr.d td { background: var(--dv-del); } .dview tr.d td.n { border-left-color: var(--dv-delbar); }
+.dview tr.a .w { background: var(--dv-addw); border-radius: 3px; } .dview tr.d .w { background: var(--dv-delw); border-radius: 3px; }
+.dview .hk { color: var(--dv-k); } .dview .hs { color: var(--dv-s); } .dview .hf { color: var(--dv-f); } .dview .hn { color: var(--dv-n); }
+.dview .hc { color: var(--dv-c); font-style: normal; } .dview .ht { color: var(--dv-t); }
+.dview tr.gap td { color: var(--muted); padding: 2px 14px; }
+.dview .dbody { max-height: 420px; overflow: auto; padding: 2px 0 6px; border-top: 1px solid var(--line); background: var(--dv-body, color-mix(in srgb, var(--code) 70%, #000 30%)); }
+.agroup > .arows .dview { margin: 8px 0 0 0; }
+.aout.dview { padding: 0; white-space: normal; max-height: none; font: inherit; background: var(--code); }
 .dl { display: block; } .dl.a { background: var(--add); color: var(--add-t); } .dl.d { background: var(--del); color: var(--del-t); } .dl.h { color: var(--muted); }
 .note { color: var(--muted); font-size: .93em; }
 .approval { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 10px; padding: 10px 12px; }
@@ -2463,8 +2490,31 @@ function highlightShellPlain(code) {
   }
   return out + esc(code.slice(last));
 }
+// code coloured by highlight.js (a real library, downloaded once, served by Naim) when it is there; Naim's own
+// colouring otherwise. Its token names are brought to Naim's colour classes (hk, hs, hn, hc, hf, ht)
+const HLJS_ALIAS = { html: "xml", svg: "xml", vue: "xml", sh: "bash", zsh: "bash", shell: "bash", js: "javascript", ts: "typescript", py: "python", yml: "yaml" };
+const HLJS_CLASS = { keyword: "hk", built_in: "hk", literal: "hk", tag: "hk", "selector-tag": "hk", string: "hs", regexp: "hs",
+  "template-string": "hs", number: "hn", comment: "hc", meta: "hc", doctag: "hc", title: "hf", "title function_": "hf",
+  "title class_": "ht", type: "ht", attr: "hf", attribute: "hf", name: "ht", params: "", variable: "", property: "hf", symbol: "hn", subst: "" };
+let hljsReady = false;
+(() => { const sc = document.createElement("script"); sc.src = "/vendor/highlight.min.js"; sc.async = true;
+  sc.onload = () => { hljsReady = !!window.hljs; }; document.head.appendChild(sc); })();
 function highlight(code, lang) {
   lang = (lang || "").toLowerCase();
+  const hl = HLJS_ALIAS[lang] || lang;
+  if (hljsReady && hl && window.hljs.getLanguage(hl)) {
+    try {
+      const out = window.hljs.highlight(code, { language: hl, ignoreIllegals: true }).value
+        .replace(/class="hljs-([\w\- ]+?)"/g, (m, k) => `class="${HLJS_CLASS[k] ?? HLJS_CLASS[k.split(" ")[0]] ?? ""}"`);
+      // a function called (« out.with_suffix(… », « run(… ») in the functions' colour, as in a code review — only in
+      // plain code, never inside a string or a comment
+      let depth = 0;
+      return out.split(/(<[^>]+>)/).map((part) => {
+        if (part.startsWith("<")) { depth += part.startsWith("</") ? -1 : part.endsWith("/>") ? 0 : 1; return part; }
+        return depth ? part : part.replace(/(^|[^\w$])([A-Za-z_][\w]*)(?=\()/g, (m, pre, name) => `${pre}<span class="hf">${name}</span>`);
+      }).join("");
+    } catch { /* Naim's own colouring below */ }
+  }
   if (/^(sh|bash|zsh|shell|console|terminal)$/.test(lang)) return highlightShell(code);
   if (/^(html|xml|svg|vue)$/.test(lang)) {
     return esc(code).replace(/(&lt;!--[\s\S]*?--&gt;)|(&lt;\/?)([\w-]+)|([\w-]+)(=)(&quot;.*?&quot;|&#39;.*?&#39;)/g,
@@ -2500,6 +2550,40 @@ function diffHtml(text) {
     const cls = /^(\+\+\+|---)/.test(l) ? "h" : l.startsWith("+") ? "a" : l.startsWith("-") ? "d" : l.startsWith("@@") ? "h" : "";
     return `<span class="dl ${cls}">${esc(l) || " "}</span>`;
   }).join("");
+}
+// a change shown as in a code review: path, line numbers, the code coloured, the changed words brought out
+function diffView(text, path, start, lang) {
+  const rows = [];
+  let oldN = start || 1, newN = start || 1;
+  const lines = text.split("\n").filter((l) => !/^(\+\+\+|---)/.test(l));
+  const numbered = !!start;
+  const paint = (t, from, to) => from >= to ? highlight(t, lang)
+    : highlight(t.slice(0, from), lang) + `<span class="w">${highlight(t.slice(from, to), lang)}</span>` + highlight(t.slice(to), lang);
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const h = l.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)/);
+    if (h) { oldN = +h[1]; newN = +h[2]; continue; }
+    if (/^\s*…/.test(l)) { rows.push(`<tr class="gap"><td colspan="2">⋯</td></tr>`); continue; }
+    if (l.startsWith("-")) {  // a block removed, then the block that replaces it: each pair's changed words brought out
+      const dels = [], adds = [];
+      while (i < lines.length && lines[i].startsWith("-")) dels.push(lines[i++].slice(1));
+      while (i < lines.length && lines[i].startsWith("+")) adds.push(lines[i++].slice(1));
+      i--;
+      const marks = dels.map((d, k) => {
+        const a = adds[k]; if (a == null || dels.length !== adds.length) return null;
+        let p = 0; while (p < d.length && p < a.length && d[p] === a[p]) p++;
+        let q = 0; while (q < d.length - p && q < a.length - p && d[d.length - 1 - q] === a[a.length - 1 - q]) q++;
+        return [p, d.length - q, a.length - q];
+      });
+      dels.forEach((d, k) => rows.push(`<tr class="d"><td class="n">${numbered ? oldN++ : ""}</td><td class="c">${marks[k] ? paint(d, marks[k][0], marks[k][1]) : highlight(d, lang) || " "}</td></tr>`));
+      adds.forEach((a, k) => rows.push(`<tr class="a"><td class="n">${numbered ? newN++ : ""}</td><td class="c">${marks[k] ? paint(a, marks[k][0], marks[k][2]) : highlight(a, lang) || " "}</td></tr>`));
+      continue;
+    }
+    if (l.startsWith("+")) { rows.push(`<tr class="a"><td class="n">${numbered ? newN++ : ""}</td><td class="c">${highlight(l.slice(1), lang) || " "}</td></tr>`); continue; }
+    rows.push(`<tr><td class="n">${numbered ? newN : ""}</td><td class="c">${highlight(l.slice(1), lang) || " "}</td></tr>`);
+    if (numbered) { oldN++; newN++; }
+  }
+  return `<div class="dview">${path ? `<div class="dpath">${esc(path)}</div>` : ""}<div class="dbody"><table>${rows.join("")}</table></div></div>`;
 }
 // the same diff, before (left) and after (right), the changed lines facing each other
 function diffSideHtml(text) {
@@ -3260,7 +3344,8 @@ function loadMermaid() {
   if (!mermaidReady) mermaidReady = new Promise((ok, ko) => {
     const sc = document.createElement("script"); sc.src = "/vendor/mermaid.min.js";
     sc.onload = () => { const dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light" || document.documentElement.dataset.theme === "dark";
-      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "default", fontFamily: "-apple-system, Helvetica, Arial, sans-serif" }); ok(window.mermaid); };
+      // Naim's diagram style, the same as its diagram files and PDFs (diagrams.py HOUSE_VARS / HOUSE_CSS)
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: {"background": "#ffffff", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#1f1e1d", "primaryBorderColor": "#3a3936", "secondaryColor": "#f6f4ef", "tertiaryColor": "#f6f4ef", "lineColor": "#8a877f", "textColor": "#1f1e1d", "titleColor": "#1f1e1d", "clusterBkg": "#f6f4ef", "clusterBorder": "#e6e2d8", "edgeLabelBackground": "#ffffff", "nodeTextColor": "#1f1e1d", "mainBkg": "#ffffff", "noteBkgColor": "#fbf3e9", "noteBorderColor": "#e8c9a8", "noteTextColor": "#1f1e1d", "actorBkg": "#ffffff", "actorBorder": "#3a3936", "signalColor": "#6b6a65", "labelBoxBkgColor": "#f6f4ef", "pie1": "#c96442", "pie2": "#4f7fae", "pie3": "#6f8452", "pie4": "#b7862b", "pie5": "#8a6fb0", "pie6": "#b4473f", "pie7": "#5b9a8b", "pie8": "#9b968c"}, themeCSS: ".node rect,.node polygon,.node circle,.node path{stroke-width:1.2px} .node rect{rx:7px;ry:7px}.cluster rect{rx:12px;ry:12px;stroke-width:1px}.cluster-label text,.cluster text{font-weight:600}.flowchart-link,.edgePath .path{stroke-width:1.4px} .edgeLabel{color:#6b6a65;font-size:13px}.titleText,.flowchartTitleText{font-size:19px;font-weight:600;fill:#1f1e1d}", fontFamily: '-apple-system, "SF Pro Text", Helvetica, Arial, sans-serif', flowchart: { curve: "basis", padding: 14, subGraphTitleMargin: { top: 16, bottom: 8 } } }); ok(window.mermaid); };
     sc.onerror = () => { mermaidReady = null; ko(new Error("Mermaid indisponible (connexion nécessaire la première fois)")); };
     document.head.appendChild(sc);
   });
@@ -4437,8 +4522,10 @@ function addBot(m, idx) {
         pre.innerHTML = highlight(lines.join("\n"), lang) + (total > lines.length ? `\n<span class="muted">… ${total - lines.length} lignes de plus</span>` : "");
         pre.hidden = !group.open; row.dataset.preview = "1";
       } else if ((name === "edit_file" || name === "multi_edit") && (args.diff || editDiff(name, args))) {
-        pre.innerHTML = diffHtml(args.diff || editDiff(name, args));  // removed lines in red, added in green, like a code review
-        pre.hidden = !group.open; row.dataset.preview = "1";
+        const view = document.createElement("div");  // as in a code review: the file, its lines, the code coloured
+        view.innerHTML = diffView(args.diff || editDiff(name, args), args.path, args.line, EXT_LANG[String(args.path || "").split(".").pop()] || "");
+        pre.replaceWith(view.firstChild); row.dataset.preview = "1";
+        const dv = $(".dview", row); dv.classList.add("aout"); dv.hidden = !group.open;
       }
       $(".aline", row).onclick = () => { const p = $(".aout", row); if (p.textContent) p.hidden = !p.hidden; };
       $(".arows", group).appendChild(row);
@@ -5150,7 +5237,7 @@ async function stream(reply, v, message, hist, extra = {}) {
               reply.steps.push({ type: "note", text: said }); v.note(said); v.setText("");
             }
             lastTool = { type: "tool", name: ev.name, sub: ev.sub, output: "",
-              args: { path: a.path || a.output, source: a.source, question: a.question, key: a.key, command: a.command, pattern: a.pattern, target: a.target, id: a.id, query: a.query, url: a.url, name: a.name, fact: a.fact, action: a.action, names: a.names, server: a.server, to: a.to, subject: a.subject, text: a.text, keys: a.keys, app: a.app, scheme: a.scheme, bundle_id: a.bundle_id, nom: a.nom, dossier: a.dossier, method: a.method, group: a.group, ...toolMeta(ev.name, a) } };
+              args: { path: a.path || a.output, source: a.source, question: a.question, key: a.key, command: a.command, pattern: a.pattern, target: a.target, id: a.id, query: a.query, url: a.url, name: a.name, fact: a.fact, action: a.action, names: a.names, server: a.server, to: a.to, subject: a.subject, text: a.text, keys: a.keys, app: a.app, scheme: a.scheme, bundle_id: a.bundle_id, nom: a.nom, dossier: a.dossier, method: a.method, group: a.group, line: a.line, ...toolMeta(ev.name, a) } };
             if (!ev.sub) run.kind = TOOL_KIND[ev.name] || "run";  // the dance of this tool until its result comes back
             reply.steps.push(lastTool); v.addStep(ev.name, lastTool.args, ev.sub); v.typing(toolLabel(ev.name, a));
             if (ev.sub) { const l = toolLabel(ev.name, a).replace(/^Naim /, ""); v.subagent({ name: ev.sub, status: "run", action: l.charAt(0).toUpperCase() + l.slice(1) }); }

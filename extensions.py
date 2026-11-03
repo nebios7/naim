@@ -1293,6 +1293,13 @@ def match_skill(task, root=None, disabled=()):
                 return lib_skill
     except Exception:  # noqa: BLE001
         pass
+    # a document to make (« un cours de médecine en PDF avec des schémas ») is the document's work: its method (cover,
+    # contents, chapters) leads, the diagrams go inside it. « un schéma en PDF de mon réseau » stays a diagram
+    if ("schemas" in by_name and "pdf-pro" in by_name and re.search(triggers.get("schemas", r"$^"), text)
+            and re.search(triggers.get("pdf-pro", r"$^"), text)
+            and re.search(r"\b(cours|rapports?|dossiers?|fiches?|supports?|livrets?|guides?|polycopi\w*|manuels?|m[ée]moires?|"
+                          r"expos[ée]s?|le[çc]ons?|chapitres?|tutoriels?)\b", text)):
+        return by_name["pdf-pro"]
     ordered = priority + [n for n in first if n not in priority] + after_specific + [
         n for n in triggers if n not in generic and n not in first and n not in priority and n not in after_specific] + list(generic)
     # a phone number, SMS, iMessage, WhatsApp, a call: sending or calling on the Mac, whatever else the message names

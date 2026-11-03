@@ -1021,11 +1021,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"pages": int(n) if n.isdigit() and int(n) > 0 else None})
             except (ValueError, OSError, subprocess.SubprocessError):
                 self.send_json({"pages": None})
-        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js") or path.startswith(("/vendor/katex/", "/vendor/fonts/")):
+        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js", "/vendor/highlight.min.js") or path.startswith(("/vendor/katex/", "/vendor/fonts/")):
             try:
                 if path == "/vendor/mermaid.min.js":
                     import diagrams
                     f, ctype = diagrams.mermaid_js(), "text/javascript"
+                elif path == "/vendor/highlight.min.js":  # code coloured by a real library, downloaded once
+                    import diagrams
+                    f, ctype = diagrams.highlight_js(), "text/javascript"
                 elif path.startswith("/vendor/fonts/"):  # the text font (Inter), downloaded once, then offline
                     import diagrams
                     f, ctype = diagrams.font_file(path[len("/vendor/fonts/"):]), "font/woff2"
@@ -2728,7 +2731,7 @@ class Handler(BaseHTTPRequestHandler):
                         "refused: this is a question, not a request for files. Answer IN the conversation (explanations "
                         "and code blocks); create or change files only when the user asks for it.")})
                     continue
-                self.event({"type": "tool", "name": name, "args": args})
+                self.event({"type": "tool", "name": name, "args": {**args, "line": ln} if (ln := helper.edit_line(name, args)) else args})
                 try:
                     if name == "aller_dans_dossier" and str(args.get("dossier") or "").strip() in ("", ".", "./"):
                         result = f"ok: you are already in {helper.root}.\nFiles:\n" + helper.list_files(".")[:3000]  # nothing to search
@@ -2939,7 +2942,7 @@ class Handler(BaseHTTPRequestHandler):
                         args = json.loads(args)
                     except ValueError:
                         args = {}
-                self.event({"type": "tool", "name": name, "args": args})
+                self.event({"type": "tool", "name": name, "args": {**args, "line": ln} if (ln := helper.edit_line(name, args)) else args})
                 try:
                     last_tool = name
                     if name in ("send_email", "chercher_contact"):
