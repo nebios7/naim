@@ -2312,7 +2312,8 @@ class Handler(BaseHTTPRequestHandler):
                       or ext.match_skill(body["message"], helper.root, helper.disabled_skills))  # nothing under way: the generic one
             if acting_only and sk and sk["name"] != "mac":
                 sk = None  # acting on an existing file (« imprime mon CV ») needs no skill — except the Mac recipes
-            if sk and sk["name"] not in ("debug", "application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):
+            # (the debug method too: a bug to find is work on the files, its method is what makes it methodical)
+            if sk and sk["name"] not in ("application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):
                 # an algorithm shown in the conversation is a ```simulation block, played there: no file, unless one is asked
                 sim_here = sk["name"] == "animation-algorithme" and not re.search(
                     r"fichiers?|\bpages?\b|\bhtml\b|enregistr|sauvegard|t[ée]l[ée]charg|\w\.(js|html?)\b", body["message"] or "", re.I)

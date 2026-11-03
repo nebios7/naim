@@ -996,6 +996,26 @@ class WorksLikeAColleague(unittest.TestCase):
         self.assertIn("self.verify_summary(content)", (ROOT / "naimtools.py").read_text())
 
 
+class DebuggingMethod(unittest.TestCase):
+    """A bug without an error message (a wrong result, a button that does nothing) gets the debug method too, in the
+    Chat as well; a bug in the user's code is debugging whatever its subject."""
+
+    def test_chosen(self):
+        import extensions as e
+        for m in ("le bouton ne marche pas sur ma page", "pourquoi ma fonction moyenne renvoie un mauvais résultat",
+                  "ma page reste blanche", "mon script plante avec une erreur bizarre"):
+            self.assertEqual((e.match_skill(m) or {}).get("name"), "debug", m)
+        for m, other in (("explique-moi la moyenne", "maths-affichage"), ("le site de la mairie ne marche pas aujourd'hui", None)):
+            self.assertEqual((e.match_skill(m) or {}).get("name"), other, m)
+
+    def test_method_and_chat(self):
+        import skills_pro
+        text = skills_pro.SKILLS["debug"][1] if hasattr(skills_pro, "SKILLS") else (ROOT / "skills_pro.py").read_text()
+        self.assertIn("Sans message d'erreur", text)
+        self.assertIn("UN changement à la fois", text)
+        self.assertNotIn('not in ("debug", "application-web"', (ROOT / "server.py").read_text())  # loaded in the Chat too
+
+
 class NetworkAndCamera(unittest.TestCase):
     """« analyse mon réseau », « une app pour ma caméra »: a read-only scan of the user's own network, a probe for the RTSP
     path, and a verified camera app to copy (one ffmpeg, its messages in a file so that it never freezes)."""

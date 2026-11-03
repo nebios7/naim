@@ -1133,7 +1133,10 @@ SKILL_TRIGGERS = {
                        r"\b(ajoute|[ée]cri[st]|lance|fai[st]|cr[ée]e|corrige)\w*\b[^.?!]{0,25}\btests?\b[^.?!]{0,40}\b(code|projet|"
                        r"programme|appli\w*|fonctions?|api|modules?|classes?|scripts?)\b",
     # code that fails (« corrige les fautes de ce texte » is proofreading, not debugging)
-    "debug": r"\b(bugs?|error|plante|crash|debug|traceback|exception)\b|\b(erreur|marche pas|fonctionne pas)\b[^.?!]{0,40}\b(code|script|programme|appli\w*|site|commande|fichier \w+\.\w+)\b|"
+    "debug": r"\b(bugs?|bugu\w*|error|plante|crash|debug|traceback|exception)\b|\b(erreur|marche pas|fonctionne pas)\b[^.?!]{0,40}\b(code|script|programme|appli\w*|site|commande|fichier \w+\.\w+)\b|"
+             # a bug without an error message: a wrong result, a button that does nothing, a page that stays blank
+             r"\b(code|script|programme|fonction|appli\w*|page|bouton|formulaire|\w+\.(?:py|js|ts|html|css|php|swift|java))\b[^.?!]{0,60}\b(ne (marche|fonctionne|r[ée]agit|s'affiche|s'ouvre|charge|calcule)\w* (pas|plus|rien)|n'affiche (rien|pas)|renvoie (un|une|des)? ?(mauvais|faux|fausse|mauvaise)|mauvais(e)? (valeur|r[ée]sultat)|r[ée]sultat (faux|incorrect|bizarre)|reste (vide|blanc|blanche|bloqu\w*)|ne se passe rien)|"
+             r"\b(pourquoi|comment se fait-il que)\b[^.?!]{0,60}\b(renvoie|donne|affiche|calcule|retourne)\b[^.?!]{0,30}\b(faux|fausse|mauvais\w*|incorrect\w*|bizarre|0|none|null|undefined|nan)\b|"
              r"\bcorrige\b[^.?!]{0,30}\b(code|script|programme|bug|erreur|appli\w*|fonction|\w+\.(py|js|ts|html|css|php|swift|java))\b",
     "git-commit": r"\bcommit\b",
     "readme": r"\b(readme)\b",
@@ -1302,6 +1305,11 @@ def match_skill(task, root=None, disabled=()):
         ordered.insert(min(ordered.index(n) for n in ("controle-ecran", "tests-unitaires") if n in ordered), "mac")
     # among the plugins that come first, what the request names first is what is asked: « un mod … avec la sécurité »
     # is a mod (its content comes after), « un audit de sécurité » is security
+    # a bug in the user's own code (« ma fonction moyenne renvoie un mauvais résultat ») is debugging, whatever its subject
+    # (maths, a page…): the subject's skill would explain, the debug method finds the cause
+    if ("debug" in by_name and re.search(triggers["debug"], text)
+            and re.search(r"\b(ma|mon|mes|cette|ce) (fonction|script|code|programme|appli\w*|page|bouton|formulaire|boucle|classe|m[ée]thode)\b|\w+\.(py|js|ts|html|css|php|swift|java)\b", text)):
+        return by_name["debug"]
     hits = [(m.start(), k, n) for k, n in enumerate(priority) if n in by_name and (m := re.search(triggers[n], text))]
     if hits:
         return by_name[min(hits)[2]]

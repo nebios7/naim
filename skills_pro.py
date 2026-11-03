@@ -52,7 +52,19 @@ PRO = {
 - La prouver avec un test ciblé : print temporaire, petite commande `python -c`, requête curl, lecture de la base.
 - Si l'hypothèse est fausse : la rayer et en formuler une autre. Ne pas corriger à l'aveugle.
 
+## 3 bis. Sans message d'erreur (résultat faux, bouton qui ne fait rien, page vide)
+- Écrire noir sur blanc l'ATTENDU et l'OBTENU, sur le plus petit exemple qui montre la différence
+  (`python3 -c "from calcul import moyenne; print(moyenne([10, 20]))"` → attendu 15, obtenu 10).
+- Couper le chemin en deux : afficher la valeur au milieu (entrée de la fonction, puis avant le `return`). Là où elle
+  devient fausse, le bug est entre les deux. Recommencer sur cette moitié.
+- Vérifier ce qu'on croit vrai : le type (« 10 » texte au lieu de 10), une boucle qui saute le premier ou le dernier
+  élément (`range(1, n)`, `< n - 1`), une division entière, un `=` au lieu de `==`, une variable écrasée, le mauvais fichier modifié.
+- Page web : ouvrir la page avec le navigateur (`browser` action=open, puis action=console pour les erreurs JavaScript,
+  action=eval pour lire une valeur) ; un bouton sans effet = souvent une erreur JavaScript ou un id qui ne correspond pas.
+- Deux hypothèses fausses de suite : revenir à l'étape 1, relire la reproduction et le code mot à mot, au lieu d'essayer une 3e idée au hasard.
+
 ## 4. Corriger
+- UN changement à la fois, puis on relance : plusieurs changements en même temps cachent lequel a marché (ou cassé).
 - Le plus petit changement qui traite la CAUSE (pas le symptôme) ; edit_file.
 - Données invalides (texte au lieu d'un nombre, valeur manquante) : ne JAMAIS inventer une valeur (ex. mettre
   quantité = 1). Corriger ce qui est certain (« 20 » → 20), rendre le code robuste (conversion, validation avec un
@@ -60,7 +72,7 @@ PRO = {
 - Retirer les prints de débogage.
 
 ## 5. Vérifier
-- Relancer la reproduction exacte de l'étape 1 : elle doit passer.
+- Relancer la reproduction exacte de l'étape 1 : elle doit passer (l'obtenu = l'attendu).
 - Relancer les tests existants ; si possible ajouter un test qui aurait détecté ce bug.
 
 ## Erreurs fréquentes
@@ -70,6 +82,9 @@ PRO = {
 - Node `Cannot find module` : `npm install` manquant ou mauvais chemin relatif / extension .js en ESM.
 - Swift : lire la PREMIÈRE erreur de xcodebuild, les suivantes en découlent souvent.
 - 500 sans détail : regarder la sortie du serveur (process_output), la vraie erreur y est.
+
+## Pour finir
+Dire en deux phrases la CAUSE (pas seulement « c'est corrigé ») et la preuve que c'est réparé (la commande relancée et son résultat).
 """),
     "application-web": ("Créer une application web qui marche (Flask par défaut), la lancer et vérifier chaque page.", """# Application web
 
