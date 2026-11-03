@@ -6,6 +6,9 @@
     python3 doc.py cmd ffmpeg                           a command: its manual or --help
     python3 doc.py node fs.readFile                     a Node module: what it exports, and its page on nodejs.org
     python3 doc.py web css grid                         the official page (MDN, docs.python.org…) found for a subject
+    python3 doc.py three exemples extrude shape         three.js: the official examples that match (names, tags)
+    python3 doc.py three exemple webgl_geometry_extrude_shapes   the code of one example (same version as Naim's model)
+    python3 doc.py three classe ExtrudeGeometry         a class: its parameters and their order, from the source
 
 Nothing is installed or downloaded: it reads what is on the Mac, or one official web page.
 """
@@ -25,7 +28,8 @@ SITES = {"python": "docs.python.org/3", "css": "developer.mozilla.org", "html": 
          "flask": "flask.palletsprojects.com", "django": "docs.djangoproject.com", "ffmpeg": "ffmpeg.org", "sqlite": "sqlite.org",
          "swift": "developer.apple.com", "swiftui": "developer.apple.com", "git": "git-scm.com/docs", "bash": "www.gnu.org/software/bash",
          "numpy": "numpy.org/doc", "pandas": "pandas.pydata.org/docs", "sympy": "docs.sympy.org", "matplotlib": "matplotlib.org",
-         "fastapi": "fastapi.tiangolo.com", "tailwind": "tailwindcss.com/docs", "arduino": "docs.arduino.cc", "cobol": "www.ibm.com/docs"}
+         "fastapi": "fastapi.tiangolo.com", "tailwind": "tailwindcss.com/docs", "arduino": "docs.arduino.cc", "cobol": "www.ibm.com/docs",
+         "three": "threejs.org", "threejs": "threejs.org", "three.js": "threejs.org"}
 
 
 def run(cmd, timeout=20):
@@ -123,13 +127,52 @@ def web_doc(subject, query):
     return fetch(links[0], query.split()[-1] if query else "") + ("\n\nAutres pages : " + ", ".join(links[1:]) if links[1:] else "")
 
 
+THREE_VERSION = "0.185.0"  # the version of the threejs-3d model: its examples and sources, not those of another release
+THREE_TAG = "r" + THREE_VERSION.split(".")[1]
+
+
+def _get(url, timeout=20):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    return urllib.request.urlopen(req, timeout=timeout).read().decode("utf-8", "replace")
+
+
+def three_doc(what, words):
+    """three.js, version of the model: examples found by their name and tags, an example's code, a class's source."""
+    try:
+        if what == "exemples":
+            names = [n for group in json.loads(_get("https://threejs.org/examples/files.json")).values() for n in group]
+            tags = json.loads(_get("https://threejs.org/examples/tags.json"))
+            keys = [w.lower() for w in words if len(w) > 2]
+            scored = sorted(((sum(k in n or any(k in t for t in tags.get(n, [])) for k in keys), n) for n in names), reverse=True)
+            hits = [n for sc, n in scored if sc][:10]
+            if not hits:
+                return f"Aucun exemple pour « {' '.join(words)} » : essaie d'autres mots en anglais (extrude, lathe, instancing, csg, tube…)."
+            return ("Exemples officiels de three.js (lis le code avec : doc.py three exemple <nom>) :\n" +
+                    "\n".join(f"- {n} — https://threejs.org/examples/#{n}" for n in hits))
+        if what == "exemple":
+            page = _get(f"https://raw.githubusercontent.com/mrdoob/three.js/{THREE_TAG}/examples/{words[0]}.html")
+            code = re.findall(r'<script type="module">(.*?)</script>', page, re.S)
+            return f"[{words[0]}, three.js {THREE_VERSION}]\n" + ("\n".join(code) if code else page)
+        if what == "classe":
+            flat = json.loads(_get(f"https://data.jsdelivr.com/v1/package/npm/three@{THREE_VERSION}/flat"))["files"]
+            path = next((f["name"] for f in flat if f["name"].endswith(f"/{words[0]}.js") and f["name"].startswith(("/src/", "/examples/jsm/"))), None)
+            if not path:
+                return f"Classe « {words[0]} » introuvable dans three.js {THREE_VERSION} : vérifie l'orthographe (majuscules)."
+            src = _get(f"https://cdn.jsdelivr.net/npm/three@{THREE_VERSION}{path}")
+            imp = "three/addons/" + path[len("/examples/jsm/"):] if path.startswith("/examples/jsm/") else "three"
+            return f"[{words[0]} — import depuis « {imp} » — three.js {THREE_VERSION}]\n" + src
+    except Exception as e:  # noqa: BLE001
+        return f"three.js : lecture impossible ({e}) : utilise web_search « threejs {' '.join(words)} »."
+    return __doc__
+
+
 def main():
     a = sys.argv[1:]
     if len(a) < 2:
         sys.exit(__doc__)
     kind, rest = a[0], a[1:]
     out = {"python": lambda: python_doc(rest[0]), "cmd": lambda: cmd_doc(rest[0]), "node": lambda: node_doc(rest[0]),
-           "web": lambda: web_doc(rest[0], " ".join(rest[1:]))}.get(kind, lambda: __doc__)()
+           "web": lambda: web_doc(rest[0], " ".join(rest[1:])), "three": lambda: three_doc(rest[0], rest[1:])}.get(kind, lambda: __doc__)()
     print(out[:LIMIT] + ("\n[… suite coupée : précise le nom (module.fonction) pour la partie utile]" if len(out) > LIMIT else ""))
 
 

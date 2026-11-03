@@ -1232,6 +1232,10 @@ class ThreeD(unittest.TestCase):
         self.assertIn("La couleur demandée est appliquée", s)  # « le cœur en rouge »: red; not the example's orange
         self.assertNotIn("0xe8846b", s)
         self.assertIn("La boîte à outils", s)
+        self.assertIn("La méthode : pour TOUT sujet", s)  # a method for any subject, not one recipe per subject
+        self.assertIn("doc.py\" three exemples", s)
+        self.assertIn("preserveDrawingBuffer: true", m)  # Naim sees its scene in a capture: a first image at once
+        self.assertIn("renderer.render(scene, camera);   // une première image", m)
         for tech in ("LatheGeometry", "ExtrudeGeometry", "InstancedMesh", "GLTFLoader", "function rayon(d)", "TubeGeometry"):
             self.assertIn(tech, s)  # a heart is not the intestine's tube coloured red
         self.assertIn("function rayon(d)", s)

@@ -16,6 +16,29 @@ projet.
 mkdir -p <dossier>/<sujet> && cp "$HOME/.naim/plugins/threejs/skills/threejs-3d/modele.html" <dossier>/<sujet>/index.html
 ```
 
+## La méthode : pour TOUT sujet, même jamais vu (pas de recette par sujet)
+Les recettes plus bas sont des exemples de techniques, pas une liste de sujets permis. Pour un sujet nouveau (une
+maison de 100 m², un pont, un avion, un atome…) :
+1. **Découpe le sujet en parties, avec leurs vraies dimensions** (en mètres : 1 unité = 1 m). Écris ce plan en 3 à 8
+   lignes avant de coder. Une maison de 100 m² : le sol (10 × 10), les pièces et leurs surfaces (la somme fait 100),
+   des murs de 2,5 m de haut et 0,2 m d'épaisseur, les portes et les fenêtres, le toit. Les chiffres que tu ne connais
+   pas (taille d'un organe, d'un monument) : `web_search`, jamais inventés.
+2. **Choisis pour chaque partie une technique** de la boîte à outils (tableau plus bas) et combine-les.
+3. **Ce que tu ne sais pas faire : cherche l'exemple officiel le plus proche**, dans la même version que le modèle, et
+   adapte-le (mots en anglais) :
+   ```bash
+   python3 "$HOME/.naim/plugins/documentation/skills/documentation/doc.py" three exemples <mots>   # ex. : extrude shape
+   python3 "$HOME/.naim/plugins/documentation/skills/documentation/doc.py" three exemple <nom>     # son code
+   python3 "$HOME/.naim/plugins/documentation/skills/documentation/doc.py" three classe <Classe>   # paramètres, ordre, import
+   ```
+4. **Un sujet qui doit être réaliste** (un vrai cœur d'atlas, une voiture, un meuble précis) : un vrai modèle 3D libre
+   vaut mieux qu'un dessin. Cherche `web_search « <sujet> glb CC0 »` (Poly Pizza, Kenney, NIH 3D, Smithsonian 3D,
+   modèles d'exemple glTF de Khronos). Vérifie la licence. Demande à l'utilisateur avant de télécharger (nom, source,
+   taille), puis charge-le avec `GLTFLoader` dans `monde` et appelle `cadrer(monde)`.
+5. **Construis, puis REGARDE** : `browser` action=screenshot (le modèle dessine une première image tout de suite, donc
+   la capture montre la scène). Compare avec ton plan : la forme ressemble-t-elle au sujet ? les proportions, les
+   couleurs ? Corrige ce qui ne va pas, puis regarde de nouveau.
+
 ## Les trois règles qui évitent une scène vide
 1. **Tout objet va dans `monde`** (`monde.add(...)`), jamais directement dans `scene`. Le modèle appelle ensuite
    `cadrer(monde)` : l'objet est centré et remplit la vue, qu'il mesure 0,5 ou 40 unités. Si tu ajoutes des objets
@@ -199,9 +222,10 @@ l'âge demandé. Si une valeur n'est pas trouvée, ne l'écris pas : n'invente j
   `python3 "$HOME/.naim/plugins/ui-ux-pro-max/skills/ui-ux-pro-max/scripts/search.py" "<sujet>" --stack threejs`.
 
 ## Vérifier
-Ouvre la page (Aperçu ou `browser` action=open) et lis les erreurs (`browser` action=console) : une erreur d'import
-(version, chemin `three/addons/`) ou de WebGL se voit là. Le navigateur de vérification de Naim est invisible : il ne
-fait pas tourner l'animation, c'est normal — l'absence d'erreur est ce qui compte.
+1. Lis les erreurs (`browser` action=console) : import, WebGL, et les signalements du modèle (objet vide, minuscule, hors
+   champ).
+2. Regarde la scène (`browser` action=screenshot) et compare-la au sujet et à ton plan. Une scène qui ne ressemble pas au
+   sujet n'est pas finie, même sans erreur.
 
 ## Pour finir
 Dis comment la voir (le fichier, ou l'adresse si un serveur est lancé) et comment on s'en sert (glisser, zoomer).

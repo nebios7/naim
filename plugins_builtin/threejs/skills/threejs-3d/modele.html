@@ -34,7 +34,7 @@ const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;   // pas d
 
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })  // l'image reste lisible (captures);
 } catch (e) {
   box.insertAdjacentHTML("beforeend", '<div class="repli">La 3D n\'est pas disponible dans ce navigateur (WebGL désactivé).</div>');
   throw e;
@@ -114,6 +114,7 @@ function taille() {
 new ResizeObserver(taille).observe(box);
 taille();
 verifier();
+renderer.render(scene, camera);   // une première image tout de suite : visible dans une capture, même sans animation
 
 const temps = new THREE.Timer();           // (three.js signale THREE.Clock comme dépassé)
 renderer.setAnimationLoop((t) => {         // s'arrête tout seul quand l'onglet est caché
