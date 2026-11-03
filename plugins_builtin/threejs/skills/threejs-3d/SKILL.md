@@ -29,14 +29,57 @@ mkdir -p <dossier>/<sujet> && cp "$HOME/.naim/plugins/threejs/skills/threejs-3d/
 3. **Lis la console** : le modèle y signale un objet vide (pas de triangles), minuscule ou hors champ. Corrige avant de
    dire que c'est fini.
 
-## Choisir la forme d'après le sujet (pas la première recette venue)
-| Le sujet a la forme… | Exemples | Recette |
+## La boîte à outils : choisir la technique d'après la forme du sujet
+Six techniques couvrent presque tout. Regarde la FORME réelle du sujet, prends la technique qui lui correspond, et
+combine-les si besoin (un arbre = un tronc tourné + des feuilles en copies ; un robot = un assemblage).
+| Le sujet a la forme… | Exemples | Technique (recette ci-dessous) |
 |---|---|---|
-| d'un tube long et replié | intestin, serpent, câble, racine, rivière | « tube enroulé » |
-| d'une masse arrondie | cœur, rein, foie, poumon, cerveau, rocher, fruit | « forme organique » (+ « vaisseaux » si veines, nervures) |
-| d'un assemblage d'objets simples | machine, maison, robot, molécule, système solaire | sphères, boîtes, cylindres dans des `THREE.Group` |
-| d'une silhouette plate épaissie | étoile, feuille, logo, lettre | `THREE.Shape` + `ExtrudeGeometry` avec `bevelEnabled: true` |
-Un cœur n'est pas un tube : ne recopie pas la recette du tube pour autre chose qu'un tube.
+| d'une masse arrondie | cœur, rein, foie, poumon, cerveau, rocher, fruit | **forme organique** (sphère déformée) |
+| d'un tube long et replié | intestin, serpent, câble, racine, rivière | **tube enroulé** ; veines/nervures : **vaisseaux** |
+| d'un objet qui tourne autour d'un axe | vase, bouteille, verre, os, tronc, pion, toupie | **A. profil tourné** (`LatheGeometry`) |
+| d'une silhouette plate épaissie | étoile, feuille, logo, lettre, pièce | **B. silhouette** (`Shape` + `ExtrudeGeometry`) |
+| d'un assemblage d'objets simples | molécule, machine, maison, robot, système solaire | **C. assemblage** (sphères, boîtes, cylindres dans un `Group`) |
+| de beaucoup d'objets identiques | cellules, globules, étoiles, forêt, foule | **D. copies** (`InstancedMesh`) |
+| d'un objet précis et réaliste | un vrai cœur d'atlas, une voiture, un monument | **un vrai modèle 3D** (`.glb`, `GLTFLoader`) |
+Ne prends jamais une recette pour un autre sujet que le sien : un cœur n'est pas un tube.
+
+## Recettes A à D (vérifiées ensemble dans une même scène)
+Les `position` ne servent qu'à les montrer côte à côte : prends seulement la technique dont tu as besoin, et `cadrer(monde)`
+met ton objet au centre.
+```js
+// A. TOURNER UN PROFIL (LatheGeometry) : vase, bouteille, verre, os, tronc, pion
+const profil = [[0,0],[0.45,0],[0.5,0.1],[0.35,0.5],[0.25,0.9],[0.32,1.2],[0.42,1.4],[0.4,1.45]].map(([x, y]) => new THREE.Vector2(x, y));
+const vase = new THREE.Mesh(new THREE.LatheGeometry(profil, 64), new THREE.MeshStandardMaterial({ color: 0x2f6f8f, roughness: 0.3, side: THREE.DoubleSide }));
+vase.position.x = -4.5; monde.add(vase);
+
+// B. ÉPAISSIR UNE SILHOUETTE (Shape + ExtrudeGeometry) : étoile, feuille, logo, lettre
+const etoile = new THREE.Shape();
+for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.3 : 0.75, a = i / 10 * Math.PI * 2 + Math.PI / 2;
+  i ? etoile.lineTo(Math.cos(a) * r, Math.sin(a) * r) : etoile.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+const geoEtoile = new THREE.ExtrudeGeometry(etoile, { depth: 0.25, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 4 });
+geoEtoile.center();
+const objEtoile = new THREE.Mesh(geoEtoile, new THREE.MeshStandardMaterial({ color: 0xe0a21b, roughness: 0.35, metalness: 0.3 }));
+objEtoile.position.set(-1.5, 0.7, 0); monde.add(objEtoile);
+
+// C. ASSEMBLER DES FORMES SIMPLES (Group) : molécule, machine, maison, robot
+const molecule = new THREE.Group();
+const atome = (x, y, z, r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 24), new THREE.MeshStandardMaterial({ color: c, roughness: 0.4 })); m.position.set(x, y, z); molecule.add(m); return m.position; };
+const liaison = (p, q) => { const d = q.clone().sub(p), c = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, d.length(), 16), new THREE.MeshStandardMaterial({ color: 0xcccccc }));
+  c.position.copy(p).add(d.clone().multiplyScalar(0.5)); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); molecule.add(c); };
+const O = atome(0, 0, 0, 0.42, 0xd62828), H1 = atome(0.75, 0.55, 0, 0.26, 0xf1f1f1), H2 = atome(-0.75, 0.55, 0, 0.26, 0xf1f1f1);
+liaison(O, H1); liaison(O, H2);
+molecule.position.set(1.5, 0.5, 0); monde.add(molecule);
+
+// D. BEAUCOUP D'OBJETS IDENTIQUES (InstancedMesh) : cellules, globules, étoiles, foule, forêt
+const n = 300, globules = new THREE.InstancedMesh(new THREE.TorusGeometry(0.09, 0.045, 12, 24), new THREE.MeshStandardMaterial({ color: 0xb3202a, roughness: 0.5 }), n);
+const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+for (let i = 0; i < n; i++) {
+  e.set(Math.random() * 6, Math.random() * 6, 0); q.setFromEuler(e);
+  m4.compose(new THREE.Vector3(4.5 + (Math.random() - 0.5) * 1.6, 0.7 + (Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6), q, new THREE.Vector3(1, 1, 1));
+  globules.setMatrixAt(i, m4);
+}
+monde.add(globules);
+```
 
 ## Recette : une forme organique + des vaisseaux sur sa surface (vérifiée : un cœur)
 `rayon(d)` dit, pour chaque direction depuis le centre, où est la surface. Change cette fonction pour une autre masse

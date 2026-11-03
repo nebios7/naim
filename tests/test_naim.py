@@ -1231,7 +1231,9 @@ class ThreeD(unittest.TestCase):
         self.assertIn("propre dossier", s)
         self.assertIn("La couleur demandée est appliquée", s)  # « le cœur en rouge »: red; not the example's orange
         self.assertNotIn("0xe8846b", s)
-        self.assertIn("Choisir la forme d'après le sujet", s)  # a heart is not the intestine's tube coloured red
+        self.assertIn("La boîte à outils", s)
+        for tech in ("LatheGeometry", "ExtrudeGeometry", "InstancedMesh", "GLTFLoader", "function rayon(d)", "TubeGeometry"):
+            self.assertIn(tech, s)  # a heart is not the intestine's tube coloured red
         self.assertIn("function rayon(d)", s)
         self.assertIn("web_search", s)  # the facts of a labelled scene are looked up, never invented
 
