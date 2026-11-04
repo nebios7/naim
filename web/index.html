@@ -3418,7 +3418,7 @@ function delivCards(dl) {
     }
     if (!act && e.target.closest("[data-dopen]")) {
       if (f.ext === "pdf") showPreview(`<!doctype html><meta charset="utf-8"><style>html{background:#525659;min-height:100%}body{margin:0;background:#525659;padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}img{max-width:100%;box-shadow:0 2px 10px #0006;background:#fff}</style><body><scr${""}ipt>
-        let n = 1; const next = () => { const i = new Image(); i.onload = () => { document.body.appendChild(i); n++; if (n <= 40) next(); }; i.src = "${location.origin}/api/thumb?${q}&w=1100&page=" + n; }; next();
+        let n = 1; const next = () => { const i = new Image(); i.onload = () => { document.body.appendChild(i); n++; if (n <= 1000) next(); }; i.onerror = () => {}; i.src = "${location.origin}/api/thumb?${q}&w=1100&page=" + n; }; next();
       </scr${""}ipt></body>`);
       else if (/^(png|jpe?g|gif|svg)$/.test(f.ext)) showImagePreview(`${location.origin}/api/raw?${q}`, f.path.split("/").pop());
       else if (/^html?$/.test(f.ext)) {

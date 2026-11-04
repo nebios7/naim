@@ -742,6 +742,7 @@ class Agent:
         self._images_rounds = 0  # « avec des images »: real images looked for before the document is given
         self._touched = set()  # files read or written in this request: replacing them is the work, not an accident
         self.prior_text = " ".join(str(m.get("content") or "") for m in (history or []))  # the conversation before it
+        self.prior_asks = " ".join(str(m.get("content") or "") for m in (history or []) if m.get("role") == "user")
         self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
         self.request_text, self._asked_which = "", set()  # the user's request; the names already asked about
         self._read_whole = set()  # long code files already shown by their plan: asked again, given whole
@@ -1980,8 +1981,12 @@ class Agent:
     def images_note(self):
         """« un cours avec des schémas et des images »: the document made has real images (free ones from the web,
         with their credit), not only drawn diagrams. A course came back with none: the work goes on first."""
-        ask = self.request_text or ""
-        if self._images_rounds >= 1 or not self.IMAGES_ASKED_RE.search(ask) or re.search(r"\b(sans|pas d['’]?)\s*(images?|photos?)", ask, re.I):
+        now = self.request_text or ""
+        # asked now, or earlier in this conversation by the user (« d'autres chapitres » after « un cours avec des images »)
+        ask = f"{now} {getattr(self, 'prior_asks', '')}"
+        no = r"\b(sans|pas d['’]?)\s*(images?|photos?)"
+        if self._images_rounds >= 1 or not self.IMAGES_ASKED_RE.search(ask) or re.search(no, now, re.I) or (
+                not self.IMAGES_ASKED_RE.search(now) and re.search(no, ask, re.I)):
             return ""
         pages = []
         for t in getattr(self, "_touched", set()):

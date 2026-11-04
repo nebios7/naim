@@ -39,7 +39,10 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
 
 1. Le fond d'abord : lis les documents donnés (read_file lit .pdf, .docx, .xlsx), cherche sur le web si besoin.
    Après chaque recherche, juge toi-même : qu'ai-je appris, que manque-t-il ? Cherche seulement ce qui manque
-   (jamais la même recherche reformulée) et passe à l'écriture dès que tu as de quoi faire. Aucun chiffre inventé. Plan avec update_todos : couverture, sommaire, 3 à 8 chapitres, conclusion.
+   (jamais la même recherche reformulée) et passe à l'écriture dès que tu as de quoi faire. Aucun chiffre inventé.
+   Un cours, un rapport, un exposé : **au moins 3 sources différentes et fiables** (faculté, manuel, société savante,
+   organisme officiel, encyclopédie), lues avec web_fetch — une seule ne suffit jamais. Note pour chacune son titre,
+   son site et son adresse : elles vont à la fin du document. Plan avec update_todos : couverture, sommaire, 3 à 8 chapitres, conclusion.
 2. Travaille dans un dossier à toi (ex. `cours-python/`). Les graphiques : un fichier JSON de données par graphique,
    puis `pdfpro.py chart …` → un .svg dans ce dossier.
 3. Écris `page.html` : SEULEMENT le contenu (pas de `<html>`, pas de `<style>`, pas de couleur à toi).
@@ -111,7 +114,8 @@ Tu sais déjà écrire les maths, les graphiques et les tableaux : écris-les co
   une colonne, 7 colonnes au plus (au-delà : deux tableaux), aucune case vide (« — »). La source sous le tableau.
 - **Schémas, diagrammes** (`make_diagram`) : 4 à 9 boîtes, des libellés courts (2 à 5 mots), un seul sens de
   lecture (de haut en bas ou de gauche à droite), un verbe sur les flèches quand il aide (« filtre », « envoie »).
-  Pas de titre dans le schéma qui répète celui de la figure.
+  Pas de titre dans le schéma qui répète celui de la figure. Dans un cours en Markdown, un bloc ```mermaid est dessiné tout seul au rendu (jamais son
+  code imprimé) ; dans page.html, fais l'image avec `make_diagram`.
 - **Géométrie, plans** (SVG) : points nommés en majuscules, longueurs cotées avec l'unité, angles droits marqués,
   traits fins, une couleur d'accent pour ce qui compte.
 - **Images** : une légende en français qui dit ce qu'on voit, le crédit (auteur, licence) dessous.
@@ -128,7 +132,10 @@ d'un professeur, à faire avant de dire que c'est fini.
   d'autre. Pas de couverture, pas de sommaire, pas de chapitre ajouté : un `<h1>` (le titre du texte, ou ses premiers
   mots), puis ses paragraphes et ses listes. Quelques lignes = une page. Tu n'inventes aucun contenu.
 - **Cours** : couverture, sommaire, un chapitre par notion (explication, exemple de code ou formule, encadré
-  « À retenir », exercice en `callout ok`), corrigés en dernier chapitre.
+  « À retenir », exercice en `callout ok`), corrigés en dernier chapitre, puis une dernière partie **Sources** :
+  `<h2>Sources</h2><ol><li>Titre de la page — Site, <a href="https://…">adresse</a> (consulté le …)</li>…</ol>`
+  (dans un cours en Markdown : `## Sources` et une liste `1. Titre — Site, https://…`), avec chaque site
+  vraiment lu et les images de Wikimedia Commons. Même règle pour un rapport ou un exposé fait avec le web.
 - **Analyse d'un courrier / d'un document** : chapitre « En bref » (3 à 5 points, `kpis` si chiffres), puis
   « Ce que dit le courrier », « Points d'attention » (`callout warn`), « Ce qu'il faut faire » (tableau action ·
   échéance · priorité avec `tag`), et les chiffres du courrier en tableau ou en graphique.

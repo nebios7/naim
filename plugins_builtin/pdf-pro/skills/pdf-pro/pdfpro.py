@@ -110,7 +110,14 @@ def _inline(t):
     t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
     t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", t)
     t = re.sub(r"(?<![*\w])\*([^*\s][^*]*?)\*(?!\w)", r"<em>\1</em>", t)
+    # an image (a plate, a diagram already drawn): shown, never its Markdown text printed
+    t = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", r'<img src="\2" alt="\1">', t)
     return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', t)
+
+
+def _num(cell):
+    """A number in a Markdown table: aligned on the right, as in the theme's tables."""
+    return ' class="num"' if re.fullmatch(r"[-+−]?\d[\d\s  ]*([.,]\d+)?\s*(%|€|\$|[a-zA-Zµ/²³°]{1,8})?", cell.strip()) else ""
 
 
 def md_html(text, shift=1):
@@ -135,6 +142,13 @@ def md_html(text, shift=1):
             while i < len(lines) and not re.match(r"^\s*```", lines[i]):
                 code.append(lines[i]); i += 1
             out.append(f'<pre class="code {html.escape(lang)}">{html.escape(chr(10).join(code))}</pre>')
+        elif re.match(r"^\s*!\[[^\]]*\]\([^)\s]+\)\s*$", ln):  # an image alone on its line: a figure, its text as caption
+            flush()
+            m = re.match(r"^\s*!\[([^\]]*)\]\(([^)\s]+)\)", ln)
+            cap = f"<figcaption>{_inline(m.group(1))}</figcaption>" if m.group(1).strip() else ""
+            out.append(f'<figure><img src="{html.escape(m.group(2))}" alt="{html.escape(m.group(1))}">{cap}</figure>')
+        elif re.match(r"^\s*</?(figure|img|div|table|section|figcaption|svg|p)\b", ln, re.I):
+            flush(); out.append(ln)  # HTML written in the Markdown (a figure given by images.py): kept as it is
         elif re.match(r"^#{1,6}\s", ln):
             flush()
             n = len(ln) - len(ln.lstrip("#"))
@@ -147,9 +161,12 @@ def md_html(text, shift=1):
                     rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")])
                 i += 1
             i -= 1
-            if rows:
+            if rows:  # a column of numbers only (never half of it): aligned on the right
+                nums = {k for k in range(len(rows[0])) if len(rows) > 1
+                        and all(_num(r[k]) for r in rows[1:] if k < len(r) and r[k].strip())}
                 out.append("<table><thead><tr>" + "".join(f"<th>{_inline(c)}</th>" for c in rows[0]) + "</tr></thead><tbody>"
-                           + "".join("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in r) + "</tr>" for r in rows[1:]) + "</tbody></table>")
+                           + "".join("<tr>" + "".join("<td" + (' class="num"' if k in nums else "") + f">{_inline(c)}</td>" for k, c in enumerate(r))
+                                     + "</tr>" for r in rows[1:]) + "</tbody></table>")
         elif re.match(r"^\s*>\s?", ln):
             flush()
             quote = []
@@ -377,7 +394,7 @@ def render_quiz(src, out, couleur=""):
     out = Path(out).expanduser().resolve()
     page_file = out.with_suffix(".html")
     page_file.write_text("\n".join(body))
-    render(page_file, out, couleur)
+    render(page_file, out, couleur, written=False)
 
 
 def render_docs(files, out, couleur=""):
@@ -407,7 +424,7 @@ def render_docs(files, out, couleur=""):
     if page_file.resolve() == f.resolve():  # never over the document given
         page_file = out.with_name(out.stem + ".pro-source.html")
     page_file.write_text(head + "\n" + body)
-    render(page_file, out, couleur)
+    render(page_file, out, couleur, written=False)
 
 
 def render_md(files, out, couleur=""):
@@ -448,7 +465,7 @@ def render_md(files, out, couleur=""):
     out = Path(out).expanduser().resolve()
     page_file = out.with_suffix(".html")
     page_file.write_text("\n".join(body))
-    render(page_file, out, couleur)
+    render(page_file, out, couleur, written=False)
 
 
 # ------------------------------------------------------------------ the page
@@ -526,7 +543,7 @@ def accent_css(name):
     return f"<style>:root{{--clay:{col};--clay-soft:{soft}}}</style>"
 
 
-def render(src, out, couleur=""):
+def render(src, out, couleur="", written=True):
     if not Path(src).expanduser().is_file():  # said plainly (not a Python error), with the file of that name if it is here
         near = Path(Path(src).name)
         sys.exit(f"erreur : fichier introuvable : {src} (No such file or directory)."
@@ -536,7 +553,7 @@ def render(src, out, couleur=""):
     naim = _naim_docs()
     if naim:  # its diagrams drawn again from their kept code, in today's style (never an old image)
         naim._fresh_diagrams(src.read_text(errors="replace"), src.parent)
-    built = page(src.read_text())
+    built = page(_draw_diagrams(src.read_text(), src))
     if couleur:
         built = re.sub(r"</head>", lambda m: accent_css(couleur) + "</head>", built, count=1, flags=re.I)
     full.write_text(built)
@@ -549,7 +566,8 @@ def render(src, out, couleur=""):
     if said:  # an image missing, or one image under several subjects
         print("PROBLÈME À CORRIGER avant de dire que c'est fini : " + " ; ".join(said) + ".")
     text = src.read_text(errors="replace")
-    better = [f"formule {n}" for n in formula_notes(text)] + element_notes(text)
+    better = [f"formule {n}" for n in formula_notes(text)] + [n for n in element_notes(text)
+                                                               if written or "<caption>" not in n]
     if better:  # drawn, but not written as in a printed course: Naim corrects its page.html, then renders again
         print("À AMÉLIORER dans " + src.name + " (corrige, puis relance render) :\n- " + "\n- ".join(better))
 
@@ -574,11 +592,11 @@ def formula_notes(page):
             notes.append("enlève les $$ autour")
         if any(unicodedata.combining(c) for c in f):
             notes.append("point ou barre sur une lettre : \\dot{V}, \\bar{x} (pas V̇ tapé)")
-        uni = [c for c in dict.fromkeys(f) if c in UNI_TEX]
+        uni = [c for c in dict.fromkeys(re.sub(r"\\text\{[^}]*\}", "", f)) if c in UNI_TEX]  # in \text{…}: plain text, fine
         if uni:
             notes.append(", ".join(f"{c} → {UNI_TEX[c]}" for c in uni))
         bare = re.sub(r"\\(?:text|mathrm|operatorname|mathbf|mathit)\{[^}]*\}|\\[A-Za-z]+", " ", f)
-        names = [w for w in dict.fromkeys(re.findall(r"(?<![A-Za-z_^{])([A-Z][A-Za-z]+)(?![A-Za-z])", bare))
+        names = [w for w in dict.fromkeys(re.findall(r"(?<![A-Za-z_^{\[])([A-Z][A-Za-z]+)(?![A-Za-z^])", bare))
                  if w.lower() not in FUNCS]
         if names:
             notes.append(", ".join(f"« {w} »" for w in names) + " nus : V_c, \\text{FR} (un nom, pas un produit de lettres)")
@@ -605,12 +623,48 @@ def element_notes(page):
                 loose += 1
     if loose:
         notes.append(f"{loose} nombre(s) de tableau sans td class=\"num\" (aligné à droite)")
+    if 'class="cover"' in page:  # a course or a report: it ends with the sources it was made from, several of them
+        part = re.search(r"<h[1-3][^>]*>(?:<[^>]+>|\d+|\s)*(Sources|Références|Bibliographie|Ressources)\b(.*?)(?=<h[12][\s>]|</section>|$)",
+                         page, re.S | re.I)
+        if not part:
+            notes.append("pas de partie « Sources » à la fin : ajoute-la, avec chaque site lu (titre — site, adresse)")
+        else:
+            links = set(re.findall(r"https?://([^/\s\"'<>]+)", part.group(2)))
+            if len(links) < 3:
+                notes.append(f"seulement {len(links)} site(s) dans les Sources : cherche et lis d'autres sources fiables "
+                             "(au moins 3 sites différents), puis complète le texte et la liste")
     for kind in ("Figure", "Tableau"):
         nums = [int(n) for n in re.findall(rf"<(?:b|strong)>\s*{kind}\s+(\d+)", page)]
         nums += [int(n) for n in re.findall(rf"<caption[^>]*>\s*(?:<b>)?\s*{kind}\s+(\d+)", page)] if kind == "Tableau" else []
         if nums and nums != list(range(1, len(nums) + 1)):
             notes.append(f"{kind}s numérotées {', '.join(map(str, nums[:10]))} : numérote 1, 2, 3… dans l'ordre, sans trou")
     return notes
+
+
+def _draw_diagrams(text, src):
+    """A diagram written in Mermaid (```mermaid in a .md, <pre class="mermaid"> in a page) is DRAWN in the house style,
+    as make_diagram does — never its code printed in the PDF (« graph TD A[Reins] --> B… » in a grey box)."""
+    blocks = list(re.finditer(r'<(pre|div)\s+class="(?:code\s+)?mermaid"[^>]*>(.*?)</\1>', text, re.S | re.I))
+    if not blocks or not _naim_docs():
+        return text
+    try:
+        import diagrams
+    except Exception:  # noqa: BLE001 — without Naim's diagrams, the code stays as it was
+        return text
+    out, last = [], 0
+    for n, m in enumerate(blocks, 1):
+        code = html.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+        png = src.with_name(f"{src.stem}-schema-{n}.png")
+        try:
+            png.with_suffix(".mmd").write_text(code)  # its code kept beside: drawn again in today's style next time
+            diagrams.render(code, png)
+            fig = f'<figure><img src="{png.name}" alt="Schéma {n}"></figure>'
+        except Exception as e:  # noqa: BLE001 — said under the render, the code shown as it is
+            print(f"PROBLÈME À CORRIGER : le schéma {n} (Mermaid) ne se dessine pas : {str(e)[:200]}")
+            fig = m.group(0)
+        out += [text[last:m.start()], fig]
+        last = m.end()
+    return "".join(out) + text[last:]
 
 
 def _naim_docs():

@@ -2253,6 +2253,8 @@ class Handler(BaseHTTPRequestHandler):
         helper.set_conversation(body.get("conv_id"))  # its background jobs report there; its own draft folder
         helper._bg_intent = bool(Agent.BG_INTENT_RE.search(body.get("message") or ""))
         helper.prior_text = " ".join(str(m.get("content") or "") for m in (body.get("history") or []))
+        # what the USER asked earlier in this conversation (« un cours avec des images »): still asked for its next chapters
+        helper.prior_asks = " ".join(str(m.get("content") or "") for m in (body.get("history") or []) if m.get("role") == "user")
         helper.request_text = body.get("message") or ""  # « le fichier de Paul » with two Paul: asked, not chosen at random
         with _lock:
             _agents[run_id] = helper  # « écris pour guider Naim » reaches this reply too

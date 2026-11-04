@@ -2766,3 +2766,46 @@ class TypographicEdits(unittest.TestCase):
         self.assertIn("else if (S.project) current.folder = S.project;", html)
         self.assertIn('current.mode === "agent" ? current.project : current.folder', html)
         self.assertIn("Travail en plusieurs fichiers sans plan", src)
+
+    def test_pdfpro_draws_mermaid_and_stays_python39(self):
+        import importlib.util, shutil
+        f = Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py"
+        spec = importlib.util.spec_from_file_location("pp", f)
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        h = pp.md_html("```mermaid\ngraph TD\n A[Reins] --> B[Vessie]\n```\n\n| Etat | Volume |\n|---|---|\n| Normal | 300 |\n| Bas | 1,5 |\n\n![Le rein](rein.jpg)")
+        self.assertIn('<pre class="code mermaid">', h)
+        self.assertIn('<td class="num">300</td>', h)
+        self.assertIn('<figure><img src="rein.jpg"', h)
+        self.assertIn("_draw_diagrams(src.read_text(), src)", f.read_text())
+        if Path("/usr/bin/python3").exists():  # the skill's commands run « python3 »: the Mac's own may be 3.9
+            r = subprocess.run(["/usr/bin/python3", "-c", f"import ast;ast.parse(open({str(f)!r}).read())"], capture_output=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_images_asked_earlier_still_asked(self):
+        with tempfile.TemporaryDirectory() as d:
+            hist = [{"role": "user", "content": "Fais un cours de médecine avec des schémas et des images"},
+                    {"role": "assistant", "content": "Voulez-vous des images ?"}]
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, history=hist)
+            a.request_text = "fournis d'autres chapitres"
+            Path(d, "02.md").write_text("# Chapitre 2\ntexte")
+            a._touched = {str(Path(d, "02.md"))}
+            self.assertTrue(a.images_note())
+            b = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, history=hist[1:])
+            b.request_text = "fournis d'autres chapitres"
+            b._touched = a._touched
+            self.assertEqual(b.images_note(), "")
+
+    def test_pdf_preview_shows_every_page(self):
+        html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
+        self.assertNotIn("if (n <= 40) next()", html)  # a 69-page course was shown up to page 40
+        self.assertIn("i.onerror = () => {}", html)
+
+    def test_pdfpro_asks_sources_at_the_end(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        self.assertTrue(any("Sources" in n for n in pp.element_notes('<section class="cover"></section><h2>Intro</h2>')))
+        one = pp.element_notes('<section class="cover"></section><h2><span class="num">09</span>Sources</h2><ol><li>https://a.fr</li></ol>')
+        self.assertTrue(any("seulement 1 site" in n for n in one))
+        self.assertEqual(pp.element_notes('<section class="cover"></section><h2>Sources</h2><ol><li>https://a.fr</li>'
+                                          '<li>https://b.org</li><li>https://c.net</li></ol>'), [])
