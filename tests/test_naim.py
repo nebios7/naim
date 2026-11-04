@@ -2916,3 +2916,34 @@ class TypographicEdits(unittest.TestCase):
             a.call_tool("edit_file", {"path": "a.html", "old_text": "coeur.jpg", "new_text": "cœur.jpg"})
             r = a.call_tool("edit_file", {"path": "a.html", "old_text": "cœur.jpg", "new_text": "coeur.jpg"})
             self.assertIn("ANNULE une correction", r)
+
+    def test_announce_reminder_again_after_progress(self):
+        src = Path(__file__).resolve().parent.parent.joinpath("server.py").read_text()
+        self.assertIn("(nudges < 2 or progress > nudge_at)", src)
+        self.assertIn("nudge_at = progress", src)
+
+    def test_tidying_files_keeps_no_document_skill(self):
+        src = Path(__file__).resolve().parent.parent.joinpath("server.py").read_text()
+        self.assertIn('and not FILE_OPS_RE.search(body["message"] or "") else None))', src)
+        import re
+        rx = re.search(r'FILE_OPS_RE = re\.compile\((r".*?"\s*\n\s*r".*?")', src, re.S)
+        self.assertTrue(rx)
+
+    def test_path_outside_project_is_pointed_to(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as h:
+            home = Path(h); (home / "Documents" / "cam3").mkdir(parents=True); (home / "Documents" / "cam3" / "x.pdf").write_text("x")
+            proj = home / "projet"; proj.mkdir()
+            a = naimtools.Agent(str(proj), "naim", auto_yes=True, emit=lambda e: None)
+            with mock.patch.object(Path, "home", lambda: home):
+                r = a.read_file("cam3/x.pdf")
+                self.assertIn(str(home / "Documents" / "cam3" / "x.pdf"), r)
+                r = a.delete_file("cam3/x.pdf")
+                self.assertTrue(r.startswith("error: not found"))
+                self.assertIn("hors du projet", r)
+            self.assertTrue((home / "Documents" / "cam3" / "x.pdf").exists())  # nothing deleted
+
+    def test_tidying_files_and_stale_answer(self):
+        src = Path(__file__).resolve().parent.parent.joinpath("server.py").read_text()
+        self.assertIn('if sk and FILE_OPS_RE.search(body["message"] or "") and not MAKE_RE.search(body["message"] or ""):', src)
+        self.assertIn("content.strip() == prev_answer.strip()", src)

@@ -1298,7 +1298,7 @@ class Agent:
     def read_file(self, path, offset=None, limit=None):
         p = self.resolve(path, read=True)
         if not p.is_file():
-            return f"error: file not found: {path}." + self._near_files(p)
+            return f"error: file not found: {path}." + (self._elsewhere(path) or self._near_files(p))
         if p.suffix.lower() in DOC_EXTS:  # Word, PDF, Excel, PowerPoint…: their text, never the raw bytes
             try:
                 text, note = docs.extract(p)
@@ -1702,12 +1702,29 @@ class Agent:
         shutil.move(str(src), str(dst))
         return f"ok: moved to {self.rel(dst)}"
 
+    def _elsewhere(self, path):
+        """« cam3/cours/x.pdf » given while the project is another folder: the same path from the user's usual folders
+        (Documents, Bureau, Téléchargements, home), said with its full path so the next call is the right one."""
+        rel = str(path or "")
+        if not rel or rel.startswith(("~", "/")):
+            return ""
+        home = Path.home()
+        for base in (home / "Documents", home / "Desktop", home / "Downloads", home):
+            f = base / rel
+            if f.exists():
+                return f" Ce chemin existe hors du projet : {f} — redonne ce chemin complet."
+        return ""
+
     def delete_file(self, path):
-        p = self.resolve(path)
+        try:
+            p = self.resolve(path)
+        except ValueError as e:  # outside the project: said plainly, with the folder to open to do it there
+            return (f"error: {e}. Pour un fichier hors du projet, ouvre d'abord son dossier (aller_dans_dossier) "
+                    "ou demande à l'utilisateur.")
         if err := self._guard_own_path(p, "Supprimer"):
             return err
         if not p.exists():
-            return f"error: not found: {path}"
+            return f"error: not found: {path}." + self._elsewhere(path) + self._near_files(p)
         if p == self.root:
             return "error: refusing to delete the whole project"
         if not self.approve(f"Mettre à la Corbeille {self.rel(p)}", f"{p}\n\nRécupérable dans la Corbeille du Mac.", kind="command"):

@@ -113,6 +113,10 @@ MAKE_RE = re.compile(r"\b(cr[ée]e[rz]?|fais|faire|fait|g[ée]n[èe]re[rz]?|dess
 NEW_WORK_RE = re.compile(r"\b(cr[ée]e[rz]?|fai[st]|faire|g[ée]n[èe]re[rz]?|dessine[rz]?|[ée]cri[st]|[ée]crire|r[ée]dige[rz]?|"
                          r"pr[ée]pare[rz]?|donne[rz]?|construi[st]|r[ée]alise[rz]?|produi[st])\b(?:[\s'’-]+[\wÀ-ÿ]+){0,2}?"
                          r"[\s'’-]+(un|une|des|deux|trois|quatre|cinq|\d+)\b(?![\s'’-]+autres?\b)", re.I)
+# tidying files that exist (« supprime les autres pdf », « mets à la corbeille », « renomme », « range ») is not making
+# a document: never the skill of the work before it (it made the course's PDF again instead of deleting)
+FILE_OPS_RE = re.compile(r"\b(supprim\w*|efface\w*|corbeille|jette\w*|d[ée]plac\w*|renomm\w*|range\w*|nettoi\w*|"
+                         r"vide\w*|retire\w* (les|ces|le|la)? ?(fichiers?|pdf|documents?|dossiers?)|garde (seulement|que|uniquement))\b", re.I)
 # the user wants files made or changed (a document, their project), not only an answer
 FILE_WORK_RE = re.compile(r"\b(?:r?ajout\w*|chang\w*|remplac\w*|rectifi\w*|refai\w*|retouch\w*|corrig\w*)\b|images?|logo|affiche|\bsvg\b|\bpng\b|infographie|fichiers?|documents?|\bpdf\b|word|docx|excel|xlsx|csv|\bzip\b|enregistr|sauvegard|"
                           r"\bcr[ée]e[rz]?\b|\bcr[ée]ation|g[ée]n[èe]re|modifi|corrige|ajoute|supprime|renomme|d[ée]place|"
@@ -2287,7 +2291,7 @@ class Handler(BaseHTTPRequestHandler):
         prompt_tokens = 0
         started = time.time()  # files made from now on are this reply's deliverables
         nudges = 1 if body.get("_relaunched") else 0
-        progress, todo_push_at = 0, -1  # tool results that worked, and when the unfinished list last sent it back to work
+        progress, todo_push_at, nudge_at = 0, -1, 0  # tool results that worked, and when the unfinished list last sent it back to work
         refusals = 0  # tool calls refused because the message only asks for an answer
         plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, 0, 0.0, False
@@ -2344,7 +2348,8 @@ class Handler(BaseHTTPRequestHandler):
                                                     if m.get("role") == "user"])
             sk = (ext.match_skill(body["message"], helper.root, helper.disabled_skills)
                   or (ext.match_skill(recent, helper.root, helper.disabled_skills)
-                      if file_work and not NEW_WORK_RE.search(body["message"] or "") else None))
+                      if file_work and not NEW_WORK_RE.search(body["message"] or "")
+                      and not FILE_OPS_RE.search(body["message"] or "") else None))
             generic_app = bool(sk and sk["name"] == "application-web" and not re.search(
                 r"\b(web|site|page|flask|fastapi|django|navigateur)\b", body["message"] or "", re.I))
             if generic_app:
@@ -2376,6 +2381,9 @@ class Handler(BaseHTTPRequestHandler):
                       or ext.match_skill(body["message"], helper.root, helper.disabled_skills))  # nothing under way: the generic one
             if acting_only and sk and sk["name"] != "mac":
                 sk = None  # acting on an existing file (« imprime mon CV ») needs no skill — except the Mac recipes
+            if sk and FILE_OPS_RE.search(body["message"] or "") and not MAKE_RE.search(body["message"] or ""):
+                sk = None  # tidying files (« mets à la corbeille cours_m1.pdf ») needs no document skill: the words of the
+                # paths (« cours », « pdf ») loaded pdf-pro, and it answered about the course instead of deleting
             # (the debug method too: a bug to find is work on the files, its method is what makes it methodical)
             if sk and sk["name"] not in ("application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):
                 # an algorithm shown in the conversation is a ```simulation block, played there: no file, unless one is asked
@@ -2603,11 +2611,26 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "retract", "chars": max(shown, len(content))})
                 self.event({"type": "token", "text": kept})
                 content, shown = kept, len(kept)
-            if not calls and not stop.is_set() and nudges < 2 and (
+            if (not calls and not stop.is_set() and used_tools and prev_answer.strip() and nudges < 3
+                    and content.strip() == prev_answer.strip()):
+                # the same words as its last answer (« PDF avec les images corrigées. » after deleting files): not what it
+                # did now — it finishes this request and says what this work did
+                nudges += 1
+                self.event({"type": "retract", "chars": max(shown, len(content))})
+                messages.append({"role": "user", "content": (
+                    "Ta réponse répète mot pour mot ta réponse précédente : elle ne parle pas de ma demande actuelle. "
+                    "Relis ma dernière demande, termine ce qui manque avec tes outils, puis dis exactement ce que tu as "
+                    "fait cette fois (et ce qui n'a pas marché).")})
+                force_tool = True
+                continue
+            if not calls and not stop.is_set() and (nudges < 2 or progress > nudge_at) and (
                     not content.strip() or (ANNOUNCE_RE.search(content) and len(content) < 400) or ends_announcing(content)
                     or (file_work and not used_tools and asks_permission(content))):
-                # « Je vais envoyer l'e-mail… » without doing it, or an empty reply: do it now
+                # « Je vais envoyer l'e-mail… » without doing it, or an empty reply: do it now. Two reminders, and one
+                # more each time the work moved forward since the last (a long task stopped on « Maintenant je vais la
+                # remplacer dans le chapitre 5 » once its two were used) — never twice without progress
                 nudges += 1
+                nudge_at = progress
                 if content.strip():
                     messages.append({"role": "assistant", "content": content})
                 messages.append({"role": "user", "content": "Fais-le maintenant avec tes outils (n'annonce pas, agis), "
