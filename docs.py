@@ -218,7 +218,17 @@ def markdown_html(text, title="Document"):
             out.append("<table>" + "".join(("<tr>" + "".join(f"<{'th' if i == 0 else 'td'}>{inline(c)}</{'th' if i == 0 else 'td'}>" for c in row) + "</tr>")
                                             for i, row in enumerate(rows)) + "</table>")
             table.clear()
+    # an image with its credit line under it (« ![Le cœur](coeur.jpg) » then « *Source : Wikimedia Commons — …* »):
+    # one figure, its caption and its credit — as the HTML figure the images tool gives
+    text = re.sub(r"^[ \t]*!\[([^\]]*)\]\(([^)\s]+)\)[ \t]*\n[ \t]*\*{0,2}((?:Source|Crédit|Credit)\s*:[^\n]*?)\*{0,2}[ \t]*$",
+                  lambda m: (f'<figure><img src="{H.escape(m.group(2))}" alt="{H.escape(m.group(1))}"><figcaption>'
+                             + (f"{H.escape(m.group(1))}. " if m.group(1).strip() else "")
+                             + f'<span class="credit">{H.escape(m.group(3).strip())}</span></figcaption></figure>'),
+                  text or "", flags=re.M | re.I)
     for line in text.splitlines():
+        if re.match(r"\s*</?(figure|img|div|table|section|figcaption|svg|br|hr|span|p)\b", line, re.I):
+            out.append(line)  # HTML written in the Markdown (a figure pasted from the images tool): kept as it is
+            continue
         if line.strip().startswith("|"):
             table.append(line)
             continue
@@ -240,7 +250,7 @@ def markdown_html(text, title="Document"):
         elif (im := re.match(r"^\s*!\[([^\]]*)\]\(([^)\s]+)\)\s*$", line)):
             # an image alone: a figure (no caption under it — a diagram already has its title, said twice it looks amateur)
             out.append(f'<figure style="margin:10pt 0;text-align:center;break-inside:avoid">'
-                       f'<img src="{H.escape(im.group(2))}" alt="{H.escape(im.group(1))}" style="max-width:100%;height:auto"></figure>')
+                       f'<img src="{H.escape(im.group(2))}" alt="{H.escape(im.group(1))}" style="max-width:100%;max-height:170mm;height:auto;object-fit:contain"></figure>')
         elif line.strip():
             out.append(f"<p>{inline(line)}</p>")
     flush_table()
@@ -538,6 +548,9 @@ def page_trouble(info, path):
             break
     if info.get("errors"):
         said.append("erreurs de la page : " + " ; ".join(e[:200].rstrip(".") for e in info["errors"][:6]))
+    if not info.get("canvas") and re.search(r"WebGLRenderer|getContext\(|new\s+Chart\(|three(?:\.module)?\.js", Path(path).read_text(errors="replace")):
+        said.append("la page doit dessiner (3D, graphique) mais AUCUNE zone de dessin n'apparaît : le canvas n'est pas mis "
+                    "dans la page (renderer.domElement ajouté à la scène au lieu du document ?), ou le script s'arrête avant")
     if info.get("blank"):
         said.append(f"{info['blank']} zone(s) de dessin (canvas) VIDE(S) : rien n'y est dessiné, la 3D, le graphique ou "
                     "le jeu ne s'affiche pas. Trouve la cause (rendu jamais appelé, taille jamais donnée, objet hors champ, "

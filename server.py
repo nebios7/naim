@@ -2653,6 +2653,14 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "user", "content": dead})
                 force_tool = True
                 continue
+            if not calls and not stop.is_set() and (want := helper.images_note()):
+                # « avec des images »: real images taken from the web before the course is given
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content})
+                    self.event({"type": "token", "text": "\n\n"})
+                messages.append({"role": "user", "content": want})
+                force_tool = True
+                continue
             if not calls and not stop.is_set() and (seen := helper.look_note()):
                 # a page made in this reply: looked at in the browser before it is called done (Naim does not see images)
                 if content.strip():

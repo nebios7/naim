@@ -1106,6 +1106,21 @@ class WorksLikeAColleague(unittest.TestCase):
         self.assertIn("hljsReady && hl && window.hljs.getLanguage(hl)", page)
         self.assertIn('"/vendor/highlight.min.js"', (ROOT / "server.py").read_text())
 
+    def test_images_asked_are_really_there(self):
+        # « un cours avec des schémas et des images »: the course came back with drawn diagrams only
+        self.a.request_text = "crée un cours de médecine en PDF avec des schémas et des images"
+        self.a.call_tool("write_file", {"path": "cours/page.html", "content": '<h1>Cours</h1><figure><img src="schema.png" alt="Schéma"></figure>'})
+        note = self.a.images_note()
+        self.assertIn("images.py", note)
+        self.assertEqual(self.a.images_note(), "")  # said once
+        self.a._images_rounds = 0
+        self.a.call_tool("edit_file", {"path": "cours/page.html", "old_text": "</figure>",
+                                       "new_text": '</figure><figure><img src="coeur.jpg"><figcaption><span class="credit">Source</span></figcaption></figure>'})
+        self.assertEqual(self.a.images_note(), "")
+        self.a.request_text = "crée un cours de médecine en PDF"
+        self.a._images_rounds = 0
+        self.assertEqual(self.a.images_note(), "")  # not asked: no push
+
     def test_own_new_file_is_not_ambiguous(self):
         # « plusieurs fichiers correspondent à « cours » » refused the edit of the course page Naim had just written
         for n in ("cours_anatomie.html", "cours_complet.page1.png"):
@@ -1465,6 +1480,23 @@ print("# modifié par l'utilisateur" in f.read_text())
             r = subprocess.run([sys.executable, "-c", script, str(ROOT)], capture_output=True, text=True,
                                env={**os.environ, "NAIM_HOME": home}, timeout=120)
             self.assertEqual(r.stdout.split(), ["True", "True"], r.stderr[-500:])
+
+    def test_markdown_figure_with_credit(self):
+        # a web image in a Markdown course: its credit line under it, or the HTML figure pasted, both drawn in the PDF
+        import docs
+        page = docs.markdown_html("# T\n\n![Le cœur](coeur.jpg)\n*Source : Wikimedia Commons — X, CC BY-SA*\n\n"
+                                  '<figure><img src="rein.jpg" alt="Rein"><figcaption>Le rein</figcaption></figure>\n')
+        self.assertIn('<span class="credit">Source : Wikimedia Commons — X, CC BY-SA</span>', page)
+        self.assertIn('<figure><img src="rein.jpg"', page)
+        self.assertNotIn("&lt;figure", page)
+
+    def test_drawing_page_without_canvas_said(self):
+        # the 3D medicine page: the renderer added to the scene instead of the page — nothing at all on screen
+        import docs
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "vide.html"
+            f.write_text("<h1>Cœur</h1><script>const r = 'new THREE.WebGLRenderer()'; throw new Error('arrêt');</script>")
+            self.assertIn("AUCUNE zone de dessin", docs.preview_png(f)[1])
 
     def test_markdown_image_drawn_in_the_pdf(self):
         import docs

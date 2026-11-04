@@ -98,6 +98,7 @@ def prendre(which, dest):
     print(f'<figure><img src="{out.name}" alt="{html.escape(f["description"][:90] or f["title"][5:])}">'
           f'<figcaption><b>Figure</b> — <ce que l\'image montre, en français>. <span class="credit">{html.escape(credit)}</span>'
           "</figcaption></figure>")
+    print(f"\nDans un Markdown (.md), deux lignes :\n![<ce que l'image montre, en français>]({out.name})\n*{credit}*")
 
 
 if __name__ == "__main__":

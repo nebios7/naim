@@ -739,6 +739,7 @@ class Agent:
         self._page_dirty, self._look_rounds = None, 0  # a web page made or changed: looked at (audit) before « fini »
         self._lost_content = None  # a write_file that lost its path: its content, kept until the path comes
         self._link_rounds = 0  # links of the final answer tried before it is given
+        self._images_rounds = 0  # « avec des images »: real images looked for before the document is given
         self._touched = set()  # files read or written in this request: replacing them is the work, not an accident
         self.prior_text = " ".join(str(m.get("content") or "") for m in (history or []))  # the conversation before it
         self._turn_changes, self._turn_started = [], time.time()  # what really changed during this request: the summary is checked against it
@@ -1967,6 +1968,35 @@ class Agent:
         (re.compile(r"\bchmod\s+(-R\s+)?0*00\s+/(\s|$)|\bchown\s+-R\s+\S+\s+/(\s|$)"), "permissions du système détruites"),
         (re.compile(r"\bcsrutil\s+disable\b"), "désactivation de la protection du système"),
     ]
+
+    IMAGES_ASKED_RE = re.compile(r"\b(images?|photos?|illustrations?|planches?|illustr[ée]e?s?)\b", re.I)
+
+    def images_note(self):
+        """« un cours avec des schémas et des images »: the document made has real images (free ones from the web,
+        with their credit), not only drawn diagrams. A course came back with none: the work goes on first."""
+        ask = self.request_text or ""
+        if self._images_rounds >= 1 or not self.IMAGES_ASKED_RE.search(ask) or re.search(r"\b(sans|pas d['’]?)\s*(images?|photos?)", ask, re.I):
+            return ""
+        pages = []
+        for t in getattr(self, "_touched", set()):
+            f = Path(t)
+            if f.suffix.lower() in (".html", ".htm", ".md") and f.is_file() and not f.name.endswith(".pro.html"):
+                pages.append(f)
+        if not pages:
+            return ""
+        for f in pages:
+            text = f.read_text(errors="replace")
+            if 'class="credit"' in text or re.search(r"""(?:src=["']|\]\()[^"')]+\.(?:jpe?g|webp)\b""", text, re.I):
+                return ""  # a real image is in it
+        self._images_rounds += 1
+        self.emit({"type": "status", "text": "Naim cherche les images demandées…"})
+        tool = "$HOME/.naim/plugins/pdf-pro/skills/pdf-pro/images.py"
+        return ("Avant de dire que c'est fini : l'utilisateur a demandé des IMAGES, et " + ", ".join(self.rel(f) for f in pages[:3])
+                + " n'en contient aucune (seulement des schémas dessinés, ou rien). Pour chaque sujet qui en a besoin, prends "
+                f"une vraie image libre sur le web :\n  python3 \"{tool}\" chercher \"<sujet en anglais> diagram fr\" 6\n"
+                f"  python3 \"{tool}\" prendre <numéro> <dossier du document>/<nom>.jpg\n"
+                "Choisis celle dont la description montre VRAIMENT ce sujet, regarde-la avec look_at, colle la figure donnée "
+                "(légende en français + crédit) dans la page avec edit_file, une image par sujet, puis refais le PDF.")
 
     def link_note(self, content):
         """The local links of the final answer, opened before it is given: a dead one (no server, a wrong path) goes back to
@@ -3544,6 +3574,9 @@ class Agent:
         except Exception:  # noqa: BLE001 — no render, no verdict: the other checks still run
             return []
         out = [f"erreur de la page : {e[:200]}" for e in (info.get("errors") or [])[:4]]
+        if not info.get("canvas"):
+            out.append("AUCUNE zone de dessin n'apparaît dans la page (le canvas n'y est pas mis, ou le script s'arrête avant) : "
+                       "rien ne s'affiche")
         if info.get("blank"):
             out.append("la zone de dessin (la 3D, le graphique) est VIDE : rien ne s'affiche. Cherche pourquoi (une erreur "
                        "ci-dessus, le rendu jamais appelé, la base du modèle supprimée) ; si la page vient du modèle d'un "
@@ -3897,6 +3930,7 @@ class Agent:
         self.request_text, self._asked_which = str(task or ""), set()
         self._touched = set()
         self._link_rounds = 0
+        self._images_rounds = 0
         try:
             return self._run(task, images)
         finally:
@@ -4396,6 +4430,9 @@ class Agent:
                     continue
                 if not self.plan and not self.subagent and (dead := self.link_note(content)):
                     self.messages.append({"role": "user", "content": dead})
+                    continue
+                if not self.plan and not self.subagent and (want := self.images_note()):
+                    self.messages.append({"role": "user", "content": want})
                     continue
                 if self._code_dirty and not self.plan and not self.subagent and self._check_pushbacks < 3:
                     self._check_pushbacks += 1

@@ -71,7 +71,8 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
 - Figure : `<figure><img src="graphique.svg"><figcaption><b>Figure 1</b> — …</figcaption></figure>` ;
   deux côte à côte : `<div class="grid2"><figure>…</figure><figure>…</figure></div>` (graphiques faits avec `small`).
 - **Une vraie image pour expliquer** (une planche d'anatomie, une photo, une carte, un appareil) : un cours,
-  un exposé ou un rapport en a dès qu'elle aide à comprendre. Prends-la sur Wikimedia Commons (images libres) :
+  un exposé ou un rapport en a dès qu'elle aide à comprendre ; **demandées (« avec des images ») : obligatoires**,
+  une par sujet, en plus des schémas. Prends-la sur Wikimedia Commons (images libres) :
   ```bash
   python3 "$T/images.py" chercher "human heart anatomy diagram fr" 6     # mots en anglais ; « fr » = légendes en français
   python3 "$T/images.py" prendre 2 <ton dossier>/coeur.jpg                # l'image, son crédit et la figure HTML à coller
