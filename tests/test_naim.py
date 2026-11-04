@@ -2721,3 +2721,8 @@ class TypographicEdits(unittest.TestCase):
         self.assertIn("avec update_todos avant de passer à la suivante", src)
         self.assertIn("helper._close_todos()", src)
         self.assertIn("Naim continue son plan", src)
+
+    def test_chat_asks_to_tick_the_list(self):
+        src = Path(__file__).resolve().parent.parent.joinpath("server.py").read_text()
+        self.assertIn("Ta liste n'a pas bougé depuis", src)
+        self.assertIn("appelle update_todos pour cocher (done) celles que tu", src)

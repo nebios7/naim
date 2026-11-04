@@ -2700,8 +2700,10 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "assistant", "content": content})
                     self.event({"type": "token", "text": "\n\n"})
                 messages.append({"role": "user", "content": (
-                    f"Ta liste de tâches n'est pas finie : il reste {len(left)} étape(s). Continue maintenant avec « {left[0]} », "
-                    "sans t'arrêter ni me demander, jusqu'à la dernière ; ta réponse finale viendra quand tout sera fait.")})
+                    f"Ta liste de tâches n'est pas à jour ou pas finie : il reste {len(left)} étape(s) non cochée(s) : "
+                    + " ; ".join(f"« {t} »" for t in left) + ". D'abord, appelle update_todos pour cocher (done) celles que tu "
+                    "as déjà vraiment faites. Puis continue avec la première qui reste, sans t'arrêter ni me demander, jusqu'à "
+                    "la dernière ; ta réponse finale viendra quand tout sera fait et coché.")})
                 force_tool = True
                 continue
             if not calls and not stop.is_set() and (fix := helper.verify_summary(content)):
@@ -2822,7 +2824,12 @@ class Handler(BaseHTTPRequestHandler):
                                "point précis, cherche CE point (pas une reformulation d'une recherche déjà faite). Si tu as de "
                                "quoi faire, passe à la suite maintenant : plan avec update_todos si le travail est long, puis "
                                "l'écriture.]")
-                if name != "update_todos" and getattr(helper, "todos", None):
+                helper._since_todo = 0 if name == "update_todos" else getattr(helper, "_since_todo", 0) + 1
+                if name != "update_todos" and getattr(helper, "todos", None) and helper._since_todo >= 6:
+                    # six actions and the list never touched (a whole course written, its PDF made, still « 1 sur 6 »)
+                    result += (f"\n\n[Ta liste n'a pas bougé depuis {helper._since_todo} actions. Appelle update_todos MAINTENANT "
+                               "pour cocher (done) les étapes déjà faites et mettre la suivante en cours, puis continue.]")
+                elif name != "update_todos" and getattr(helper, "todos", None):
                     # its plan under every result, as in the Agent: without it the list stayed on step 1 while all was done
                     cur = next((x["text"] for x in helper.todos if x.get("status") == "in_progress"), None)
                     done_n = sum(x.get("status") == "done" for x in helper.todos)
