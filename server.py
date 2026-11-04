@@ -2825,6 +2825,13 @@ class Handler(BaseHTTPRequestHandler):
                                "quoi faire, passe à la suite maintenant : plan avec update_todos si le travail est long, puis "
                                "l'écriture.]")
                 helper._since_todo = 0 if name == "update_todos" else getattr(helper, "_since_todo", 0) + 1
+                if name in ("write_file", "edit_file", "multi_edit") and not getattr(helper, "todos", None) \
+                        and not getattr(helper, "_plan_asked", False) and not result.startswith("error"):
+                    helper._writes_no_plan = getattr(helper, "_writes_no_plan", set()) | {str(args.get("path", ""))}
+                    if len(helper._writes_no_plan) >= 2:  # two different files (one file fixed twice is not a long work)  # a long work (chapters, files) going on without a plan: once, it writes one
+                        helper._plan_asked = True
+                        result += ("\n\n[Travail en plusieurs fichiers sans plan : appelle update_todos MAINTENANT avec la liste "
+                                   "des étapes (ce qui est fait en done, la suivante en cours), puis continue.]")
                 if name != "update_todos" and getattr(helper, "todos", None) and helper._since_todo >= 6:
                     # six actions and the list never touched (a whole course written, its PDF made, still « 1 sur 6 »)
                     result += (f"\n\n[Ta liste n'a pas bougé depuis {helper._since_todo} actions. Appelle update_todos MAINTENANT "

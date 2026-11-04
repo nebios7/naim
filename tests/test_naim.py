@@ -2759,3 +2759,10 @@ class TypographicEdits(unittest.TestCase):
         good = pp.element_notes('<table><caption>Tableau 1 — x</caption><tr><td>Rein</td><td class="num">120</td></tr></table>'
                                 "<figcaption><b>Figure 1</b></figcaption><figcaption><b>Figure 2</b></figcaption>")
         self.assertEqual(good, [])
+
+    def test_chat_keeps_its_folder_and_asks_a_plan(self):
+        root = Path(__file__).resolve().parent.parent
+        html, src = (root / "web/index.html").read_text(), (root / "server.py").read_text()
+        self.assertIn("else if (S.project) current.folder = S.project;", html)
+        self.assertIn('current.mode === "agent" ? current.project : current.folder', html)
+        self.assertIn("Travail en plusieurs fichiers sans plan", src)

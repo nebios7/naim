@@ -3744,7 +3744,10 @@ async function renameCurrent() {
 async function openConv(id) {
   current = runs[id] ? runs[id].conv : await api(`/api/conversations/${id}`);
   if (current.mode && current.mode !== S.mode) S.mode = current.mode;
-  if (current.project && current.mode === "agent") S.project = current.project;
+  // its own folder, in the Chat too: back to a course made in cours_medecine, it works there again — not in the folder
+  // chosen since for another conversation (it read the COBOL course's README and started the medicine course over in it)
+  const own = current.mode === "agent" ? current.project : current.folder;
+  if (own && own !== S.project && !TEMP_DIR_RE.test(own)) { S.project = own; saveSettings(); if (current.mode !== "agent") toast(`Dossier de cette conversation : ${own.split("/").pop()}`); }
   applySettings(); setView("chat"); renderList(); renderThread(); updateTitle();
   if (S.mode === "agent" && S.project && $("#panel").classList.contains("show")) loadTree();
 }
@@ -5091,7 +5094,7 @@ async function send(textArg, attsArg, opts = {}) {
   if (S.mode === "agent" && !S.project) { toast("Choisis d'abord le dossier du projet"); $("#pick").focus(); return; }
   setView("chat");
   if (!current) { current = { id: draftId || newId(), title: (text || atts[0].name).slice(0, 60), mode: S.mode, messages: [] }; draftId = null; }
-  current.mode = S.mode; if (S.mode === "agent") current.project = S.project;
+  current.mode = S.mode; if (S.mode === "agent") current.project = S.project; else if (S.project) current.folder = S.project;
   if (opts.goal) current.goal = { text: opts.goal, turns: 0, max: GOAL_MAX, active: true, last: "", same: 0 };
   else if (!opts.goalTurn && !opts.bg && textArg === undefined && current.goal?.active) {
     current.goal.active = false; current.goal.why = "en pause : tu as écrit"; toast("Objectif en pause — /goal pour le reprendre");
