@@ -255,9 +255,39 @@ def _backup():
         b.write_text(NAIM_MD.read_text())
 
 
+def accepted_rules():
+    """The rules accepted from the dreams, as written in NAIM.md (its own section), in order."""
+    try:
+        cur = NAIM_MD.read_text()
+    except OSError:
+        return []
+    if SECTION not in cur:
+        return []
+    part = cur.split(SECTION, 1)[1].split("\n## ", 1)[0]
+    return [l[2:].strip() for l in part.splitlines() if l.startswith("- ") and l[2:].strip()]
+
+
+def remove_rule(text):
+    """An accepted rule taken out of NAIM.md (the file as it was is kept aside first). True if it was there."""
+    try:
+        cur = NAIM_MD.read_text()
+    except OSError:
+        return False
+    line = f"- {' '.join(str(text).split())}"
+    if SECTION not in cur or line not in cur.splitlines():
+        return False
+    _backup()
+    head, part = cur.split(SECTION, 1)
+    part = "\n".join(l for l in part.split("\n") if l.strip() != line)
+    NAIM_MD.write_text(head + SECTION + part)
+    return True
+
+
 def add_rule(text):
-    """Write an accepted rule at the end of NAIM.md, in its own section."""
+    """Write an accepted rule at the end of NAIM.md, in its own section — not a second time in other words."""
     text = " ".join(str(text).split())
+    if _known(text, accepted_rules()):
+        return  # already there, said differently (« Vérifie toujours le résultat réel… » twice)
     _backup()
     try:
         cur = NAIM_MD.read_text()

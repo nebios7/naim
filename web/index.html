@@ -7861,7 +7861,15 @@ async function loadDreams() {
       ${p.why ? `<small>${esc(p.why)}</small>` : ""}
       ${(p.evidence || []).length ? `<div class="dev">${p.evidence.map((e) => `<div>Tu avais dit : « ${esc(e.user)} »${e.title ? ` · ${esc(e.title)}` : ""}</div>`).join("")}</div>` : ""}</div>
       <div class="sc">${p.kind === "regle" ? `<button class="btn" data-edit>Modifier</button>` : ""}<button class="btn primary" data-yes>${p.kind === "regle" ? "Ajouter" : "Retirer"}</button><button class="btn" data-no>Refuser</button></div></div>`).join("");
-  box.innerHTML = head + (props ? `<div class="sgroup">${props}</div>` : last && !st.running ? `<div class="sgroup"><div class="srow"><div class="sl"><small>Aucune proposition en attente. Les règles acceptées sont à la fin de <span class="mono">~/.naim/NAIM.md</span>.</small></div></div></div>` : "");
+  const rules = r.rules || [];  // the rules accepted: written in Naim's instructions (NAIM.md), read at every conversation
+  const kept = `<div class="sgroup"><div class="srow col"><div class="sl"><b>${rules.length} règle${rules.length > 1 ? "s" : ""} acceptée${rules.length > 1 ? "s" : ""}</b>
+      <small>Écrites dans les consignes de Naim (<span class="mono">~/.naim/NAIM.md</span>) : il les suit dans chaque conversation. Ce ne sont pas des faits de mémoire, d'où le compteur séparé plus bas.</small></div></div>
+      ${rules.map((t) => `<div class="srow drule"><div class="sl" style="flex:1;min-width:0"><span class="ptext">${esc(t)}</span></div><div class="sc"><button class="btn" data-rm>Retirer</button></div></div>`).join("")}</div>`;
+  box.innerHTML = head + (rules.length ? kept : "") + (props ? `<div class="sgroup">${props}</div>` : last && !st.running ? `<div class="sgroup"><div class="srow"><div class="sl"><small>Aucune proposition en attente. Les règles acceptées sont à la fin de <span class="mono">~/.naim/NAIM.md</span>.</small></div></div></div>` : "");
+  $$(".drule", box).forEach((row) => { $("[data-rm]", row).onclick = async () => {
+    const t = $(".ptext", row).textContent;
+    if (!confirm(`Retirer cette règle des consignes de Naim ?\n\n${t}`)) return;
+    const res = await dreamOp({ op: "remove_rule", text: t }); toast(res.ok ? "Règle retirée (l'ancien NAIM.md est gardé à côté)" : "Règle introuvable"); loadDreams(); }; });
   $("#dreamRun").onclick = async () => { await dreamOp({ op: "run" }); toast("Naim rêve : il relit ce qui est nouveau"); setTimeout(loadDreams, 800); };
   $$(".dprop", box).forEach((row) => {
     const go = async (accept, text) => {

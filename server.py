@@ -935,7 +935,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({**llamacpp.SERVER.status(), "log": llamacpp.SERVER.log_tail(), "files": files})
         elif path == "/api/dream":  # Naim's dream: what it read at night and the rules it proposes
             d = dreaming.latest()
-            self.send_json({"state": dreaming.STATE, "pending": dreaming.pending(),
+            self.send_json({"state": dreaming.STATE, "pending": dreaming.pending(), "rules": dreaming.accepted_rules(),
                             "last": d and {k: d.get(k) for k in ("date", "date_time", "read")}})
         elif path == "/api/schedules":
             self.send_json({"tasks": scheduler.load(), "running": scheduler.running_ids(), "pending": scheduler.pending()})
@@ -1426,6 +1426,8 @@ class Handler(BaseHTTPRequestHandler):
             elif b.get("op") in ("accept", "refuse"):
                 p = dreaming.answer(b.get("date", ""), b.get("id", ""), b["op"] == "accept", b.get("text"))
                 self.send_json({"ok": bool(p), "proposal": p})
+            elif b.get("op") == "remove_rule":  # an accepted rule taken back out of Naim's instructions
+                self.send_json({"ok": dreaming.remove_rule(b.get("text", ""))})
             else:
                 self.send_json({"error": "opération inconnue"}, 400)
         elif path == "/api/clipboard":

@@ -1395,6 +1395,27 @@ print(m("fais une maquette plus belle de mon application"), m("audit de sécurit
         self.assertIn('"/api/skills/packs"', server)
 
 
+class DreamRules(unittest.TestCase):
+    """Rules accepted from the dreams: shown (they are in NAIM.md, not in the memory facts, so « 0 fait » confused),
+    removable, and not written twice in other words."""
+
+    def test_listed_removed_not_doubled(self):
+        import dreaming
+        with tempfile.TemporaryDirectory() as d:
+            saved = dreaming.NAIM_MD, dreaming.ext.HOME
+            dreaming.NAIM_MD, dreaming.ext.HOME = Path(d) / "NAIM.md", Path(d)
+            try:
+                dreaming.NAIM_MD.write_text("# Consignes\n")
+                dreaming.add_rule("Vérifie toujours le résultat réel d'une tâche avant de déclarer qu'elle est terminée.")
+                dreaming.add_rule("Vérifie toujours le résultat réel avant de dire que c'est fini.")  # the same, other words
+                dreaming.add_rule("Lis les fichiers existants avant de les modifier.")
+                self.assertEqual(len(dreaming.accepted_rules()), 2)
+                self.assertTrue(dreaming.remove_rule("Lis les fichiers existants avant de les modifier."))
+                self.assertEqual(dreaming.accepted_rules(), ["Vérifie toujours le résultat réel d'une tâche avant de déclarer qu'elle est terminée."])
+            finally:
+                dreaming.NAIM_MD, dreaming.ext.HOME = saved
+
+
 class DiagramStyle(unittest.TestCase):
     """Naim's diagrams in the style of its PDFs: groups on one cream with a small accent title, white boxes, light
     arrows; colours a diagram asks for brought into the PDF's soft tones. In a PDF made from
