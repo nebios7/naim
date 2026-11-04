@@ -3,6 +3,8 @@
 naim-pdf, the KaTeX already shipped with Naim).
 
   pdfpro.py render <page.html> <sortie.pdf> [couleur]   the theme, the formulas, the coloured code, then the A4 PDF
+  … --police marianne  (or spectral, marianne+spectral) the document in a font installed in ~/.naim/fonts
+  pdfpro.py polices                                     the fonts installed
   pdfpro.py render <document> <sortie.pdf> [couleur]    a document of any kind -> a pro PDF: .md .txt .docx .doc .rtf
                                                   .odt .pdf .csv .xlsx .pptx (its titles, lists, tables kept)
   pdfpro.py render 01.md 02.docx … <sortie.pdf>   several documents -> ONE PDF: cover, contents, one chapter each,
@@ -543,6 +545,50 @@ def accent_css(name):
     return f"<style>:root{{--clay:{col};--clay-soft:{soft}}}</style>"
 
 
+# ------------------------------------------------------------------ fonts the user installed (« avec la police Marianne »)
+FONTS = Path.home() / ".naim" / "fonts"
+WEIGHTS = {"thin": 100, "extralight": 200, "light": 300, "regular": 400, "book": 400, "medium": 500, "semibold": 600,
+           "bold": 700, "extrabold": 800, "black": 900}
+POLICE = {"name": ""}
+
+
+def fonts_installed():
+    return sorted(d.name for d in FONTS.iterdir() if d.is_dir() and any(d.glob("*.*"))) if FONTS.is_dir() else []
+
+
+def font_css(name):
+    """The CSS that puts the whole document in a font of ~/.naim/fonts/<name>/ (its weights and italics read from the
+    file names: Marianne-Bold_Italic.woff2, Spectral-SemiBold.ttf…). « marianne+spectral »: text in the first, titles
+    in the second (the French State's pair)."""
+    names = [n.strip().lower() for n in re.split(r"[+,/]", name or "") if n.strip()]
+    if not names:
+        return ""
+    faces, families = [], []
+    for n in names:
+        d = next((x for x in (FONTS.iterdir() if FONTS.is_dir() else []) if x.is_dir() and x.name.lower() == n), None)
+        files = [f for f in (d.glob("*") if d else []) if f.suffix.lower() in (".woff2", ".woff", ".ttf", ".otf")]
+        if not files:
+            have = ", ".join(fonts_installed()) or "aucune"
+            sys.exit(f"erreur : police « {n} » introuvable dans ~/.naim/fonts. Installées : {have}.")
+        best = {}
+        for f in files:  # one file per weight and style, the web formats first
+            key = f.stem.lower().replace("_", "").replace("-", " ")
+            italic = "italic" in key
+            w = next((v for k, v in sorted(WEIGHTS.items(), key=lambda kv: -len(kv[0])) if k in key.replace(" ", "")), 400)
+            rank = (".woff2", ".woff", ".otf", ".ttf").index(f.suffix.lower())
+            if (w, italic) not in best or rank < best[(w, italic)][0]:
+                best[(w, italic)] = (rank, f)
+        fam = f"Naim-{n}"
+        fmt = {".woff2": "woff2", ".woff": "woff", ".ttf": "truetype", ".otf": "opentype"}
+        for (w, italic), (_, f) in sorted(best.items()):
+            faces.append(f"@font-face{{font-family:'{fam}';src:url('{f.as_uri()}') format('{fmt[f.suffix.lower()]}');"
+                         f"font-weight:{w};font-style:{'italic' if italic else 'normal'}}}")
+        families.append(fam)
+    text, titles = families[0], families[-1]
+    return ("<style>" + "".join(faces) + f":root{{--sans:'{text}',-apple-system,sans-serif;--serif:'{titles}',Georgia,serif}}"
+            f"body{{font-family:'{text}',-apple-system,sans-serif}}</style>")
+
+
 def render(src, out, couleur="", written=True):
     if not Path(src).expanduser().is_file():  # said plainly (not a Python error), with the file of that name if it is here
         near = Path(Path(src).name)
@@ -556,6 +602,8 @@ def render(src, out, couleur="", written=True):
     built = page(_draw_diagrams(src.read_text(), src))
     if couleur:
         built = re.sub(r"</head>", lambda m: accent_css(couleur) + "</head>", built, count=1, flags=re.I)
+    if POLICE["name"]:  # a font asked (« avec la police Marianne »): after the theme, it wins
+        built = re.sub(r"</head>", lambda m: font_css(POLICE["name"]) + "</head>", built, count=1, flags=re.I)
     full.write_text(built)
     r = subprocess.run([str(NAIM_PDF), str(full), str(out), "A4"], capture_output=True, text=True, timeout=180)
     if r.returncode != 0 or not out.is_file():
@@ -815,7 +863,16 @@ def chart(kind, data_file, out, title="", size=""):
 
 
 if __name__ == "__main__":
-    a = [_here(x) for x in sys.argv[1:]]
+    argv = sys.argv[1:]
+    if "--police" in argv:  # « --police marianne » anywhere: the whole document in that installed font
+        i = argv.index("--police")
+        POLICE["name"] = argv[i + 1] if i + 1 < len(argv) else ""
+        argv = argv[:i] + argv[i + 2:]
+        font_css(POLICE["name"])  # unknown font: said now, with the installed ones
+    if argv[:1] == ["polices"]:
+        print("Polices installées (~/.naim/fonts) : " + (", ".join(fonts_installed()) or "aucune"))
+        sys.exit(0)
+    a = [_here(x) for x in argv]
     if len(a) >= 3 and a[0] in ("quiz", "render") and a[1].lower().endswith(".json"):  # a quiz -> its pro PDF
         render_quiz(a[1], a[2], a[3] if len(a) > 3 else "")
         sys.exit(0)

@@ -2947,3 +2947,23 @@ class TypographicEdits(unittest.TestCase):
         src = Path(__file__).resolve().parent.parent.joinpath("server.py").read_text()
         self.assertIn('if sk and FILE_OPS_RE.search(body["message"] or "") and not MAKE_RE.search(body["message"] or ""):', src)
         self.assertIn("content.strip() == prev_answer.strip()", src)
+
+    def test_asked_font_is_used(self):
+        from unittest import mock
+        import importlib.util
+        with tempfile.TemporaryDirectory() as h:
+            (Path(h) / "fonts" / "marianne").mkdir(parents=True)
+            (Path(h) / "fonts" / "marianne" / "Marianne-Bold_Italic.woff2").write_bytes(b"x")
+            (Path(h) / "fonts" / "marianne" / "Marianne-Regular.woff2").write_bytes(b"x")
+            a = naimtools.Agent(h, "naim", auto_yes=True, emit=lambda e: None)
+            with mock.patch.object(naimtools.ext, "HOME", Path(h)):
+                a.request_text = "refais le PDF avec la police Marianne"
+                self.assertEqual(a._asked_font(), ["--police", "marianne"])
+                a.request_text = "fais un cours"
+                self.assertEqual(a._asked_font(), [])
+            f = Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py"
+            spec = importlib.util.spec_from_file_location("pp", f); pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+            pp.FONTS = Path(h) / "fonts"
+            css = pp.font_css("marianne")
+            self.assertIn("font-weight:700;font-style:italic", css)
+            self.assertIn("--sans:'Naim-marianne'", css)

@@ -32,6 +32,11 @@ python3 "$T/pdfpro.py" render page.html document.pdf                     # le st
 python3 "$T/pdfpro.py" check document.pdf                                # page 1 et 2 en PNG, à regarder avec look_at
 ```
 
+**Une police demandée** (« avec la police Marianne », « en Spectral ») : ajoute `--police <nom>` à `render`
+(`python3 "$T/pdfpro.py" render page.html document.pdf --police marianne`). `marianne+spectral` : le texte en
+Marianne, les titres en Spectral (la paire de l'État). `python3 "$T/pdfpro.py" polices` liste celles qui sont
+installées (dans `~/.naim/fonts/<nom>/`). Jamais de `<style>` ni de `font-family` dans page.html pour ça.
+
 Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formules, graphiques, schéma, encadrés) :
 `$T/exemples/cours.html`. Lis-le avec read_file avant d'écrire ta page.
 

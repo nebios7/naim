@@ -2755,6 +2755,15 @@ class Agent:
                 return res + "\n" + self._check_after(before, lambda: sim.screenshot(device))
         return res
 
+    def _asked_font(self):
+        """« avec la police Marianne » in this conversation, and that font installed in ~/.naim/fonts: its option for
+        pdf-pro (a PDF made by convert_document gets it too, not only one made with pdfpro.py by hand)."""
+        fonts = ext.HOME / "fonts"
+        have = {d.name.lower() for d in fonts.iterdir() if d.is_dir()} if fonts.is_dir() else set()
+        said = f"{self.request_text} {getattr(self, 'prior_asks', '')}".lower()
+        asked = [n for n in sorted(have) if re.search(rf"\b{re.escape(n)}\b", said) and re.search(r"\b(polices?|fonte|typo\w*|font)\b", said)]
+        return ["--police", "+".join(asked)] if asked else []
+
     def convert_document(self, source, output, paper="A4", orientation="portrait"):
         src, dst = self.resolve(source, read=True), self.resolve(output)
         if not self.approve(f"Convertir {self.rel(src)} en {self.rel(dst)}", f"{src}\n→ {dst}"):
@@ -2763,11 +2772,12 @@ class Agent:
             self.checkpoint.save(dst)
             self.emit({"type": "checkpoint", "run_id": self.run_id})
         pro = ext.HOME / "plugins" / "pdf-pro" / "skills" / "pdf-pro" / "pdfpro.py"
+        police = self._asked_font()
         if src.suffix.lower() in (".html", ".htm") and dst.suffix.lower() == ".pdf" and src.is_file() and pro.is_file():
             head = src.read_text(errors="replace")[:4000].lower()
             if not re.search(r"<(html|head|style)\b", head):
                 # only the content, no style of its own (a pdf-pro page): it gets the pdf-pro look, never a bare one
-                r = subprocess.run([sys.executable, str(pro), "render", str(src), str(dst)], capture_output=True, text=True, timeout=240)
+                r = subprocess.run([sys.executable, str(pro), "render", str(src), str(dst), *police], capture_output=True, text=True, timeout=240)
                 out = (r.stdout or r.stderr).strip().splitlines()
                 out = [l for l in out if l.startswith("PROBLÈME")] + [l for l in out if not l.startswith("PROBLÈME")]
                 return "\n".join(out)[:3500] + "\n(Style pdf-pro appliqué : cette page n'a que le contenu.)"
@@ -2785,7 +2795,7 @@ class Agent:
                 readme = src.parent / "README.md"
                 srcs = ([readme] if readme.is_file() else []) + chapters
                 note = f"\n(Cours complet : {len(chapters)} chapitres de {src.parent.name}, dans l'ordre, avec couverture et sommaire.)"
-            r = subprocess.run([sys.executable, str(pro), "render", *map(str, srcs), str(dst)], capture_output=True, text=True, timeout=600)
+            r = subprocess.run([sys.executable, str(pro), "render", *map(str, srcs), str(dst), *police], capture_output=True, text=True, timeout=600)
             if r.returncode == 0 and dst.is_file():
                 # the problems first and whole (an empty image frame was cut away behind a long review, never seen)
                 out = (r.stdout or "").strip().splitlines()
