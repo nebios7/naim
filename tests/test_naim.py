@@ -2839,4 +2839,4 @@ class TypographicEdits(unittest.TestCase):
         html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
         self.assertIn("data-sendnow", html)
         self.assertIn('closest?.("[data-sendnow]")', html)
-        self.assertIn('<span class="gwait">En attente · Naim le lit à sa prochaine étape</span>', html)  # in full, under the message
+        self.assertIn('state === "wait" ? "En attente"', html)  # in the head, as before

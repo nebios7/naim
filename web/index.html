@@ -1535,8 +1535,7 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
   background: var(--user); border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; font-size: 13.5px; color: var(--text); cursor: default; }
 .md .evnote.gnote { margin: 12px 0 12px auto; }
 .gnote .ghead { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 3px; white-space: nowrap; min-width: 0; }
-.gnote .gfoot { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 10px; margin-top: 6px; }
-.gnote .gwait { flex: 1 1 auto; color: var(--warn); font-size: 11.5px; }
+.gnote .gfoot { display: flex; margin: 2px 0 4px; padding-left: 19px; }
 .gnote .gnow { border: 0 !important; background: none !important; box-shadow: none !important; color: var(--text); font: inherit;
   font-size: 11.5px; font-weight: 500; padding: 0; cursor: pointer; }
 .gnote .gnow:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -3658,11 +3657,12 @@ const MENU_ICONS = { "🪝": "bolt", "↻": "refresh", "🔔": "bell", "📄": "
 // (« En attente » until Naim reads it at its next step, then « Pris en compte » at the place where it read it)
 function guideNote(text, state) {
   const words = String(text).replace(/^Toi\s*:\s*/, "");
-  const st = state === "read" ? "Pris en compte" : "";
-  // a choice: wait for its next step (said in full, under the message, where it has room), or stop it and send now
-  const now = state === "wait" ? `<span class="gwait">En attente · Naim le lit à sa prochaine étape</span><button class="gnow" data-sendnow title="Arrête Naim et envoie ce message tout de suite">Envoyer maintenant</button>` : "";
+  const st = state === "wait" ? "En attente" : state === "read" ? "Pris en compte" : "";
+  const tip = state === "wait" ? ' title="Naim le lit à sa prochaine étape, sans s\'arrêter"' : "";
+  // a choice: wait for its next step, or stop it and send now — on its own line, between the head and the message
+  const now = state === "wait" ? `<button class="gnow" data-sendnow title="Arrête Naim et envoie ce message tout de suite">Envoyer maintenant</button>` : "";
   return Object.assign(document.createElement("div"), { className: "evnote gnote" + (state === "wait" ? " pending" : ""),
-    innerHTML: `<div class="ghead"><span class="evic">${svgI("chat")}</span><span>Ton message pendant le travail</span>${st ? `<span class="gstate">${st}</span>` : ""}</div><div class="gtext">${esc(words)}</div>${now ? `<div class="gfoot">${now}</div>` : ""}` });
+    innerHTML: `<div class="ghead"><span class="evic">${svgI("chat")}</span><span>Ton message pendant le travail</span>${st ? `<span class="gstate"${tip}>${st}</span>` : ""}</div>${now ? `<div class="gfoot">${now}</div>` : ""}<div class="gtext">${esc(words)}</div>` });
 }
 function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()]; return k && RICON[k] ? svgI(k) : esc(ic || ""); }
 function showMenu(anchor, items) {
@@ -5525,7 +5525,7 @@ document.addEventListener("click", async (e) => {
   const text = $(".gtext", note).textContent;
   (run.queue ||= []).push(text);
   note.classList.remove("pending"); $(".gfoot", note)?.remove();
-  $(".ghead", note)?.insertAdjacentHTML("beforeend", '<span class="gstate">Envoyé comme nouvelle demande</span>');
+  const st = $(".gstate", note); if (st) { st.textContent = "Envoyé comme nouvelle demande"; st.removeAttribute("title"); }
   run.pendingNotes = (run.pendingNotes || []).filter((x) => !String(x.text).endsWith(text));
   await stop();
 });
