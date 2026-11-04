@@ -2703,3 +2703,21 @@ class TypographicEdits(unittest.TestCase):
             a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None)
             self.assertTrue(a.edit_file("p.html", "<h1>Le robot met de l'ordre</h1>", "<h1>Tri par insertion</h1>").startswith("ok"))
             self.assertEqual(Path(d, "p.html").read_text(), "<h1>Tri par insertion</h1>\n")
+
+    def test_doubled_folder_keeps_finding_root_file(self):
+        # « cours_medecine/c.html » written at the root, then a command made the doubled folder: still the same file
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t, "cours_medecine"); d.mkdir()
+            a = naimtools.Agent(str(d), "naim", auto_yes=True, emit=lambda e: None)
+            a.resolve("cours_medecine/c.html").write_text("x")
+            self.assertTrue((d / "c.html").exists())
+            (d / "cours_medecine" / "img").mkdir(parents=True)
+            self.assertEqual(a.resolve("cours_medecine/c.html", read=True), (d / "c.html").resolve())
+            self.assertEqual(a.resolve("cours_medecine/img"), (d / "cours_medecine/img").resolve())
+            self.assertEqual(a.resolve("cours_medecine/neuf.html"), (d / "cours_medecine/neuf.html").resolve())
+
+    def test_chat_shows_plan_and_closes_it(self):
+        src = Path(__file__).resolve().parent.parent.joinpath("server.py").read_text()
+        self.assertIn("avec update_todos avant de passer à la suivante", src)
+        self.assertIn("helper._close_todos()", src)
+        self.assertIn("Naim continue son plan", src)

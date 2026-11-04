@@ -1127,8 +1127,14 @@ class Agent:
         if not parts or Path(str(path)).is_absolute():
             return path
         for k in range(min(len(parts) - 1, len(self.root.parts)), 0, -1):
-            if tuple(parts[:k]) == self.root.parts[-k:] and not (self.root / Path(*parts[:k])).is_dir():
-                return str(Path(*parts[k:]))
+            if tuple(parts[:k]) == self.root.parts[-k:]:
+                short = str(Path(*parts[k:]))
+                if (self.root / path).exists():  # really there, under the doubled folder
+                    return path
+                # the file made before at the root stays found once a command (images.py prendre cours_medecine/…) has
+                # created the doubled folder: else it was « not found », written again, and an old draft stayed behind
+                if (self.root / short).exists() or not (self.root / Path(*parts[:k])).is_dir():
+                    return short
         return path
 
     def rel(self, p):

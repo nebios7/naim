@@ -2438,7 +2438,17 @@ class Handler(BaseHTTPRequestHandler):
                 limit = 1000
         except Exception:  # noqa: BLE001 — never a reason to fail the answer
             pass
-        for step in range(limit):
+        step, ceiling, extended_at = -1, max(limit, 200), -1
+        while True:
+            step += 1
+            left_now = [x for x in (getattr(helper, "todos", None) or []) if x.get("status") not in ("done", "skipped")]
+            if step == limit - 1 and limit < ceiling and left_now and progress > extended_at + 5:
+                # its plan is not finished and the last steps moved forward (files written, commands that worked): more
+                # steps, like the Agent, instead of stopping in the middle (a course cut before its PDF was made again)
+                extended_at, limit = progress, min(limit + 30, ceiling)
+                self.event({"type": "status", "text": "Naim continue son plan…"})
+            if step >= limit:
+                break
             if stop.is_set():
                 self.event({"type": "stopped"})
                 break
@@ -2812,6 +2822,13 @@ class Handler(BaseHTTPRequestHandler):
                                "point précis, cherche CE point (pas une reformulation d'une recherche déjà faite). Si tu as de "
                                "quoi faire, passe à la suite maintenant : plan avec update_todos si le travail est long, puis "
                                "l'écriture.]")
+                if name != "update_todos" and getattr(helper, "todos", None):
+                    # its plan under every result, as in the Agent: without it the list stayed on step 1 while all was done
+                    cur = next((x["text"] for x in helper.todos if x.get("status") == "in_progress"), None)
+                    done_n = sum(x.get("status") == "done" for x in helper.todos)
+                    result += (f"\n\n[Plan {done_n}/{len(helper.todos)} — étape en cours : {cur}. Quand elle est finie, coche-la "
+                               "avec update_todos avant de passer à la suivante.]" if cur
+                               else f"\n\n[Plan {done_n}/{len(helper.todos)}]")
                 messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
             if (say := helper.speak_note(content, calls)):
                 # three steps without a word: one sentence for the user — its own message (glued to a file read, it was
@@ -2854,6 +2871,8 @@ class Handler(BaseHTTPRequestHandler):
                         + (f", mais j'ai travaillé ({done})" if done else "") + ". Écris « continue » pour que je reprenne et "
                         "te dise où j'en suis ; pour un long projet (plusieurs fichiers, compiler, tester), le mode Agent "
                         "va plus loin.")})
+        if not stop.is_set():
+            helper._close_todos()  # no step left « in progress » (a spinner turning forever) once the reply has ended
         self.event({"type": "done"})
 
     def chat_with_web(self, body, messages, options, stop, schedule=False, files=False, web=True, email=False, send_now=False):
