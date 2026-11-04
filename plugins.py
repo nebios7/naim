@@ -61,6 +61,16 @@ def _ver(v):
     return tuple(int(x) for x in re.findall(r"\d+", str(v or "0"))[:4])
 
 
+def _tree_hash(d):
+    """What a plugin folder holds (its files' paths and contents), to see whether it changed."""
+    import hashlib
+    h = hashlib.sha1()
+    for f in sorted(x for x in Path(d).rglob("*") if x.is_file() and "__pycache__" not in x.parts and x.name != ".DS_Store"):
+        h.update(str(f.relative_to(d)).encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
 def ensure_builtin():
     """Plugins shipped with Naim: installed once (on), updated to a newer version while the user has not removed them."""
     if not BUILTIN.is_dir():
@@ -73,14 +83,24 @@ def ensure_builtin():
             continue
         dst = PLUGINS / m["name"]
         cur = _manifest(dst) if dst.is_dir() else None
-        if cur and _ver(cur.get("version")) >= _ver(m.get("version")):
+        hashes = st.setdefault("hashes", {})
+        if cur and _ver(cur.get("version")) > _ver(m.get("version")):
             continue
+        if cur and _ver(cur.get("version")) == _ver(m.get("version")):
+            # the same version: updated only when Naim's copy changed and the user did not edit the installed one
+            # (a fix shipped without a new number was never installed: an old pdfpro.py kept old diagrams)
+            new_h, have_h = _tree_hash(src), _tree_hash(dst)
+            if new_h == have_h or (hashes.get(m["name"]) not in (None, have_h)):
+                if new_h == have_h and hashes.get(m["name"]) != have_h:
+                    hashes[m["name"]], changed = have_h, True
+                continue
         if dst.exists():  # an older copy: kept aside, never lost
             back = ext.HOME / "plugins.anciens" / f"{m['name']}-{time.strftime('%Y%m%d-%H%M%S')}"
             back.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(dst), str(back))
-        shutil.copytree(src, dst)
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
         st.setdefault("enabled", {}).setdefault(m["name"], True)
+        hashes[m["name"]] = _tree_hash(dst)
         changed = True
     if changed:
         _save(st)

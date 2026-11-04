@@ -8,6 +8,7 @@
 // (or `window.__naimError = "..."`), e.g. after Mermaid has drawn the diagram.
 import AppKit
 import WebKit
+import PDFKit
 
 let args = Array(CommandLine.arguments.dropFirst())
 guard args.count >= 2 else {
@@ -238,7 +239,43 @@ class Renderer: NSObject, WKNavigationDelegate {
 
     @objc func printed(_ op: NSPrintOperation, success: Bool, context: UnsafeMutableRawPointer?) {
         guard success, FileManager.default.fileExists(atPath: output.path) else { fail("création du PDF impossible") }
+        numberPages(output)
         done(", \"pages\": \(CGPDFDocument(output as CFURL)?.numberOfPages ?? 0)")
+    }
+
+    // « 2 / 17 » at the foot of every page but the first (a cover, or a one-page letter): a long document is found
+    // again page by page. Drawn into the page itself (every viewer and printer shows it), the links put back after
+    func numberPages(_ url: URL) {
+        guard let src = CGPDFDocument(url as CFURL), src.numberOfPages > 1, let links = PDFDocument(url: url) else { return }
+        let n = src.numberOfPages
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let ctx = CGContext(consumer: consumer, mediaBox: nil, nil) else { return }
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 8),
+            .foregroundColor: NSColor(calibratedRed: 0.55, green: 0.53, blue: 0.50, alpha: 1)]
+        for i in 1...n {
+            guard let page = src.page(at: i) else { continue }
+            var box = page.getBoxRect(.mediaBox)
+            ctx.beginPage(mediaBox: &box)
+            ctx.drawPDFPage(page)
+            if i > 1 {
+                let text = NSAttributedString(string: "\(i) / \(n)", attributes: attrs)
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+                text.draw(at: NSPoint(x: box.midX - text.size().width / 2, y: box.minY + 24))
+                NSGraphicsContext.restoreGraphicsState()
+            }
+            ctx.endPage()
+        }
+        ctx.closePDF()
+        guard let numbered = PDFDocument(data: data as Data) else { return }
+        for i in 0..<min(n, links.pageCount, numbered.pageCount) {  // the contents' links, clickable again
+            guard let from = links.page(at: i), let to = numbered.page(at: i) else { continue }
+            for ann in from.annotations where ann.type == "Link" {
+                if let copy = ann.copy() as? PDFAnnotation { to.addAnnotation(copy) }
+            }
+        }
+        numbered.write(to: url)
     }
 }
 

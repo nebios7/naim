@@ -1437,6 +1437,35 @@ class DiagramStyle(unittest.TestCase):
         self.assertIn("chercher", r.stderr + r.stdout)  # its usage, without the network
         self.assertIn("images.py", (ROOT / "plugins_builtin/pdf-pro/skills/pdf-pro/SKILL.md").read_text())
 
+    def test_pages_numbered(self):
+        # a 17-page course had no page numbers: « 2 / 3 » at the foot of every page but the cover
+        import docs
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "long.html"
+            page.write_text("<style>section{page-break-after:always}</style>" + "".join(f"<section><h1>Partie {i}</h1></section>" for i in range(3)))
+            docs.convert(page, Path(d) / "long.pdf")
+            text = docs.pdf_text(Path(d) / "long.pdf")[0]
+            self.assertRegex(text, r"\b2\s*/\s*\d\b")
+            self.assertNotRegex(text, r"\b1\s*/\s*\d\b")  # not on the cover
+
+    def test_builtin_plugin_updated_when_its_content_changes(self):
+        # pdf-pro fixed without a new version number stayed old on the Mac (old diagrams in the PDFs)
+        script = r"""
+import sys, json; sys.path.insert(0, sys.argv[1])
+import plugins
+plugins.ensure_builtin()
+f = plugins.PLUGINS / "pdf-pro/skills/pdf-pro/pdfpro.py"
+f.write_text(f.read_text() + "\n# ancienne copie\n")
+st = json.loads(plugins.STATE.read_text()); st["hashes"].pop("pdf-pro"); plugins.STATE.write_text(json.dumps(st))
+plugins.ensure_builtin(); print("# ancienne copie" not in f.read_text())
+f.write_text(f.read_text() + "\n# modifié par l'utilisateur\n"); plugins.ensure_builtin()
+print("# modifié par l'utilisateur" in f.read_text())
+"""
+        with tempfile.TemporaryDirectory() as home:
+            r = subprocess.run([sys.executable, "-c", script, str(ROOT)], capture_output=True, text=True,
+                               env={**os.environ, "NAIM_HOME": home}, timeout=120)
+            self.assertEqual(r.stdout.split(), ["True", "True"], r.stderr[-500:])
+
     def test_markdown_image_drawn_in_the_pdf(self):
         import docs
         page = docs.markdown_html("# Cours\n\n![Appareil digestif](schemas/digestif.png)\n\nTexte ![petit](a.png) ici.")
