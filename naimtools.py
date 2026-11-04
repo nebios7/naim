@@ -3697,6 +3697,16 @@ class Agent:
             result = self._dispatch(name, args, fn)
         finally:
             self._allow_once = False
+        if name == "edit_file" and str(result).startswith("ok") and isinstance(args, dict):
+            # an edit that puts back what an earlier edit of this task took out (« coeur » → « cœur », then « cœur » →
+            # « coeur »): it undoes its own fix — said, so it checks instead of going round in a circle
+            key = (str(args.get("path", "")), str(args.get("old_text", "")), str(args.get("new_text", "")))
+            done = getattr(self, "_edits_done", [])
+            if key[1] and any(d[0] == key[0] and d[1] == key[2] and d[2] == key[1] for d in done):
+                result = str(result) + ("\n\n[Attention : cette modification ANNULE une correction que tu avais faite plus tôt "
+                                        "dans ce travail. Si la première était juste, remets-la. Vérifie le vrai contenu "
+                                        "(le fichier, l'image avec look_at) avant de choisir, et dis à l'utilisateur lequel est le bon.]")
+            self._edits_done = (done + [key])[-50:]
         if str(result).startswith("denied by the user"):
             self._refused = str(args.get("command") or args.get("path") or args.get("action") or name)[:120]
             result = (str(result) + " — The user said NO. Respect it: do NOT try any other way to do this (no sudo, no other "

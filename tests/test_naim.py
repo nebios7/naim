@@ -2904,3 +2904,15 @@ class TypographicEdits(unittest.TestCase):
             r = a.read_file("cours-medecine.md")
             self.assertTrue(r.startswith("error: file not found"))
             self.assertIn("cours-medecine.html", r)
+
+    def test_same_picture_for_two_subjects_and_undone_fix(self):
+        import docs
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t); Path(t, "poumons.jpg").write_bytes(b"lungs"); Path(t, "coeur.jpg").write_bytes(b"lungs")
+            said = docs._figure_trouble('<img src="coeur.jpg" alt="Le cœur"><img src="poumons.jpg" alt="Les poumons">', t)
+            self.assertTrue(any("LE MÊME fichier" in x for x in said))
+            Path(t, "a.html").write_text('<img src="coeur.jpg">')
+            a = naimtools.Agent(str(t), "naim", auto_yes=True, emit=lambda e: None)
+            a.call_tool("edit_file", {"path": "a.html", "old_text": "coeur.jpg", "new_text": "cœur.jpg"})
+            r = a.call_tool("edit_file", {"path": "a.html", "old_text": "cœur.jpg", "new_text": "coeur.jpg"})
+            self.assertIn("ANNULE une correction", r)

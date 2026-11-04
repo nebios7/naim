@@ -381,6 +381,21 @@ def _figure_trouble(page, base):
                     + (" — une photo : reprends-la avec images.py (chercher puis prendre vers ce chemin) ;" if photos else " —")
                     + " un schéma : make_diagram vers ce fichier ; sinon retire la figure. Ne mets jamais une autre image "
                     "à la place (une image de poumons sous le nom du cœur est fausse)")
+    # two names, one same picture (coeur.jpg copied from poumons.jpg) shown for two subjects: one of them is wrong
+    import hashlib
+    sums = {}
+    for x, alts in uses.items():
+        f = base / x
+        if f.is_file():
+            try:
+                sums.setdefault(hashlib.sha1(f.read_bytes()).hexdigest(), []).append((x, alts[0] if alts else ""))
+            except OSError:
+                pass
+    for same in sums.values():
+        if len(same) > 1 and len({a.lower() for _, a in same}) > 1:
+            said.append("les images " + " et ".join(x for x, _ in same) + " sont LE MÊME fichier, montré pour des sujets "
+                        "différents (" + ", ".join(a or x for x, a in same) + ") : l'une est fausse. Reprends la bonne image "
+                        "de chaque sujet (le fichier téléchargé pour ce sujet, ou images.py), jamais une copie d'une autre")
     for x, alts in uses.items():
         subjects = {a.lower() for a in alts if a}
         if len(subjects) > 1:
