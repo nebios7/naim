@@ -73,6 +73,11 @@ def prendre(which, dest):
     else:
         sys.exit("erreur : donne le numéro d'une image de la dernière recherche (python3 images.py chercher …)")
     out = Path(dest).expanduser()
+    # a plain name (« cœur.jpg » -> « coeur.jpg »): one spelling only, the one written in the document
+    import unicodedata
+    plain = out.name.replace("œ", "oe").replace("Œ", "OE").replace("æ", "ae")
+    plain = "".join(c for c in unicodedata.normalize("NFD", plain) if not unicodedata.combining(c))
+    out = out.with_name(re.sub(r"[^\w.-]+", "-", plain))
     out.parent.mkdir(parents=True, exist_ok=True)
     data = _get(f["thumb"], binary=True)
     real = Path(urllib.parse.urlparse(f["thumb"]).path).suffix.lower() or ".jpg"  # a drawing (svg) comes as a .png

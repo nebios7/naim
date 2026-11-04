@@ -1283,10 +1283,22 @@ class Agent:
         more = f" Suite : offset={end + 1}." if end < n else " (fin du fichier)"
         return f"[{self.rel(p)} · lignes {start}–{end} sur {n}.{more}]\n" + "\n".join(out)
 
+    def _near_files(self, p):
+        """The files of that folder whose names are close (« cours-medecine.md » asked, « cours-medecine.html » and
+        the chapters 01-….md there): said with the error, so the next read is the right one."""
+        import difflib
+        d = p.parent
+        if not d.is_dir():
+            return ""
+        names = sorted(f.name for f in d.iterdir() if f.is_file() and not f.name.startswith("."))
+        near = difflib.get_close_matches(p.name, names, n=4, cutoff=0.5)
+        near += [n for n in names if n not in near and Path(n).suffix == p.suffix][:6 - len(near)]
+        return f" Dans {self.rel(d)}/ il y a : {', '.join(near)}." if near else ""
+
     def read_file(self, path, offset=None, limit=None):
         p = self.resolve(path, read=True)
         if not p.is_file():
-            return f"error: file not found: {path}"
+            return f"error: file not found: {path}." + self._near_files(p)
         if p.suffix.lower() in DOC_EXTS:  # Word, PDF, Excel, PowerPoint…: their text, never the raw bytes
             try:
                 text, note = docs.extract(p)

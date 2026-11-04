@@ -361,15 +361,26 @@ def _figure_trouble(page, base):
         uses.setdefault(src.group(1), []).append(H.unescape(alt.group(2)).strip() if alt else "")
     missing = [x for x in uses if not (base / x).is_file()]
     # downloaded into a sub-folder (images/cœur.jpg) but written « cœur.jpg »: the right path said, nothing to redraw
-    moved = {x: next((f for f in base.rglob(Path(x).name) if f.is_file() and ".git" not in f.parts), None) for x in missing}
+    def plain(n):  # « cœur.jpg » and « coeur.jpg », « néphron » and « nephron »: the same name typed two ways
+        import unicodedata
+        n = n.lower().replace("œ", "oe").replace("æ", "ae")
+        return "".join(c for c in unicodedata.normalize("NFD", n) if not unicodedata.combining(c))
+    pics = [f for f in base.rglob("*") if f.is_file() and ".git" not in f.parts
+            and f.suffix.lower() in (".jpg", ".jpeg", ".png", ".svg", ".gif", ".webp")] if missing else []
+    moved = {x: next((f for f in pics if f.name == Path(x).name), None)
+             or next((f for f in pics if plain(f.name) == plain(Path(x).name)), None) for x in missing}
     for x, f in moved.items():
         if f:
             said.append(f"image {x} introuvable à cet endroit (cadre vide dans le PDF) : elle est dans "
-                        f"{f.relative_to(base)} — écris ce chemin-là dans le document, puis refais le PDF")
+                        f"{f.relative_to(base)} — écris exactement ce chemin-là dans le document (même orthographe, œ compris), "
+                        "puis refais le PDF. Ne copie jamais une autre image sous ce nom")
     missing = [x for x in missing if not moved[x]]
     if missing:
+        photos = [x for x in missing if Path(x).suffix.lower() in (".jpg", ".jpeg", ".webp")]
         said.append("image(s) introuvable(s), le cadre est vide dans le PDF : " + ", ".join(missing[:6])
-                    + " — fais chaque schéma (make_diagram vers ce fichier) ou retire la figure")
+                    + (" — une photo : reprends-la avec images.py (chercher puis prendre vers ce chemin) ;" if photos else " —")
+                    + " un schéma : make_diagram vers ce fichier ; sinon retire la figure. Ne mets jamais une autre image "
+                    "à la place (une image de poumons sous le nom du cœur est fausse)")
     for x, alts in uses.items():
         subjects = {a.lower() for a in alts if a}
         if len(subjects) > 1:

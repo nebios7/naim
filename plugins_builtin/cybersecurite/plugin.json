@@ -1,11 +1,14 @@
 {
   "name": "cybersecurite",
-  "version": "1.0",
-  "description": "Cybersécurité défensive : audit de sécurité d'un projet de code (failles, secrets, dépendances) et bilan de sécurité du Mac et du réseau de la maison, avec ce qu'il faut corriger et comment. Lecture seule, sur les systèmes de l'utilisateur.",
+  "version": "1.1",
+  "description": "Cybersécurité défensive : audit de sécurité d'un projet de code, bilan du Mac et du réseau de la maison, durcissement d'un site ou d'un serveur, analyse d'un fichier ou d'un lien suspect sans l'ouvrir, cours et CTF. Seulement quand l'utilisateur parle de sécurité.",
   "skills": "skills",
   "triggers": {
     "audit-securite": "\\b(audit\\w* (de )?s[ée]curit[ée]|faille\\w*|vuln[ée]rabilit[ée]\\w*|injections? (sql|de commande)|xss|csrf|owasp|secrets? (dans|expos[ée]s?)|mots? de passe (en clair|dans le code)|s[ée]curis\\w* (mon|le|ce|cette|mon) (code|projet|site|appli\\w*|api|serveur web)|(code|projet|site|appli\\w*|api)\\b[^.?!]{0,40}\\b(s[ée]curis[ée]e?|vuln[ée]rable|pirat\\w*)|pip-audit|npm audit)\\b",
-    "securite-mac": "\\b(s[ée]curit[ée] (de|du) (mon |ce |mon )?(mac|ordinateur|ordi|r[ée]seau|wi-?fi|box)|(mon|ce) (mac|ordi\\w*|r[ée]seau|wi-?fi) (est[- ]il |est |)(s[ée]curis[ée]|prot[ée]g[ée]|pirat[ée]|vuln[ée]rable)|bilan de s[ée]curit[ée]|pare-?feu|coupe-?feu|firewall|filevault|ports? ouverts?|appareils? (inconnus?|suspects?)|qui (est|se) connect\\w* (à|sur) (mon|ma) (wi-?fi|box|r[ée]seau)|durcir (mon|le) mac)\\b"
+    "securite-mac": "\\b(s[ée]curit[ée] (de|du) (mon |ce |mon )?(mac|ordinateur|ordi|r[ée]seau|wi-?fi|box)|(mon|ce) (mac|ordi\\w*|r[ée]seau|wi-?fi) (est[- ]il |est |)(s[ée]curis[ée]|prot[ée]g[ée]|pirat[ée]|vuln[ée]rable)|bilan de s[ée]curit[ée]|pare-?feu|coupe-?feu|firewall|filevault|ports? ouverts?|appareils? (inconnus?|suspects?)|qui (est|se) connect\\w* (à|sur) (mon|ma) (wi-?fi|box|r[ée]seau)|durcir (mon|le) mac)\\b",
+    "durcissement": "\\b(durci\\w*|hardening|en-?t[êe]tes? de s[ée]curit[ée]|security headers|hsts|content-security-policy|\\bcsp\\b|s[ée]curis\\w* (mon |le |ce |mon )?(serveur|vps|nginx|apache|ssh|site en ligne)|configur\\w* (ssh|https|ssl|tls|le certificat)|certificat (ssl|https|tls)|fail2ban|ufw)\\b",
+    "fichier-suspect": "\\b((fichier|pi[èe]ce jointe|document|lien|sms|mail|e-?mail|message|site|pdf|zip|archive|appli\\w*)\\b[^.?!]{0,50}\\b(suspect(?:e|es|s)?|louches?|dangereux|dangereuse|pi[ée]g[ée]e?s?|frauduleux|frauduleuse|arnaques?|virus|malveillante?s?|fiables?)|(est-ce|c'est) (une )?arnaque|hame[çc]onnage|phishing|malware|virus|ran[çc]ongiciel|je peux (l'?ouvrir|cliquer)|faut-il (l'?ouvrir|cliquer))\\b",
+    "cours-cyber": "\\b((cours|fiche|formation|apprendre|explique\\w*|le[çc]on|tuto\\w*|r[ée]vision)\\b[^.?!]{0,40}\\b(cybers[ée]curit[ée]|s[ée]curit[ée] informatique|cryptographie|chiffrement|hachage|pentest|hacking [ée]thique|owasp)|\\bctf\\b|capture the flag|root-?me|tryhackme|hack ?the ?box|picoctf|overthewire|cybers[ée]curit[ée])\\b"
   },
   "priority": true
 }
