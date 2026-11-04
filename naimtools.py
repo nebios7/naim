@@ -680,8 +680,18 @@ def finals(files, root=None):
             except OSError:
                 pass
 
+    for d in beside:  # the pages and Markdown chapters of that folder on disk (a course rebuilt from its .md files)
+        dp = Path(d) if Path(d).is_absolute() or not root else Path(root) / d
+        try:
+            for fp in list(dp.glob("*.md")) + list(dp.glob("*.html")):
+                inside |= {Path(x).name.lower() for x in re.findall(r"(?:\]\(|src=[\"'])([^)\"'\s]+\.(?:png|jpe?g|svg|gif|webp))", fp.read_text(errors="replace"), re.I)}
+        except OSError:
+            pass
+
     def draft(path):
         low = str(path).lower()
+        if any(re.fullmatch(re.escape(s.lower()) + r"-schema-\d+\.png", low) for s in stems):
+            return True  # a diagram pdf-pro drew from a ```mermaid block: it is in the PDF
         return (low.endswith((".html", ".htm")) or any(re.fullmatch(re.escape(s) + r"\.page\d+\.png", str(path), re.I) for s in stems)
                 or (low.endswith((".txt", ".json", ".py", ".sh", ".md", ".markdown", ".mmd")) and folder(path) in beside)
                 or (Path(low).name in inside))
@@ -2729,7 +2739,9 @@ class Agent:
             if not re.search(r"<(html|head|style)\b", head):
                 # only the content, no style of its own (a pdf-pro page): it gets the pdf-pro look, never a bare one
                 r = subprocess.run([sys.executable, str(pro), "render", str(src), str(dst)], capture_output=True, text=True, timeout=240)
-                return (r.stdout or r.stderr).strip()[-600:] + "\n(Style pdf-pro appliqué : cette page n'a que le contenu.)"
+                out = (r.stdout or r.stderr).strip().splitlines()
+                out = [l for l in out if l.startswith("PROBLÈME")] + [l for l in out if not l.startswith("PROBLÈME")]
+                return "\n".join(out)[:3500] + "\n(Style pdf-pro appliqué : cette page n'a que le contenu.)"
         if dst.suffix.lower() == ".pdf" and src.is_file() and pro.is_file() and src.suffix.lower() == ".json" and '"questions"' in src.read_text(errors="replace")[:20000]:
             r = subprocess.run([sys.executable, str(pro), "quiz", str(src), str(dst)], capture_output=True, text=True, timeout=300)  # a quiz: its pro PDF
             return (r.stdout or "").strip()[-600:] if r.returncode == 0 and dst.is_file() else f"error: {(r.stderr or r.stdout).strip()[-400:]}"
@@ -2746,7 +2758,10 @@ class Agent:
                 note = f"\n(Cours complet : {len(chapters)} chapitres de {src.parent.name}, dans l'ordre, avec couverture et sommaire.)"
             r = subprocess.run([sys.executable, str(pro), "render", *map(str, srcs), str(dst)], capture_output=True, text=True, timeout=600)
             if r.returncode == 0 and dst.is_file():
-                return (r.stdout or "").strip()[-600:] + note
+                # the problems first and whole (an empty image frame was cut away behind a long review, never seen)
+                out = (r.stdout or "").strip().splitlines()
+                first = [l for l in out if l.startswith("PROBLÈME")] + [l for l in out if not l.startswith("PROBLÈME")]
+                return "\n".join(first)[:3500] + note
             return f"error: {(r.stderr or r.stdout).strip()[-400:]}"
         try:
             if src.suffix.lower() in (".svg", ".html", ".htm") and dst.suffix.lower() == ".png" or (

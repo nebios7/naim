@@ -8,6 +8,7 @@ import io
 import re
 import subprocess
 import tempfile
+import threading
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -359,6 +360,13 @@ def _figure_trouble(page, base):
         alt = re.search(r"""alt=(["'])(.*?)\1""", tag)  # « l'appareil urinaire »: the apostrophe is part of it
         uses.setdefault(src.group(1), []).append(H.unescape(alt.group(2)).strip() if alt else "")
     missing = [x for x in uses if not (base / x).is_file()]
+    # downloaded into a sub-folder (images/cœur.jpg) but written « cœur.jpg »: the right path said, nothing to redraw
+    moved = {x: next((f for f in base.rglob(Path(x).name) if f.is_file() and ".git" not in f.parts), None) for x in missing}
+    for x, f in moved.items():
+        if f:
+            said.append(f"image {x} introuvable à cet endroit (cadre vide dans le PDF) : elle est dans "
+                        f"{f.relative_to(base)} — écris ce chemin-là dans le document, puis refais le PDF")
+    missing = [x for x in missing if not moved[x]]
     if missing:
         said.append("image(s) introuvable(s), le cadre est vide dans le PDF : " + ", ".join(missing[:6])
                     + " — fais chaque schéma (make_diagram vers ce fichier) ou retire la figure")
@@ -484,6 +492,26 @@ def convert(src, dst, paper="A4", orientation="portrait"):
 PREVIEWS = cu.ext.DATA / "apercus"
 
 
+_PRUNE_LOCK = threading.Lock()
+
+
+def _prune_previews():
+    """Keep the cache small — one at a time, and a file another request just removed is no error: twelve thumbnails
+    asked at once (a course's deliverables) made some fail at random, and their cards showed no picture."""
+    if not _PRUNE_LOCK.acquire(blocking=False):
+        return
+    try:
+        def age(f):
+            try:
+                return f.stat().st_mtime
+            except OSError:
+                return 0
+        for old in sorted(PREVIEWS.glob("*.png"), key=age)[:-120]:
+            old.unlink(missing_ok=True)
+    finally:
+        _PRUNE_LOCK.release()
+
+
 def preview_png(path, page=1, width=1100):
     """(png path, note): an image of a deliverable, to look at it. PDF page, image, SVG / HTML, Office (Quick Look)."""
     import diagrams
@@ -493,8 +521,7 @@ def preview_png(path, page=1, width=1100):
     PREVIEWS.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha1(f"{path}:{path.stat().st_mtime}:{page}:{width}".encode()).hexdigest()[:16]
     out = PREVIEWS / f"{key}.png"
-    for old in sorted(PREVIEWS.glob("*.png"), key=lambda f: f.stat().st_mtime)[:-60]:
-        old.unlink(missing_ok=True)  # keep the cache small
+    _prune_previews()
     note, trouble = "", ""
     if ext == ".pdf":
         r = subprocess.run([pdf_tool(), str(path), str(out), str(page), str(width)], capture_output=True, text=True, timeout=60)

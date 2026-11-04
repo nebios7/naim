@@ -1534,7 +1534,13 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .evnote.gnote { display: block; align-self: flex-end; margin: 6px 0 6px auto; width: fit-content; max-width: min(78%, 560px); padding: 8px 12px 9px;
   background: var(--user); border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; font-size: 13.5px; color: var(--text); cursor: default; }
 .md .evnote.gnote { margin: 12px 0 12px auto; }
-.gnote .ghead { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 3px; white-space: nowrap; }
+.gnote .ghead { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 3px; white-space: nowrap; min-width: 0; }
+.gnote .gfoot { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 10px; margin-top: 6px; }
+.gnote .gwait { flex: 1 1 auto; color: var(--warn); font-size: 11.5px; }
+.gnote .gnow { border: 1px solid color-mix(in srgb, var(--muted) 45%, transparent) !important; background: none; color: var(--text); font: inherit;
+  font-size: 12px; padding: 2px 10px; border-radius: 999px; cursor: pointer; }
+.gnote .gnow:hover { background: var(--hover); }
+.gnote:not(.pending) .gfoot { display: none; }
 .gnote .ghead .evic svg { width: 13px; height: 13px; }
 .gnote .ghead span { display: inline-flex; -webkit-line-clamp: unset; overflow: visible; }  /* not the old remark's 3-line clamp */
 .gnote .gstate { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; }
@@ -3398,7 +3404,7 @@ function delivCards(dl) {
   box.innerHTML = `<div class="delivtitle">Livrables${many ? ` <span class="muted">· ${dl.files.length} fichiers ${kinds.length === 1 ? kinds[0] : ""}</span>` : ""}</div><div class="deliv${many ? " many folded" : ""}">${dl.files.map((f, i) => {
     const q = `root=${encodeURIComponent(f.root || dl.root)}&path=${encodeURIComponent(f.path)}`;
     const icon = /^(png|jpe?g|gif|svg)$/.test(f.ext) ? "image" : /^(csv|xlsx)$/.test(f.ext) ? "chart" : f.ext === "zip" ? "compress" : f.ext === "mp4" ? "play" : "file";
-    const thumb = /^(pdf|png|jpe?g|gif|svg|docx|pptx)$/.test(f.ext) ? `<img loading="lazy" alt=""${/^(pdf|docx|pptx)$/.test(f.ext) && f.ext !== "pptx" ? ' class="doc"' : ""} src="/api/thumb?${q}&w=260" onerror="this.remove()">` : "";
+    const thumb = /^(pdf|png|jpe?g|gif|svg|docx|pptx)$/.test(f.ext) ? `<img loading="lazy" alt=""${/^(pdf|docx|pptx)$/.test(f.ext) && f.ext !== "pptx" ? ' class="doc"' : ""} src="/api/thumb?${q}&w=260" onerror="if(!this.dataset.again){this.dataset.again=1;setTimeout(()=>{this.src=this.src+'&again=1'},800)}else this.remove()">` : "";
     return `<div class="dcard" data-i="${i}" data-dopen title="${esc(f.shown || f.path)}"><span class="dthumb">${svgI(icon)}${thumb}</span><span class="dinfo"><b>${esc(f.path.split("/").pop())}</b><small>${DELIV_KIND[f.ext] || f.ext.toUpperCase()} · ${fmtSize(f.size)}</small></span>
       <span class="dacts"><button data-dfinder title="Montrer dans le Finder">${svgI("folder")}</button><button data-dmore title="Plus d'actions">${svgI("dots")}</button></span></div>`; }).join("")}</div>${many ? `<button class="dmore" data-dall>Voir les ${dl.files.length - 6} autres</button>` : ""}`;
   $("[data-dall]", box)?.addEventListener("click", (e) => { e.stopPropagation(); const g = $(".deliv", box), open = g.classList.toggle("folded");
@@ -3652,9 +3658,11 @@ const MENU_ICONS = { "🪝": "bolt", "↻": "refresh", "🔔": "bell", "📄": "
 // (« En attente » until Naim reads it at its next step, then « Pris en compte » at the place where it read it)
 function guideNote(text, state) {
   const words = String(text).replace(/^Toi\s*:\s*/, "");
-  const st = state === "wait" ? "En attente · Naim le lit à sa prochaine étape" : state === "read" ? "Pris en compte" : "";
+  const st = state === "read" ? "Pris en compte" : "";
+  // a choice: wait for its next step (said in full, under the message, where it has room), or stop it and send now
+  const now = state === "wait" ? `<span class="gwait">En attente · Naim le lit à sa prochaine étape</span><button class="gnow" data-sendnow title="Arrête Naim et envoie ce message tout de suite">Envoyer maintenant</button>` : "";
   return Object.assign(document.createElement("div"), { className: "evnote gnote" + (state === "wait" ? " pending" : ""),
-    innerHTML: `<div class="ghead"><span class="evic">${svgI("chat")}</span><span>Ton message pendant le travail</span>${st ? `<span class="gstate">${st}</span>` : ""}</div><div class="gtext">${esc(words)}</div>` });
+    innerHTML: `<div class="ghead"><span class="evic">${svgI("chat")}</span><span>Ton message pendant le travail</span>${st ? `<span class="gstate">${st}</span>` : ""}</div><div class="gtext">${esc(words)}</div>${now ? `<div class="gfoot">${now}</div>` : ""}` });
 }
 function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()]; return k && RICON[k] ? svgI(k) : esc(ic || ""); }
 function showMenu(anchor, items) {
@@ -5510,6 +5518,17 @@ function goalAfter(conv, reply) {
   g.turns++; renderGoalBar(); saveConv(conv);
   setTimeout(() => { if (current === conv && !curRun() && conv.goal?.active) send(`Continue l'objectif (tour ${g.turns + 1} / ${g.max}).`, [], { goalTurn: true }); }, 1200);
 }
+// « Envoyer maintenant » on a waiting message: Naim stops, and the message goes at once as a new request
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest?.("[data-sendnow]"); if (!b) return;
+  const run = curRun(), note = b.closest(".gnote"); if (!run || !note) return;
+  const text = $(".gtext", note).textContent;
+  (run.queue ||= []).push(text);
+  note.classList.remove("pending"); $(".gfoot", note)?.remove();
+  $(".ghead", note)?.insertAdjacentHTML("beforeend", '<span class="gstate">Envoyé comme nouvelle demande</span>');
+  run.pendingNotes = (run.pendingNotes || []).filter((x) => !String(x.text).endsWith(text));
+  await stop();
+});
 async function stop() {
   const run = curRun();
   if (!run) return;

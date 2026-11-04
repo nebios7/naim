@@ -1879,7 +1879,7 @@ class SkillScripts(unittest.TestCase):
             self.assertIn(x, h)
         self.assertIn('<span class="k">MOVE</span>', pp.highlight("       MOVE 1 TO X.", "cobol"))
         from unittest import mock
-        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="": None):
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="", **kw: None):
             t = Path(t)
             (t / "README.md").write_text("# Cours X\n\nUn cours sur X couvre :\n\n- a")
             (t / "01-a.md").write_text("# Cours X - Début\n\nTexte.")
@@ -1897,7 +1897,7 @@ class SkillScripts(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("pp3", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
         pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
         self.assertEqual(pp._caps_titles("PROFIL\nTexte normal.\n06 52 90 96 62"), "## Profil\nTexte normal.\n06 52 90 96 62")
-        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="": None):
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="", **kw: None):
             t = Path(t)
             (t / "notes.csv").write_text("Nom;Note\nAlice;15\n")
             (t / "compte_rendu.txt").write_text("RÉUNION\n\nTexte.\n")
@@ -1913,7 +1913,7 @@ class SkillScripts(unittest.TestCase):
         from unittest import mock
         spec = importlib.util.spec_from_file_location("pp4", Path(__file__).resolve().parents[1] / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
         pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
-        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="": None):
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(pp, "render", lambda src, out, c="", **kw: None):
             t = Path(t)
             (t / "quiz.json").write_text(json.dumps({"titre": "Q", "questions": [{"q": "A ?", "choix": ["x", "y"], "bonne": 1,
                                                     "indice": "i", "explication": "parce que"}], "cartes": [{"recto": "r", "verso": "v"}]}))
@@ -2809,3 +2809,34 @@ class TypographicEdits(unittest.TestCase):
         self.assertTrue(any("seulement 1 site" in n for n in one))
         self.assertEqual(pp.element_notes('<section class="cover"></section><h2>Sources</h2><ol><li>https://a.fr</li>'
                                           '<li>https://b.org</li><li>https://c.net</li></ol>'), [])
+
+    def test_moved_image_and_course_parts(self):
+        import docs
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t); (t / "images").mkdir(); (t / "images" / "coeur.jpg").write_bytes(b"x")
+            said = docs._figure_trouble('<img src="coeur.jpg" alt="Le cœur">', t)
+            self.assertIn("images/coeur.jpg", said[0])
+            (t / "c.pdf").write_bytes(b"%PDF"); (t / "c-schema-1.png").write_bytes(b"x")
+            (t / "04.md").write_text("![Le cœur](images/coeur.jpg)")
+            files = [{"path": n, "size": 1} for n in ("c.pdf", "c-schema-1.png", "images/coeur.jpg")]
+            self.assertEqual([f["path"] for f in naimtools.finals(files, str(t))], ["c.pdf"])
+
+    def test_thumbnails_survive_concurrent_requests(self):
+        import docs, threading as th
+        html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
+        self.assertIn("this.dataset.again", html)  # a thumbnail that failed once is asked again before being removed
+        errs = []
+        def go():
+            try:
+                docs._prune_previews()
+            except Exception as e:  # noqa: BLE001
+                errs.append(e)
+        ts = [th.Thread(target=go) for _ in range(12)]
+        [t.start() for t in ts]; [t.join() for t in ts]
+        self.assertEqual(errs, [])
+
+    def test_waiting_message_can_be_sent_now(self):
+        html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
+        self.assertIn("data-sendnow", html)
+        self.assertIn('closest?.("[data-sendnow]")', html)
+        self.assertIn('<span class="gwait">En attente · Naim le lit à sa prochaine étape</span>', html)  # in full, under the message
