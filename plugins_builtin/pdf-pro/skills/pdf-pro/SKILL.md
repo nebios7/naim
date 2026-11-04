@@ -91,6 +91,37 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
 - Code : `<pre class="code python"><span class="file">fichier.py</span>…le code tel quel…</pre>` (python, js, sql, bash) :
   il est coloré tout seul. Écris `<` et `&` du code comme `&lt;` et `&amp;`.
 
+## Bien écrire chaque élément (comme dans un manuel)
+
+Tu sais déjà écrire les maths, les graphiques et les tableaux : écris-les comme un manuel imprimé, pas comme un brouillon.
+
+- **Formules** : la formule seule dans `tex` / `tex-block`, en LaTeX, SANS `$$` ni `$` autour. Un nom de grandeur
+  prend un indice (`V_c`, `P_{\text{alv}}`, `\dot{V}_E`) ou s'écrit en `\text{DC}` : jamais `Vc`, `DC`, `FR` nus
+  (chaque lettre deviendrait une variable en italique). Les mots en indice en `\text{…}`, les unités en
+  `\text{ cmH}_2\text{O}`, `\text{ mL/min}`. Les symboles en commandes : `\times`, `\cdot`, `\approx`, `\le`,
+  `\ge`, `\neq`, `\Delta`, `\mu`, `^\circ` — jamais × ≈ ≤ Δ µ ° tapés, ni de lettre accentuée (V̇ → `\dot{V}`,
+  x̄ → `\bar{x}`). Sous la formule, une phrase dit ce que veut dire chaque lettre, avec son unité.
+- **Graphiques** (`pdfpro.py chart`) : un message par graphique, et le titre DIT ce message (« Les ventes
+  doublent en 2024 », pas « Ventes »). Les unités dans le titre ou les étiquettes (« en € », « en % »). Barres
+  triées de la plus grande à la plus petite (sauf le temps, dans l'ordre), 3 à 12 valeurs ; anneau (donut)
+  seulement pour les parts d'un tout, 6 parts au plus ; courbe pour une évolution dans le temps. Données vraies
+  et sourcées : la source dans la légende de la figure.
+- **Tableaux** : une `<caption>Tableau n — ce qu'il montre</caption>`, les unités dans les en-têtes
+  (« Surface (m²) »), chaque nombre dans un `td class="num"` (aligné à droite), le même nombre de décimales dans
+  une colonne, 7 colonnes au plus (au-delà : deux tableaux), aucune case vide (« — »). La source sous le tableau.
+- **Schémas, diagrammes** (`make_diagram`) : 4 à 9 boîtes, des libellés courts (2 à 5 mots), un seul sens de
+  lecture (de haut en bas ou de gauche à droite), un verbe sur les flèches quand il aide (« filtre », « envoie »).
+  Pas de titre dans le schéma qui répète celui de la figure.
+- **Géométrie, plans** (SVG) : points nommés en majuscules, longueurs cotées avec l'unité, angles droits marqués,
+  traits fins, une couleur d'accent pour ce qui compte.
+- **Images** : une légende en français qui dit ce qu'on voit, le crédit (auteur, licence) dessous.
+- **Code** : court, qui marche tel quel, commenté en français sur les lignes importantes.
+- **Numérotation** : Figure 1, 2, 3… et Tableau 1, 2, 3… dans l'ordre, sans trou, et le texte y renvoie
+  (« voir la figure 2 »).
+
+Après `render`, s'il affiche « À AMÉLIORER », corrige ces points dans page.html et relance : c'est la relecture
+d'un professeur, à faire avant de dire que c'est fini.
+
 ## Selon la demande
 
 - **Un texte donné à mettre en PDF** (une note, un compte rendu, quelques lignes) : son texte, TOUT son texte, rien

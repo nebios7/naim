@@ -463,15 +463,45 @@ def page(body, title="Document"):
             f'<style>{(HERE / "theme.css").read_text()}</style>{_katex()}</head><body>{color_code(body)}</body></html>')
 
 
+# formulas written the Markdown way are drawn too: « $$…$$ » kept inside a tex-block (KaTeX showed it in red, raw), or
+# left in the text ($$…$$, \[…\], \(…\), $…$ with maths inside); accents in a formula pass (strict: false)
+MATH_JS = r"""
+function naimTex(t) { t = t.trim(); var m = t.match(/^\$\$([\s\S]*)\$\$$/) || t.match(/^\\\[([\s\S]*)\\\]$/)
+  || t.match(/^\\\(([\s\S]*)\\\)$/) || t.match(/^\$([\s\S]*)\$$/); t = m ? m[1].trim() : t;
+  // a word as index (P_{pleurale}, V_{max}): upright, as in a printed course — not letters in italics one by one
+  return t.replace(/([_^])\{([A-Za-z\u00C0-\u017F]{3,}(?:[ '-][A-Za-z\u00C0-\u017F]+)*)\}/g, '$1{\\text{$2}}'); }
+function naimMath(root) {
+  var re = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$([^\s$](?:[^$]*?[^\s$])?)\$/g, todo = [];
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function (n) {
+    return n.parentElement.closest('pre, code, script, style, textarea, .tex, .tex-block, .katex, svg') ? 2 : 1; } });
+  while (w.nextNode()) if (/\$|\\[\[(]/.test(w.currentNode.nodeValue)) todo.push(w.currentNode);
+  todo.forEach(function (n) {
+    var v = n.nodeValue, out = document.createDocumentFragment(), last = 0, m, hit = false; re.lastIndex = 0;
+    while ((m = re.exec(v))) {
+      var inline = m[3] !== undefined || m[4] !== undefined, tex = m[1] || m[2] || m[3] || m[4];
+      if (m[4] !== undefined && !/[\\^_{}=]/.test(tex)) continue;  // « 5 $ et 10 $ »: prices, not maths
+      hit = true; out.appendChild(document.createTextNode(v.slice(last, m.index)));
+      var e = document.createElement(inline ? 'span' : 'div'); e.className = inline ? 'tex' : 'tex-block';
+      e.textContent = tex; out.appendChild(e); last = re.lastIndex; }
+    if (!hit) return; out.appendChild(document.createTextNode(v.slice(last)));
+    var p = n.parentElement;
+    if (p && p.tagName === 'P' && out.childNodes.length === 3 && !out.firstChild.nodeValue.trim()
+        && !out.lastChild.nodeValue.trim() && out.childNodes[1].tagName === 'DIV') { p.replaceWith(out.childNodes[1]); return; }
+    n.replaceWith(out); });
+}
+"""
+
+
 def _katex():
     if not (KATEX / "katex.min.js").is_file():
         return ""
     return (f'<link rel="stylesheet" href="{(KATEX / "katex.min.css").as_uri()}">'
             f'<script src="{(KATEX / "katex.min.js").as_uri()}"></script>'
-            "<script>window.__naimWait = true;"
+            "<script>window.__naimWait = true;" + MATH_JS +
             "document.addEventListener('DOMContentLoaded', function () {"
-            "  try { document.querySelectorAll('.tex, .tex-block').forEach(function (e) {"
-            "    katex.render(e.textContent, e, { displayMode: e.classList.contains('tex-block'), throwOnError: false }); });"
+            "  try { naimMath(document.body); document.querySelectorAll('.tex, .tex-block').forEach(function (e) {"
+            "    katex.render(naimTex(e.textContent), e, { displayMode: e.classList.contains('tex-block'), throwOnError: false,"
+            "                 strict: false }); });"
             "  } catch (err) { window.__naimError = String(err); }"
             "  (document.fonts ? document.fonts.ready : Promise.resolve()).then(function () { window.__naimReady = true; });"
             "});</script>")
@@ -518,6 +548,69 @@ def render(src, out, couleur=""):
     said = naim._figure_trouble(src.read_text(errors="replace"), src.parent) if naim else []
     if said:  # an image missing, or one image under several subjects
         print("PROBLÈME À CORRIGER avant de dire que c'est fini : " + " ; ".join(said) + ".")
+    text = src.read_text(errors="replace")
+    better = [f"formule {n}" for n in formula_notes(text)] + element_notes(text)
+    if better:  # drawn, but not written as in a printed course: Naim corrects its page.html, then renders again
+        print("À AMÉLIORER dans " + src.name + " (corrige, puis relance render) :\n- " + "\n- ".join(better))
+
+
+UNI_TEX = {"×": r"\times", "·": r"\cdot", "≈": r"\approx", "≤": r"\le", "≥": r"\ge", "≠": r"\neq", "−": "-", "√": r"\sqrt{…}",
+           "²": "^2", "³": "^3", "→": r"\to", "∞": r"\infty", "Δ": r"\Delta", "π": r"\pi", "α": r"\alpha", "β": r"\beta",
+           "μ": r"\mu", "λ": r"\lambda", "θ": r"\theta", "σ": r"\sigma", "Σ": r"\sum", "∫": r"\int", "±": r"\pm", "°": r"^\circ"}
+FUNCS = {"sin", "cos", "tan", "log", "ln", "exp", "lim", "max", "min", "det", "mod", "arg", "sup", "inf"}
+
+
+def formula_notes(page):
+    r"""How its formulas are written (not only drawn): what a teacher would correct, said to Naim with the right LaTeX, so
+    it rewrites them itself — « V̇ E = Vc × FR » becomes \dot{V}_E = V_c \times \text{FR}."""
+    import unicodedata
+    found = re.findall(r'class="tex(?:-block)?"[^>]*>(.*?)</(?:span|div)>', page, re.S)
+    found += re.findall(r"\$\$(.+?)\$\$", re.sub(r'class="tex(?:-block)?"[^>]*>.*?</(?:span|div)>', "", page, flags=re.S), re.S)
+    out = []
+    for raw in found:
+        f = html.unescape(raw).strip()
+        show, notes = re.sub(r"\s+", " ", f)[:70], []
+        if re.match(r"^(\$|\\\[|\\\()", f):
+            notes.append("enlève les $$ autour")
+        if any(unicodedata.combining(c) for c in f):
+            notes.append("point ou barre sur une lettre : \\dot{V}, \\bar{x} (pas V̇ tapé)")
+        uni = [c for c in dict.fromkeys(f) if c in UNI_TEX]
+        if uni:
+            notes.append(", ".join(f"{c} → {UNI_TEX[c]}" for c in uni))
+        bare = re.sub(r"\\(?:text|mathrm|operatorname|mathbf|mathit)\{[^}]*\}|\\[A-Za-z]+", " ", f)
+        names = [w for w in dict.fromkeys(re.findall(r"(?<![A-Za-z_^{])([A-Z][A-Za-z]+)(?![A-Za-z])", bare))
+                 if w.lower() not in FUNCS]
+        if names:
+            notes.append(", ".join(f"« {w} »" for w in names) + " nus : V_c, \\text{FR} (un nom, pas un produit de lettres)")
+        if re.search(r"(?<![A-Za-z\\])([A-Z])\s+([A-Z])(?![A-Za-z])", bare):
+            notes.append("lettres séparées (V E) : l'indice s'écrit V_E")
+        if notes and all(not o.startswith(f"« {show} »") for o in out):
+            out.append(f"« {show} » : " + " ; ".join(notes))
+    return out[:8]
+
+
+def element_notes(page):
+    """The tables and the numbering, read as a teacher would: a table without its caption, numbers not aligned, a
+    figure or a table numbered out of order."""
+    notes = []
+    tables = re.findall(r"<table\b.*?</table>", page, re.S | re.I)
+    bare = sum(1 for t in tables if not re.search(r"<caption\b", t, re.I))
+    if bare:
+        notes.append(f"{bare} tableau(x) sans <caption>Tableau n — ce qu'il montre</caption>")
+    loose = 0
+    for t in tables:
+        for attrs, cell in re.findall(r"<td\b([^>]*)>(.*?)</td>", t, re.S | re.I):
+            text = html.unescape(re.sub(r"<[^>]+>", "", cell)).strip()
+            if re.fullmatch(r"[-+−]?\d[\d\s  ]*([.,]\d+)?\s*(%|€|\$|m²|kg|g|mL|L|cm|mm|km|h|min|s)?", text) and "num" not in attrs:
+                loose += 1
+    if loose:
+        notes.append(f"{loose} nombre(s) de tableau sans td class=\"num\" (aligné à droite)")
+    for kind in ("Figure", "Tableau"):
+        nums = [int(n) for n in re.findall(rf"<(?:b|strong)>\s*{kind}\s+(\d+)", page)]
+        nums += [int(n) for n in re.findall(rf"<caption[^>]*>\s*(?:<b>)?\s*{kind}\s+(\d+)", page)] if kind == "Tableau" else []
+        if nums and nums != list(range(1, len(nums) + 1)):
+            notes.append(f"{kind}s numérotées {', '.join(map(str, nums[:10]))} : numérote 1, 2, 3… dans l'ordre, sans trou")
+    return notes
 
 
 def _naim_docs():

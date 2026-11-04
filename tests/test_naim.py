@@ -2732,3 +2732,30 @@ class TypographicEdits(unittest.TestCase):
         html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
         self.assertNotIn("margin: 0 auto 14px; max-width: 560px", "\n".join(l for l in html.split("\n") if l.startswith(".dcard")))
         self.assertIn('<div class="mcard">', html)
+
+    def test_pdfpro_draws_markdown_style_formulas(self):
+        # « $$…$$ » kept inside a tex-block was shown raw, in red: the delimiters are taken off, $…$ in text drawn
+        src = Path(__file__).resolve().parent.parent.joinpath("plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py").read_text()
+        self.assertIn("naimMath(document.body)", src)
+        self.assertIn("naimTex(e.textContent)", src)
+        self.assertIn("strict: false", src)
+
+    def test_pdfpro_tells_badly_written_formulas(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        notes = pp.formula_notes('<div class="tex-block">$$V\u0307 E = Vc \\times FR$$</div><div class="tex-block">E = mc^2</div>'
+                                 '<div class="tex-block">\\dot{V}_E = V_c \\times \\text{FR}</div><div class="tex-block">dV = A\\,dx</div>')
+        self.assertEqual(len(notes), 1)
+        self.assertIn("\\dot{V}", notes[0]); self.assertIn("« Vc »", notes[0]); self.assertIn("enlève les $$", notes[0])
+
+    def test_pdfpro_reads_tables_and_numbering(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        bad = pp.element_notes("<table><tr><td>Rein</td><td>120</td></tr></table><figcaption><b>Figure 1</b></figcaption>"
+                               "<figcaption><b>Figure 3</b></figcaption>")
+        self.assertEqual(len(bad), 3)
+        good = pp.element_notes('<table><caption>Tableau 1 — x</caption><tr><td>Rein</td><td class="num">120</td></tr></table>'
+                                "<figcaption><b>Figure 1</b></figcaption><figcaption><b>Figure 2</b></figcaption>")
+        self.assertEqual(good, [])
