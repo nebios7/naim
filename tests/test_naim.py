@@ -1385,7 +1385,7 @@ print(m("fais une maquette plus belle de mon application"), m("audit de sécurit
             self.assertTrue(out[4].startswith("refus"))
             # a trigger of a pack not installed (apple-design) is skipped: the request still gets a skill
             self.assertEqual(out[5].split()[0], "ui-ux-pro-max")
-            self.assertEqual(out[5].split()[1], "vibesec")
+            self.assertEqual(out[5].split()[1], "audit-securite")  # the cybersecurity plugin's audit, with its script
 
     def test_welcome_screen_offers_the_packs(self):
         page = (ROOT / "web" / "index.html").read_text()
@@ -2840,3 +2840,27 @@ class TypographicEdits(unittest.TestCase):
         self.assertIn("data-sendnow", html)
         self.assertIn('closest?.("[data-sendnow]")', html)
         self.assertIn('state === "wait" ? "En attente"', html)  # in the head, as before
+
+    def test_cybersecurity_audit_finds_and_masks(self):
+        import importlib.util
+        f = Path(__file__).resolve().parent.parent / "plugins_builtin/cybersecurite/skills/audit-securite/audit.py"
+        spec = importlib.util.spec_from_file_location("au", f); au = importlib.util.module_from_spec(spec); spec.loader.exec_module(au)
+        with tempfile.TemporaryDirectory() as t:
+            Path(t, "app.py").write_text('import os\nSECRET_KEY = "s3cr3t-prod-2024"\n'
+                                         'def ping(request): os.system("ping " + request.args["h"])\n'
+                                         'requests.get("https://x.fr", verify=False)\n'
+                                         'print("ÉTAT RÉEL DES FICHIERS")\n')
+            _, n, found = au.scan(t)
+            ids = {x["id"] for x in found}
+            self.assertTrue({"secret-mot-de-passe", "commande-shell", "tls-desactive"} <= ids)
+            self.assertNotIn("chiffrement-ecb", ids)  # « DES » in French capitals is not the DES cipher
+            self.assertFalse(any("s3cr3t-prod" in x["code"] for x in found))  # a secret is never shown whole
+
+    def test_cybersecurity_plugin_is_only_for_security_requests(self):
+        import json, re
+        m = json.loads((Path(__file__).resolve().parent.parent / "plugins_builtin/cybersecurite/plugin.json").read_text())
+        hit = lambda t: [k for k, rx in m["triggers"].items() if re.search(rx, t, re.I)]
+        self.assertEqual(hit("est-ce que mon mac est sécurisé ?"), ["securite-mac"])
+        self.assertEqual(hit("fais un audit de sécurité de mon projet"), ["audit-securite"])
+        for t in ("crée un cours de médecine en PDF", "fais une calculatrice en python", "crée un site pour un boulanger"):
+            self.assertEqual(hit(t), [])

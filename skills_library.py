@@ -671,9 +671,12 @@ créer (nom exact et où : Settings › Secrets and variables › Actions) et o�
     # ------------------------------------------------------------------ quality
     "securite": ("Relire un projet pour trouver les failles de sécurité et les corriger.", """# Revue de sécurité
 
-Chercher : injections SQL/commandes, XSS, CSRF, secrets dans le code, mots de passe en clair,
-contrôles d'accès manquants, uploads non filtrés, dépendances vulnérables (`pip-audit`, `npm audit`).
-Pour chaque problème : fichier:ligne, gravité, exploitation possible, correctif. Corriger les plus graves d'abord.
+Charge le skill **audit-securite** (use_skill) et suis-le : son script `audit.py` lit tout le projet (injections,
+XSS, secrets, HTTPS désactivé, hachage des mots de passe, dépendances) et donne fichier:ligne, gravité et correction.
+Pour le Mac ou le réseau de la maison : skill **securite-mac**.
+Sans le plugin : chercher injections SQL/commandes, XSS, CSRF, secrets dans le code, mots de passe en clair,
+contrôles d'accès manquants, uploads non filtrés, dépendances vulnérables (`pip-audit`, `npm audit`) ; pour chaque
+problème : fichier:ligne, gravité, exploitation possible, correctif ; corriger les plus graves d'abord.
 """),
     "performance": ("Mesurer puis accélérer du code lent (profilage avant optimisation).", """# Performance
 

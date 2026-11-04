@@ -1,0 +1,11 @@
+{
+  "name": "cybersecurite",
+  "version": "1.0",
+  "description": "Cybersécurité défensive : audit de sécurité d'un projet de code (failles, secrets, dépendances) et bilan de sécurité du Mac et du réseau de la maison, avec ce qu'il faut corriger et comment. Lecture seule, sur les systèmes de l'utilisateur.",
+  "skills": "skills",
+  "triggers": {
+    "audit-securite": "\\b(audit\\w* (de )?s[ée]curit[ée]|faille\\w*|vuln[ée]rabilit[ée]\\w*|injections? (sql|de commande)|xss|csrf|owasp|secrets? (dans|expos[ée]s?)|mots? de passe (en clair|dans le code)|s[ée]curis\\w* (mon|le|ce|cette|mon) (code|projet|site|appli\\w*|api|serveur web)|(code|projet|site|appli\\w*|api)\\b[^.?!]{0,40}\\b(s[ée]curis[ée]e?|vuln[ée]rable|pirat\\w*)|pip-audit|npm audit)\\b",
+    "securite-mac": "\\b(s[ée]curit[ée] (de|du) (mon |ce |mon )?(mac|ordinateur|ordi|r[ée]seau|wi-?fi|box)|(mon|ce) (mac|ordi\\w*|r[ée]seau|wi-?fi) (est[- ]il |est |)(s[ée]curis[ée]|prot[ée]g[ée]|pirat[ée]|vuln[ée]rable)|bilan de s[ée]curit[ée]|pare-?feu|coupe-?feu|firewall|filevault|ports? ouverts?|appareils? (inconnus?|suspects?)|qui (est|se) connect\\w* (à|sur) (mon|ma) (wi-?fi|box|r[ée]seau)|durcir (mon|le) mac)\\b"
+  },
+  "priority": true
+}
