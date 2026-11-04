@@ -1668,13 +1668,13 @@ body.home .empty { margin: 0 auto 22px; }
 .hchip svg { width: 15px; height: 15px; color: var(--muted); }
 .hrec { margin-top: 30px; }
 /* the morning card: what Naim proposes after its dream (until every proposal is answered) */
-.dcard { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: var(--r-m, 12px); padding: 11px 14px; margin: 0 auto 14px; max-width: 560px; font-size: 13.5px; }
-.dcard svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
-.dcard .dt { flex: 1; min-width: 0; }
-.dcard small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-.dcard .dclose { flex: none; background: none; border: 0; padding: 5px; margin-left: -4px; border-radius: 7px; color: var(--muted); cursor: pointer; display: inline-flex; }
-.dcard .dclose:hover { background: var(--side); color: var(--text); }
-.dcard .dclose svg { width: 15px; height: 15px; }
+.mcard { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: var(--r-m, 12px); padding: 11px 14px; margin: 0 auto 14px; max-width: 560px; font-size: 13.5px; }
+.mcard svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.mcard .dt { flex: 1; min-width: 0; }
+.mcard small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.mcard .dclose { flex: none; background: none; border: 0; padding: 5px; margin-left: -4px; border-radius: 7px; color: var(--muted); cursor: pointer; display: inline-flex; }
+.mcard .dclose:hover { background: var(--side); color: var(--text); }
+.mcard .dclose svg { width: 15px; height: 15px; }
 .dprop .sl b { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
 .dprop .ptext, .dprop .sl small { display: block; }
 .dprop .ptext { font-size: 14px; margin: 2px 0; }
@@ -2111,14 +2111,14 @@ body.voicefirst:not(.busyrun) #talkBtn:not([hidden]):not(.on):hover .tw i { anim
 .libcard .attic svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 5px; }
 
 /* SpotlightCard (React Bits, without React): the light under the mouse on the cards */
-.acard, .dcard, .qcard { position: relative; }
-.acard::before, .dcard::before, .qcard::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
+.acard, .dcard, .mcard, .qcard { position: relative; }
+.acard::before, .dcard::before, .mcard::before, .qcard::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
   background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--text) 9%, transparent), transparent 70%); }
-.acard:hover::before, .dcard:hover::before, .qcard:hover::before { opacity: 1; }
+.acard:hover::before, .dcard:hover::before, .mcard:hover::before, .qcard:hover::before { opacity: 1; }
 #spane h2 .bw { display: inline-block; animation: blurin .45s cubic-bezier(.2,.7,.2,1) both; }
 @keyframes blurin { from { filter: blur(8px); opacity: 0; transform: translateY(-6px); } to { filter: none; opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { #spane h2 .bw { animation: none; } }
-@media (prefers-reduced-motion: reduce) { .acard::before, .dcard::before, .qcard::before { display: none; } }
+@media (prefers-reduced-motion: reduce) { .acard::before, .dcard::before, .mcard::before, .qcard::before { display: none; } }
 
 /* context panel (click on the gauge next to the input) */
 #ctxInfo { cursor: pointer; border-radius: 6px; padding: 2px 4px; }
@@ -7841,7 +7841,7 @@ async function dreamCard() {
   const sig = r.pending.map((p) => p.id).join(",");
   let hidden = ""; try { hidden = localStorage.getItem("naim.dreamHidden") || ""; } catch {}
   if (!r.state.running && sig && hidden === sig) { box.innerHTML = ""; return; }
-  box.innerHTML = `<div class="dcard">${svgI("moon")}<div class="dt">${r.state.running
+  box.innerHTML = `<div class="mcard">${svgI("moon")}<div class="dt">${r.state.running
       ? `<b>Naim rêve…</b><small>Il ${esc(r.state.step || "relit ses conversations")}${r.state.total ? ` · ${r.state.done}/${r.state.total}` : ""}</small>`
       : `<b>Pendant la nuit, Naim a relu ce que tu lui as dit</b><small>${rules ? `${rules} règle${rules > 1 ? "s" : ""} proposée${rules > 1 ? "s" : ""} pour ses consignes` : ""}${rules && n > rules ? " · " : ""}${n > rules ? `${n - rules} fait${n - rules > 1 ? "s" : ""} à retirer de sa mémoire` : ""}</small>`}</div>
     ${r.state.running ? "" : `<button class="btn primary" id="dreamSee">Voir</button><button class="ib dclose" id="dreamHide" title="Masquer (revient s'il y a de nouvelles propositions)">${svgI("x")}</button>`}</div>`;
@@ -8919,7 +8919,7 @@ async function openDeepLink() {
   }).observe(spane, { childList: true });
   // SpotlightCard: a soft light follows the mouse on the cards
   document.addEventListener("pointermove", (e) => {
-    const c = e.target.closest?.(".acard, .dcard"); if (!c) return;
+    const c = e.target.closest?.(".acard, .dcard, .mcard"); if (!c) return;
     const r = c.getBoundingClientRect();
     c.style.setProperty("--mx", `${e.clientX - r.left}px`); c.style.setProperty("--my", `${e.clientY - r.top}px`);
   }, { passive: true });

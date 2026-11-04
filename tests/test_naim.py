@@ -2726,3 +2726,9 @@ class TypographicEdits(unittest.TestCase):
         src = Path(__file__).resolve().parent.parent.joinpath("server.py").read_text()
         self.assertIn("Ta liste n'a pas bougé depuis", src)
         self.assertIn("appelle update_todos pour cocher (done) celles que tu", src)
+
+    def test_deliverable_cards_have_one_style(self):
+        # the morning card used .dcard too: its margin and 560px width made the deliverable cards overflow and touch
+        html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
+        self.assertNotIn("margin: 0 auto 14px; max-width: 560px", "\n".join(l for l in html.split("\n") if l.startswith(".dcard")))
+        self.assertIn('<div class="mcard">', html)
