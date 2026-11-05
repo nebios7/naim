@@ -19,6 +19,13 @@ import naimtools  # noqa: E402
 
 llamacpp.note_error = lambda *a: None  # tests never write to the user's error log
 
+# tests never write to the journals of the user's plugins either (ECC keeps its own statistics): the plugins' hooks
+# still run, but their data folders point to a temporary folder
+import plugins  # noqa: E402
+_plugin_hook_sets, _HOOK_DATA = plugins.hook_sets, tempfile.mkdtemp(prefix="naim-test-hookdata-")
+plugins.hook_sets = lambda: [(src, {**d, "env": {k: (_HOOK_DATA if k.endswith(("_DATA_HOME", "_DATA_DIR", "_HOME")) else v)
+                                                 for k, v in (d.get("env") or {}).items()}}) for src, d in _plugin_hook_sets()]
+
 
 class ToolArguments(unittest.TestCase):
     """A small model often breaks the JSON of its tool calls: what can be mended is, the rest is said."""
