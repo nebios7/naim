@@ -4252,6 +4252,14 @@ class Agent:
         with self._inbox_lock:
             self._inbox.append(text)
 
+    def withdraw(self, text):
+        """A waiting message taken back by the user before it was read: True if it was still waiting."""
+        with self._inbox_lock:
+            if text in self._inbox:
+                self._inbox.remove(text)
+                return True
+        return False
+
     def _read_inbox(self):
         with self._inbox_lock:
             items, self._inbox = self._inbox, []

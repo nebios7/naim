@@ -1535,7 +1535,7 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
   background: var(--user); border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; font-size: 13.5px; color: var(--text); cursor: default; }
 .md .evnote.gnote { margin: 12px 0 12px auto; }
 .gnote .ghead { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 3px; white-space: nowrap; min-width: 0; }
-.gnote .gfoot { display: flex; margin: 2px 0 4px; padding-left: 19px; }
+.gnote .gfoot { display: flex; gap: 14px; margin: 2px 0 4px; padding-left: 19px; }
 .gnote .gnow { border: 0 !important; background: none !important; box-shadow: none !important; color: var(--text); font: inherit;
   font-size: 11.5px; font-weight: 500; padding: 0; cursor: pointer; }
 .gnote .gnow:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -3314,7 +3314,12 @@ document.addEventListener("click", (e) => { if (e.target.closest(".wstop")) stop
 document.addEventListener("click", (e) => { const im = e.target.closest(".md img.mdimg:not(.off)"); if (im) lightbox(im.src); });
 document.addEventListener("click", (e) => { const n = e.target.closest(".evnote.long"); if (n) n.classList.toggle("open"); });
 // long remarks are marked once drawn (3 lines shown, a click shows all)
-new MutationObserver(() => $$(".evnote:not([data-l])").forEach((n) => { n.dataset.l = 1; if ((n.textContent || "").length > 180) n.classList.add("long"); }))
+new MutationObserver(() => $$(".evnote:not([data-l])").forEach((n) => {
+  n.dataset.l = 1;
+  const gt = n.classList.contains("gnote") && $(".gtext", n);
+  if (gt)  // a message of the user: « Afficher tout » only when its text is really cut, never on one that fits
+    requestAnimationFrame(() => { if (gt.scrollHeight > gt.clientHeight + 2) n.classList.add("long"); });
+  else if ((n.textContent || "").length > 180) n.classList.add("long"); }))
   .observe(document.body, { childList: true, subtree: true });
 document.addEventListener("click", async (e) => {  // « Copier » on an opened command
   const b = e.target.closest(".ccopy"); if (!b) return;
@@ -3660,7 +3665,7 @@ function guideNote(text, state) {
   const st = state === "wait" ? "En attente" : state === "read" ? "Pris en compte" : "";
   const tip = state === "wait" ? ' title="Naim le lit à sa prochaine étape, sans s\'arrêter"' : "";
   // a choice: wait for its next step, or stop it and send now — on its own line, between the head and the message
-  const now = state === "wait" ? `<button class="gnow" data-sendnow title="Arrête Naim et envoie ce message tout de suite">Envoyer maintenant</button>` : "";
+  const now = state === "wait" ? `<button class="gnow" data-sendnow title="Arrête Naim et envoie ce message tout de suite">Envoyer maintenant</button><button class="gnow" data-unsend title="Retire ce message avant que Naim le lise">Annuler</button>` : "";
   return Object.assign(document.createElement("div"), { className: "evnote gnote" + (state === "wait" ? " pending" : ""),
     innerHTML: `<div class="ghead"><span class="evic">${svgI("chat")}</span><span>Ton message pendant le travail</span>${st ? `<span class="gstate"${tip}>${st}</span>` : ""}</div>${now ? `<div class="gfoot">${now}</div>` : ""}<div class="gtext">${esc(words)}</div>` });
 }
@@ -5529,6 +5534,19 @@ document.addEventListener("click", async (e) => {
   run.pendingNotes = (run.pendingNotes || []).filter((x) => !String(x.text).endsWith(text));
   await stop();
 });
+// « Annuler » on a waiting message: taken back before Naim reads it (said plainly when it was read already)
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest?.("[data-unsend]"); if (!b) return;
+  const run = curRun(), note = b.closest(".gnote"); if (!run || !note) return;
+  const text = $(".gtext", note).textContent;
+  const r = await api("/api/interject/cancel", { method: "POST", body: { run_id: run.id, text } }).catch(() => ({}));
+  if (!r.ok) { toast("Trop tard : Naim l'a déjà lu"); return; }
+  const same = (x) => String(x.text || "").replace(/^Toi\s*:\s*/, "") === text;
+  run.pendingNotes = (run.pendingNotes || []).filter((x) => !same(x));
+  run.reply.steps = (run.reply.steps || []).filter((x) => !(x.type === "event" && x.icon === "💬" && same(x)));
+  if (run.v?._notes) run.v._notes = run.v._notes.filter((x) => !same(x));
+  note.remove(); toast("Message annulé");
+}, true);
 async function stop() {
   const run = curRun();
   if (!run) return;

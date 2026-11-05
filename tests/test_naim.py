@@ -2993,3 +2993,13 @@ class TypographicEdits(unittest.TestCase):
                 (d / n).write_text("x")
             self.assertEqual(server.existing_document(t, "page 7 l'équation est en rouge"), ("3annes/page.html", "3annes/cours.pdf"))
             self.assertIsNone(server.existing_document(t, "crée un cours de médecine 3ème année"))
+
+    def test_waiting_message_can_be_taken_back(self):
+        with tempfile.TemporaryDirectory() as t:
+            a = naimtools.Agent(t, "naim", auto_yes=True, emit=lambda e: None)
+            a.interject("ajoute une image")
+            self.assertTrue(a.withdraw("ajoute une image"))
+            self.assertFalse(a.withdraw("ajoute une image"))  # read or taken back already: said
+        html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
+        self.assertIn("data-unsend", html)
+        self.assertIn("/api/interject/cancel", html)

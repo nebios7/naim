@@ -1288,6 +1288,12 @@ class Handler(BaseHTTPRequestHandler):
                 if flag:
                     flag.set()
             self.send_json({"ok": bool(agent and text)})
+        elif path == "/api/interject/cancel":  # « Annuler » on a waiting message: taken back if not read yet
+            body = self.read_json()
+            with _lock:
+                agent = _agents.get(body.get("run_id"))
+            text = str(body.get("text") or "").strip()[:4000]
+            self.send_json({"ok": bool(agent and text and agent.withdraw(text))})
         elif path == "/api/changes/revert":
             body = self.read_json()
             ok = ext.revert_checkpoint_file(body.get("run_id", ""), body.get("path", ""))
