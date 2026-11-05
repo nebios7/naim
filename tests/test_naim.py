@@ -2967,3 +2967,29 @@ class TypographicEdits(unittest.TestCase):
             css = pp.font_css("marianne")
             self.assertIn("font-weight:700;font-style:italic", css)
             self.assertIn("--sans:'Naim-marianne'", css)
+
+    def test_red_formulas_and_claimed_fix(self):
+        import server
+        self.assertTrue(server.claims_done("J'ai corrigé l'affichage des équations."))
+        self.assertFalse(server.claims_done("Je vais corriger les équations."))
+        src = (Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py").read_text()
+        self.assertIn("'_{$1_$2}'", src)        # V_O_2 drawn as V_{O_2}, never in red
+        self.assertIn("\\\\mathrm{", src)        # $MAP$ in the text drawn upright
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pp", Path(__file__).resolve().parent.parent / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec); spec.loader.exec_module(pp)
+        n = pp.formula_notes('<div class="tex-block">\\dot{V}_O_2 = Q</div><div class="tex-block">F = D \\times E</div>'
+                             '<div class="tex-block">6CO_2 + 6H_2O</div>')
+        self.assertEqual(len(n), 1); self.assertIn("V_{O_2}", n[0])
+        s = (Path(__file__).resolve().parent.parent / "server.py").read_text()
+        self.assertIn("est DÉJÀ installée sur ce Mac", s)
+        self.assertIn("ext.match_skill(first_ask", s)
+
+    def test_correction_edits_the_existing_document(self):
+        import server
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t, "3annes"); d.mkdir()
+            for n in ("page.html", "page.pro.html", "cours.pdf"):
+                (d / n).write_text("x")
+            self.assertEqual(server.existing_document(t, "page 7 l'équation est en rouge"), ("3annes/page.html", "3annes/cours.pdf"))
+            self.assertIsNone(server.existing_document(t, "crée un cours de médecine 3ème année"))

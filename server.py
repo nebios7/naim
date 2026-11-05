@@ -125,8 +125,10 @@ FILE_WORK_RE = re.compile(r"\b(?:r?ajout\w*|chang\w*|remplac\w*|rectifi\w*|refai
 # was done — checked against the tools really used in that reply
 DONE_CLAIM_RE = re.compile(r"\bj'ai (?:bien |maintenant |d[ée]j[àa] )?(?:install[ée]|ajout[ée]|cr[ée]{2}|envoy[ée]|supprim[ée]|"
                            r"modifi[ée]|enregistr[ée]|t[ée]l[ée]charg[ée]|lanc[ée]|imprim[ée]|configur[ée]|mis [àa] jour|"
-                           r"activ[ée]|d[ée]plac[ée]|renomm[ée]|copi[ée])\b|\b(?:est|sont|a [ée]t[ée]|ont [ée]t[ée]) "
-                           r"(?:maintenant |bien )?(?:install[ée]e?s?|ajout[ée]e?s?|cr[ée]{2}e?s?|envoy[ée]e?s?|activ[ée]e?s?)\b|"
+                           r"activ[ée]|d[ée]plac[ée]|renomm[ée]|copi[ée]|corrig[ée]|r[ée]par[ée]|r[ée]gl[ée]|refait|r[ée]g[ée]n[ée]r[ée]|"
+                           r"remplac[ée]|r[ée]solu|r[ée]tabli|mis (?:le|la|les|l')|r[ée]dig[ée]|termin[ée]|fini)\b|\b(?:est|sont|a [ée]t[ée]|ont [ée]t[ée]) "
+                           r"(?:maintenant |bien )?(?:install[ée]e?s?|ajout[ée]e?s?|cr[ée]{2}e?s?|envoy[ée]e?s?|activ[ée]e?s?|corrig[ée]e?s?|r[ée]par[ée]e?s?|"
+                           r"r[ée]gl[ée]e?s?|remplac[ée]e?s?|r[ée]solue?s?)\b|"
                            r"\bavec succ[èe]s\b", re.I)
 
 
@@ -292,6 +294,34 @@ def ends_announcing(text):
     """The answer ends on what it is going to do (« Je vais maintenant le reformuler… »): the work is not done."""
     last = [s for s in re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip()) if s.strip()][-1:]
     return bool(last) and bool(LATE_ANNOUNCE_RE.search(last[0])) and len(text) < 1500
+
+
+CORRECTION_RE = re.compile(r"\b(corrig\w*|rectifi\w*|modifi\w*|change\w*|remplac\w*|r[ée]pare\w*|retouch\w*|page \d+|"
+                           r"(?:mal|pas bien) [ée]crit\w*|en rouge|erreur|faute|donne[- ]moi le (?:pdf|document) corrig)", re.I)
+
+
+def existing_document(root, message):
+    """« corrige la page 7 » while a PDF made from a page of this folder exists: (that page, its PDF), newest first.
+    None for new work (« crée un cours… ») or when nothing was made here."""
+    if not CORRECTION_RE.search(message or "") or NEW_WORK_RE.search(message or ""):
+        return None
+    root = Path(root)
+    try:
+        made = sorted((f for f in root.glob("**/*.pro.html") if len(f.relative_to(root).parts) <= 4 and ".git" not in f.parts),
+                      key=lambda f: f.stat().st_mtime, reverse=True)
+    except OSError:
+        return None
+    for pro in made[:5]:
+        page, pdf = pro.with_name(pro.name[:-len(".pro.html")] + ".html"), None
+        for cand in pro.parent.glob("*.pdf"):
+            pdf = cand if not pdf or cand.stat().st_mtime > pdf.stat().st_mtime else pdf
+        if page.is_file() and pdf:
+            chapters = [f for f in pro.parent.glob("*.md") if re.match(r"\d{1,3}[-_ .]", f.name)]
+            if len(chapters) >= 2:  # a course written in chapters: its page is rebuilt from them, they are what is changed
+                return (f"les chapitres {pro.parent.relative_to(root)}/NN-….md (le PDF se refait depuis README.md)",
+                        str(pdf.relative_to(root)))
+            return (str(page.relative_to(root)), str(pdf.relative_to(root)))
+    return None
 
 
 def claims_done(text):
@@ -2346,7 +2376,12 @@ class Handler(BaseHTTPRequestHandler):
             # the same skills as the Agent (a house plan, a pro email…): their method and tools, not a drawing made up by hand
             recent = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
                                                     if m.get("role") == "user"])
+            # the work this conversation is about (its first request: « refais le PDF du cours… »), before a guess from the
+            # words of the last messages (« équations » loaded the maths skill, and it started the whole course again)
+            first_ask = next((str(m.get("content") or "") for m in (body.get("history") or []) if m.get("role") == "user"), "")
+            follow = (file_work and not NEW_WORK_RE.search(body["message"] or "") and not FILE_OPS_RE.search(body["message"] or ""))
             sk = (ext.match_skill(body["message"], helper.root, helper.disabled_skills)
+                  or (ext.match_skill(first_ask, helper.root, helper.disabled_skills) if follow and first_ask else None)
                   or (ext.match_skill(recent, helper.root, helper.disabled_skills)
                       if file_work and not NEW_WORK_RE.search(body["message"] or "")
                       and not FILE_OPS_RE.search(body["message"] or "") else None))
@@ -2435,6 +2470,18 @@ class Handler(BaseHTTPRequestHandler):
                 "Markdown. Ne crée ni ne modifie aucun fichier.)") + (
                 f" (Le fichier {', '.join(named[:3])} est dans le dossier du projet : lis-le d'abord avec read_file, "
                 "puis explique ce que tu y vois, sans le modifier.)" if named else ""))
+        if (src_doc := existing_document(helper.root, body["message"] or "")):
+            # a correction of a document already made (« page 7 l'équation est fausse », « donne-moi le PDF corrigé »): that
+            # file is changed where asked, never a new course written from nothing in a new folder
+            messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                f"\n\n(Le document existe déjà : {src_doc[0]} (son PDF : {src_doc[1]}). Corrige SEULEMENT ce que je demande, "
+                "dans ce fichier (read_file puis edit_file), puis refais son PDF avec la même commande qu'avant. Ne recrée "
+                "pas le document, pas de nouveau dossier.)"))
+        if (font := helper._asked_font()):  # « avec la police Marianne », installed: used, never looked for on the web
+            messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                f"\n\n(La police {font[1]} est DÉJÀ installée sur ce Mac (~/.naim/fonts). Ne la télécharge pas, ne la "
+                f"cherche pas sur le web : pour un PDF, ajoute `--police {font[1]}` à `pdfpro.py render` ; convert_document "
+                "l'applique tout seul.)"))
         if MAC_ACTION_RE.search(body["message"] or ""):  # « imprime-le », « ouvre Safari »: it acts, it does not explain
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Fais-le toi-même sur ce Mac avec tes outils, ne m'explique pas comment faire. run_command agit sur le "

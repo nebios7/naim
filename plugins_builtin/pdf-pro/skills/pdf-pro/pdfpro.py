@@ -488,7 +488,9 @@ MATH_JS = r"""
 function naimTex(t) { t = t.trim(); var m = t.match(/^\$\$([\s\S]*)\$\$$/) || t.match(/^\\\[([\s\S]*)\\\]$/)
   || t.match(/^\\\(([\s\S]*)\\\)$/) || t.match(/^\$([\s\S]*)\$$/); t = m ? m[1].trim() : t;
   // a word as index (P_{pleurale}, V_{max}): upright, as in a printed course — not letters in italics one by one
-  return t.replace(/([_^])\{([A-Za-z\u00C0-\u017F]{3,}(?:[ '-][A-Za-z\u00C0-\u017F]+)*)\}/g, '$1{\\text{$2}}'); }
+  t = t.replace(/([_^])\{([A-Za-z\u00C0-\u017F]{3,}(?:[ '-][A-Za-z\u00C0-\u017F]+)*)\}/g, '$1{\\text{$2}}');
+  // two indices in a row (\dot{V}_O_2, KaTeX shows it in red): one index holding both — V_{O_2}
+  return t.replace(/_([A-Za-z0-9]|\{[^{}]*\})_([A-Za-z0-9]|\{[^{}]*\})/g, '_{$1_$2}'); }
 function naimMath(root) {
   var re = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$([^\s$](?:[^$]*?[^\s$])?)\$/g, todo = [];
   var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function (n) {
@@ -498,7 +500,8 @@ function naimMath(root) {
     var v = n.nodeValue, out = document.createDocumentFragment(), last = 0, m, hit = false; re.lastIndex = 0;
     while ((m = re.exec(v))) {
       var inline = m[3] !== undefined || m[4] !== undefined, tex = m[1] || m[2] || m[3] || m[4];
-      if (m[4] !== undefined && !/[\\^_{}=]/.test(tex)) continue;  // « 5 $ et 10 $ »: prices, not maths
+      if (m[4] !== undefined && !/[\\^_{}=]/.test(tex) && !/^[A-Za-z\u0391-\u03C9]{1,8}(?:'|\d)?$/.test(tex)) continue;
+      if (m[4] !== undefined && /^[A-Za-z]{2,8}$/.test(tex)) tex = '\\mathrm{' + tex + '}';  // $MAP$: a name, upright  // « 5 $ et 10 $ »: prices, not maths
       hit = true; out.appendChild(document.createTextNode(v.slice(last, m.index)));
       var e = document.createElement(inline ? 'span' : 'div'); e.className = inline ? 'tex' : 'tex-block';
       e.textContent = tex; out.appendChild(e); last = re.lastIndex; }
@@ -644,12 +647,12 @@ def formula_notes(page):
         if uni:
             notes.append(", ".join(f"{c} → {UNI_TEX[c]}" for c in uni))
         bare = re.sub(r"\\(?:text|mathrm|operatorname|mathbf|mathit)\{[^}]*\}|\\[A-Za-z]+", " ", f)
-        names = [w for w in dict.fromkeys(re.findall(r"(?<![A-Za-z_^{\[])([A-Z][A-Za-z]+)(?![A-Za-z^])", bare))
+        names = [w for w in dict.fromkeys(re.findall(r"(?<![A-Za-z_^{\[\d])([A-Z][A-Za-z]+)(?![A-Za-z^_\d])", bare))
                  if w.lower() not in FUNCS]
         if names:
             notes.append(", ".join(f"« {w} »" for w in names) + " nus : V_c, \\text{FR} (un nom, pas un produit de lettres)")
-        if re.search(r"(?<![A-Za-z\\])([A-Z])\s+([A-Z])(?![A-Za-z])", bare):
-            notes.append("lettres séparées (V E) : l'indice s'écrit V_E")
+        if re.search(r"_(?:[A-Za-z0-9]|\{[^{}]*\})_", f):
+            notes.append("deux indices à la suite (V_O_2) : un seul indice qui contient tout, V_{O_2}")
         if notes and all(not o.startswith(f"« {show} »") for o in out):
             out.append(f"« {show} » : " + " ; ".join(notes))
     return out[:8]
