@@ -1141,7 +1141,11 @@ body.haslive .working .wtime { display: none; }
 .dmore { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; padding: 2px 4px; cursor: pointer; margin-bottom: 6px; }
 .dmore:hover { color: var(--text); }
 .dcard { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: min(340px, 100%); padding: 6px 6px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; transition: border-color .15s, background .15s; }
-.dcard:hover { border-color: color-mix(in srgb, var(--muted) 45%, var(--line)); }
+.dcard:hover { border-color: color-mix(in srgb, var(--muted) 45%, var(--line)); transform: translateY(-1px); box-shadow: 0 3px 10px rgb(0 0 0 / .12); }
+.dcard { transition: border-color .15s, background .15s, transform .18s var(--ease, ease), box-shadow .18s; }
+.deliv .dcard { animation: cardIn .38s cubic-bezier(.2, .8, .3, 1) both; animation-delay: calc(var(--i, 0) * 55ms); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .deliv .dcard { animation: none; } .dcard:hover { transform: none; } }
 .dcard .dthumb { position: relative; flex: none; width: 34px; height: 40px; border-radius: 5px; background: var(--side); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--muted); }
 .dcard .dthumb svg { width: 17px; height: 17px; }
 .dcard .dthumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; background: #fff; }
@@ -1479,6 +1483,14 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .agroup.live > summary .gnow > .tk.tkout, .liveline .ltxt > .tk.tkout { animation: tkOut .3s ease-in both; }
 @keyframes tkIn { from { opacity: 0; transform: translateY(105%); filter: blur(1.5px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes tkOut { to { opacity: 0; transform: translateY(-105%); filter: blur(1.5px); } }
+/* the end of a block: a check drawn in one stroke, then the icon fades out and gives its place back */
+.ldone svg { width: 14px; height: 14px; fill: none; stroke: var(--ok, #3fb950); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 16; stroke-dashoffset: 16; animation: checkDraw .38s .08s cubic-bezier(.3, .7, .3, 1) forwards; }
+@keyframes checkDraw { to { stroke-dashoffset: 0; } }
+.glive.gend { animation: gEnd .45s 1s ease-in forwards; overflow: hidden; }
+@keyframes gEnd { to { opacity: 0; width: 0; margin-right: 0; } }
+.agroup > summary .gsum.gback { animation: tkIn .36s cubic-bezier(.2, .8, .3, 1) both; }
+@media (prefers-reduced-motion: reduce) { .ldone svg { animation: none; stroke-dashoffset: 0; } .glive.gend, .gsum.gback { animation: none; } }
 /* the quill leaves a thin line of ink under its nib, drawn as it writes and wiped at each new line */
 .lfeather { position: relative; }
 .lfeather .ink { position: absolute; left: 7px; bottom: 6.5px; height: 1.4px; border-radius: 1px; background: currentColor; opacity: .55;
@@ -1949,6 +1961,12 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .todos .tm .f { fill: #d97757; }
 .todos .tm .k { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .todos .ti.in_progress .tm svg { animation: todoSpin 1s linear infinite; }
+.todos .ti.just .tm svg { animation: tickPop .42s cubic-bezier(.3, 1.6, .5, 1) both; }
+.todos .ti.just .tm .k { stroke-dasharray: 10; stroke-dashoffset: 10; animation: checkDraw .32s .12s ease-out forwards; }
+.todos .ti.just span:last-child { transition: color .5s; }
+.todos .ti.now { animation: tkIn .36s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes tickPop { from { transform: scale(.4); opacity: .3; } 60% { transform: scale(1.15); opacity: 1; } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .todos .ti.just .tm svg, .todos .ti.just .tm .k, .todos .ti.now { animation: none; stroke-dashoffset: 0; } }
 .todos.finished .ti.in_progress .tm svg { animation: none; }
 @keyframes todoSpin { to { transform: rotate(360deg); } }
 .todos .ti span:last-child { color: var(--text); text-decoration: none !important; }
@@ -3429,7 +3447,7 @@ function delivCards(dl) {
     const q = `root=${encodeURIComponent(f.root || dl.root)}&path=${encodeURIComponent(f.path)}`;
     const icon = /^(png|jpe?g|gif|svg)$/.test(f.ext) ? "image" : /^(csv|xlsx)$/.test(f.ext) ? "chart" : f.ext === "zip" ? "compress" : f.ext === "mp4" ? "play" : "file";
     const thumb = /^(pdf|png|jpe?g|gif|svg|docx|pptx)$/.test(f.ext) ? `<img loading="lazy" alt=""${/^(pdf|docx|pptx)$/.test(f.ext) && f.ext !== "pptx" ? ' class="doc"' : ""} src="/api/thumb?${q}&w=260" onerror="if(!this.dataset.again){this.dataset.again=1;setTimeout(()=>{this.src=this.src+'&again=1'},800)}else this.remove()">` : "";
-    return `<div class="dcard" data-i="${i}" data-dopen title="${esc(f.shown || f.path)}"><span class="dthumb">${svgI(icon)}${thumb}</span><span class="dinfo"><b>${esc(f.path.split("/").pop())}</b><small>${DELIV_KIND[f.ext] || f.ext.toUpperCase()} · ${fmtSize(f.size)}</small></span>
+    return `<div class="dcard" data-i="${i}" style="--i:${Math.min(i, 8)}" data-dopen title="${esc(f.shown || f.path)}"><span class="dthumb">${svgI(icon)}${thumb}</span><span class="dinfo"><b>${esc(f.path.split("/").pop())}</b><small>${DELIV_KIND[f.ext] || f.ext.toUpperCase()} · ${fmtSize(f.size)}</small></span>
       <span class="dacts"><button data-dfinder title="Montrer dans le Finder">${svgI("folder")}</button><button data-dmore title="Plus d'actions">${svgI("dots")}</button></span></div>`; }).join("")}</div>${many ? `<button class="dmore" data-dall>Voir les ${dl.files.length - 6} autres</button>` : ""}`;
   $("[data-dall]", box)?.addEventListener("click", (e) => { e.stopPropagation(); const g = $(".deliv", box), open = g.classList.toggle("folded");
     e.currentTarget.textContent = open ? `Voir les ${dl.files.length - 6} autres` : "Réduire"; });
@@ -4648,9 +4666,14 @@ function addBot(m, idx) {
         in_progress: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" class="o"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" class="a"/></svg>',
         skipped: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" class="o d"/></svg>' };
       const todo = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" class="o"/></svg>';
+      const was = v._todoSt || [], wasW = $(".tbar i", box)?.style.width || "", w = Math.round(100 * done / list.length) + "%";
+      // a step just ticked pops; the step just begun slides in; nothing moves on the first drawing of a list
+      const moved = (t, i) => was.length && was[i] && was[i] !== t.status ? (t.status === "done" ? " just" : t.status === "in_progress" ? " now" : "") : "";
       box.innerHTML = `<div class="th"><span>Tâches</span><span>${done} sur ${list.length}${stopped ? " · arrêté" : ""}</span></div>`
-        + `<div class="tbar"><i style="width:${Math.round(100 * done / list.length)}%"></i></div>`
-        + list.map((t) => `<div class="ti ${t.status}"><span class="tm">${ICON[t.status] || todo}</span><span>${esc(t.text)}</span></div>`).join("");
+        + `<div class="tbar"><i style="width:${wasW || w}"></i></div>`
+        + list.map((t, i) => `<div class="ti ${t.status}${moved(t, i)}"><span class="tm">${ICON[t.status] || todo}</span><span>${esc(t.text)}</span></div>`).join("");
+      v._todoSt = list.map((t) => t.status);
+      if (wasW && wasW !== w) requestAnimationFrame(() => requestAnimationFrame(() => { const bar = $(".tbar i", box); if (bar) bar.style.width = w; }));
     },
     verify(ev) {
       const bad = ev.failures.length;
@@ -5680,6 +5703,15 @@ function setLiveIcon(box, kind) {
   fresh.classList.add("lin");
   cur.forEach((o) => { o.classList.add("lout"); setTimeout(() => o.remove(), 260); });
 }
+// a block of work done: its live icon becomes a check that settles, then fades away (nothing left to watch)
+function liveDone(gl) {
+  if (!gl) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || !gl.dataset.k) { gl.remove(); return; }
+  gl.dataset.k = "done";
+  [...gl.children].forEach((o) => { o.classList.remove("lin"); o.classList.add("lout"); setTimeout(() => o.remove(), 260); });
+  gl.insertAdjacentHTML("beforeend", '<span class="licon ldone lin"><svg viewBox="0 0 16 16"><path d="M3.6 8.4l2.9 2.9 5.9-6.2"/></svg></span>');
+  gl.classList.add("gend"); setTimeout(() => gl.remove(), 1500);
+}
 // the words of the step roll: the old ones slide up and away, the new ones come from below
 function rollText(el, txt) {
   const cur = $(":scope > .tk:not(.tkout)", el);
@@ -5796,7 +5828,7 @@ new MutationObserver(() => naimDots()).observe(document.body, { childList: true,
 // « Naim réfléchit… 12 s » in its place
 function liveInThread(r, label, step, time) {
   const mine = r?.v?.el;
-  $$(".agroup.live").forEach((g) => { if (g.closest(".turn") !== mine || g !== lastWork(g.parentElement)) { g.classList.remove("live"); $(".glive", g)?.remove(); $(".gtime", g)?.remove(); $(".gnow", g)?.remove(); } });
+  $$(".agroup.live").forEach((g) => { if (g.closest(".turn") !== mine || g !== lastWork(g.parentElement)) { g.classList.remove("live"); liveDone($(".glive", g)); $(".gtime", g)?.remove(); $(".gnow", g)?.remove(); $(".gsum", g)?.classList.add("gback"); } });
   $$(".liveline").forEach((l) => { if (!r || l.closest(".turn") !== mine) l.remove(); });
   if (!r || !mine) return;
   const flow = $(".flow", mine); if (!flow) return;
