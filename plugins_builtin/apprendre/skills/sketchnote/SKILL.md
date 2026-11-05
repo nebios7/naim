@@ -46,5 +46,14 @@ pas de HTML, pas de svg à la main. Ta réponse : une phrase, puis UN bloc ```sk
 }
 ```
 
+## Invente (chaque sketchnote est unique)
+- `dessin` : une petite illustration en SVG (`viewBox="0 0 100 70"`, traits épais, 2 ou 3 couleurs) près du titre :
+  une maison, une ampoule, un cœur, une fusée, un livre… ce qui résume le sujet.
+- `croquis` (dans un bloc) : un petit dessin SVG (`viewBox="0 0 60 60"`) qui illustre CE bloc.
+- `style` : cahier (défaut), tableau (craie sur tableau noir : sciences, cours), pastel, sombre, vintage (histoire).
+- `couleur` d'un bloc, l'ordre et le mélange comparaison / étapes / blocs : compose selon le texte, pas toujours pareil.
+Si le contenu demande une autre mise en page (une frise, un cycle, un schéma annoté), tu peux inventer ta propre
+page dessinée avec un bloc ```visuel (skill visuel).
+
 ## 4. Après
 Une phrase : l'utilisateur peut demander la carte mentale (/mindmap), des fiches (/flashcards) ou une BD (/bd).

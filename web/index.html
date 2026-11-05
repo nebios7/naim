@@ -1426,6 +1426,24 @@ header#chatHeader { overflow: hidden; }
 .bdcap { margin-top: 6px; background: #fff; border: 2px solid #1f1e1d; border-radius: 3px; padding: 5px 8px; text-align: center; font: 700 12.5px/1.25 -apple-system, Helvetica, sans-serif; }
 .bdk { margin-top: 12px; border: 2px dashed #d9534f; border-radius: 10px; padding: 8px 12px; font: 13.5px/1.45 -apple-system, Helvetica, sans-serif; }
 .bdk b { color: #d9534f; } .bdk ul { margin: 4px 0 0; padding-left: 18px; }
+/* what Naim draws itself: a scene behind a panel, a doodle in a block, an illustration by a title */
+.bdc { isolation: isolate; } .bdscene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; opacity: .9; }
+.skdoodle { float: right; width: 64px; height: 64px; object-fit: contain; margin: 0 0 4px 8px; }
+.skart { display: block; max-width: 160px; max-height: 120px; margin: 0 auto 6px; }
+.mmart { display: block; max-width: 140px; max-height: 100px; margin: 0 auto 4px; }
+/* the styles Naim may choose: black and white (manga), pastel, dark, chalkboard, retro */
+.bd.t-nb .bdc { --bg: #fff !important; background: #fff; } .bd.t-nb .bdp { filter: grayscale(1) contrast(1.4); } .bd.t-nb .bdt { font-family: "Marker Felt", -apple-system, sans-serif; }
+.bd.t-pastel .bdc { border-width: 2px; border-color: #6b665b; border-radius: 14px; } .bd.t-pastel .bdc { background: color-mix(in srgb, var(--bg) 55%, #fff); }
+.bd.t-dark { background: #1d1c1a; color: #f2efe8; } .bd.t-dark .bdc { border-color: #f2efe8; background: color-mix(in srgb, var(--bg) 22%, #262522); } .bd.t-dark .bdk { color: #f2efe8; }
+.bd.t-retro { background: #f4e9cf; } .bd.t-retro .bdc { background: color-mix(in srgb, var(--bg) 60%, #e9dcb8); border-color: #5a4630; } .bd.t-retro .bdt { font-family: "American Typewriter", Georgia, serif; }
+.sk.t-chalk { background: #26332d; background-image: none; color: #f1efe6; } .sk.t-chalk .skt span { background: none; color: #ffe27a; font-family: "Chalkboard SE", sans-serif; }
+.sk.t-chalk .skb, .sk.t-chalk .skc, .sk.t-chalk .skr, .sk.t-chalk .skvsb { background: transparent; border-color: #f1efe6; color: #f1efe6; } .sk.t-chalk .sks, .sk.t-chalk .skx { color: #cfd8d1; }
+.sk.t-chalk, .sk.t-chalk b, .sk.t-chalk li, .sk.t-chalk p { font-family: "Chalkboard SE", -apple-system, sans-serif; } .sk.t-chalk .ski { background: transparent; }
+.sk.t-dark { background: #1d1c1a; background-image: none; color: #f2efe8; } .sk.t-dark .skb, .sk.t-dark .skc, .sk.t-dark .skr, .sk.t-dark .skvsb { background: #262522; border-color: #f2efe8; color: #f2efe8; } .sk.t-dark .skt span { color: #1f1e1d; }
+.sk.t-pastel { background: #fbf6ff; background-image: none; } .sk.t-pastel .skb { border-color: color-mix(in srgb, var(--c) 60%, #fff); }
+.sk.t-retro { background: #f4e9cf; background-image: none; } .sk.t-retro, .sk.t-retro b { font-family: "American Typewriter", Georgia, serif !important; }
+.fc.t-dark .fcc { background: #262522; color: #f2efe8; } .fc.t-dark .fcc[aria-pressed="true"] { background: #33302a; }
+.fc.t-pastel .fcc { background: color-mix(in srgb, var(--c) 12%, #fff); }
 /* a sketchnote: notebook paper, a title in highlighter, hand underlines in colour, A versus B, steps with arrows */
 .sk { margin: 12px 0; color: #24221f; border-radius: 12px; padding: 16px 18px 16px; background: #fffdf5;
   background-image: repeating-linear-gradient(transparent 0 31px, #ece6d6 31px 32px); }
@@ -3033,6 +3051,14 @@ function jsonBlock(body, open) {
   if (end < 0) return null;
   try { return { data: JSON.parse(body.slice(i0, end + 1)), after: body.slice(end + 1).trim() }; } catch (e) { return open ? null : null; }
 }
+// what Naim invents itself: an SVG scene, a doodle, an illustration — drawn as an image (no script can run in it)
+function ownSvg(svg, cls) {
+  svg = String(svg || "").trim();
+  if (!/^<svg[\s>]/i.test(svg)) return "";
+  if (!/xmlns=/.test(svg)) svg = svg.replace(/^<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  return `<img class="${cls}" alt="" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}">`;
+}
+const styleCls = (q) => { const t = String(q.style || "").toLowerCase(); return /noir|manga|n&b|nb\b/.test(t) ? " t-nb" : /pastel/.test(t) ? " t-pastel" : /sombre|nuit|dark/.test(t) ? " t-dark" : /tableau|craie|chalk/.test(t) ? " t-chalk" : /vintage|ancien|r[ée]tro/.test(t) ? " t-retro" : ""; };
 // ---- an educational comic strip: coloured panels, whole characters in line art with an accessory, a caption box,
 // speech bubbles pointing at who speaks
 const BD_BG = ["#fde4a0", "#bfe0f7", "#f9cbd6", "#cdeccf", "#e3d6f6", "#fbd8b8"];
@@ -3077,11 +3103,12 @@ function bdHtml(q) {
       return `<div class="bdb ${s}${b.pensee ? " th" : ""}${t.length <= 3 ? " sm" : ""}${k == null ? " off" : ""}">${esc(t)}</div>`; }).join("");
     const figs = cast.map((k) => `<div class="bdf">${bdPerson(people[k], k, (bulles.find((b) => who(b.qui) === k) || {}).humeur)}</div>`).join("");
     const cap = c.legende || c.narration;
-    return `<div class="bdc" style="--bg:${c.fond || BD_BG[n % BD_BG.length]}">`
+    return `<div class="bdc" style="--bg:${c.fond || BD_BG[n % BD_BG.length]}">${ownSvg(c.scene || c.decor, "bdscene")}`
       + `<div class="bdbs">${bubbles}</div><div class="bdfs">${figs}</div>${cap ? `<div class="bdcap">${esc(cap)}</div>` : ""}</div>`;
   };
   const keep = Array.isArray(q.a_retenir) ? q.a_retenir : q.a_retenir ? [q.a_retenir] : [];
-  return `<figure class="bd">${q.titre ? `<figcaption class="bdt">${esc(q.titre)}</figcaption>` : ""}<div class="bdg">${cases.map(panel).join("")}</div>`
+  const cols = +q.colonnes ? Math.max(1, Math.min(4, Math.round(+q.colonnes))) : 0;  // none asked: as many as fit
+  return `<figure class="bd${styleCls(q)}">${q.titre ? `<figcaption class="bdt">${esc(q.titre)}</figcaption>` : ""}<div class="bdg"${cols ? ` style="grid-template-columns:repeat(${cols},1fr)"` : ""}>${cases.map(panel).join("")}</div>`
     + (keep.length ? `<div class="bdk"><b>À retenir</b><ul>${keep.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>` : "") + `</figure>`;
 }
 // ---- a sketchnote: notebook paper, a highlighted title, A versus B, a chain of steps with arrows, blocks, « à retenir »
@@ -3094,8 +3121,8 @@ function sketchHtml(q) {
   const side = (x, col) => x ? `<div class="skside" style="--c:${col}"><b>${esc(x.titre || "")}</b>${skLine(col)}<p>${esc(x.texte || "")}</p></div>` : "";
   const card = (b, i) => { const col = b.couleur || SK_COLORS[(i + 2) % SK_COLORS.length];
     return `<div class="skb" style="--c:${col};--r:${(i % 2 ? 0.6 : -0.5)}deg"><div class="skh"><span class="ski">${ic(b.icone)}</span><b>${esc(b.titre || "")}</b></div>${skLine(col)}`
-      + `<ul>${(b.points || []).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>${b.exemple ? `<div class="skx">${esc(b.exemple)}</div>` : ""}</div>`; };
-  return `<figure class="sk"><div class="skt"><span>${esc(q.titre || "")}</span></div>`
+      + `${ownSvg(b.croquis, "skdoodle")}<ul>${(b.points || []).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>${b.exemple ? `<div class="skx">${esc(b.exemple)}</div>` : ""}</div>`; };
+  return `<figure class="sk${styleCls(q)}">${ownSvg(q.dessin || q.illustration, "skart")}<div class="skt"><span>${esc(q.titre || "")}</span></div>`
     + (q.sous_titre ? `<div class="sks">${esc(q.sous_titre)}</div>` : "")
     + (q.idee_centrale ? `<div class="skc">${esc(q.idee_centrale)}</div>` : "")
     + (cmp ? `<div class="skvs">${side(cmp.gauche, "#2f9a6f")}<span class="skvsb">VS</span>${side(cmp.droite, "#d9534f")}</div>` : "")
@@ -3135,7 +3162,7 @@ function mindHtml(q) {
   const lines = String(q.centre || q.titre || "").toUpperCase().split(/\s+/).reduce((a, w) => { const l = a[a.length - 1]; if (l && (l + " " + w).length <= 14) a[a.length - 1] = l + " " + w; else a.push(w); return a; }, []).slice(0, 3);
   const center = `<ellipse cx="${cx}" cy="${cy}" rx="92" ry="${30 + lines.length * 9}" fill="#fff" stroke="#e8e3d8" stroke-width="2"/>`
     + lines.map((l, i) => `<text x="${cx}" y="${cy + 6 + (i - (lines.length - 1) / 2) * 19}" text-anchor="middle" font-weight="800" font-size="17" fill="#1f1e1d">${esc(l)}</text>`).join("");
-  return `<figure class="mm"><svg viewBox="0 0 ${W} ${H}" font-family="-apple-system, 'SF Pro Text', Helvetica, Arial, sans-serif">${links}${nodes}${center}</svg>`
+  return `<figure class="mm${styleCls(q)}">${ownSvg(q.dessin, "mmart")}<svg viewBox="0 0 ${W} ${H}" font-family="-apple-system, 'SF Pro Text', Helvetica, Arial, sans-serif">${links}${nodes}${center}</svg>`
     + (q.a_retenir ? `<figcaption>${esc(Array.isArray(q.a_retenir) ? q.a_retenir.join(" · ") : q.a_retenir)}</figcaption>` : "") + `</figure>`;
 }
 // ---- flashcards alone: a grid of cards with a coloured band, each turns over on a click (question / answer)
@@ -3143,8 +3170,8 @@ const FC_COLORS = ["#3fb68b", "#4d8fe0", "#e8a23a", "#e0609a", "#f2c230", "#9a6e
 function flashHtml(q) {
   const cards = (q.cartes || []).filter((c) => c && (c.recto || c.verso));
   if (!cards.length) return null;
-  return `<div class="fc">${q.titre ? `<div class="fct">${esc(q.titre)}</div>` : ""}<div class="fcg">${cards.map((c, i) =>
-    `<button class="fcc" style="--c:${FC_COLORS[i % FC_COLORS.length]}" data-fc aria-pressed="false"><span class="fcf"><small>FICHE ${i + 1}</small><b>${esc(c.recto || "")}</b></span>`
+  return `<div class="fc${styleCls(q)}">${q.titre ? `<div class="fct">${esc(q.titre)}</div>` : ""}<div class="fcg">${cards.map((c, i) =>
+    `<button class="fcc" style="--c:${c.couleur || FC_COLORS[i % FC_COLORS.length]}" data-fc aria-pressed="false"><span class="fcf"><small>FICHE ${i + 1}</small><b>${esc(c.recto || "")}</b></span>`
     + `<span class="fcb"><small>RÉPONSE</small><b>${esc(c.verso || "")}</b></span></button>`).join("")}</div>`
     + `<div class="fcfoot">${cards.length} fiche${cards.length > 1 ? "s" : ""} · clique sur une fiche pour la retourner</div></div>`;
 }

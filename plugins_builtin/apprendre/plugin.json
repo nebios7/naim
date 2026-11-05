@@ -1,6 +1,6 @@
 {
   "name": "apprendre",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Apprendre un cours, un livre ou un document autrement, directement dans la conversation : fiches de révision à retourner, carte mentale, sketchnote dessiné, BD éducative avec des personnages qui expliquent.",
   "skills": "skills",
   "triggers": {

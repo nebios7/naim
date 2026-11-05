@@ -52,5 +52,19 @@ une phrase.
 }
 ```
 
+## Invente (chaque BD est unique)
+Le cadre est dessiné par l'application ; toi, tu inventes ce qui rend CETTE BD vivante, d'après le sujet :
+- `scene` (dans une case) : le décor, que tu dessines toi-même en SVG `viewBox="0 0 200 150"` — une salle du trône,
+  une rue la nuit, un laboratoire, une banque, une forêt, l'intérieur du corps… Formes simples et pleines, couleurs
+  douces, rien en bas au centre (les personnages s'y tiennent), pas de texte. Il remplace la couleur de fond.
+- `style` (de la page) : couleur (défaut), pastel, noir et blanc (manga, polar), sombre (mystère, espace), vintage
+  (histoire) — choisis selon le sujet et le ton.
+- `colonnes` (1 à 4) : 1 pour une histoire lue case par case, 3 ou 4 pour une planche de règles.
+- Les personnages, leurs couleurs et accessoires, le ton des répliques, les fonds de case (`fond`) : à toi de les
+  choisir pour que deux BD sur deux sujets ne se ressemblent pas.
+Exemple de décor : `"scene": "<svg viewBox=\"0 0 200 150\"><rect width=\"200\" height=\"150\" fill=\"#2c3e66\"/><circle cx=\"165\" cy=\"28\" r=\"12\" fill=\"#f6e7a6\"/><rect x=\"0\" y=\"118\" width=\"200\" height=\"32\" fill=\"#3b4a6b\"/></svg>"`
+Si le sujet demande vraiment une autre forme (un roman-photo, une frise, un storyboard), tu peux inventer ta propre
+page avec un bloc ```visuel (skill visuel) à la place.
+
 ## 4. Après
 Une phrase : l'utilisateur peut demander la suite, des fiches (/flashcards) ou un quiz (/quiz) sur la BD.

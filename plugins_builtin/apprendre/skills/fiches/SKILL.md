@@ -30,6 +30,10 @@ Ta réponse : une phrase, puis UN bloc ```quiz avec SEULEMENT des `cartes` (pas 
 }
 ```
 
+## Invente
+- `couleur` d'une fiche (une couleur par thème : définitions en bleu, dates en orange…), `style` (pastel, sombre).
+- Varie les fiches : questions, définitions, « vrai ou faux ? », compléter une phrase, une formule à retrouver.
+
 ## 4. Après
 Une phrase : combien de fiches, et que l'utilisateur peut demander un quiz (/quiz) sur les mêmes notions.
 Ne redonne pas les fiches en texte : les cartes suffisent.

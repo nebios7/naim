@@ -32,6 +32,11 @@ pas de Mermaid. Ta réponse : une phrase, puis UN bloc ```carte (du JSON), puis 
 }
 ```
 
+## Invente
+- `couleur` de chaque branche (sinon une palette vive est choisie), `style` (sombre, pastel…), `dessin` : une petite
+  illustration SVG (`viewBox="0 0 100 70"`) au-dessus de la carte qui résume le sujet.
+- Le nombre de branches, leurs titres et leurs détails suivent le texte : une carte n'en copie jamais une autre.
+
 ## 4. Après
 Une phrase : l'utilisateur peut demander des fiches (/flashcards), un sketchnote (/sketchnotes) ou une BD (/bd)
 du même texte.
