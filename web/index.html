@@ -1988,8 +1988,12 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .todos .ti.done span:last-child, .todos .ti.skipped span:last-child { color: var(--muted); }
 .todos .ti.skipped span:last-child::after { content: none !important; }
 @media (prefers-reduced-motion: reduce) { .todos .ti.in_progress .tm svg { animation: none; } }
-.bubble pre.ucode { margin: 6px 0; padding: 9px 12px; background: var(--code); border: 1px solid var(--line); border-radius: 10px;
-  white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.55 "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; }
+/* code in your message: no box in the box. Among words, a quiet band of code; alone, the bubble itself is the code */
+.bubble pre.ucode { margin: 8px -4px; padding: 8px 12px; background: color-mix(in srgb, #000 22%, transparent); border: 0; border-radius: 8px;
+  white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; }
+:root[data-theme="light"] .bubble pre.ucode { background: color-mix(in srgb, #000 5%, transparent); }
+.bubble.onlycode { padding-top: 10px; padding-bottom: 10px; }
+.bubble.onlycode pre.ucode { margin: 0; padding: 0; background: none; }
 .bubble code.uinline { font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; font-size: .9em; background: var(--code);
   border: 1px solid var(--line); padding: 0 5px; border-radius: 5px; }
 /* rating and secondary actions: visible on the latest answer, on hover elsewhere */
@@ -2765,44 +2769,102 @@ const SHELL_START = /^\s*(\$ )?(python3?|pip3?|cd|grep|head|tail|sed|awk|cat|ls|
 // when there is a formula or code in it; anything else is pasted as plain text, as before.
 // MathML back to LaTeX: Safari / WebKit leave the hidden LaTeX out of a copy, but keep the formula's structure
 // (powers, fractions, roots, letters, signs); it is read back into the LaTeX that would have written it
-const MO_TEX = { "−": "-", "×": "\\times ", "·": "\\cdot ", "⋅": "\\cdot ", "÷": "\\div ", "±": "\\pm ", "∓": "\\mp ", "≤": "\\le ", "≥": "\\ge ",
-  "≠": "\\neq ", "≈": "\\approx ", "≡": "\\equiv ", "→": "\\to ", "⇒": "\\Rightarrow ", "⇔": "\\Leftrightarrow ", "∞": "\\infty ", "∈": "\\in ",
-  "∉": "\\notin ", "⊂": "\\subset ", "∪": "\\cup ", "∩": "\\cap ", "∀": "\\forall ", "∃": "\\exists ", "∑": "\\sum ", "∏": "\\prod ", "∫": "\\int ",
-  "∂": "\\partial ", "∇": "\\nabla ", "′": "'", "…": "\\ldots ", "⋯": "\\cdots ", "∘": "\\circ ", "⟨": "\\langle ", "⟩": "\\rangle ", "∣": "\\mid ",
-  "{": "\\{", "}": "\\}", "\u2061": "", "\u2062": "", "\u2063": "" };
-const GREEK = "αβγδεζηθικλμνξοπρστυφχψωΓΔΘΛΞΠΣΦΨΩ", GREEK_TEX = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","o","pi","rho","sigma","tau","upsilon","phi","chi","psi","omega","Gamma","Delta","Theta","Lambda","Xi","Pi","Sigma","Phi","Psi","Omega"];
-const BB = { "ℂ": "C", "ℝ": "R", "ℕ": "N", "ℤ": "Z", "ℚ": "Q" };
+const SYM_TEX = { "−": "-", "×": "\\times ", "·": "\\cdot ", "⋅": "\\cdot ", "÷": "\\div ", "±": "\\pm ", "∓": "\\mp ", "≤": "\\le ", "≥": "\\ge ",
+  "≠": "\\neq ", "≈": "\\approx ", "≡": "\\equiv ", "∼": "\\sim ", "≃": "\\simeq ", "∝": "\\propto ", "→": "\\to ", "←": "\\leftarrow ", "↦": "\\mapsto ",
+  "⇒": "\\Rightarrow ", "⇐": "\\Leftarrow ", "⇔": "\\Leftrightarrow ", "⟶": "\\longrightarrow ", "↔": "\\leftrightarrow ", "∞": "\\infty ", "∈": "\\in ",
+  "∉": "\\notin ", "∋": "\\ni ", "⊂": "\\subset ", "⊆": "\\subseteq ", "⊃": "\\supset ", "⊇": "\\supseteq ", "∪": "\\cup ", "∩": "\\cap ", "∖": "\\setminus ",
+  "∅": "\\emptyset ", "∀": "\\forall ", "∃": "\\exists ", "∄": "\\nexists ", "¬": "\\neg ", "∧": "\\land ", "∨": "\\lor ", "∑": "\\sum ", "∏": "\\prod ",
+  "∫": "\\int ", "∬": "\\iint ", "∭": "\\iiint ", "∮": "\\oint ", "∂": "\\partial ", "∇": "\\nabla ", "′": "'", "″": "''", "…": "\\ldots ", "⋯": "\\cdots ",
+  "⋮": "\\vdots ", "⋱": "\\ddots ", "∘": "\\circ ", "⟨": "\\langle ", "⟩": "\\rangle ", "∣": "|", "‖": "\\| ", "∥": "\\parallel ", "⊥": "\\perp ", "∠": "\\angle ",
+  "°": "^\\circ ", "ℏ": "\\hbar ", "ℓ": "\\ell ", "⊕": "\\oplus ", "⊗": "\\otimes ", "†": "\\dagger ", "★": "\\star ", "⌊": "\\lfloor ", "⌋": "\\rfloor ",
+  "⌈": "\\lceil ", "⌉": "\\rceil ", "{": "\\{", "}": "\\}", "%": "\\%", "#": "\\#", "&": "\\&", "⁡": "", "⁢": "", "⁣": "", " ": "~" };
+const GREEK = { α: "alpha", β: "beta", γ: "gamma", δ: "delta", ε: "varepsilon", ϵ: "epsilon", ζ: "zeta", η: "eta", θ: "theta", ϑ: "vartheta", ι: "iota",
+  κ: "kappa", λ: "lambda", μ: "mu", ν: "nu", ξ: "xi", π: "pi", ϖ: "varpi", ρ: "rho", ϱ: "varrho", σ: "sigma", ς: "varsigma", τ: "tau", υ: "upsilon",
+  φ: "varphi", ϕ: "phi", χ: "chi", ψ: "psi", ω: "omega", Γ: "Gamma", Δ: "Delta", Θ: "Theta", Λ: "Lambda", Ξ: "Xi", Π: "Pi", Σ: "Sigma", Υ: "Upsilon",
+  Φ: "Phi", Ψ: "Psi", Ω: "Omega" };
+const BB = { "ℂ": "C", "ℝ": "R", "ℕ": "N", "ℤ": "Z", "ℚ": "Q", "ℙ": "P" };
+const FUNCS = /^(sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|sinh|cosh|tanh|ln|log|lg|exp|lim|liminf|limsup|max|min|sup|inf|det|dim|ker|deg|arg|gcd|Pr|mod)$/;
+const VARIANT = { normal: "mathrm", bold: "mathbf", "bold-italic": "boldsymbol", "double-struck": "mathbb", script: "mathcal", fraktur: "mathfrak", "sans-serif": "mathsf", monospace: "mathtt" };
+const ACCENT = { "^": "hat", "ˆ": "hat", "¯": "bar", "‾": "overline", "→": "vec", "⃗": "vec", "~": "tilde", "˜": "tilde", "˙": "dot", "¨": "ddot", "ˇ": "check", "˘": "breve", "⏞": "overbrace", "⌢": "overset{\\frown}" };
+const FENCE_ENV = { "()": "pmatrix", "[]": "bmatrix", "||": "vmatrix", "∣∣": "vmatrix", "‖‖": "Vmatrix", "\\{\\}": "Bmatrix" };
+const sym = (t) => [...t].map((c) => SYM_TEX[c] ?? (GREEK[c] ? `\\${GREEK[c]} ` : BB[c] ? `\\mathbb{${BB[c]}}` : c)).join("");
+// a base or an exponent: one sign stays bare, a command (\sum, \int, \log) too, anything longer goes in braces
+const grp = (t) => { t = t.trim(); return t.length === 1 || /^\\[a-zA-Z]+$/.test(t) ? t : /^\\[a-zA-Z]+ $/.test(t + " ") && !/\s/.test(t) ? t : `{${t}}`; };
 function mathmlTex(n) {
-  if (n.nodeType === 3) return n.textContent.trim();
+  if (n.nodeType === 3) return sym(n.textContent.trim());
   if (n.nodeType !== 1) return "";
-  const tag = n.localName, kids = [...n.children], all = () => kids.map(mathmlTex).join(""), g = (k) => { const t = mathmlTex(k); return t.length === 1 ? t : `{${t}}`; };
-  const txt = (n.textContent || "").trim();
+  const tag = n.localName, kids = [...n.children], txt = (n.textContent || "").trim();
+  const T = (k) => (k ? mathmlTex(k) : "").trim(), all = () => kids.map(mathmlTex).join("");
   switch (tag) {
-    case "annotation": case "annotation-xml": return "";
+    case "annotation": case "annotation-xml": case "mphantom": return "";
     case "semantics": return kids[0] ? mathmlTex(kids[0]) : "";
-    case "mi": {
-      if (BB[txt]) return `\\mathbb{${BB[txt]}}`;
-      if (n.getAttribute("mathvariant") === "double-struck") return `\\mathbb{${txt}}`;
-      const k = GREEK.indexOf(txt); if (k >= 0) return `\\${GREEK_TEX[k]} `;
-      return txt.length > 1 ? (/^(sin|cos|tan|ln|log|exp|lim|max|min|det|arg|sup|inf)$/.test(txt) ? `\\${txt} ` : `\\mathrm{${txt}}`) : txt;
+    case "mi": case "mn": {
+      const v = n.getAttribute("mathvariant");
+      if (tag === "mi" && FUNCS.test(txt)) return `\\${txt} `;
+      if (v && VARIANT[v] && /^[A-Za-z0-9]+$/.test(txt) && !(v === "normal" && tag === "mn")) return `\\${VARIANT[v]}{${txt}}`;
+      if (tag === "mi" && txt.length > 1 && /^[A-Za-z]+$/.test(txt)) return `\\mathrm{${txt}}`;
+      return sym(txt);
     }
-    case "mn": return txt;
-    case "mo": return MO_TEX[txt] ?? txt;
-    case "mtext": return txt ? `\\text{${txt}}` : " ";
-    case "mspace": return " ";
-    case "msup": return `${g(kids[0])}^${g(kids[1])}`;
-    case "msub": return `${g(kids[0])}_${g(kids[1])}`;
-    case "msubsup": return `${g(kids[0])}_${g(kids[1])}^${g(kids[2])}`;
-    case "mfrac": return `\\frac{${mathmlTex(kids[0])}}{${mathmlTex(kids[1])}}`;
-    case "msqrt": return `\\sqrt{${all()}}`;
-    case "mroot": return `\\sqrt[${mathmlTex(kids[1])}]{${mathmlTex(kids[0])}}`;
-    case "mover": { const a = (kids[1]?.textContent || "").trim(), acc = { "^": "hat", "ˆ": "hat", "¯": "bar", "‾": "overline", "→": "vec", "⃗": "vec", "~": "tilde", "˙": "dot" }[a];
-      return acc ? `\\${acc}{${mathmlTex(kids[0])}}` : `\\overset{${mathmlTex(kids[1])}}{${mathmlTex(kids[0])}}`; }
-    case "munder": return `\\underset{${mathmlTex(kids[1])}}{${mathmlTex(kids[0])}}`;
-    case "munderover": return `${g(kids[0])}_${g(kids[1])}^${g(kids[2])}`;
-    case "mtable": return `\\begin{matrix}${kids.map((r) => [...r.children].map(mathmlTex).join(" & ")).join(" \\\\ ")}\\end{matrix}`;
-    default: return all();
+    case "mo": return sym(txt);
+    case "ms": return `\\text{"${txt}"}`;
+    case "mtext": { const t = (n.textContent || "").replace(/ /g, " "); return t.trim() ? `\\text{${t}}` : "\\ "; }
+    case "mspace": { const w = parseFloat(n.getAttribute("width")) || 0; return w >= 0.9 ? "\\quad " : w >= 0.3 ? "\\ " : w >= 0.15 ? "\\, " : " "; }
+    case "msup": {
+      const e = T(kids[1]);
+      if (/^'+$/.test(e)) return T(kids[0]) + e;  // f′ : a prime, not a power
+      if (e === "^\\circ") return T(kids[0]) + e;
+      return `${grp(T(kids[0]))}^${grp(e)}`;
+    }
+    case "msub": return `${grp(T(kids[0]))}_${grp(T(kids[1]))}`;
+    case "msubsup": case "munderover": return `${grp(T(kids[0]))}_${grp(T(kids[1]))}^${grp(T(kids[2]))}`;
+    case "mfrac": return parseFloat(n.getAttribute("linethickness")) === 0 ? `\\atop{${T(kids[0])}}{${T(kids[1])}}` : `\\frac{${T(kids[0])}}{${T(kids[1])}}`;
+    case "msqrt": return `\\sqrt{${all().trim()}}`;
+    case "mroot": return `\\sqrt[${T(kids[1])}]{${T(kids[0])}}`;
+    case "mover": {
+      const a = (kids[1]?.textContent || "").trim(), acc = ACCENT[a];
+      if (acc) return acc.includes("{") ? `\\${acc}{${T(kids[0])}}` : `\\${acc}{${T(kids[0])}}`;
+      if (/^(∑|∏|lim|max|min)$/.test(T(kids[0]).replace(/\\|\s/g, "")) || kids[0]?.localName === "mo") return `${grp(T(kids[0]))}^${grp(T(kids[1]))}`;
+      return `\\overset{${T(kids[1])}}{${T(kids[0])}}`;
+    }
+    case "munder": {
+      const a = (kids[1]?.textContent || "").trim();
+      if (a === "‾" || a === "_" || a === "¯") return `\\underline{${T(kids[0])}}`;
+      if (a === "⏟") return `\\underbrace{${T(kids[0])}}`;
+      if (kids[0]?.localName === "mo" || FUNCS.test((kids[0]?.textContent || "").trim())) return `${grp(T(kids[0]))}_${grp(T(kids[1]))}`;
+      return `\\underset{${T(kids[1])}}{${T(kids[0])}}`;
+    }
+    case "menclose": return `\\boxed{${all().trim()}}`;
+    case "mtable": return matrixTex(n, "matrix");
+    case "mfenced": {
+      const o = n.getAttribute("open") ?? "(", c = n.getAttribute("close") ?? ")";
+      const t = kids.length === 1 && kids[0].localName === "mtable" && FENCE_ENV[o + c];
+      return t ? matrixTex(kids[0], t) : `\\left${o === "{" ? "\\{" : o || "."}${kids.map(mathmlTex).join(",")}\\right${c === "}" ? "\\}" : c || "."}`;
+    }
+    default: return rowTex(kids);
   }
+}
+function matrixTex(t, env) {
+  const rows = [...t.children].map((r) => [...r.children].map((c) => mathmlTex(c).trim()).join(" & "));
+  return `\\begin{${env}}${rows.join(" \\\\ ")}\\end{${env}}`;
+}
+// a row: a matrix between brackets is one environment (pmatrix, bmatrix, cases), ( a over b without bar ) is a binomial
+function rowTex(kids) {
+  let out = "";
+  for (let i = 0; i < kids.length; i++) {
+    const k = kids[i], o = k.localName === "mo" ? k.textContent.trim() : null, nx = kids[i + 1], c = kids[i + 2];
+    const inner = nx && (nx.localName === "mtable" ? nx : nx.localName === "mrow" && nx.children.length === 1 && nx.children[0].localName === "mtable" ? nx.children[0] : null);
+    if (o && inner) {
+      const close = c?.localName === "mo" ? c.textContent.trim() : "";
+      if (o === "{" && !close) { out += matrixTex(inner, "cases"); i += 1; continue; }
+      const env = FENCE_ENV[o + close] || FENCE_ENV[sym(o) + sym(close)];
+      if (env) { out += matrixTex(inner, env); i += 2; continue; }
+    }
+    if (o === "(" && nx?.localName === "mfrac" && parseFloat(nx.getAttribute("linethickness")) === 0 && c?.textContent.trim() === ")") {
+      out += `\\binom{${mathmlTex(nx.children[0]).trim()}}{${mathmlTex(nx.children[1]).trim()}}`; i += 2; continue;
+    }
+    out += mathmlTex(k);
+  }
+  return out;
 }
 // plain text that is code (several lines with the marks of code): pasted as a block in its language
 function pastedCode(t) {
@@ -4377,6 +4439,7 @@ function addUser(m, idx) {
   d.innerHTML = `${imgs.length ? `<div class="imgs">${imgs.map((a) => `<img src="data:${a.mime};base64,${a.data}" alt="${esc(a.name)}">`).join("")}</div>` : ""}${files.length ? `<div class="atts">${attChips(files)}</div>` : ""}<div class="bubble"></div>
     <div class="msgacts">${S.show_time && m.time ? `<span class="time">${fmtTime(m.time)}</span>` : ""}<button class="icon" data-a="copy" title="Copier">⧉</button><button class="icon" data-a="edit" title="Modifier et renvoyer">✎</button></div>`;
   $(".bubble", d).innerHTML = userHtml(m.content);
+  const ub = $(".bubble", d); ub.classList.toggle("onlycode", ub.children.length === 1 && ub.firstElementChild.matches("pre.ucode") && !ub.textContent.replace(ub.firstElementChild.textContent, "").trim());
   if (!m.content) $(".bubble", d).hidden = true;
   $$(".imgs img", d).forEach((im) => (im.onclick = () => lightbox(im.src)));
   $("[data-a=copy]", d).onclick = () => { copyText(m.content); toast("Copié"); };
