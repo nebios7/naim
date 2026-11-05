@@ -501,7 +501,9 @@ details.think div { white-space: pre-wrap; border-left: 2px solid var(--line); p
 .dview table { width: 100%; border-collapse: collapse; font: 13.5px/1.75 ui-monospace, "SF Mono", Menlo, monospace; }
 .dview td { padding: 0 14px 0 0; vertical-align: top; }
 .dview td.n { width: 1%; min-width: 38px; padding: 0 14px 0 12px; text-align: right; color: var(--muted); opacity: .75; user-select: none;
-  font-variant-numeric: tabular-nums; border-left: 4px solid transparent; }
+  font-variant-numeric: tabular-nums; border-left: 4px solid transparent;
+  white-space: nowrap; overflow-wrap: normal; word-break: keep-all; font-size: 12.5px; }  /* a number is never cut in two (36 shown as 3 / 6) */
+.dview td.c { font-feature-settings: "liga" 0, "calt" 0; letter-spacing: 0; -webkit-font-smoothing: antialiased; }
 .dview td.c { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); padding-left: 2ch; text-indent: -2ch; }
 .dview tr.a td { background: var(--dv-add); } .dview tr.a td.n { border-left-color: var(--dv-addbar); }
 .dview tr.d td { background: var(--dv-del); } .dview tr.d td.n { border-left-color: var(--dv-delbar); }
