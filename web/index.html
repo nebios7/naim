@@ -1279,6 +1279,15 @@ header#chatHeader { border-bottom: 1px solid var(--line); background: var(--bg);
 .md code { border-radius: 4px; }
 .turn { animation: naimIn 180ms var(--ease) both; }
 @keyframes naimIn { from { opacity: 0; transform: translateY(4px); } }
+/* the message just sent rises from the input box, as if it left it */
+.turn.user.sent { animation: naimSent .42s cubic-bezier(.2, .85, .25, 1.08) both; transform-origin: bottom right; }
+@keyframes naimSent { from { opacity: 0; transform: translateY(26px) scale(.96); } 60% { opacity: 1; } }
+/* the round button: its sign (send / stop) pops in when it changes */
+#send.swap { animation: sendSwap .3s cubic-bezier(.3, 1.5, .5, 1); }
+@keyframes sendSwap { from { transform: scale(.7) rotate(-20deg); } }
+/* the conversation chosen in the list: its mark and colour glide in */
+.conv { transition: background .18s var(--ease, ease), color .18s, box-shadow .22s var(--ease, ease); }
+@media (prefers-reduced-motion: reduce) { .turn.user.sent, #send.swap { animation: none; } }
 
 /* menus, toasts, panels: they open from where you clicked */
 .menu, #ctxmenu { border-radius: var(--r-l); border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); padding: 5px; transform-origin: top left; animation: naimPop 120ms var(--ease) both; }
@@ -4271,7 +4280,7 @@ function addUser(m, idx) {
       renderThread(); send(text, atts);
     };
   };
-  $("#thread").appendChild(d);
+  $("#thread").appendChild(d); return d;
 }
 
 // ---- friendly action labels (no raw tool names in the UI)
@@ -5168,7 +5177,7 @@ async function send(textArg, attsArg, opts = {}) {
   if (!textArg) { $("#input").value = ""; pending = []; renderPending(); autoGrow(); }
   if ($("#thread .empty")) $("#thread").innerHTML = "";
   leaveHome();
-  addUser(userMsg, current.messages.length - 2);
+  addUser(userMsg, current.messages.length - 2)?.classList.add("sent");
   const v = addBot(reply, current.messages.length - 1);
   v.typing(S.mode === "agent" ? "Naim réfléchit…" : "Naim écrit…");
   updateTitle();
@@ -5615,7 +5624,8 @@ function guidePlaceholder() {
 }
 function updateSendBtn() {
   const typing = !!$("#input").value.trim(), busy = !!curRun();
-  $("#send").textContent = busy && !typing ? "■" : "↑";
+  const sign = busy && !typing ? "■" : "↑", sb = $("#send");
+  if (sb.textContent !== sign) { sb.textContent = sign; sb.classList.remove("swap"); void sb.offsetWidth; sb.classList.add("swap"); }
   $("#send").title = !busy ? "Envoyer" : typing ? "Envoyer à Naim pendant qu'il travaille (il en tient compte sans s'arrêter)" : "Arrêter (Échap)";
   // nothing typed, nothing attached, nothing running: the round button is the voice (as in a pro assistant)
   document.body.classList.toggle("voicefirst", !typing && !busy && !(typeof pending !== "undefined" && pending.length));
