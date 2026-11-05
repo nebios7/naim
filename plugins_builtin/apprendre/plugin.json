@@ -1,0 +1,45 @@
+{
+  "name": "apprendre",
+  "version": "1.1",
+  "description": "Apprendre un cours, un livre ou un document autrement, directement dans la conversation : fiches de révision à retourner, carte mentale, sketchnote dessiné, BD éducative avec des personnages qui expliquent.",
+  "skills": "skills",
+  "triggers": {
+    "fiches": "\\b(fiches? (de r[ée]vision|m[ée]moire)|flash ?cards?|cartes? (de r[ée]vision|[àa] retourner)|/flashcards?)\\b",
+    "carte-mentale": "\\b(cartes? mentales?|mind ?maps?|carte heuristique|sch[ée]ma heuristique|arbre des id[ée]es|/mindmap)\\b",
+    "sketchnote": "\\b(sketch ?notes?|sketchnoting|notes? (dessin[ée]es|visuelles|illustr[ée]es)|prise de notes? visuelle|/sketchnotes?)\\b",
+    "bd-educative": "\\b(bandes? dessin[ée]es?|(une|en|forme de|petite) bd\\b(?!\\s*(sql|mysql|postgre\\w*|sqlite|de donn\\w*|relationnelle))|comics?|educational ?comics?|histoire (illustr[ée]e|en images)|/educationalcomics?|/bd)\\b"
+  },
+  "commands": [
+    {
+      "cmd": "/flashcards",
+      "arg": "[sujet ou nombre]",
+      "description": "Des fiches de révision à retourner, tirées du texte ou du document de la conversation",
+      "prompt": "Avec le skill fiches, fais des fiches de révision (recto / verso) à partir du texte, du livre ou du document de cette conversation (ou de ce sujet) :"
+    },
+    {
+      "cmd": "/mindmap",
+      "arg": "[sujet]",
+      "description": "La carte mentale du texte ou du document de la conversation",
+      "prompt": "Avec le skill carte-mentale, fais la carte mentale du texte, du livre ou du document de cette conversation (ou de ce sujet) :"
+    },
+    {
+      "cmd": "/sketchnotes",
+      "arg": "[sujet]",
+      "description": "Un sketchnote dessiné : l'idée centrale, les blocs clés, à retenir",
+      "prompt": "Avec le skill sketchnote, fais un sketchnote du texte, du livre ou du document de cette conversation (ou de ce sujet) :"
+    },
+    {
+      "cmd": "/educationalcomics",
+      "arg": "[sujet]",
+      "description": "Une BD éducative : des personnages expliquent le contenu en quelques cases",
+      "prompt": "Avec le skill bd-educative, fais une BD éducative qui explique le texte, le livre ou le document de cette conversation (ou ce sujet) :"
+    },
+    {
+      "cmd": "/bd",
+      "arg": "[sujet]",
+      "description": "Une BD éducative (comme /educationalcomics)",
+      "prompt": "Avec le skill bd-educative, fais une BD éducative qui explique le texte, le livre ou le document de cette conversation (ou ce sujet) :"
+    }
+  ],
+  "priority": true
+}

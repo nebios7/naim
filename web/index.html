@@ -1129,7 +1129,7 @@ body.haslive .working .wtime { display: none; }
 .diagram .dbar span { flex: 1; }
 .diagram .dbar button { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; }
 .diagram .dbar button:hover { background: var(--hover); color: var(--text); }
-.diagram .dview { padding: 14px; overflow: auto; text-align: center; max-height: 560px; }
+.diagram .dview { padding: 14px; overflow: auto; text-align: center; max-height: 560px; background: #fff; border: 0; border-radius: 0; margin: 0; }  /* not the diff view's box (same class name) */
 .diagram .dview svg { max-width: 100%; height: auto; }
 .diagram .derr { padding: 10px 14px; font-size: 12.5px; color: var(--danger); background: var(--panel); }
 .diagram.showcode .dview { display: none; } .diagram:not(.showcode) .code { display: none; }
@@ -1406,6 +1406,72 @@ header#chatHeader { overflow: hidden; }
 #liveBar .ltext { flex: 0 1 auto; }
 #liveBar .ltime { margin-left: auto; }
 /* the interactive quiz */
+/* an educational comic strip: a white page, coloured panels with a thick ink line, a caption box at the bottom */
+.bd { margin: 12px 0; background: #fff; color: #1f1e1d; border-radius: 12px; padding: 12px 14px 14px; box-shadow: 0 1px 0 rgb(0 0 0 / .04); }
+.bdt { font: 800 17px/1.2 -apple-system, "SF Pro Display", Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .6px; text-align: center; margin: 2px 0 10px; }
+.bdg { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.bdc { position: relative; border: 3px solid #1f1e1d; border-radius: 8px; background: var(--bg); min-height: 220px; display: flex; flex-direction: column; overflow: hidden; padding: 8px 8px 8px; }
+.bdbs { display: flex; flex-direction: column; gap: 6px; flex: 1; justify-content: flex-start; }
+.bdb { position: relative; max-width: 90%; background: #fff; border: 2px solid #1f1e1d; border-radius: 14px; padding: 5px 9px; font: 600 12.5px/1.3 -apple-system, Helvetica, sans-serif; }
+.bdb.sm { border-radius: 50%; min-width: 30px; text-align: center; font: 900 17px/1 -apple-system, sans-serif; padding: 6px 8px; }
+.bdb::after { content: ""; position: absolute; bottom: -8px; width: 10px; height: 10px; background: #fff; border-right: 2px solid #1f1e1d; border-bottom: 2px solid #1f1e1d; transform: skewX(25deg) rotate(45deg); }
+.bdb.l { align-self: flex-start; } .bdb.l::after { left: 18px; }
+.bdb.c { align-self: center; } .bdb.c::after { left: calc(50% - 5px); }
+.bdb.r { align-self: flex-end; } .bdb.r::after { right: 18px; transform: skewX(-25deg) rotate(45deg); }
+.bdb.th { border-style: dashed; border-radius: 20px; } .bdb.th::after { border: 2px solid #1f1e1d; border-radius: 50%; width: 7px; height: 7px; transform: none; bottom: -11px; }
+.bdb.off::after { display: none; }
+.bdfs { display: flex; justify-content: space-around; align-items: flex-end; min-height: 118px; padding-top: 4px; }
+.bdbs:empty { flex: 1; }
+.bdf .bdp { width: 76px; height: 114px; display: block; overflow: visible; }
+.bdcap { margin-top: 6px; background: #fff; border: 2px solid #1f1e1d; border-radius: 3px; padding: 5px 8px; text-align: center; font: 700 12.5px/1.25 -apple-system, Helvetica, sans-serif; }
+.bdk { margin-top: 12px; border: 2px dashed #d9534f; border-radius: 10px; padding: 8px 12px; font: 13.5px/1.45 -apple-system, Helvetica, sans-serif; }
+.bdk b { color: #d9534f; } .bdk ul { margin: 4px 0 0; padding-left: 18px; }
+/* a sketchnote: notebook paper, a title in highlighter, hand underlines in colour, A versus B, steps with arrows */
+.sk { margin: 12px 0; color: #24221f; border-radius: 12px; padding: 16px 18px 16px; background: #fffdf5;
+  background-image: repeating-linear-gradient(transparent 0 31px, #ece6d6 31px 32px); }
+.skt { text-align: center; margin-bottom: 4px; }
+.skt span { font: 900 21px/1.2 -apple-system, "SF Pro Display", Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .3px; padding: 1px 10px;
+  background: linear-gradient(transparent 22%, #ffd84d 22%, #ffd84d 88%, transparent 88%); display: inline-block; transform: rotate(-1.2deg); }
+.skl { display: block; width: 90%; height: 8px; margin: 1px 0 4px; }
+.sks { text-align: center; font: 14px "Chalkboard SE", -apple-system, sans-serif; color: #6b665b; margin-bottom: 8px; }
+.skc { margin: 6px auto 12px; max-width: 460px; text-align: center; font: 700 15px/1.4 -apple-system, Helvetica, sans-serif; padding: 10px 18px;
+  border: 2.5px solid #24221f; border-radius: 40px 34px 44px 30px / 30px 40px 32px 42px; background: #fff; }
+.skvs { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin: 8px 0 14px; }
+.skside b { font: 900 18px -apple-system, Helvetica, sans-serif; color: var(--c); text-transform: uppercase; letter-spacing: .3px; }
+.skside .skl { width: 110px; } .skside p { margin: 2px 0 0; font: 600 14px/1.35 -apple-system, Helvetica, sans-serif; }
+.skvsb { width: 46px; height: 46px; border: 2.5px solid #24221f; border-radius: 50%; display: grid; place-items: center; font: 900 15px -apple-system, sans-serif; background: #fff; }
+.sksteps { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; margin: 6px 0 12px; }
+.skst { font: 800 14px -apple-system, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .4px; display: inline-flex; flex-direction: column; align-items: center; }
+.skst .skl { width: 100%; min-width: 60px; }
+.skar { font: 700 22px -apple-system, sans-serif; color: #24221f; }
+.skg { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.skb { background: #fff; border: 2px solid #24221f; border-radius: 14px 10px 16px 12px; padding: 10px 12px; transform: rotate(var(--r)); }
+.skh { display: flex; align-items: center; gap: 8px; }
+.skh b { font: 800 15.5px -apple-system, Helvetica, sans-serif; color: var(--c); text-transform: uppercase; letter-spacing: .2px; }
+.ski { width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--c, #e8913a); border: 2px solid currentColor; background: #fff; }
+.ski svg { width: 15px; height: 15px; }
+.skb ul { margin: 0; padding: 0; list-style: none; font: 600 13.5px/1.45 -apple-system, Helvetica, sans-serif; }
+.skb li { padding-left: 18px; position: relative; } .skb li::before { content: "→"; position: absolute; left: 0; color: var(--c); font-weight: 800; }
+.skx { margin-top: 6px; font: italic 12.5px "Chalkboard SE", -apple-system, sans-serif; color: #6b665b; border-top: 1.5px dashed #d8d2c4; padding-top: 5px; }
+.skr { --c: #e8913a; margin-top: 14px; display: flex; gap: 10px; align-items: center; font: 700 14px/1.4 -apple-system, Helvetica, sans-serif;
+  background: #fff; border: 2.5px solid #24221f; border-radius: 12px; padding: 8px 12px; }
+/* a mind map: in Naim's colours (dark or light), the centre stays a white oval */
+.mm { margin: 12px 0; } .mm svg { width: 100%; height: auto; display: block; }
+.mm figcaption { text-align: center; color: var(--muted); font-size: 13px; margin-top: 4px; }
+/* flashcards: a grid of white cards with a coloured band; a card turned over shows its answer on cream */
+.fc { margin: 10px 0 12px; } .fct { font-weight: 650; font-size: 15px; margin: 0 0 10px; }
+.fcg { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.fcc { position: relative; text-align: left; border: 0; border-top: 6px solid var(--c); border-radius: 10px; background: #fff; color: #1f1e1d; min-height: 118px; padding: 12px 14px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .18); cursor: pointer; font: inherit; transition: transform .25s var(--ease, ease), background .2s; }
+.fcc:hover { transform: translateY(-2px); }
+.fcc small { display: block; font: 600 10.5px "SF Mono", ui-monospace, Menlo, monospace; letter-spacing: 1.5px; color: #8a857a; margin-bottom: 8px; }
+.fcc b { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.fcc .fcb { display: none; } .fcc[aria-pressed="true"] { background: #fdf6e3; animation: fcFlip .32s var(--ease, ease); }
+.fcc[aria-pressed="true"] .fcf { display: none; } .fcc[aria-pressed="true"] .fcb { display: block; }
+.fcc[aria-pressed="true"] b { font-weight: 500; }
+@keyframes fcFlip { from { transform: rotateY(80deg); } }
+.fcfoot { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .fcc[aria-pressed="true"] { animation: none; } .fcc:hover { transform: none; } }
 .quizcard { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 10px 0 12px; background: var(--panel); }
 .quizcard.qwait { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; }
 .qtabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--hover); margin-bottom: 14px; }
@@ -2695,9 +2761,9 @@ function quizOrder(it) {
 function quizDraw(el) {
   let q; try { q = JSON.parse(el.dataset.quiz); } catch (e) { return; }
   const qs = q.questions, cards = Array.isArray(q.cartes) ? q.cartes : [], d = el.dataset;
-  d.tab ??= "quiz"; d.i ??= "0"; d.score ??= "0"; d.card ??= "0";
+  d.tab ??= qs.length ? "quiz" : "cartes"; d.i ??= "0"; d.score ??= "0"; d.card ??= "0";
   const i = +d.i, n = qs.length, tab = cards.length ? d.tab : "quiz";
-  const tabs = cards.length ? `<div class="qtabs"><button data-qtab="quiz" class="${tab === "quiz" ? "on" : ""}">Quiz</button><button data-qtab="cartes" class="${tab === "cartes" ? "on" : ""}">Cartes mémoire</button></div>` : "";
+  const tabs = cards.length && qs.length ? `<div class="qtabs"><button data-qtab="quiz" class="${tab === "quiz" ? "on" : ""}">Quiz</button><button data-qtab="cartes" class="${tab === "cartes" ? "on" : ""}">Cartes mémoire</button></div>` : "";
   let html = "";
   if (tab === "cartes") {
     const k = Math.min(+d.card, cards.length - 1), c = cards[k], back = d.flip === "1";
@@ -2955,6 +3021,134 @@ function userHtml(src) {
   out.push(userMathHtml(src.slice(i)));
   return out.join("");
 }
+// a JSON block that may still be written, or followed by words: the JSON object and what comes after
+function jsonBlock(body, open) {
+  const i0 = body.indexOf("{"); if (i0 < 0) return null;
+  let depth = 0, str = false, end = -1;
+  for (let i = i0; i < body.length; i++) {
+    const ch = body[i];
+    if (str) { if (ch === "\\") i++; else if (ch === '"') str = false; continue; }
+    if (ch === '"') str = true; else if (ch === "{") depth++; else if (ch === "}" && --depth === 0) { end = i; break; }
+  }
+  if (end < 0) return null;
+  try { return { data: JSON.parse(body.slice(i0, end + 1)), after: body.slice(end + 1).trim() }; } catch (e) { return open ? null : null; }
+}
+// ---- an educational comic strip: coloured panels, whole characters in line art with an accessory, a caption box,
+// speech bubbles pointing at who speaks
+const BD_BG = ["#fde4a0", "#bfe0f7", "#f9cbd6", "#cdeccf", "#e3d6f6", "#fbd8b8"];
+const BD_COLORS = ["#4d7fd6", "#9a6ee0", "#e8913a", "#2f9a6f", "#d9534f", "#1f1e1d"];
+const BD_SKIN = ["#f6d7b8", "#e8b98f", "#c68d62", "#8d5a3b"];
+function bdPerson(p, k, mood) {
+  const col = p.couleur || BD_COLORS[k % BD_COLORS.length], skin = BD_SKIN[(p.peau ?? 0) % 4] || BD_SKIN[0], ink = "#1f1e1d";
+  const hair = { long: '<path d="M24 22c0-11 7-16 16-16s16 5 16 16c0 7-1 14-3 17h-3V24c-5 2-15 2-20 0v15h-3c-2-3-3-10-3-17z" fill="#3a2b25"/>',
+    court: '<path d="M25 21c0-10 6-15 15-15s15 5 15 15c-5-4-10-6-15-6s-10 2-15 6z" fill="#3a2b25"/>',
+    boucle: '<path d="M24 22c-3-8 2-17 9-16 3-3 11-3 14 0 7-1 12 8 9 16-2-4-5-6-7-4-2-3-5-3-7-1-2-2-5-2-7 1-3-2-7 0-11 4z" fill="#3a2b25"/>',
+    chignon: '<path d="M25 21c0-10 6-15 15-15s15 5 15 15c-5-4-10-6-15-6s-10 2-15 6zM35 5a5 5 0 1 0 10 0a5 5 0 1 0-10 0z" fill="#3a2b25"/>', chauve: "" }[p.cheveux || "chauve"] ?? "";
+  const mouth = mood === "surpris" ? `<ellipse cx="40" cy="31" rx="2.6" ry="3.2" fill="${ink}"/>` : mood === "triste" ? `<path d="M35 33q5-4 10 0" fill="none" stroke="${ink}" stroke-width="1.8" stroke-linecap="round"/>`
+    : `<path d="M35 30q5 4.5 10 0" fill="none" stroke="${ink}" stroke-width="1.8" stroke-linecap="round"/>`;
+  const acc = String(p.accessoire || "").toLowerCase();
+  const top = /couronne|roi|reine/.test(acc) ? `<path d="M29 9l3-8 4 6 4-7 4 7 4-6 3 8z" fill="#f2c230" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"/>`
+    : /chapeau/.test(acc) ? `<path d="M24 11h32M30 11V2h20v9" fill="#3a3a3a" stroke="${ink}" stroke-width="2"/>`
+    : /ampoule|id[ée]e/.test(acc) ? `<g transform="translate(58 -6)"><circle cx="8" cy="8" r="7" fill="#ffe27a" stroke="${ink}" stroke-width="1.5"/><path d="M5 15h6M6 18h4" stroke="${ink}" stroke-width="1.5"/></g>` : "";
+  const face = /masque|espion|cach/.test(acc) ? `<rect x="27" y="19" width="26" height="7" rx="3" fill="${ink}"/><circle cx="35" cy="22.5" r="1.6" fill="#fff"/><circle cx="45" cy="22.5" r="1.6" fill="#fff"/>`
+    : `<circle cx="35" cy="22" r="2" fill="${ink}"/><circle cx="45" cy="22" r="2" fill="${ink}"/>` + (p.lunettes || /lunettes/.test(acc) ? `<g fill="none" stroke="${ink}" stroke-width="1.4"><circle cx="35" cy="22" r="4.6"/><circle cx="45" cy="22" r="4.6"/><path d="M39.6 22h.8"/></g>` : "");
+  const hand = /cl[ée]/.test(acc) ? `<g transform="translate(60 44) rotate(-35)"><circle cx="0" cy="0" r="6" fill="none" stroke="#e0a91f" stroke-width="3.5"/><path d="M6 0h16M16 0v5M20 0v4" stroke="#e0a91f" stroke-width="3.5" stroke-linecap="round"/></g>`
+    : /livre/.test(acc) ? `<rect x="58" y="44" width="14" height="18" rx="2" fill="#c4553a" stroke="${ink}" stroke-width="1.5"/>`
+    : /[ée]p[ée]e/.test(acc) ? `<path d="M62 50l14-22" stroke="#9aa3ad" stroke-width="3" stroke-linecap="round"/><path d="M60 47l6 5" stroke="${ink}" stroke-width="2.5"/>` : "";
+  return `<svg class="bdp" viewBox="0 0 80 120" aria-label="${esc(p.nom || "")}">${top}`
+    + `<path d="M34 92v22M46 92v22" stroke="${ink}" stroke-width="4.5" stroke-linecap="round"/>`
+    + `<path d="M50 56l12 0" stroke="${ink}" stroke-width="3.5" stroke-linecap="round"/>`
+    + `<ellipse cx="40" cy="70" rx="14" ry="24" fill="${col}" stroke="${ink}" stroke-width="2"/>`
+    + `<circle cx="40" cy="24" r="16" fill="${skin}" stroke="${ink}" stroke-width="2"/>${hair}${face}${mouth}${hand}</svg>`;
+}
+function bdHtml(q) {
+  const cases = Array.isArray(q.cases) ? q.cases : Array.isArray(q.panels) ? q.panels : [];
+  if (!cases.length) return null;
+  const people = Array.isArray(q.personnages) ? q.personnages : [];
+  const who = (n) => { const k = people.findIndex((p) => (p.nom || "").toLowerCase() === String(n || "").toLowerCase()); return k >= 0 ? k : null; };
+  const panel = (c, n) => {
+    const bulles = Array.isArray(c.bulles) ? c.bulles : [];
+    let cast = [...new Set(bulles.map((b) => who(b.qui)).filter((k) => k != null))];
+    (c.presents || []).forEach((nm) => { const k = who(nm); if (k != null && !cast.includes(k)) cast.push(k); });
+    if (!cast.length && people.length) cast = [n % people.length];
+    cast = cast.slice(0, 3);
+    const slot = (k) => { const i = cast.indexOf(k); return cast.length === 1 ? "c" : i === 0 ? "l" : i === cast.length - 1 ? "r" : "c"; };
+    const bubbles = bulles.map((b) => { const k = who(b.qui), s = k == null ? "c" : slot(k), t = String(b.texte || b.dit || "");
+      return `<div class="bdb ${s}${b.pensee ? " th" : ""}${t.length <= 3 ? " sm" : ""}${k == null ? " off" : ""}">${esc(t)}</div>`; }).join("");
+    const figs = cast.map((k) => `<div class="bdf">${bdPerson(people[k], k, (bulles.find((b) => who(b.qui) === k) || {}).humeur)}</div>`).join("");
+    const cap = c.legende || c.narration;
+    return `<div class="bdc" style="--bg:${c.fond || BD_BG[n % BD_BG.length]}">`
+      + `<div class="bdbs">${bubbles}</div><div class="bdfs">${figs}</div>${cap ? `<div class="bdcap">${esc(cap)}</div>` : ""}</div>`;
+  };
+  const keep = Array.isArray(q.a_retenir) ? q.a_retenir : q.a_retenir ? [q.a_retenir] : [];
+  return `<figure class="bd">${q.titre ? `<figcaption class="bdt">${esc(q.titre)}</figcaption>` : ""}<div class="bdg">${cases.map(panel).join("")}</div>`
+    + (keep.length ? `<div class="bdk"><b>À retenir</b><ul>${keep.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>` : "") + `</figure>`;
+}
+// ---- a sketchnote: notebook paper, a highlighted title, A versus B, a chain of steps with arrows, blocks, « à retenir »
+const SK_COLORS = ["#2f9a6f", "#d9534f", "#3d7cc9", "#e8913a", "#9a5cc9", "#3a8f9a"];
+const skLine = (c) => `<svg class="skl" viewBox="0 0 100 8" preserveAspectRatio="none"><path d="M2 5 C 25 2, 50 8, 75 4 S 95 5, 98 4" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round"/></svg>`;
+function sketchHtml(q) {
+  const blocs = Array.isArray(q.blocs) ? q.blocs : [], cmp = q.comparaison, steps = Array.isArray(q.etapes) ? q.etapes : [];
+  if (!blocs.length && !cmp && !steps.length) return null;
+  const ic = (k) => (RICON[k] ? svgI(k) : svgI("bulb"));
+  const side = (x, col) => x ? `<div class="skside" style="--c:${col}"><b>${esc(x.titre || "")}</b>${skLine(col)}<p>${esc(x.texte || "")}</p></div>` : "";
+  const card = (b, i) => { const col = b.couleur || SK_COLORS[(i + 2) % SK_COLORS.length];
+    return `<div class="skb" style="--c:${col};--r:${(i % 2 ? 0.6 : -0.5)}deg"><div class="skh"><span class="ski">${ic(b.icone)}</span><b>${esc(b.titre || "")}</b></div>${skLine(col)}`
+      + `<ul>${(b.points || []).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>${b.exemple ? `<div class="skx">${esc(b.exemple)}</div>` : ""}</div>`; };
+  return `<figure class="sk"><div class="skt"><span>${esc(q.titre || "")}</span></div>`
+    + (q.sous_titre ? `<div class="sks">${esc(q.sous_titre)}</div>` : "")
+    + (q.idee_centrale ? `<div class="skc">${esc(q.idee_centrale)}</div>` : "")
+    + (cmp ? `<div class="skvs">${side(cmp.gauche, "#2f9a6f")}<span class="skvsb">VS</span>${side(cmp.droite, "#d9534f")}</div>` : "")
+    + (steps.length ? `<div class="sksteps">${steps.map((t, i) => `<span class="skst" style="--c:${SK_COLORS[(i + 2) % SK_COLORS.length]}">${esc(t)}${skLine(SK_COLORS[(i + 2) % SK_COLORS.length])}</span>`).join('<span class="skar">⟶</span>')}</div>` : "")
+    + (blocs.length ? `<div class="skg">${blocs.map(card).join("")}</div>` : "")
+    + (q.a_retenir ? `<div class="skr"><span class="ski">${svgI("star")}</span>${esc(Array.isArray(q.a_retenir) ? q.a_retenir.join(" · ") : q.a_retenir)}</div>` : "") + `</figure>`;
+}
+// ---- a mind map: the subject in an oval at the centre, the branches as coloured pills on both sides, their points
+// under them with a dot of the branch colour, curved links. Drawn as one SVG (it scales with the page).
+const MM_COLORS = ["#3fb68b", "#4d8fe0", "#e8a23a", "#e0609a", "#9a6ee0", "#3aa6b8", "#d9634f", "#8fb83a"];
+function mindHtml(q) {
+  const br = (Array.isArray(q.branches) ? q.branches : []).slice(0, 8);
+  if (!br.length) return null;
+  const cut = (t, n) => { t = String(t || ""); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+  const W = 760, PW = 230, PH = 40, LH = 20, GAP = 22;
+  const left = br.filter((_, i) => i % 2 === 1), right = br.filter((_, i) => i % 2 === 0);
+  const hOf = (b) => PH + 10 + Math.min(5, (b.points || []).length) * LH;
+  const colH = (col) => col.reduce((a, b) => a + hOf(b), 0) + GAP * Math.max(0, col.length - 1);
+  const H = Math.max(220, colH(left), colH(right)) + 40, cx = W / 2, cy = H / 2;
+  let links = "", nodes = "";
+  const place = (col, isLeft) => {
+    let y = (H - colH(col)) / 2;
+    col.forEach((b) => {
+      const k = br.indexOf(b), c = b.couleur || MM_COLORS[k % MM_COLORS.length], x = isLeft ? 20 : W - 20 - PW, py = y + PH / 2;
+      const ex = isLeft ? x + PW : x, sx = isLeft ? cx - 92 : cx + 92;
+      links += `<path d="M${sx},${cy} C${(sx + ex) / 2},${cy} ${(sx + ex) / 2},${py} ${ex},${py}" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`;
+      nodes += `<rect x="${x}" y="${y}" width="${PW}" height="${PH}" rx="20" fill="var(--panel, #fff)" stroke="${c}" stroke-width="3"/>`
+        + `<text x="${x + PW / 2}" y="${py + 5}" text-anchor="middle" font-weight="650" font-size="15" fill="var(--text, #1f1e1d)">${esc(cut(b.titre, 26))}</text>`;
+      (b.points || []).slice(0, 5).forEach((t, j) => {
+        const ty = y + PH + 18 + j * LH, tx = x + 18;
+        nodes += `<circle cx="${tx}" cy="${ty - 4}" r="4" fill="${c}"/><text x="${tx + 12}" y="${ty}" font-size="13" fill="var(--muted, #6b665b)">${esc(cut(t, 30))}</text>`;
+      });
+      y += hOf(b) + GAP;
+    });
+  };
+  place(left, true); place(right, false);
+  const lines = String(q.centre || q.titre || "").toUpperCase().split(/\s+/).reduce((a, w) => { const l = a[a.length - 1]; if (l && (l + " " + w).length <= 14) a[a.length - 1] = l + " " + w; else a.push(w); return a; }, []).slice(0, 3);
+  const center = `<ellipse cx="${cx}" cy="${cy}" rx="92" ry="${30 + lines.length * 9}" fill="#fff" stroke="#e8e3d8" stroke-width="2"/>`
+    + lines.map((l, i) => `<text x="${cx}" y="${cy + 6 + (i - (lines.length - 1) / 2) * 19}" text-anchor="middle" font-weight="800" font-size="17" fill="#1f1e1d">${esc(l)}</text>`).join("");
+  return `<figure class="mm"><svg viewBox="0 0 ${W} ${H}" font-family="-apple-system, 'SF Pro Text', Helvetica, Arial, sans-serif">${links}${nodes}${center}</svg>`
+    + (q.a_retenir ? `<figcaption>${esc(Array.isArray(q.a_retenir) ? q.a_retenir.join(" · ") : q.a_retenir)}</figcaption>` : "") + `</figure>`;
+}
+// ---- flashcards alone: a grid of cards with a coloured band, each turns over on a click (question / answer)
+const FC_COLORS = ["#3fb68b", "#4d8fe0", "#e8a23a", "#e0609a", "#f2c230", "#9a6ee0"];
+function flashHtml(q) {
+  const cards = (q.cartes || []).filter((c) => c && (c.recto || c.verso));
+  if (!cards.length) return null;
+  return `<div class="fc">${q.titre ? `<div class="fct">${esc(q.titre)}</div>` : ""}<div class="fcg">${cards.map((c, i) =>
+    `<button class="fcc" style="--c:${FC_COLORS[i % FC_COLORS.length]}" data-fc aria-pressed="false"><span class="fcf"><small>FICHE ${i + 1}</small><b>${esc(c.recto || "")}</b></span>`
+    + `<span class="fcb"><small>RÉPONSE</small><b>${esc(c.verso || "")}</b></span></button>`).join("")}</div>`
+    + `<div class="fcfoot">${cards.length} fiche${cards.length > 1 ? "s" : ""} · clique sur une fiche pour la retourner</div></div>`;
+}
+document.addEventListener("click", (e) => { const c = e.target.closest("[data-fc]"); if (c) c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true"); });
 function codeBlock(lang, body, file = "", open = false) {
   if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }  // an operation « posée »: computed
   if (open && /^(graphe|graph|courbe|fonction|svg|pose)$/i.test(lang || "")) {
@@ -2986,7 +3180,15 @@ function codeBlock(lang, body, file = "", open = false) {
       if (end < 0) return wait();
       json = body.slice(i0, end + 1); after = body.slice(end + 1).trim();
     }
-    try { const q = JSON.parse(json); if (q && Array.isArray(q.questions) && q.questions.length) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>` + (after ? md(after) : ""); } catch (e) { if (open) return wait(); }
+    try { const q = JSON.parse(json); if (q && !(q.questions || []).length && Array.isArray(q.cartes) && q.cartes.length) { const h = flashHtml(q); if (h) return h + (after ? md(after) : ""); }
+      if (q && !Array.isArray(q.questions) && Array.isArray(q.cartes) && q.cartes.length) q.questions = [];
+      if (q && Array.isArray(q.questions) && (q.questions.length || q.cartes?.length)) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>` + (after ? md(after) : ""); } catch (e) { if (open) return wait(); }
+  }
+  if (/^(bd|comic|sketchnotes?|carte|mindmap|carte-mentale)$/i.test(lang || "") && (/^(bd|comic|sketch)/i.test(lang) || /^\s*\{/.test(body))) {  // drawn by the application from Naim's JSON: never raw code
+    const kind = /^sketch/i.test(lang) ? "sk" : /^(carte|mindmap)/i.test(lang) ? "mm" : "bd", j = jsonBlock(body, open);
+    if (!j) { if (typeof quill !== "undefined") { quill.last = performance.now(); quill.cmd = false; quill.rate = quill.rate || 120; }
+      return `<div class="quizcard qwait">${liveIcon("write")}<span>Naim dessine ${{ sk: "le sketchnote", mm: "la carte mentale", bd: "la BD" }[kind]}…</span></div>`; }
+    try { const h = kind === "sk" ? sketchHtml(j.data) : kind === "mm" ? mindHtml(j.data) : bdHtml(j.data); if (h) return h + (j.after ? md(j.after) : ""); } catch (e) { /* unreadable: shown as written */ }
   }
   if (/^simulation$/i.test(lang || "")) {  // an algorithm played step by step (const ALGO = {…}) with the tested engine
     if (open) { quillText(body.length); return `<div class="vis vwait">${liveIcon("write")}<span>Naim prépare la simulation… <span class="muted">${body.split("\n").length} lignes</span></span></div>`; }
@@ -3632,7 +3834,7 @@ function loadMermaid() {
     const sc = document.createElement("script"); sc.src = "/vendor/mermaid.min.js";
     sc.onload = () => { const dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light" || document.documentElement.dataset.theme === "dark";
       // Naim's diagram style, the same as its diagram files and PDFs (diagrams.py HOUSE_VARS / HOUSE_CSS)
-      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: {"background": "#ffffff", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#1f1e1d", "primaryBorderColor": "#3a3936", "secondaryColor": "#f6f4ef", "tertiaryColor": "#f6f4ef", "lineColor": "#8a877f", "textColor": "#1f1e1d", "titleColor": "#1f1e1d", "clusterBkg": "#f6f4ef", "clusterBorder": "#e6e2d8", "edgeLabelBackground": "#ffffff", "nodeTextColor": "#1f1e1d", "mainBkg": "#ffffff", "noteBkgColor": "#fbf3e9", "noteBorderColor": "#e8c9a8", "noteTextColor": "#1f1e1d", "actorBkg": "#ffffff", "actorBorder": "#3a3936", "signalColor": "#6b6a65", "labelBoxBkgColor": "#f6f4ef", "pie1": "#c96442", "pie2": "#4f7fae", "pie3": "#6f8452", "pie4": "#b7862b", "pie5": "#8a6fb0", "pie6": "#b4473f", "pie7": "#5b9a8b", "pie8": "#9b968c"}, themeCSS: ".node rect,.node polygon,.node circle,.node path{stroke-width:1.2px} .node rect{rx:7px;ry:7px}.cluster rect{rx:12px;ry:12px;stroke-width:1px}.cluster-label text,.cluster text{font-weight:600}.flowchart-link,.edgePath .path{stroke-width:1.4px} .edgeLabel{color:#6b6a65;font-size:13px}.titleText,.flowchartTitleText{font-size:19px;font-weight:600;fill:#1f1e1d}", fontFamily: '-apple-system, "SF Pro Text", Helvetica, Arial, sans-serif', flowchart: { curve: "basis", padding: 14, subGraphTitleMargin: { top: 16, bottom: 8 } } }); ok(window.mermaid); };
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: {"background": "#ffffff", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#1f1e1d", "primaryBorderColor": "#3a3936", "secondaryColor": "#f6f4ef", "tertiaryColor": "#f6f4ef", "lineColor": "#8a877f", "textColor": "#1f1e1d", "titleColor": "#1f1e1d", "clusterBkg": "#f6f4ef", "clusterBorder": "#e6e2d8", "edgeLabelBackground": "#ffffff", "nodeTextColor": "#1f1e1d", "mainBkg": "#ffffff", "noteBkgColor": "#fbf3e9", "noteBorderColor": "#e8c9a8", "noteTextColor": "#1f1e1d", "actorBkg": "#ffffff", "actorBorder": "#3a3936", "signalColor": "#6b6a65", "labelBoxBkgColor": "#f6f4ef", "pie1": "#c96442", "pie2": "#4f7fae", "pie3": "#6f8452", "pie4": "#b7862b", "pie5": "#8a6fb0", "pie6": "#b4473f", "pie7": "#5b9a8b", "pie8": "#9b968c", "cScale0": "#f4d6cb", "cScaleLabel0": "#1f1e1d", "cScale1": "#d4e3f5", "cScaleLabel1": "#1f1e1d", "cScale2": "#d3ecdd", "cScaleLabel2": "#1f1e1d", "cScale3": "#e5d9f3", "cScaleLabel3": "#1f1e1d", "cScale4": "#f6e5c3", "cScaleLabel4": "#1f1e1d", "cScale5": "#cfe9ec", "cScaleLabel5": "#1f1e1d", "cScale6": "#f3d3df", "cScaleLabel6": "#1f1e1d", "cScale7": "#e2e8c9", "cScaleLabel7": "#1f1e1d", "cScale8": "#d9dcf6", "cScaleLabel8": "#1f1e1d", "cScale9": "#f0dccb", "cScaleLabel9": "#1f1e1d", "cScale10": "#cde7d6", "cScaleLabel10": "#1f1e1d", "cScale11": "#ead6ee", "cScaleLabel11": "#1f1e1d", "cScalePeer0": "#c4553a"}, themeCSS: ".node rect,.node polygon,.node circle,.node path{stroke-width:1.2px} .node rect{rx:7px;ry:7px}.cluster rect{rx:12px;ry:12px;stroke-width:1px}.cluster-label text,.cluster text{font-weight:600}.flowchart-link,.edgePath .path{stroke-width:1.4px} .edgeLabel{color:#6b6a65;font-size:13px}.titleText,.flowchartTitleText{font-size:19px;font-weight:600;fill:#1f1e1d}", fontFamily: '-apple-system, "SF Pro Text", Helvetica, Arial, sans-serif', flowchart: { curve: "basis", padding: 14, subGraphTitleMargin: { top: 16, bottom: 8 } } }); ok(window.mermaid); };
     sc.onerror = () => { mermaidReady = null; ko(new Error("Mermaid indisponible (connexion nécessaire la première fois)")); };
     document.head.appendChild(sc);
   });
