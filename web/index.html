@@ -1919,6 +1919,8 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 /* maths: formulas (KaTeX), an operation « posée » on squared paper, a figure on a white sheet */
 .md .mathx.d { display: block; margin: 10px 0; overflow-x: auto; overflow-y: hidden; }
 .md .mathx .katex { font-size: 1.08em; }
+.bubble b.uh { font-size: 1.05em; }
+.bubble .mathx.d { display: block; margin: 8px 0; overflow-x: auto; overflow-y: hidden; white-space: normal; }
 .md figure.pose { margin: 12px 0; display: flex; width: fit-content; max-width: 100%; flex-direction: column; gap: 8px; padding: 14px 20px 12px;
   border: 1px solid var(--line); border-radius: 12px; background: var(--code); }
 .md figure.pose table { border-collapse: collapse; margin: 0; font: 500 19px/1.55 "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace;
@@ -2757,6 +2759,60 @@ function codeFile(prev, body) {
 // command) coloured in its language — a first line « Bash » / « python » names it, a command start means shell — and
 // `inline code` in monospace; everything else stays plain text
 const SHELL_START = /^\s*(\$ )?(python3?|pip3?|cd|grep|head|tail|sed|awk|cat|ls|git|npm|npx|node|curl|echo|brew|uvx?|make|bash|sh|zsh|swift|xcodebuild|open|find|rm|mv|cp|mkdir)\b/;
+// a copy from a page (a course, a chat, documentation) carries its rich version too: formulas drawn by KaTeX or
+// MathML keep their LaTeX in it, code its block. The plain text loses them (« z² » becomes « z », « 2 » on its own
+// line). It is turned back into what Naim reads and shows well: $…$ / $$…$$, ```code```, titles, lists, bold. Only
+// when there is a formula or code in it; anything else is pasted as plain text, as before.
+function pastedMarkdown(html) {
+  if (!/katex|<math|application\/x-tex|math\/tex|<pre|<code/i.test(html)) return null;
+  const doc = new DOMParser().parseFromString(html, "text/html");  // parsed only, nothing in it runs
+  const texOf = (el) => el.querySelector('annotation[encoding="application/x-tex"]')?.textContent?.trim();
+  const inline = (el) => [...el.childNodes].map(walk).join("");
+  const block = (t) => "\n\n" + t.trim() + "\n\n";
+  function walk(n) {
+    if (n.nodeType === 3) return n.textContent.replace(/\s+/g, " ");
+    if (n.nodeType !== 1) return "";
+    const tag = n.tagName.toLowerCase(), cls = n.getAttribute("class") || "";
+    if (/(^|\s)katex-display(\s|$)/.test(cls)) { const t = texOf(n); if (t) return block("$$" + t + "$$"); }
+    if (/(^|\s)katex(\s|$)/.test(cls) || tag === "math") {
+      const t = texOf(n); if (t) return n.closest(".katex-display") || n.getAttribute("display") === "block" ? block("$$" + t + "$$") : "$" + t + "$";
+    }
+    if (tag === "script" && /math\/tex/.test(n.getAttribute("type") || "")) {
+      const t = n.textContent.trim(); return /mode=display/.test(n.getAttribute("type")) ? block("$$" + t + "$$") : "$" + t + "$";
+    }
+    if (tag === "mjx-assistive-mml" || tag === "style" || tag === "script" || tag === "annotation") return "";
+    if (tag === "pre") {
+      const lang = ((n.querySelector("code")?.className || cls).match(/language-([\w+#-]+)/) || [])[1] || "";
+      return block("```" + lang + "\n" + n.textContent.replace(/\n+$/, "") + "\n```");
+    }
+    if (tag === "code") return "`" + n.textContent + "`";
+    if (tag === "br") return "\n";
+    if (/^h[1-6]$/.test(tag)) return block("#".repeat(+tag[1]) + " " + inline(n));
+    if (tag === "b" || tag === "strong") { const t = inline(n).trim(); return t ? "**" + t + "**" : ""; }
+    if (tag === "li") {
+      const ol = n.parentElement?.tagName === "OL", k = [...n.parentElement.children].indexOf(n) + 1;
+      return "\n" + (ol ? k + ". " : "- ") + inline(n).trim();
+    }
+    if (tag === "ul" || tag === "ol") return "\n" + inline(n) + "\n";
+    if (tag === "tr") return "\n| " + [...n.children].map((c) => inline(c).trim()).join(" | ") + " |";
+    if (tag === "p" || tag === "div" || tag === "section" || tag === "article" || tag === "blockquote" || tag === "table") return block(inline(n));
+    return inline(n);
+  }
+  return walk(doc.body).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+// formulas in your own message are drawn as in Naim's answers ($…$ in the line, $$…$$ on their own line)
+// the light marks of a pasted text, shown as such in your bubble: « ### Titre » a title line, « **mot** » bold
+const userMarks = (t) => esc(t).replace(/^#{1,6} +(.+)$/gm, '<b class="uh">$1</b>').replace(/\*\*([^*\n]+?)\*\*/g, "<b>$1</b>");
+function userMathHtml(text) {
+  let out = "", i = 0;
+  for (const m of text.matchAll(MATH_RE)) {
+    const [all, dd, bd, pi, pre = "", si] = m, tex = dd ?? bd ?? pi ?? si, d = dd !== undefined || bd !== undefined;
+    out += userMarks(text.slice(i, m.index) + (si !== undefined ? pre : ""));
+    out += d ? `<div class="mathx d" data-tex="${esc(tex.trim())}">${esc(tex.trim())}</div>` : `<span class="mathx" data-tex="${esc(tex.trim())}">${esc(tex.trim())}</span>`;
+    i = m.index + all.length;
+  }
+  return out + userMarks(text.slice(i));
+}
 function userHtml(src) {
   src = String(src || "");
   const out = [], re = /```([\w+#.-]*)[^\n]*\n?([\s\S]*?)(?:```|$)|`([^`]+)`/g;
@@ -2768,15 +2824,15 @@ function userHtml(src) {
       const first = body.match(/^\s*(bash|shell|sh|zsh|python|py|js|javascript|ts|typescript|html|css|sql|json|swift|php|java|c|cpp|go|rust|yaml)\s*\n/i);
       if (first && !lang) { lang = first[1]; body = body.slice(first[0].length); }
       body = body.replace(/^\s*\n|\s+$/g, "");
-      out.push(esc(src.slice(i, m.index).replace(/\n$/, "")));
+      out.push(userMathHtml(src.slice(i, m.index).replace(/\n$/, "")));
       out.push(`<pre class="ucode"><code>${highlight(body, lang || (SHELL_START.test(body) ? "bash" : ""))}</code></pre>`);
       i = re.lastIndex; while (src[i] === " " || src[i] === "\t") i++; if (src[i] === "\n") i++;  // the block is its own line
     } else {
-      out.push(esc(src.slice(i, m.index)), `<code class="uinline">${esc(body)}</code>`);
+      out.push(userMathHtml(src.slice(i, m.index)), `<code class="uinline">${esc(body)}</code>`);
       i = re.lastIndex;
     }
   }
-  out.push(esc(src.slice(i)));
+  out.push(userMathHtml(src.slice(i)));
   return out.join("");
 }
 function codeBlock(lang, body, file = "", open = false) {
@@ -6240,7 +6296,17 @@ document.addEventListener("dragenter", (e) => { if (e.dataTransfer?.types.includ
 document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging"); if (e.dataTransfer?.files.length) { setView("chat"); addFiles(e.dataTransfer.files); } });
-$("#input").addEventListener("paste", (e) => { if (e.clipboardData?.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } });
+$("#input").addEventListener("paste", (e) => {
+  if (e.clipboardData?.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); return; }
+  const html = e.clipboardData?.getData("text/html");
+  if (!html) return;
+  const text = pastedMarkdown(html);
+  if (text == null) return;  // nothing special in it: the plain text is pasted as usual
+  e.preventDefault();
+  const inp = e.currentTarget;
+  inp.setRangeText(text, inp.selectionStart, inp.selectionEnd, "end");
+  inp.dispatchEvent(new Event("input", { bubbles: true }));
+});
 
 // ======================================================================= terminal
 const termHist = []; let termIdx = 0, termRunId = null;
