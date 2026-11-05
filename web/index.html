@@ -3341,12 +3341,23 @@ function niceStep(span) {  // 1, 2 or 5 × 10^k, about 8 graduations
 const frNum = (v) => String(+v.toFixed(6)).replace(".", ",").replace("-", "−");
 let graphSeq = 0;
 function graphHtml(src) {
-  const curves = [], points = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
-  let xr = null, yr = null;
+  const curves = [], points = [], shapes = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
+  let xr = null, yr = null, ortho = false, showXY = false;
+  // the names of a figure: « A B C D », « A, B, C », « ABCD », « A'B'C'D' », « A1 B1 C1 »
+  const names = (t) => { t = t.trim(); return /[\s,;]/.test(t) ? t.split(/[\s,;]+/).filter(Boolean) : t.match(/[A-Z][₀-₉0-9]*['’]*/g) || []; };
   for (const raw of String(src).split("\n")) {
     const l = raw.trim();
     if (!l) continue;
     let m;
+    if ((m = l.match(/^(polygone|polygon|triangle|quadrilat[èe]re|figure|segment|vecteur|vector|droite|line)s?\s*:?\s+(.+)$/i))) {
+      // geometry: a figure through named points, a segment, a vector (an arrow), a line through two points
+      const k = m[1].toLowerCase(), kind = /^seg/.test(k) ? "seg" : /^vec/.test(k) ? "vec" : /^(droite|line)/.test(k) ? "line" : "poly";
+      const label = (m[2].match(/«\s*([^»]+?)\s*»|"([^"]+)"/) || [])[1];
+      shapes.push({ kind, names: names(m[2].replace(/«[^»]*»|"[^"]*"/g, "")), label });
+      continue;
+    }
+    if (/^(rep[èe]re )?orthonorm[ée]?$/i.test(l)) { ortho = true; continue; }
+    if (/^(avec (les )?)?coordonn[ée]es$/i.test(l)) { showXY = true; continue; }
     if ((m = l.match(/^([xy])\s*(?::|∈|dans)\s*\[?\s*(.+?)\s*(?:\.\.|;|à)\s*(.+?)\s*\]?$/i))) {
       const r = [mathFn(m[2])(0), mathFn(m[3])(0)].sort((a, b) => a - b);  // bounds may be computed: -2pi, pi/2, sqrt(2)
       if (m[1].toLowerCase() === "x") xr = r; else yr = r;
@@ -3362,6 +3373,11 @@ function graphHtml(src) {
     }  // any other line (a comment, a title): ignored, the graph is still drawn
   }
   if (!curves.length && !points.length) return null;
+  if (shapes.length && !curves.length) ortho = true;  // a figure is drawn in an orthonormal frame: a square stays a square
+  if (ortho && !xr && !yr && points.length) {  // the figure and the origin, with a margin
+    const xs = points.map((p) => p.x).concat(0), ys = points.map((p) => p.y).concat(0);
+    xr = [Math.min(...xs) - 1, Math.max(...xs) + 1]; yr = [Math.min(...ys) - 1, Math.max(...ys) + 1];
+  }
   xr ||= points.length ? [Math.min(-1, ...points.map((p) => p.x)) - 1, Math.max(1, ...points.map((p) => p.x)) + 1] : [-5, 5];
   const N = 480, samples = curves.map((c) => Array.from({ length: N + 1 }, (_, k) => { const x = xr[0] + (xr[1] - xr[0]) * k / N, y = c.f(x); return [x, Number.isFinite(y) ? y : NaN]; }));
   if (!yr) {  // what the curves show, without their far ends (an asymptote does not crush the rest)
@@ -3371,7 +3387,14 @@ function graphHtml(src) {
     yr = [Math.min(lo - pad, 0), Math.max(hi + pad, 0)];
     if (yr[1] - yr[0] < 1) yr = [yr[0] - 1, yr[1] + 1];
   }
-  const W = 520, H = 340, L = 40, R = 16, T = 14, B = 30;
+  let W = 520, H = 340;
+  const L = 40, R = 16, T = 14, B = 30;
+  if (ortho) {  // one unit is as long on both axes: the frame takes the figure's proportions (within bounds)
+    const ux = xr[1] - xr[0], uy = yr[1] - yr[0], u = Math.min((W - L - R) / ux, (H - T - B) / uy, 64);
+    W = Math.round(Math.max(240, ux * u + L + R)); H = Math.round(Math.max(200, uy * u + T + B));
+    const cx = (xr[0] + xr[1]) / 2, cy = (yr[0] + yr[1]) / 2, hx = (W - L - R) / u / 2, hy = (H - T - B) / u / 2;
+    xr = [cx - hx, cx + hx]; yr = [cy - hy, cy + hy];
+  }
   const X = (x) => L + (x - xr[0]) / (xr[1] - xr[0]) * (W - L - R), Y = (y) => T + (yr[1] - y) / (yr[1] - yr[0]) * (H - T - B);
   const sx = niceStep(xr[1] - xr[0]), sy = niceStep(yr[1] - yr[0]);
   let g = "";
@@ -3401,12 +3424,40 @@ function graphHtml(src) {
     const lab = samples[n].filter(([, y]) => Number.isFinite(y) && y > yr[0] && y < yr[1]).at(-Math.round(N * 0.06) || -1);
     if (lab) g += `<text x="${X(lab[0]) - 4}" y="${Y(lab[1]) - 8}" text-anchor="end" fill="${COLORS[n % COLORS.length]}" font-weight="600" font-style="italic">${esc(c.name === "y" ? "" : "C" + c.name)}</text>`;
   });
+  // the figures, under the points: filled lightly in their own colour, a vector ends in an arrow
+  const byName = Object.fromEntries(points.map((pt) => [pt.name.replace(/’/g, "'"), pt]));
+  const at = (nm) => byName[nm.replace(/’/g, "'")];
+  let polyN = 0;
+  shapes.forEach((sh) => {
+    const pts = sh.names.map(at).filter(Boolean);
+    if (pts.length < 2) return;
+    const col = COLORS[(sh.kind === "poly" ? polyN++ : curves.length + polyN + 2) % COLORS.length];
+    if (sh.kind === "poly") {  // a vertex takes its figure's colour, its name goes outside the figure
+      const cx = pts.reduce((a, q) => a + q.x, 0) / pts.length, cy = pts.reduce((a, q) => a + q.y, 0) / pts.length;
+      pts.forEach((q) => { q.col ||= col; if (!q.out) { const dx = q.x - cx, dy = q.y - cy, d = Math.hypot(dx, dy) || 1; q.out = [dx / d, dy / d]; } });
+    }
+    if (sh.kind === "poly") {
+      g += `<polygon points="${pts.map((q) => `${X(q.x).toFixed(1)},${Y(q.y).toFixed(1)}`).join(" ")}" fill="${col}" fill-opacity=".14" stroke="${col}" stroke-width="2" stroke-linejoin="round" clip-path="url(#${id}z)"/>`;
+      const c = pts.reduce((a, q) => [a[0] + q.x / pts.length, a[1] + q.y / pts.length], [0, 0]);
+      if (sh.label) g += `<text x="${X(c[0])}" y="${Y(c[1]) + 4}" text-anchor="middle" fill="${col}" font-weight="600">${esc(sh.label)}</text>`;
+    } else if (sh.kind === "line") {
+      const [a, b] = pts, dx = b.x - a.x, dy = b.y - a.y, big = 1e3;
+      g += `<line x1="${X(a.x - dx * big)}" y1="${Y(a.y - dy * big)}" x2="${X(a.x + dx * big)}" y2="${Y(a.y + dy * big)}" stroke="${col}" stroke-width="1.6" clip-path="url(#${id}z)"/>`;
+    } else {
+      const [a, b] = pts;
+      g += `<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}" stroke="${col}" stroke-width="2"${sh.kind === "vec" ? ` marker-end="url(#${id}v${col.slice(1)})"` : ""}/>`;
+    }
+  });
+  const arrows = [...new Set(COLORS)].map((c) => `<marker id="${id}v${c.slice(1)}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${c}"/></marker>`).join("");
   points.forEach((pt) => {
-    g += `<circle cx="${X(pt.x)}" cy="${Y(pt.y)}" r="3.6" fill="#222"/><text x="${X(pt.x) + 6}" y="${Y(pt.y) - 6}" font-weight="600">${esc(pt.name)}</text>`;
+    const lab = pt.name + (showXY ? `(${frNum(pt.x)} ; ${frNum(pt.y)})` : "");
+    const [ox, oy] = pt.out || [0.7, 0.7], tx = X(pt.x) + ox * 9, ty = Y(pt.y) - oy * 9 + 4;
+    const anchor = ox > 0.35 ? "start" : ox < -0.35 ? "end" : "middle";
+    g += `<circle cx="${X(pt.x)}" cy="${Y(pt.y)}" r="3.6" fill="${pt.col || "#222"}"/><text x="${tx.toFixed(1)}" y="${(ty + (Math.abs(ox) <= 0.35 ? -oy * 4 : 0)).toFixed(1)}" text-anchor="${anchor}" font-weight="600" fill="${pt.col || "#333"}" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">${esc(lab)}</text>`;
   });
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" font-family="Helvetica, Arial" font-size="11" fill="#333">`
     + `<defs><marker id="${id}f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>`
-    + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}</svg>`;
+    + arrows + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}</svg>`;
   const legend = curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join("");
   return `<figure class="mfig mgraph">${svg}<figcaption>${legend}</figcaption></figure>`;
 }

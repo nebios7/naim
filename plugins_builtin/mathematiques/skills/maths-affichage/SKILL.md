@@ -13,7 +13,8 @@ L'application dessine quatre choses à ta place : utilise-les toujours.
 | Une formule | `$…$` dans la phrase, `$$…$$` seule sur sa ligne | la formule mise en page (KaTeX) |
 | Une opération posée | un bloc `pose` avec SEULEMENT l'opération | les étapes exactes, alignées |
 | La courbe d'une fonction | un bloc `graphe` avec la fonction | le repère et la courbe exacte |
-| Une figure de géométrie | un bloc `svg` | la figure sur fond blanc |
+| Une figure dans un repère (points, polygones, vecteurs, transformation) | un bloc `graphe` avec les points et les figures | le repère orthonormé et la figure exacte |
+| Une figure de géométrie sans repère (cercle, angle, solide) | un bloc `svg` | la figure sur fond blanc |
 
 Jamais de formule dans un bloc de code, jamais de calcul « dessiné » avec des tirets ou des espaces.
 
@@ -82,7 +83,33 @@ Une fonction par ligne (`f(x) = …` ou `y = …`), avec `^`, `*` ou rien (`2x`)
 `ln`, `abs`, `pi`. Facultatif : `x : a..b`, `y : c..d`, des points nommés `A(1;2)`. L'application calcule la courbe
 exacte : ne dessine jamais une courbe à la main en svg.
 
-## 4. Figures de géométrie : bloc svg
+### Une figure dans un repère : toujours le bloc graphe
+Points, polygones, segments, vecteurs, droites, et l'image d'une figure par une transformation (matrice, symétrie,
+rotation, translation, homothétie) : calcule d'abord les coordonnées (run_command avec Python si besoin), puis
+écris-les dans un bloc `graphe`. L'application trace un repère **orthonormé** (un carré reste un carré), remplit
+chaque figure de sa couleur et place les noms à l'extérieur :
+```graphe
+A(1;1)
+B(3;1)
+C(3;2)
+D(1;2)
+A'(3;0)
+B'(5;-2)
+C'(7;-1)
+D'(5;1)
+polygone ABCD
+polygone A'B'C'D'
+vecteur A A'
+coordonnées
+```
+- `polygone ABCD` (ou `triangle ABC`, `polygone A B C D`) : la figure reliant ces points, dans l'ordre ;
+- `segment A B`, `vecteur A B` (une flèche), `droite A B` (la droite entière) ;
+- `coordonnées` : écrit A(1 ; 1) à côté de chaque point ; `orthonormé` : impose le repère orthonormé avec des courbes ;
+- un nom entre « » après la figure l'écrit au milieu : `polygone ABCD « initiale »`.
+Jamais de diagramme Mermaid ni de page HTML pour une figure de maths, jamais de PDF si on ne demande pas de document :
+la réponse avec la figure s'écrit dans la conversation.
+
+## 4. Figures de géométrie sans repère : bloc svg
 Environ 280 × 220, `viewBox`, traits épais `stroke-width="2"`, noms des points en Helvetica, longueurs écrites, angle
 droit marqué par un petit carré, codage des égalités par des petits traits. Exemples à adapter :
 

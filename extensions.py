@@ -1176,7 +1176,8 @@ SKILL_TRIGGERS = {
     "plan-maison": r"\bplans? (d['’]|c['’])?archit|\b(plans?|sch[ée]mas?|croquis|dessin)\b[^.?!]{0,40}\b(maisons?|appartements?|villas?|pavillons?|logements?|duplex|plain[- ]pied)\b|\b(fai\w*|cr[ée]\w*|con[cç]\w*|imagin\w*|dessin\w*)\b[^.?!]{0,30}\b(maisons?|appartements?|villas?)\b[^.?!]{0,20}\bt[1-7]\b"
                    r"|\b(plans?|sch[ée]mas?|croquis|dessine\w*)\b[^.?!]{0,30}\b[tf][1-7]\b|\b[tf][1-7]\b[^.?!]{0,15}\d+ ?(m²|m2\b|m[eè]tres? carr)",
     "schemas": r"\b(sch[ée]mas?|diagrammes?|organigrammes?|flowchart|mermaid|uml|mcd|erd|logigrammes?|carte mentale|mind ?map|gantt)\b",
-    "rapport": r"\b(rapport(?! de bug| d'erreur)|dossier technique|cahier des charges|compte[- ]rendu|livre blanc|note de synth[eè]se)\b",
+    # « le rapport des aires », « par rapport à », « rapport de proportionnalité » are maths, not a report to write
+    "rapport": r"\b(rapport(?! de bug| d'erreur)(?<!par rapport)(?!s?\s+(?:des\s+(?:aires|longueurs|volumes|c[ôo]t[ée]s|distances|p[ée]rim[èe]tres|masses|vitesses|surfaces|angles|mesures)|entre|de\s+(?:proportionnalit|similitude|r[ée]duction|l'homoth|homoth|agrandissement)|d'(?:agrandissement|homoth)|k\b|=))|dossier technique|cahier des charges|compte[- ]rendu|livre blanc|note de synth[eè]se)\b",
     "visuels": r"\b(logo|banni[eè]re|ic[oô]ne d'app|flyer|infographie|carte de visite)\b|\b(une|cette|mon|ma|ton|des|l['’]|d['’])\s?affiches?\b",  # « affiche-moi les photos » is not a poster
     "recherche-approfondie": r"\b(recherche approfondie|enqu[eê]te sur|[ée]tat de l'art|[ée]tude de march[ée]|analyse concurrentielle|recoupe|compare les sources|veille approfondie|deep research)\b",
     # « fusionne ces deux pdf » merges files, not branches: merge/fusionne counts only when no file kind follows
