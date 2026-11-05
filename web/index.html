@@ -1465,9 +1465,29 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .glive .bgdots, .liveline .bgdots, details.bgjob:not(.ok):not(.ko) .bgdots { display: inline-block !important; width: 16px; height: 16px; flex: none; }
 .bgdots canvas { display: block; width: 16px; height: 16px; }
 .glive { display: inline-flex; margin-right: 6px; }
+/* the live icon changes like a hand changing tools: the old one lifts away while the new one settles in the same place */
+.glive, .liveline .lic { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; }
+.glive > *, .liveline .lic > * { grid-area: 1 / 1; }
+.glive > .lin, .liveline .lic > .lin { animation: licIn .34s cubic-bezier(.2, .9, .3, 1.25) both; }
+.glive > .lout, .liveline .lic > .lout { animation: licOut .24s ease-in both; pointer-events: none; }
+@keyframes licIn { from { opacity: 0; transform: scale(.45) rotate(-25deg); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes licOut { to { opacity: 0; transform: translate(4px, -5px) scale(.55) rotate(18deg); filter: blur(2px); } }
+/* what Naim does rolls like a ticker: the step done slides up and away, the new one comes from below */
+.agroup.live > summary .gnow, .liveline .ltxt { display: inline-grid; overflow: hidden; min-width: 0; }
+.gnow > .tk, .ltxt > .tk { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agroup.live > summary .gnow > .tk.tkin, .liveline .ltxt > .tk.tkin { animation: tkIn .36s cubic-bezier(.2, .8, .3, 1) both, naimShimmer 3.2s cubic-bezier(.4, 0, .6, 1) infinite; }
+.agroup.live > summary .gnow > .tk.tkout, .liveline .ltxt > .tk.tkout { animation: tkOut .3s ease-in both; }
+@keyframes tkIn { from { opacity: 0; transform: translateY(105%); filter: blur(1.5px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes tkOut { to { opacity: 0; transform: translateY(-105%); filter: blur(1.5px); } }
+/* the quill leaves a thin line of ink under its nib, drawn as it writes and wiped at each new line */
+.lfeather { position: relative; }
+.lfeather .ink { position: absolute; left: 7px; bottom: 6.5px; height: 1.4px; border-radius: 1px; background: currentColor; opacity: .55;
+  width: var(--ink, 0px); }
+.lfeather svg { stroke-width: 2.1; filter: drop-shadow(0 0 2.5px color-mix(in srgb, #d97757 45%, transparent)); }
+.lfeather svg path:nth-child(-n+2) { fill: currentColor; fill-opacity: .22; }  /* a full vane, not a thin outline */
 .agroup.live > summary:has(.gnow) .gsum { display: none; }
 .agroup.live > summary .gnow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agroup.live > summary .gnow, .liveline .ltxt {
+.agroup.live > summary .gnow > .tk, .liveline .ltxt > .tk {
   background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 42%, color-mix(in srgb, var(--text) 85%, var(--muted)) 50%, var(--muted) 58%, var(--muted) 100%);
   background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: naimShimmer 3.2s cubic-bezier(.4, 0, .6, 1) infinite; }
@@ -1487,7 +1507,7 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 .lread i { width: 3.5px; height: 3.5px; border-radius: 50%; background: currentColor; animation: rdot 0.9s ease-in-out infinite; }
 .lread i:nth-child(2) { animation-delay: .15s; } .lread i:nth-child(3) { animation-delay: .3s; }
 @keyframes rdot { 0%, 100% { transform: translateY(1px); opacity: .45; } 50% { transform: translateY(-2.5px); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .lfeather svg, .lread i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .lfeather svg, .lread i, .lin, .lout, .tkin, .tkout { animation: none !important; } .lout, .tkout { display: none; } }
 /* a block of actions: the lines written (+72, green) and the images it looked at, small, on the right */
 .agroup > summary .gadd { color: var(--add-t); font-variant-numeric: tabular-nums; margin-left: 6px; }
 .agroup > summary .gthumbs { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding-left: 10px; flex: none; }
@@ -5636,15 +5656,42 @@ function quillRun() {
       rot = -9 + 13 * (0.5 + 0.5 * Math.sin(quill.phase)) - 3 * Math.max(0, Math.sin(quill.phase * 2)); x = quill.x; y = -0.5 * Math.max(0, Math.sin(quill.phase));
     }
     document.documentElement.style.setProperty("--quill", `rotate(${rot.toFixed(2)}deg) translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`);
+    document.documentElement.style.setProperty("--ink", `${(quill.x * 2.4).toFixed(2)}px`);  // the line written so far
     quill.raf = requestAnimationFrame(step);
   };
   quill.raf = requestAnimationFrame(step);
 }
 new MutationObserver(() => { if (!quill.raf && $(".lfeather svg")) { quill.last = performance.now(); quillRun(); } })  // it appears: writing begins
   .observe(document.body, { childList: true, subtree: true });
-const liveIcon = (k) => k === "write" ? `<span class="licon lfeather">${svgI("feather")}</span>`
-  : k === "read" ? '<span class="licon lread" aria-hidden="true"><i></i><i></i><i></i></span>'
+const liveIcon = (k) => k === "write" ? `<span class="licon lfeather">${svgI("feather")}<i class="ink"></i></span>`
   : `<span class="bgdots" data-m="${k}" aria-hidden="true"><canvas></canvas></span>`;
+// the icon of the step: dots stay the same dots and dance into the new step; between the quill and the dots, the
+// old one lifts away while the new one settles (a hand changing tools)
+function setLiveIcon(box, kind) {
+  if (box.dataset.k === kind) return;
+  const prev = box.dataset.k; box.dataset.k = kind;
+  const cur = [...box.children].filter((c) => !c.classList.contains("lout"));
+  const dots = cur.find((c) => c.classList.contains("bgdots"));
+  if (dots && kind !== "write") { dots.dataset.m = kind; return; }
+  $$(":scope > .lout", box).forEach((o) => o.remove());
+  box.insertAdjacentHTML("beforeend", liveIcon(kind));
+  const fresh = box.lastElementChild, still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!prev || still) { cur.forEach((o) => o.remove()); return; }
+  fresh.classList.add("lin");
+  cur.forEach((o) => { o.classList.add("lout"); setTimeout(() => o.remove(), 260); });
+}
+// the words of the step roll: the old ones slide up and away, the new ones come from below
+function rollText(el, txt) {
+  const cur = $(":scope > .tk:not(.tkout)", el);
+  if (cur && cur.textContent === txt) return;
+  $$(":scope > .tkout", el).forEach((o) => o.remove());
+  const s = document.createElement("span"); s.className = "tk"; s.textContent = txt;
+  if (!cur) { el.textContent = ""; el.appendChild(s); return; }
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    s.classList.add("tkin"); cur.classList.add("tkout"); setTimeout(() => cur.remove(), 320);
+  } else cur.remove();
+  el.appendChild(s);
+}
 // four dots in a square; two opposite corners swap places, then the other two, one swap every 0.625 s with no pause
 // (each swap lasts 0.667 s, so the next one starts as the last settles). The curves are measured frame by frame: the
 // vertical motion leads and overshoots by 11 %, the horizontal one follows, so the two dots pass along a curve and the
@@ -5710,6 +5757,8 @@ const naimDots = (() => {
     check: (t) => { const u = wrap(t, 1.2), b = .28 * (bump(u / .18) + .7 * bump((u - .24) / .18)); return CORNERS.map(([x, y]) => [x + (.5 - x) * b, y + (.5 - y) * b, 1 + .25 * b]); },
     // sums up: the four meet in the middle, are one for an instant, then part again
     sum: (t) => { const u = wrap(t, 1.6), m = u < .4 ? ease(u / .4) : u < .6 ? 1 : 1 - ease((u - .6) / .4); return CORNERS.map(([x, y]) => [x + (.5 - x) * m, y + (.5 - y) * m, 1 + .3 * m]); },
+    // reads: three dots in a wave, like eyes along a line (the fourth melts into the middle one)
+    read: (t) => [0, 1, 2].map((i) => [i / 2, .5 - .32 * Math.max(0, Math.sin(wrap(t, .9) * 6.2832 - i * .9)), 1]).concat([[.5, .5, 0]]),
     // waits for the user: the square breathes, slowly
     wait: (t) => { const b = (1 - Math.cos(wrap(t, 2.8) * 6.2832)) / 2; return CORNERS.map(([x, y]) => [x + (.5 - x) * .14 * b, y + (.5 - y) * .14 * b, .8 + .2 * b]); },
   };
@@ -5720,7 +5769,15 @@ const naimDots = (() => {
     const t = now / 1000, made = {};
     const shape = (m) => made[m] ||= still.matches ? CORNERS : (DANCES[m] || ((x) => dance(x % CYCLE)))(t);
     for (const c of cvs) {
-      const pts = shape(c.parentElement?.dataset.m || "think");
+      const m = c.parentElement?.dataset.m || "think";
+      if (c._m !== m) { if (c._m && c._pts) { c._from = c._pts; c._t0 = t; } c._m = m; }  // a new step: the dots move to it
+      let pts = shape(m);
+      if (c._from) {
+        const u = (t - c._t0) / .45;
+        if (u >= 1) c._from = null;
+        else { const e = ease(u); pts = pts.map(([x, y, k = 1], i) => { const [fx, fy, fk = 1] = c._from[i] || [x, y, 0]; return [fx + (x - fx) * e, fy + (y - fy) * e, fk + (k - fk) * e]; }); }
+      }
+      c._pts = pts;
       const w = c.clientWidth || 16, px = (window.devicePixelRatio || 1) * Math.max(1, c.getBoundingClientRect().width / w);  // sharp under the page zoom too
       if (c.width !== Math.round(w * px)) { c.width = c.height = Math.round(w * px); c._color = null; }
       c._color ||= dotColor(c);
@@ -5749,12 +5806,12 @@ function liveInThread(r, label, step, time) {
     last.classList.add("live");
     const sum = $(":scope > summary", last);
     let gl = $(".glive", sum); if (!gl) { gl = document.createElement("span"); gl.className = "glive"; sum.prepend(gl); }
-    const kind = liveKind(label, r.kind); if (gl.dataset.k !== kind) { gl.dataset.k = kind; gl.innerHTML = liveIcon(kind); }
+    setLiveIcon(gl, liveKind(label, r.kind));
     // the title says what is being done right now (« Lit index.html », the command's own description), then the
     // time and the chevron; the tally (« Lu 2 fichiers… ») comes back once the work is done
     let now = $(".gnow", sum); if (!now) { now = document.createElement("span"); now.className = "gnow"; $(".gsum", sum).after(now); }
     const doing = label.replace(/^Naim /, ""), txt = (step ? step + " · " : "") + doing.charAt(0).toUpperCase() + doing.slice(1);
-    if (now.textContent !== txt) now.textContent = txt;
+    rollText(now, txt);
     let gt = $(".gtime", sum); if (!gt) { gt = document.createElement("span"); gt.className = "gtime"; $(".gchev", sum).before(gt); }
     gt.textContent = time;
   } else if ((r.reply?.content || "").trim() && !writing) {
@@ -5762,10 +5819,10 @@ function liveInThread(r, label, step, time) {
   } else {
     let l = $(".liveline", flow);
     if (!l) { l = document.createElement("div"); l.className = "liveline"; l.innerHTML = '<span class="lic"></span><span class="ltxt"></span><span class="ltm"></span>'; }
-    const kind = liveKind(label, r.kind), lic = $(".lic", l); if (lic.dataset.k !== kind) { lic.dataset.k = kind; lic.innerHTML = liveIcon(kind); }
+    setLiveIcon($(".lic", l), liveKind(label, r.kind));
     if (l !== flow.lastElementChild) flow.appendChild(l);
     const txt = (step ? step + " · " : "") + label + "…";
-    if ($(".ltxt", l).textContent !== txt) $(".ltxt", l).textContent = txt;
+    rollText($(".ltxt", l), txt);
     $(".ltm", l).textContent = time;
   }
 }
