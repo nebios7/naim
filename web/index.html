@@ -2763,10 +2763,65 @@ const SHELL_START = /^\s*(\$ )?(python3?|pip3?|cd|grep|head|tail|sed|awk|cat|ls|
 // MathML keep their LaTeX in it, code its block. The plain text loses them (« z² » becomes « z », « 2 » on its own
 // line). It is turned back into what Naim reads and shows well: $…$ / $$…$$, ```code```, titles, lists, bold. Only
 // when there is a formula or code in it; anything else is pasted as plain text, as before.
+// MathML back to LaTeX: Safari / WebKit leave the hidden LaTeX out of a copy, but keep the formula's structure
+// (powers, fractions, roots, letters, signs); it is read back into the LaTeX that would have written it
+const MO_TEX = { "−": "-", "×": "\\times ", "·": "\\cdot ", "⋅": "\\cdot ", "÷": "\\div ", "±": "\\pm ", "∓": "\\mp ", "≤": "\\le ", "≥": "\\ge ",
+  "≠": "\\neq ", "≈": "\\approx ", "≡": "\\equiv ", "→": "\\to ", "⇒": "\\Rightarrow ", "⇔": "\\Leftrightarrow ", "∞": "\\infty ", "∈": "\\in ",
+  "∉": "\\notin ", "⊂": "\\subset ", "∪": "\\cup ", "∩": "\\cap ", "∀": "\\forall ", "∃": "\\exists ", "∑": "\\sum ", "∏": "\\prod ", "∫": "\\int ",
+  "∂": "\\partial ", "∇": "\\nabla ", "′": "'", "…": "\\ldots ", "⋯": "\\cdots ", "∘": "\\circ ", "⟨": "\\langle ", "⟩": "\\rangle ", "∣": "\\mid ",
+  "{": "\\{", "}": "\\}", "\u2061": "", "\u2062": "", "\u2063": "" };
+const GREEK = "αβγδεζηθικλμνξοπρστυφχψωΓΔΘΛΞΠΣΦΨΩ", GREEK_TEX = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","o","pi","rho","sigma","tau","upsilon","phi","chi","psi","omega","Gamma","Delta","Theta","Lambda","Xi","Pi","Sigma","Phi","Psi","Omega"];
+const BB = { "ℂ": "C", "ℝ": "R", "ℕ": "N", "ℤ": "Z", "ℚ": "Q" };
+function mathmlTex(n) {
+  if (n.nodeType === 3) return n.textContent.trim();
+  if (n.nodeType !== 1) return "";
+  const tag = n.localName, kids = [...n.children], all = () => kids.map(mathmlTex).join(""), g = (k) => { const t = mathmlTex(k); return t.length === 1 ? t : `{${t}}`; };
+  const txt = (n.textContent || "").trim();
+  switch (tag) {
+    case "annotation": case "annotation-xml": return "";
+    case "semantics": return kids[0] ? mathmlTex(kids[0]) : "";
+    case "mi": {
+      if (BB[txt]) return `\\mathbb{${BB[txt]}}`;
+      if (n.getAttribute("mathvariant") === "double-struck") return `\\mathbb{${txt}}`;
+      const k = GREEK.indexOf(txt); if (k >= 0) return `\\${GREEK_TEX[k]} `;
+      return txt.length > 1 ? (/^(sin|cos|tan|ln|log|exp|lim|max|min|det|arg|sup|inf)$/.test(txt) ? `\\${txt} ` : `\\mathrm{${txt}}`) : txt;
+    }
+    case "mn": return txt;
+    case "mo": return MO_TEX[txt] ?? txt;
+    case "mtext": return txt ? `\\text{${txt}}` : " ";
+    case "mspace": return " ";
+    case "msup": return `${g(kids[0])}^${g(kids[1])}`;
+    case "msub": return `${g(kids[0])}_${g(kids[1])}`;
+    case "msubsup": return `${g(kids[0])}_${g(kids[1])}^${g(kids[2])}`;
+    case "mfrac": return `\\frac{${mathmlTex(kids[0])}}{${mathmlTex(kids[1])}}`;
+    case "msqrt": return `\\sqrt{${all()}}`;
+    case "mroot": return `\\sqrt[${mathmlTex(kids[1])}]{${mathmlTex(kids[0])}}`;
+    case "mover": { const a = (kids[1]?.textContent || "").trim(), acc = { "^": "hat", "ˆ": "hat", "¯": "bar", "‾": "overline", "→": "vec", "⃗": "vec", "~": "tilde", "˙": "dot" }[a];
+      return acc ? `\\${acc}{${mathmlTex(kids[0])}}` : `\\overset{${mathmlTex(kids[1])}}{${mathmlTex(kids[0])}}`; }
+    case "munder": return `\\underset{${mathmlTex(kids[1])}}{${mathmlTex(kids[0])}}`;
+    case "munderover": return `${g(kids[0])}_${g(kids[1])}^${g(kids[2])}`;
+    case "mtable": return `\\begin{matrix}${kids.map((r) => [...r.children].map(mathmlTex).join(" & ")).join(" \\\\ ")}\\end{matrix}`;
+    default: return all();
+  }
+}
+// plain text that is code (several lines with the marks of code): pasted as a block in its language
+function pastedCode(t) {
+  const lines = t.replace(/\s+$/, "").split("\n");
+  if (lines.length < 2 || /^\s*```/.test(t)) return null;
+  const codey = (l) => !l.trim() || /^\s{2,}\S|[;{}]\s*$|^\s*(import|from|def|class|return|if|elif|else|for|while|try|except|with|print|const|let|var|function|#include|public|private|SELECT|INSERT|UPDATE|echo|cd|ls|sudo|npm|pip|git|brew|python3?)\b|^\s*[\w.\[\]]+\s*[-+*/]?=\s*\S|\w\([^)]*\)\s*$|^\s*(#|\/\/)/.test(l);
+  const filled = lines.filter((l) => l.trim());
+  if (filled.length < 2 || filled.filter(codey).length / filled.length < 0.8) return null;
+  if (filled.some((l) => /[.!?]\s*$/.test(l) && l.split(" ").length > 8)) return null;  // sentences: prose, not code
+  const lang = /^\s*(import|from|def|elif|print\()/m.test(t) ? "python" : /^\s*(const|let|var|function)\b|=>/m.test(t) ? "javascript"
+    : /^\s*(SELECT|INSERT|UPDATE|CREATE)\b/im.test(t) ? "sql" : /^\s*(\$ |sudo|brew|npm|pip|git|cd|ls|echo)\b/m.test(t) ? "bash" : "";
+  return "```" + lang + "\n" + t.replace(/\s+$/, "") + "\n```";
+}
 function pastedMarkdown(html) {
-  if (!/katex|<math|application\/x-tex|math\/tex|<pre|<code/i.test(html)) return null;
+  if (!/katex|<math|application\/x-tex|math\/tex|<pre|<code|data-tex/i.test(html)) return null;
   const doc = new DOMParser().parseFromString(html, "text/html");  // parsed only, nothing in it runs
-  const texOf = (el) => el.querySelector('annotation[encoding="application/x-tex"]')?.textContent?.trim();
+  const texOf = (el) => el.closest("[data-tex]")?.dataset.tex?.trim() || el.querySelector("[data-tex]")?.dataset.tex?.trim()
+    || el.querySelector('annotation[encoding="application/x-tex"]')?.textContent?.trim()
+    || ((m) => m ? mathmlTex(m).replace(/\s+/g, " ").trim() : "")(el.localName === "math" ? el : el.querySelector("math"));
   const inline = (el) => [...el.childNodes].map(walk).join("");
   const block = (t) => "\n\n" + t.trim() + "\n\n";
   function walk(n) {
@@ -2780,6 +2835,9 @@ function pastedMarkdown(html) {
     if (tag === "script" && /math\/tex/.test(n.getAttribute("type") || "")) {
       const t = n.textContent.trim(); return /mode=display/.test(n.getAttribute("type")) ? block("$$" + t + "$$") : "$" + t + "$";
     }
+    if (n.hasAttribute("data-tex") && /mathx/.test(cls)) { const t = n.dataset.tex.trim(); return n.classList.contains("d") ? block("$$" + t + "$$") : "$" + t + "$"; }
+    if (/(^|\s)katex-html(\s|$)/.test(cls)) return "";  // the drawn half: its letters only, the formula is read from the other
+    if (tag === "mjx-container") { const m = n.querySelector("math"); if (m) { const t = mathmlTex(m).trim(); return n.getAttribute("display") === "true" ? block("$$" + t + "$$") : "$" + t + "$"; } }
     if (tag === "mjx-assistive-mml" || tag === "style" || tag === "script" || tag === "annotation") return "";
     if (tag === "pre") {
       const lang = ((n.querySelector("code")?.className || cls).match(/language-([\w+#-]+)/) || [])[1] || "";
@@ -5217,7 +5275,7 @@ async function send(textArg, attsArg, opts = {}) {
   if (atts.some((a) => a.loading)) { toast("Lecture du document en cours… un instant"); return; }
   if (S.mode === "agent" && !S.project) { toast("Choisis d'abord le dossier du projet"); $("#pick").focus(); return; }
   setView("chat");
-  if (!current) { current = { id: draftId || newId(), title: (text || atts[0].name).slice(0, 60), mode: S.mode, messages: [] }; draftId = null; }
+  if (!current) { current = { id: draftId || newId(), title: ((text || "").split("\n").map((l) => l.replace(/^\s*(#{1,6}|>|[-*]|\d+\.)\s+/, "").replace(/\*\*|__|`+|\$\$?/g, "").trim()).find(Boolean) || atts[0]?.name || "Conversation").slice(0, 60), mode: S.mode, messages: [] }; draftId = null; }
   current.mode = S.mode; if (S.mode === "agent") current.project = S.project; else if (S.project) current.folder = S.project;
   if (opts.goal) current.goal = { text: opts.goal, turns: 0, max: GOAL_MAX, active: true, last: "", same: 0 };
   else if (!opts.goalTurn && !opts.bg && textArg === undefined && current.goal?.active) {
@@ -6298,9 +6356,9 @@ document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging"); if (e.dataTransfer?.files.length) { setView("chat"); addFiles(e.dataTransfer.files); } });
 $("#input").addEventListener("paste", (e) => {
   if (e.clipboardData?.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); return; }
-  const html = e.clipboardData?.getData("text/html");
-  if (!html) return;
-  const text = pastedMarkdown(html);
+  const html = e.clipboardData?.getData("text/html"), plain = e.clipboardData?.getData("text/plain") || "";
+  let text = html ? pastedMarkdown(html) : null;
+  if (text == null) text = pastedCode(plain);  // code copied from an editor, a terminal, a chat: its block
   if (text == null) return;  // nothing special in it: the plain text is pasted as usual
   e.preventDefault();
   const inp = e.currentTarget;
