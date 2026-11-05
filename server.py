@@ -293,7 +293,10 @@ def asks_permission(text):
 def ends_announcing(text):
     """The answer ends on what it is going to do (« Je vais maintenant le reformuler… »): the work is not done."""
     last = [s for s in re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip()) if s.strip()][-1:]
-    return bool(last) and bool(LATE_ANNOUNCE_RE.search(last[0])) and len(text) < 1500
+    # « Dossier créé. Je télécharge maintenant des images… »: any « je + verb … maintenant / tout de suite » too
+    return bool(last) and bool(LATE_ANNOUNCE_RE.search(last[0]) or ANNOUNCE_RE.search(last[0].strip())
+                               or re.search(r"^\W*je \w+(?:[^.!?]{0,60})\b(?:maintenant|tout de suite|à présent|ensuite)\b", last[0].strip(), re.I)) \
+        and not last[0].strip().endswith("?") and len(text) < 1500
 
 
 CORRECTION_RE = re.compile(r"\b(corrig\w*|rectifi\w*|modifi\w*|change\w*|remplac\w*|r[ée]pare\w*|retouch\w*|page \d+|"

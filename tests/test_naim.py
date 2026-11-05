@@ -3003,3 +3003,10 @@ class TypographicEdits(unittest.TestCase):
         html = Path(__file__).resolve().parent.parent.joinpath("web/index.html").read_text()
         self.assertIn("data-unsend", html)
         self.assertIn("/api/interject/cancel", html)
+
+    def test_reply_ending_on_an_announce_is_sent_back(self):
+        import server
+        self.assertTrue(server.ends_announcing("Dossier créé. Je télécharge maintenant des images variées du site Servier."))
+        self.assertTrue(server.ends_announcing("Le cours est prêt. Je prépare maintenant le cours de 4ème année."))
+        self.assertFalse(server.ends_announcing("Le PDF est prêt : 3annes/cours.pdf."))
+        self.assertFalse(server.ends_announcing("Voulez-vous que je continue maintenant ?"))
