@@ -12,7 +12,7 @@ L'application dessine quatre choses à ta place : utilise-les toujours.
 |---|---|---|
 | Une formule | `$…$` dans la phrase, `$$…$$` seule sur sa ligne | la formule mise en page (KaTeX) |
 | Une opération posée | un bloc `pose` avec SEULEMENT l'opération | les étapes exactes, alignées |
-| Apprendre une division AVEC le visuel demandé (« méthode visuelle », « apprends-moi », un enfant) | un bloc `division` avec SEULEMENT l'opération | la potence pas à pas, les noms, les flèches, une phrase par étape |
+| Une division AVEC le mot « visuel » dans le message (« méthode visuelle », « en visuel ») | un bloc `division` avec SEULEMENT l'opération | la potence pas à pas, les noms, les flèches, une phrase par étape |
 | Apprendre une addition, une soustraction, une multiplication AVEC le visuel demandé | un bloc `addition`, `soustraction` ou `multiplication` avec SEULEMENT l'opération | colonne par colonne, les retenues en rouge, une phrase par étape |
 | La courbe d'une fonction | un bloc `graphe` avec la fonction | le repère et la courbe exacte |
 | Une figure dans un repère (points, polygones, vecteurs, transformation) | un bloc `graphe` avec les points et les figures | le repère orthonormé et la figure exacte |
@@ -93,13 +93,15 @@ Opérateurs `+`, `-`, `×`, `:`. Un bloc par opération. N'écris pas les étape
 ```
 - **« Pose-la », « en colonnes », « la division posée »** : un bloc `pose` avec l'opération (l'application dessine
   l'opération posée complète), puis les étapes écrites.
-- **Visuel demandé** — « visuel », « méthode visuelle », « montre-moi », « dessine », « apprends-moi », « explique à
-  un enfant », un enfant qui apprend : le bloc `division` / `addition` / `soustraction` / `multiplication` ci-dessous
+- **Visuel demandé** — SEULEMENT si le message dit « visuel », « méthode visuelle », « en visuel », « dessine » ou
+  « en dessin » : le bloc `division` / `addition` / `soustraction` / `multiplication` ci-dessous
   (pas à pas), puis les étapes écrites.
 - Le visuel n'est fait QUE si on le demande dans le message ; sinon, la réponse écrite ci-dessus.
+- « Apprends-moi », « tu vas m'apprendre », « pour un enfant », « pour le CM1 » NE demandent PAS le visuel : réponse
+  écrite (avec des mots simples et des nombres adaptés pour un enfant). Le visuel seulement avec le mot « visuel ».
 
 ### Apprendre la division : bloc division
-Quand le visuel est demandé (« méthode visuelle », « apprends-moi la division », « montre-moi », un enfant qui apprend),
+Quand le visuel est demandé (le message dit « visuel », « méthode visuelle », « dessine » ou « en dessin »),
 écris UN bloc avec seulement l'opération :
 ```division
 854 : 7
