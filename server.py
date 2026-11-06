@@ -199,6 +199,7 @@ LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, 
 
 
 SIM_BLOCK_RE = re.compile(r"```simulation[ \t]*\n(.*?)```", re.S)
+DRAWN_OP_RE = re.compile(r"```(division|addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)[ \t]*\n", re.I)
 SVG_BLOCK_RE = re.compile(r"```svg[ \t]*\n\s*(<svg[\s\S]*?</svg>)\s*```", re.I)
 # a ```mermaid block, with the title line just before it (« **Architecture de la scène :** »)
 MERMAID_BLOCK_RE = re.compile(r"(\n[^\n]{0,80}:\**[ \t]*\n)?\n*```mermaid[ \t]*\n.*?```[ \t]*", re.S)
@@ -2340,7 +2341,7 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = rewrites = loops = sim_checks = svg_checks = 0
+        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2739,6 +2740,20 @@ class Handler(BaseHTTPRequestHandler):
                                      "complet, corrigé, sur le plan de l'exemple vérifié.)"})
                     shown = 0
                     continue
+            if (not calls and not stop.is_set() and drawn_checks < 1 and DRAWN_OP_RE.search(content)
+                    and not re.match(r"\s*(\[visuel\]|/visuel\b)", body.get("message") or "", re.I)):
+                # the step-by-step drawing of an operation only when the user asked for it with /visuel: otherwise the
+                # answer is written again in text (the operation posée through ```pose-texte), as Naim always did
+                drawn_checks += 1
+                self.event({"type": "retract", "chars": shown})
+                self.event({"type": "status", "text": "Naim écrit sa réponse en texte…"})
+                messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": "(Pas de visuel : je ne l'ai pas demandé avec /visuel. Redonne ta réponse "
+                                 "entière EN TEXTE : l'opération posée dans un bloc ```pose-texte (seulement l'opération, par "
+                                 "exemple 854 : 7), puis les étapes écrites, le résultat et la vérification. Aucun bloc "
+                                 "division, addition, soustraction ou multiplication.)"})
+                shown = 0
+                continue
             if not calls and not stop.is_set() and svg_checks < 2 and SVG_BLOCK_RE.search(content):
                 # a figure drawn in the answer is measured before it is shown (the model does not see its own SVG):
                 # out of the frame, labels on top of each other or cut by a line, a name far from its point → redrawn

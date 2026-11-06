@@ -1,6 +1,6 @@
 {
   "name": "mathematiques",
-  "version": "1.14",
+  "version": "1.15",
   "description": "Maths comme dans un manuel : formules en LaTeX (algèbre, analyse, matrices, vecteurs, trigo, probabilités, statistiques), opérations posées et courbes de fonctions calculées par l'application, figures de géométrie, énoncé puis corrigé (concours, IFSI, brevet, bac, exercices).",
   "skills": "skills",
   "triggers": {
@@ -12,6 +12,12 @@
       "arg": "<l'exercice>",
       "description": "Résoudre un exercice de maths : énoncé, opérations posées, formules, figure",
       "prompt": "Résous cet exercice de maths avec le skill maths-affichage (énoncé, puis corrigé : formules en LaTeX, opérations dans des blocs pose, figure en svg si c'est de la géométrie) :"
+    },
+    {
+      "cmd": "/visuel",
+      "arg": "<le calcul ou la notion>",
+      "description": "En visuel : le calcul dessiné pas à pas (division, addition, soustraction, multiplication, figures)",
+      "prompt": "[visuel] Avec le skill maths-affichage, explique EN VISUEL (le bloc division / addition / soustraction / multiplication joué pas à pas), puis les étapes écrites :"
     }
   ]
 }

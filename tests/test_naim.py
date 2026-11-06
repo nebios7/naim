@@ -3043,3 +3043,23 @@ class SvgCheck(unittest.TestCase):
     def test_broken_xml_is_said(self):
         import svgcheck
         self.assertIn("ne se lit pas", svgcheck.check("<svg viewBox='0 0 10 10'><rect></svg>")[0])
+
+
+class VisualOnlyOnRequest(unittest.TestCase):
+    """The step-by-step drawing of an operation only with /visuel: a drawn block in any other answer is written again
+    in text; the /visuel command marks its message so it is allowed."""
+
+    def test_drawn_block_is_seen_and_visuel_marker_allows_it(self):
+        import re
+        import server
+        self.assertTrue(server.DRAWN_OP_RE.search("Voici :\n```division\n854 : 7\n```"))
+        self.assertFalse(server.DRAWN_OP_RE.search("```pose-texte\n854 : 7\n```"))
+        allowed = lambda m: bool(re.match(r"\s*(\[visuel\]|/visuel\b)", m, re.I))
+        self.assertTrue(allowed("[visuel] Avec le skill maths-affichage, explique EN VISUEL : 854 : 7"))
+        self.assertFalse(allowed("apprends-moi la division avec la méthode visuelle"))
+
+    def test_visuel_command_exists(self):
+        import json
+        cmds = json.loads((ROOT / "plugins_builtin/mathematiques/plugin.json").read_text())["commands"]
+        c = next(c for c in cmds if c["cmd"] == "/visuel")
+        self.assertTrue(c["prompt"].startswith("[visuel]"))

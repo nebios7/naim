@@ -3452,7 +3452,8 @@ function poseText(src) {
   return { text: lines.join("\n"), result: `${A} × ${B} = ${R}` };
 }
 function codeBlock(lang, body, file = "", open = false) {
-  if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }
+  // an operation posée is written as aligned text (no drawing unless asked with /visuel); with a comma: the old layout
+  if (/^pose$/i.test(lang || "") && !open) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, open); const h = poseHtml(body); if (h) return h; }
   if (/^(pose-texte|operation|calcul-texte)$/i.test(lang || "") && !open) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, open); }
   if (/^(addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)$/i.test(lang || "") && !open) { const h = /÷|:|\/|divis/i.test(body) ? divisionHtml(body) : opLearnHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }
   if (/^(division|divise|apprendre-division)$/i.test(lang || "") && !open) { const h = divisionHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }  // an operation « posée »: computed
