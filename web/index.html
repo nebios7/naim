@@ -2019,15 +2019,18 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .sysfig .syspan > div + div { border-left: 1px solid var(--line); padding-left: 18px; }
 .sysfig .systt { font-weight: 650; font-size: 13.5px; letter-spacing: .3px; text-transform: uppercase; color: var(--muted); margin: 4px 0 6px; }
 .sysfig svg { width: 100%; height: auto; display: block; font-family: -apple-system, "SF Pro Text", Helvetica, sans-serif; }
-.sysfig .sg { stroke: var(--line); stroke-width: 1; } .sysfig .sa { stroke: var(--text); stroke-width: 1.6; } .sysfig .sah { fill: var(--text); }
-.sysfig .st { fill: var(--muted); font-size: 12px; } .sysfig .sv { fill: var(--text); font-size: 14px; font-style: italic; font-weight: 600; }
+/* like a good chart: the data stands out, the frame steps back (faint grid, thin muted axes, small grey numbers) */
+.sysfig .sg { stroke: var(--line); stroke-width: .8; opacity: .55; } .sysfig .sa { stroke: var(--muted); stroke-width: 1.2; } .sysfig .sah { fill: var(--muted); }
+.sysfig .st { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; opacity: .85; } .sysfig .sv { fill: var(--muted); font-size: 13px; font-style: italic; font-weight: 600; }
 .sysfig .sl { font-size: 13.5px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
-.sysfig .sd { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 4; }
-.sysfig .sstar { fill: #f2c230; stroke: var(--text); stroke-width: 1.4; } .sysfig .sp { fill: var(--text); font-size: 14px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
-.sysfig .shi { fill: #3d7cc9; font-size: 13px; font-weight: 700; } .sysfig .sho { fill: #2f9a6f; font-size: 13px; font-weight: 700; }
-.sysfig .se { stroke: var(--text); stroke-width: 1.5; opacity: .75; } .sysfig .sw { fill: var(--text); font-size: 13px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
-.sysfig .sni { fill: #8bb6ea; stroke: #3d7cc9; stroke-width: 2; } .sysfig .sno { fill: #8fd0ad; stroke: #2f9a6f; stroke-width: 2; }
-.sysfig .snt { fill: #10233a; font-size: 16px; font-style: italic; font-weight: 700; } .sysfig .seq { fill: var(--text); font-size: 13.5px; }
+.sysfig .syslg { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: center; margin-top: 4px; font-size: 13px; }
+.sysfig .syslg i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.sysfig .sd { stroke: var(--muted); stroke-width: 1.1; stroke-dasharray: 3 4; opacity: .8; }
+.sysfig .sdot { fill: var(--text); } .sysfig .sring { fill: none; stroke: var(--text); stroke-width: 1.4; opacity: .45; }  /* the solution: a plain dot, a thin ring */ .sysfig .sp { fill: var(--text); font-size: 14px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.sysfig .shi { fill: #3b82d6; font-size: 12px; font-weight: 650; letter-spacing: .4px; } .sysfig .sho { fill: #2a9d6f; font-size: 12px; font-weight: 650; letter-spacing: .4px; }
+.sysfig .se { stroke: var(--muted); stroke-width: 1.3; opacity: .7; } .sysfig .sw { fill: var(--text); font-size: 13px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.sysfig .sni { fill: color-mix(in srgb, #3b82d6 22%, var(--panel)); stroke: #3b82d6; stroke-width: 1.8; } .sysfig .sno { fill: color-mix(in srgb, #2a9d6f 22%, var(--panel)); stroke: #2a9d6f; stroke-width: 1.8; }
+.sysfig .snt { fill: var(--text); font-size: 15px; font-style: italic; font-weight: 650; } .sysfig .seq { fill: var(--text); font-size: 13.5px; }
 .sysfig .syssyn { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
 .sysfig .schk { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 /* a division to learn: a white board, big round digits, the colours of a school book, one step at a time */
@@ -3520,7 +3523,7 @@ function systemSolve(A, B) {  // Gauss–Jordan: {kind: "unique"|"none"|"many", 
   const x = Array(n).fill(0); piv.forEach((c, r) => (x[c] = M[r][n]));
   return { kind: "unique", x };
 }
-const SYS_COL = ["#d9534f", "#3d7cc9", "#2f9a6f", "#9a5cc9"];
+const SYS_COL = ["#e5534b", "#3b82d6", "#2a9d6f", "#9b6bd6"];  // distinct hues, same weight, legible in light and dark
 function systemHtml(src) {
   const P = systemParse(src); if (!P) return null;
   const { A, B, n, vars } = P, sol = systemSolve(A, B), m = A.length;
@@ -3541,7 +3544,7 @@ function systemHtml(src) {
     for (let v = Math.ceil(yr[0] / stepY) * stepY; v <= yr[1]; v += stepY) g += `<line x1="${L}" y1="${Y(v)}" x2="${W - R}" y2="${Y(v)}" class="sg"/>` + (v ? `<text x="${X(0) - 6}" y="${Y(v) + 4}" text-anchor="end" class="st">${numFr(v)}</text>` : "");
     g += `<line x1="${L}" y1="${Y(0)}" x2="${W - R}" y2="${Y(0)}" class="sa" marker-end="url(#sysar)"/><line x1="${X(0)}" y1="${H - Bm}" x2="${X(0)}" y2="${T}" class="sa" marker-end="url(#sysar)"/>`
       + `<text x="${W - R - 2}" y="${Y(0) - 7}" text-anchor="end" class="sv">${vars[0]}</text><text x="${X(0) + 7}" y="${T + 12}" class="sv">${vars[1]}</text>`;
-    const labels = [];
+    const labels = [], segs = [];
     A.forEach((r, i) => {  // the line a·x + b·y = c, cut to the frame
       const [a, b] = r, cc = B[i], pts = [];
       if (Math.abs(b) > 1e-12) { for (const x of xr) { const y = (cc - a * x) / b; if (y >= yr[0] - 1e-9 && y <= yr[1] + 1e-9) pts.push([x, y]); } }
@@ -3549,26 +3552,24 @@ function systemHtml(src) {
       if (pts.length < 2) return;
       pts.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
       const [p, q] = [pts[0], pts[pts.length - 1]], col = SYS_COL[i % 4];
-      g += `<line x1="${X(p[0])}" y1="${Y(p[1])}" x2="${X(q[0])}" y2="${Y(q[1])}" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;
-      // its name along the line, on the far side from the solution, pushed off the line, never on another name
+      g += `<line x1="${X(p[0])}" y1="${Y(p[1])}" x2="${X(q[0])}" y2="${Y(q[1])}" stroke="${col}" stroke-width="2.6" stroke-linecap="round"/>`;
+      // on the line, only its short name (L1, L2…) near its far end; the whole equation goes in the legend
       const S = sol.kind === "unique" ? [X(c[0]), Y(c[1])] : [(X(p[0]) + X(q[0])) / 2, (Y(p[1]) + Y(q[1])) / 2];
-      const ends = [[X(p[0]), Y(p[1])], [X(q[0]), Y(q[1])]], E = ends.sort((u, v) => Math.hypot(v[0] - S[0], v[1] - S[1]) - Math.hypot(u[0] - S[0], u[1] - S[1]))[0];
-      const dx = E[0] - S[0], dy = E[1] - S[1], len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len, side = i % 2 ? -1 : 1;
-      const text = `L${i + 1} : ${eqText(i)}`, tw = text.length * 7.4;
-      let box = null;
-      for (const t of [0.72, 0.58, 0.86, 0.45, 0.32]) {
-        const ax = S[0] + dx * t + nx * 16 * side, ay = S[1] + dy * t + ny * 16 * side;
-        const x1 = Math.min(W - R - tw - 2, Math.max(L + 2, ax - tw / 2)), b = [x1, ay - 13, x1 + tw, ay + 4];
-        if (!labels.some((o) => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]) && b[1] > T && b[3] < H - Bm) { box = b; break; }
-        box = box || b;
-      }
-      labels.push(box);
-      g += `<text x="${box[0]}" y="${box[3] - 4}" fill="${col}" class="sl">${esc(text)}</text>`;
+      const ends = [[X(p[0]), Y(p[1])], [X(q[0]), Y(q[1])]];
+      const E = sol.kind === "unique" ? ends.sort((u, v) => Math.hypot(v[0] - S[0], v[1] - S[1]) - Math.hypot(u[0] - S[0], u[1] - S[1]))[0]
+        : ends.sort((u, v) => u[1] - v[1])[i % 2];
+      const dx = E[0] - S[0], dy = E[1] - S[1], len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
+      let tx = S[0] + dx * 0.88 + nx * 14, ty = S[1] + dy * 0.88 + ny * 14 + 5;
+      tx = Math.min(W - R - 18, Math.max(L + 4, tx)); ty = Math.min(H - Bm - 4, Math.max(T + 14, ty));
+      while (labels.some((o) => Math.abs(o[0] - tx) < 24 && Math.abs(o[1] - ty) < 16)) ty += 16;
+      labels.push([tx, ty]);
+      g += `<text x="${tx}" y="${ty}" fill="${col}" class="sl">L${i + 1}</text>`;
+      segs.push([[X(p[0]), Y(p[1])], [X(q[0]), Y(q[1])], 1000]);
     });
     if (sol.kind === "unique") {
       const sx = X(c[0]), sy = Y(c[1]);
       g += `<line x1="${sx}" y1="${sy}" x2="${sx}" y2="${Y(0)}" class="sd"/><line x1="${sx}" y1="${sy}" x2="${X(0)}" y2="${sy}" class="sd"/>`
-        + `<path d="${starPath(sx, sy, 11, 4.6)}" class="sstar"/><text x="${sx + 14}" y="${sy - 10}" class="sp">Solution ${solTxt}</text>`;
+        + `<circle cx="${sx}" cy="${sy}" r="9" class="sring"/><circle cx="${sx}" cy="${sy}" r="5" class="sdot"/><text x="${sx + 14}" y="${sy - 10}" class="sp">Solution ${solTxt}</text>`;
     }
   } else {  // R³: an oblique view; each plane cut to a cube around the solution, drawn translucent
     const c = sol.kind === "unique" ? sol.x : [0, 0, 0], h = 3;
@@ -3593,10 +3594,9 @@ function systemHtml(src) {
       const top = scr.reduce((a, b) => (b[1] < a[1] ? b : a));
       g += `<text x="${Math.min(W - 8, Math.max(8, top[0]))}" y="${Math.max(16, top[1] - 6)}" text-anchor="middle" fill="${col}" class="sl">P${i + 1}</text>`;
     });
-    g += `<g class="slegend">${A.map((r, i) => `<text x="12" y="${H - 14 - (m - 1 - i) * 18}" fill="${SYS_COL[i % 4]}" class="sl">P${i + 1} : ${esc(eqText(i))}</text>`).join("")}</g>`;
     if (sol.kind === "unique") {
       const [sx, sy] = PJ(c), [px, py] = PJ([c[0], 0, c[2]]);
-      g += `<line x1="${sx}" y1="${sy}" x2="${px}" y2="${py}" class="sd"/><path d="${starPath(sx, sy, 11, 4.6)}" class="sstar"/><text x="${sx + 14}" y="${sy - 10}" class="sp">Solution ${solTxt}</text>`;
+      g += `<line x1="${sx}" y1="${sy}" x2="${px}" y2="${py}" class="sd"/><circle cx="${sx}" cy="${sy}" r="9" class="sring"/><circle cx="${sx}" cy="${sy}" r="5" class="sdot"/><text x="${sx + 14}" y="${sy - 10}" class="sp">Solution ${solTxt}</text>`;
     }
   }
   const geo = `<svg viewBox="0 0 ${W} ${H}" class="sysg"><defs><marker id="sysar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="sah"/></marker>`
@@ -3625,7 +3625,8 @@ function systemHtml(src) {
     : sol.kind === "none" ? `Pas de solution : ${n === 2 ? "les droites sont parallèles" : "les plans n'ont aucun point commun à tous"} — aucune entrée X ne donne B dans le réseau.`
     : `Une infinité de solutions : ${n === 2 ? "les droites sont confondues" : "les plans se coupent selon une droite (ou sont confondus)"}.`;
   return `<figure class="sysfig"><div class="syshead"><span class="mathx d" data-tex="${esc(head)}">${esc(head)}</span></div>`
-    + `<div class="syspan"><div><div class="systt">I. Géométrie ${n === 2 ? "(droites dans ℝ²)" : "(plans dans ℝ³)"}</div>${geo}</div>`
+    + `<div class="syspan"><div><div class="systt">I. Géométrie ${n === 2 ? "(droites dans ℝ²)" : "(plans dans ℝ³)"}</div>${geo}`
+    + `<div class="syslg">${A.map((_, i) => `<span><i style="background:${SYS_COL[i % 4]}"></i>${n === 2 ? "L" : "P"}${i + 1} : ${esc(eqText(i))}</span>`).join("")}</div></div>`
     + `<div><div class="systt">II. Réseau (topologie de AX = B)</div>${netSvg}</div></div><div class="syssyn">${synth}</div></figure>`;
 }
 function starPath(cx, cy, R, r) { let d = ""; for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r : R; d += (k ? "L" : "M") + (cx + rr * Math.cos(a)).toFixed(1) + "," + (cy + rr * Math.sin(a)).toFixed(1); } return d + "Z"; }
