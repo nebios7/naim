@@ -2013,6 +2013,13 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .bubble b.uh { font-size: 1.05em; }
 .bubble .mathx.d { display: block; margin: 8px 0; overflow-x: auto; overflow-y: hidden; white-space: normal; }
 /* a division to learn: a white board, big round digits, the colours of a school book, one step at a time */
+/* the normal division posée: the same drawing in Naim's colours, light or dark, no animation */
+.dvfig.dvstill { background: var(--code, var(--panel)); border: 1px solid var(--line); padding: 10px 16px 10px; }
+.dvfig.dvstill .dvk, .dvfig.dvstill .dvp, .dvfig.dvstill .dvm, .dvfig.dvstill .dvdown { fill: var(--text); }
+.dvfig.dvstill .dvq { fill: #d97757; } .dvfig.dvstill .dvbar { stroke: var(--text); stroke-width: 4; } .dvfig.dvstill .dvline { stroke: var(--text); stroke-width: 3; }
+.dvfig.dvstill svg text { font: 600 36px "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; }
+.dvfig.dvstill figcaption { font-size: 14.5px; color: var(--muted); margin-top: 2px; } .dvfig.dvstill figcaption b { color: var(--text); }
+.dvfig.dvstill figcaption span { margin-left: 12px; opacity: .8; }
 .dvfig { margin: 12px 0; background: #fff; color: #111; border-radius: 14px; padding: 12px 14px 12px; width: fit-content; max-width: 100%; }
 .dvfig svg text { font: 800 38px "Arial Rounded MT Bold", "SF Pro Rounded", -apple-system, sans-serif; }
 .dvfig .dvk { fill: #111; } .dvfig .dvq, .dvfig .dvp, .dvfig .dvm { fill: #3d6fe0; } .dvfig .dvdown { fill: #2f9a55; }
@@ -2022,6 +2029,8 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .dvfig .dvbx { fill: none; stroke-width: 4; } .dvfig .dvbx.r { stroke: #e53935; } .dvfig .dvbx.g { stroke: #2e9e4f; } .dvfig .dvbx.b { stroke: #3d6fe0; }
 .dvfig .dvbx.o { stroke: #e8832a; stroke-dasharray: 7 6; }
 .dvfig .dvhi { fill: #ffe9a8; opacity: .7; }
+.dvfig svg text.dvc { font: 800 18px "Arial Rounded MT Bold", -apple-system, sans-serif; fill: #e53935; }
+.dvfig .dvz { fill: #9aa3b5; } .dvfig .dvsum { fill: #3d6fe0; }
 .dvfig .dvlab { font: 800 26px "Arial Rounded MT Bold", -apple-system, sans-serif !important; } .dvfig .dvlab.r { fill: #e53935; } .dvfig .dvlab.g { fill: #2e9e4f; } .dvfig .dvlab.b { fill: #3d6fe0; } .dvfig .dvlab.o { fill: #e8832a; }
 .dvfig [data-s], .dvfig [data-only] { transition: opacity .35s ease, transform .35s ease; }
 .dvfig .dvoff { opacity: 0; }
@@ -3207,7 +3216,97 @@ document.addEventListener("click", (e) => { const c = e.target.closest("[data-fc
 // ---- a long division to LEARN (```division  854 : 7): the names first (dividende, diviseur, quotient, reste), then
 // step by step as on the board — how many times, the product to take away, what remains, the digit brought down by a
 // green arrow — each step said in a child's words; at the end the check. Computed here, exactly (whole numbers).
-function divisionHtml(src) {
+// ---- addition, subtraction, multiplication to LEARN (```addition 268 + 457, ```soustraction 503 − 276,
+// ```multiplication 347 × 26): the same board as the division — column after column, the carries in red, a child's
+// sentence at each step, Précédent / Suivant. Computed here, exactly (whole numbers).
+const COLNAME = ["unités", "dizaines", "centaines", "milliers", "dizaines de milliers", "centaines de milliers", "millions", "dizaines de millions", "centaines de millions"];
+function opLearnHtml(src) {
+  const m = String(src).replace(/\s+/g, " ").match(/(\d[\d ]*)\s*([+\-−×x*]|plus|moins|fois)\s*(\d[\d ]*)/i);
+  if (!m) return null;
+  const A = m[1].replace(/\s/g, ""), B = m[3].replace(/\s/g, ""), op = { "+": "+", plus: "+", "-": "−", "−": "−", moins: "−", "×": "×", x: "×", "*": "×", fois: "×" }[m[2].toLowerCase()];
+  if (!op || A.length > 9 || B.length > 9 || (op === "×" && B.length > 3) || (op === "−" && BigInt(A) < BigInt(B))) return null;
+  const a = A.split("").reverse().map(Number), b = B.split("").reverse().map(Number);
+  const CW = op === "−" ? 50 : 42, RH = 60, X0 = 24, Y0 = 34, els = [], say = [];
+  let st = 0;
+  const nc = Math.max(A.length, B.length) + (op === "×" ? B.length + 1 : 2), u = nc;  // column u = units
+  const X = (c) => X0 + c * CW + CW / 2, Yr = (r) => Y0 + r * RH;
+  const T = (c, r, t, cls, s) => els.push(`<text text-anchor="middle" class="${cls}" data-s="${s}" x="${X(c)}" y="${Yr(r)}">${esc(String(t))}</text>`);
+  const small = (c, r, t, s, dx = 0, dy = -30) => els.push(`<text text-anchor="middle" class="dvc" data-s="${s}" x="${X(c) + dx}" y="${Yr(r) + dy}">${esc(String(t))}</text>`);
+  const line = (c1, c2, r, s) => els.push(`<line class="dvline" data-s="${s}" x1="${X(c1) - CW / 2}" y1="${Yr(r) + 16}" x2="${X(c2) + CW / 2}" y2="${Yr(r) + 16}"/>`);
+  const write = (str, endc, r, cls, s) => [...str].forEach((d, i) => T(endc - str.length + 1 + i, r, d, cls, s));
+  const name = (k) => COLNAME[k] || `rang ${k + 1}`;
+  const L = Math.max(A.length, B.length);
+  // the operation written, one under the other, units under units
+  write(A, u, 1, "dvk", 0); write(B, u, 2, "dvk", 0); T(u - Math.max(A.length, B.length) - (op === "×" ? 0 : 0) - 1, 2, op, "dvk", 0);
+  line(u - L, u, 2, 0);
+  let result, rows = 3;
+  if (op === "+") {
+    say.push(`On pose <b>${A} + ${B}</b> : les unités sous les unités, les dizaines sous les dizaines… On commence par la droite, colonne par colonne.`);
+    let carry = 0, out = "";
+    for (let k = 0; k < L; k++) {
+      st++;
+      const x = a[k] || 0, y = b[k] || 0, sum = x + y + carry, d = sum % 10, nc2 = Math.floor(sum / 10);
+      T(u - k, 3, d, "dvq", st); out = d + out;
+      if (nc2) small(u - k - 1, 1, nc2, st, 0, -36);
+      say.push(`Colonne des <b>${name(k)}</b> : ${x} + ${y}${carry ? ` + <b class=r>${carry}</b> (la retenue)` : ""} = <b>${sum}</b>. ${nc2 ? `J'écris <b class=b>${d}</b> et je retiens <b class=r>${nc2}</b>.` : `J'écris <b class=b>${d}</b>.`}`);
+      carry = nc2;
+    }
+    if (carry) { st++; T(u - L, 3, carry, "dvq", st); out = carry + out; say.push(`Il reste la retenue <b class=r>${carry}</b> : je l'écris devant.`); }
+    result = (BigInt(A) + BigInt(B)).toString();
+    st++; say.push(`<b class=b>${A} + ${B} = ${result}</b>. On vérifie dans l'autre sens : ${result} − ${B} = ${A} ✓`);
+  } else if (op === "−") {
+    say.push(`On pose <b>${A} − ${B}</b> : le plus grand en haut, les unités sous les unités. On commence par la droite.`);
+    let borrow = 0;
+    const res = [];
+    for (let k = 0; k < A.length; k++) {
+      st++;
+      const top = a[k], bot = (b[k] || 0) + borrow;
+      if (top < bot) {
+        small(u - k, 1, "1", st, -CW * 0.42, -14);    // the 10 added on top: a small 1 before the digit
+        small(u - k - 1, 2, "+1", st, -CW * 0.5, 10);  // the 1 given back below, at the next column
+        const d = top + 10 - bot; T(u - k, 3, d, "dvq", st); res.unshift(d);
+        say.push(`Colonne des <b>${name(k)}</b> : ${top} − ${bot}, c'est impossible (${top} est plus petit). J'ajoute <b class=r>10</b> en haut : <b>${top + 10} − ${bot} = ${d}</b>. Je rends <b class=r>1</b> en bas, à la colonne des ${name(k + 1)}.`);
+        borrow = 1;
+      } else {
+        const d = top - bot; res.unshift(d);
+        const lead = k === A.length - 1 && d === 0 && A.length > 1;
+        if (!lead) T(u - k, 3, d, "dvq", st);
+        say.push(`Colonne des <b>${name(k)}</b> : <b>${top} − ${bot}${borrow ? " (avec le 1 rendu)" : ""} = ${d}</b>.${lead ? " Un 0 devant ne s'écrit pas." : ` J'écris <b class=b>${d}</b>.`}`);
+        borrow = 0;
+      }
+    }
+    result = (BigInt(A) - BigInt(B)).toString();
+    st++; say.push(`<b class=b>${A} − ${B} = ${result}</b>. On vérifie : ${result} + ${B} = ${A} ✓`);
+  } else {
+    say.push(`On pose <b>${A} × ${B}</b>. On multiplie <b>${A}</b> par chaque chiffre de <b>${B}</b>, en commençant par les unités, puis on additionne les lignes.`);
+    const parts = [];
+    for (let j = 0; j < b.length; j++) {
+      const r = 3 + j;
+      if (j) { st++; for (let z = 0; z < j; z++) T(u - z, r, "0", "dvz", st); say.push(`Deuxième ligne : on multiplie par le chiffre des <b>${name(j)}</b> (${b[j]}). On décale d'un rang : j'écris <b>0</b>${j > 1 ? " deux fois" : ""} à droite.`.replace("Deuxième", j === 1 ? "Deuxième" : "Troisième")); }
+      let carry = 0;
+      for (let k = 0; k < a.length; k++) {
+        st++;
+        const pr = a[k] * b[j] + carry, d = pr % 10, c = Math.floor(pr / 10);
+        T(u - k - j, r, d, "dvq", st);
+        say.push(`<b>${a[k]} × ${b[j]}</b>${carry ? ` + <b class=r>${carry}</b> (la retenue)` : ""} = <b>${pr}</b>. ${c ? `J'écris <b class=b>${d}</b> et je retiens <b class=r>${c}</b>.` : `J'écris <b class=b>${d}</b>.`}`);
+        carry = c;
+      }
+      if (carry) { st++; T(u - a.length - j, r, carry, "dvq", st); say.push(`Je finis la ligne avec la retenue <b class=r>${carry}</b>.`); }
+      parts.push(BigInt(A) * BigInt(b[j]) * 10n ** BigInt(j));
+    }
+    result = (BigInt(A) * BigInt(B)).toString();
+    rows = 3 + b.length;
+    if (b.length > 1) {
+      st++; line(u - result.length, u, 2 + b.length, st); write(result, u, 3 + b.length, "dvq dvsum", st); T(u - result.length, 2 + b.length, "+", "dvk", st);
+      say.push(`J'additionne les lignes : ${parts.map(String).join(" + ")} = <b class=b>${result}</b>.`); rows++;
+    }
+    st++; say.push(`<b class=b>${A} × ${B} = ${result}</b>. Astuce pour vérifier : ${A} est à peu près ${Math.round(Number(A) / 10 ** (A.length - 1)) * 10 ** (A.length - 1)}, ${B} à peu près ${Math.round(Number(B) / 10 ** (B.length - 1)) * 10 ** (B.length - 1)} : le résultat doit être proche de ${(Math.round(Number(A) / 10 ** (A.length - 1)) * 10 ** (A.length - 1)) * (Math.round(Number(B) / 10 ** (B.length - 1)) * 10 ** (B.length - 1))}.`);
+  }
+  const W = X0 * 2 + (nc + 1) * CW, H = Yr(rows) + 10;
+  return `<figure class="dvfig" data-step="0" data-say="${esc(JSON.stringify(say))}"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="max-width:100%">${els.join("")}</svg>`
+    + `<div class="dvsay"></div><div class="dvbtn"><button data-dv="-1">Précédent</button><span class="dvn"></span><button data-dv="1" class="on">Suivant</button><button data-dv="all">Tout voir</button></div></figure>`;
+}
+function divisionHtml(src, still = false) {
   const m = String(src).replace(/\s+/g, " ").match(/(\d[\d ]*)\s*(?:÷|:|\/|divis[ée] par)\s*(\d[\d ]*)/i);
   if (!m) return null;
   const A = m[1].replace(/\s/g, ""), B = m[2].replace(/\s/g, ""), N = BigInt(B);
@@ -3276,6 +3375,13 @@ function divisionHtml(src) {
   s++;
   say.push(`On vérifie : <b class=g>${B}</b> × <b class=b>${quotient}</b> + <b class=o>${rest}</b> = <b class=r>${A}</b> ✓`);
   const last = s;
+  if (still) {  // the division posée as written in a notebook: every line at once, the result under it
+    const svg = els.join("").replace(/<g class="dvnames"[\s\S]*?<\/g>/, "").replace(/<g data-s="\d+"><line class="dvar"[\s\S]*?<\/g>/g, "")
+      .replace(/<rect class="dvhi"[^>]*\/>/g, "").replace(/<rect class="dvbx o"[^>]*\/>/g, "");
+    const H2 = rowY(2 * steps.length) + 24;
+    return `<figure class="dvfig dvstill"><svg viewBox="0 0 ${W} ${H2}" width="${Math.round(W * 0.78)}" style="max-width:100%">${svg}</svg>`
+      + `<figcaption>${A} : ${B} = <b>${quotient}</b>${rest === 0n ? "" : `, reste <b>${rest}</b>`}<span>${B} × ${quotient}${rest === 0n ? "" : ` + ${rest}`} = ${A}</span></figcaption></figure>`;
+  }
   return `<figure class="dvfig" data-step="0" data-last="${last}" data-say="${esc(JSON.stringify(say))}">`
     + `<svg viewBox="0 0 ${W} ${H}" width="${W}" style="max-width:100%">${els.join("")}</svg>`
     + `<div class="dvsay"></div><div class="dvbtn"><button data-dv="-1">Précédent</button><span class="dvn"></span><button data-dv="1" class="on">Suivant</button><button data-dv="all">Tout voir</button></div></figure>`;
@@ -3294,10 +3400,11 @@ document.addEventListener("click", (e) => {
   f.dataset.step = b.dataset.dv === "all" ? max : Math.max(0, Math.min(max, +f.dataset.step + +b.dataset.dv));
   divDraw(f);
 });
-new MutationObserver(() => document.querySelectorAll(".dvfig:not([data-drawn])").forEach((f) => { f.dataset.drawn = 1; divDraw(f); }))
+new MutationObserver(() => document.querySelectorAll(".dvfig:not([data-drawn]):not(.dvstill)").forEach((f) => { f.dataset.drawn = 1; divDraw(f); }))
   .observe(document.body, { childList: true, subtree: true });
 function codeBlock(lang, body, file = "", open = false) {
   if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }
+  if (/^(addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)$/i.test(lang || "") && !open) { const h = /÷|:|\/|divis/i.test(body) ? divisionHtml(body) : opLearnHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }
   if (/^(division|divise|apprendre-division)$/i.test(lang || "") && !open) { const h = divisionHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }  // an operation « posée »: computed
   if (open && /^(graphe|graph|courbe|fonction|svg|pose)$/i.test(lang || "")) {
     return `<figure class="mfig mwait"><span>${/^pose$/i.test(lang) ? "Calcul posé" : /^svg$/i.test(lang) ? "Figure" : "Courbe"} en cours…</span></figure>`;
@@ -3583,6 +3690,7 @@ function poseCells(s, pad = 0, shift = 0) {  // one box per digit; the comma in 
 function poseHtml(src) {
   const p = poseParse(src);
   if (!p) return null;
+  if (p.op === "÷" && !p.a.dec && !p.b.dec) { const h = divisionHtml(`${p.a.txt} : ${p.b.txt}`, true); if (h) return h; }
   const { a, b, op } = p, row = (o, cells, cls = "") => `<tr class="${cls}"><td class="po">${o}</td><td class="pn">${cells}</td></tr>`;
   let rows = "", result, note = "";
   if (op === "+" || op === "−") {
