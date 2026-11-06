@@ -3402,8 +3402,58 @@ document.addEventListener("click", (e) => {
 });
 new MutationObserver(() => document.querySelectorAll(".dvfig:not([data-drawn]):not(.dvstill)").forEach((f) => { f.dataset.drawn = 1; divDraw(f); }))
   .observe(document.body, { childList: true, subtree: true });
+// ---- an operation written as TEXT, as in a notebook (```pose-texte  854 : 7): the model does not align characters
+// well (a bar that shifts, a « − 4 » for « − 24 »), so it gives only the operation and the text is written here,
+// one column per digit, exact — in the same plain code block it used to write by hand
+function poseText(src) {
+  const m = String(src).replace(/\s+/g, " ").match(/(\d[\d ]*)\s*(÷|:|\/|divis[ée] par|[+\-−×x*]|plus|moins|fois)\s*(\d[\d ]*)/i);
+  if (!m) return null;
+  const A = m[1].replace(/\s/g, ""), B = m[3].replace(/\s/g, ""), o = m[2].toLowerCase();
+  const op = /÷|:|\/|divis/.test(o) ? "÷" : /\+|plus/.test(o) ? "+" : /[-−]|moins/.test(o) ? "−" : "×";
+  if (A.length > 12 || B.length > 6) return null;
+  const sp = (str) => str.split("").join(" ");                     // « 854 » → « 8 5 4 »
+  if (op === "÷") {
+    const N = BigInt(B); if (N === 0n) return null;
+    const d = A.split("").map(Number), n = d.length;
+    let end = 0, part = BigInt(d[0]);
+    while (part < N && end < n - 1) { end++; part = part * 10n + BigInt(d[end]); }
+    const steps = [];
+    for (;;) { const q = part / N, prod = q * N, rem = part - prod; steps.push({ end, part, q, prod, rem }); if (end >= n - 1) break; end++; part = rem * 10n + BigInt(d[end]); }
+    const quotient = steps.map((x) => x.q).join(""), width = 2 + 2 * n;
+    const at = (str, e) => { const st = e - str.length + 1; return " ".repeat(2 + 2 * st) + sp(str); };   // a number ending on digit e
+    const left = [at(A, n - 1)];
+    steps.forEach((x, k) => {
+      const pr = x.prod.toString(), st = x.end - Math.max(pr.length, x.part.toString().length) + 1;
+      left.push(" ".repeat(2 * st) + "- " + sp(pr).padStart(2 * (x.end - st) + 1));
+      left.push(" ".repeat(2 * st) + "-".repeat(2 * (x.end - st) + 3));
+      const next = k < steps.length - 1 ? String(d[x.end + 1]) : "";
+      left.push(at(x.rem.toString() + next, x.end + (next ? 1 : 0)));
+    });
+    const bar = Math.max(2 * quotient.length + 1, 2 * B.length + 1) + 2;
+    const right = ["| " + sp(B), "|" + "-".repeat(bar), "| " + sp(quotient)];
+    const lines = left.map((l, i) => (i < 3 ? l.padEnd(width + 1) + right[i] : l).replace(/\s+$/, ""));
+    const rest = steps[steps.length - 1].rem;
+    return { text: lines.join("\n"), result: `${A} ÷ ${B} = ${quotient}` + (rest ? `, reste ${rest}` : "") };
+  }
+  const a = BigInt(A), b = BigInt(B);
+  if (op === "−" && a < b) return null;
+  if (op === "+" || op === "−") {
+    const R = (op === "+" ? a + b : a - b).toString(), w = Math.max(A.length, B.length, R.length);
+    const row = (str, sign = " ") => sign + " " + sp(str.padStart(w)).padStart(2 * w - 1);
+    return { text: [row(A), row(B, op === "+" ? "+" : "-"), "-".repeat(2 * w + 1), row(R)].join("\n"), result: `${A} ${op} ${B} = ${R}` };
+  }
+  // multiplication: one line per digit of the second number, shifted (with its 0s), then the sum
+  const digs = B.split("").reverse().map(Number), R = (a * b).toString(), parts = digs.map((x, j) => (a * BigInt(x)).toString() + "0".repeat(j));
+  const w = Math.max(A.length, B.length, R.length, ...parts.map((x) => x.length));
+  const row = (str, sign = " ") => sign + " " + sp(str.padStart(w)).padStart(2 * w - 1);
+  const lines = [row(A), row(B, "x"), "-".repeat(2 * w + 1)];
+  if (digs.length > 1) { parts.forEach((x, j) => lines.push(row(x, j ? "+" : " "))); lines.push("-".repeat(2 * w + 1)); }
+  lines.push(row(R));
+  return { text: lines.join("\n"), result: `${A} × ${B} = ${R}` };
+}
 function codeBlock(lang, body, file = "", open = false) {
   if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }
+  if (/^(pose-texte|operation|calcul-texte)$/i.test(lang || "") && !open) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, open); }
   if (/^(addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)$/i.test(lang || "") && !open) { const h = /÷|:|\/|divis/i.test(body) ? divisionHtml(body) : opLearnHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }
   if (/^(division|divise|apprendre-division)$/i.test(lang || "") && !open) { const h = divisionHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }  // an operation « posée »: computed
   if (open && /^(graphe|graph|courbe|fonction|svg|pose)$/i.test(lang || "")) {
