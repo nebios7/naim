@@ -1,6 +1,6 @@
 {
   "name": "mathematiques",
-  "version": "1.8",
+  "version": "1.9",
   "description": "Maths comme dans un manuel : formules en LaTeX (algèbre, analyse, matrices, vecteurs, trigo, probabilités, statistiques), opérations posées et courbes de fonctions calculées par l'application, figures de géométrie, énoncé puis corrigé (concours, IFSI, brevet, bac, exercices).",
   "skills": "skills",
   "triggers": {
