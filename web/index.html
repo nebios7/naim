@@ -2012,6 +2012,24 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md .mathx .katex { font-size: 1.08em; }
 .bubble b.uh { font-size: 1.05em; }
 .bubble .mathx.d { display: block; margin: 8px 0; overflow-x: auto; overflow-y: hidden; white-space: normal; }
+/* a linear system AX = B in two views: geometry and network, on a chalkboard-dark or paper-light card (Naim's theme) */
+.sysfig { margin: 12px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.sysfig .syshead { text-align: center; margin-bottom: 6px; overflow-x: auto; }
+.sysfig .syspan { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.sysfig .syspan > div + div { border-left: 1px solid var(--line); padding-left: 18px; }
+.sysfig .systt { font-weight: 650; font-size: 13.5px; letter-spacing: .3px; text-transform: uppercase; color: var(--muted); margin: 4px 0 6px; }
+.sysfig svg { width: 100%; height: auto; display: block; font-family: -apple-system, "SF Pro Text", Helvetica, sans-serif; }
+.sysfig .sg { stroke: var(--line); stroke-width: 1; } .sysfig .sa { stroke: var(--text); stroke-width: 1.6; } .sysfig .sah { fill: var(--text); }
+.sysfig .st { fill: var(--muted); font-size: 12px; } .sysfig .sv { fill: var(--text); font-size: 14px; font-style: italic; font-weight: 600; }
+.sysfig .sl { font-size: 13.5px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+.sysfig .sd { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 4; }
+.sysfig .sstar { fill: #f2c230; stroke: var(--text); stroke-width: 1.4; } .sysfig .sp { fill: var(--text); font-size: 14px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.sysfig .shi { fill: #3d7cc9; font-size: 13px; font-weight: 700; } .sysfig .sho { fill: #2f9a6f; font-size: 13px; font-weight: 700; }
+.sysfig .se { stroke: var(--text); stroke-width: 1.5; opacity: .75; } .sysfig .sw { fill: var(--text); font-size: 13px; font-weight: 650; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.sysfig .sni { fill: #8bb6ea; stroke: #3d7cc9; stroke-width: 2; } .sysfig .sno { fill: #8fd0ad; stroke: #2f9a6f; stroke-width: 2; }
+.sysfig .snt { fill: #10233a; font-size: 16px; font-style: italic; font-weight: 700; } .sysfig .seq { fill: var(--text); font-size: 13.5px; }
+.sysfig .syssyn { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
+.sysfig .schk { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 /* a division to learn: a white board, big round digits, the colours of a school book, one step at a time */
 /* the normal division posée: the same drawing in Naim's colours, light or dark, no animation */
 .dvfig.dvstill { background: var(--code, var(--panel)); border: 1px solid var(--line); padding: 10px 16px 10px; }
@@ -3451,9 +3469,170 @@ function poseText(src) {
   lines.push(row(R));
   return { text: lines.join("\n"), result: `${A} × ${B} = ${R}` };
 }
+// ---- a linear system AX = B seen two ways (```systeme): its equations (or A and B) are read here, solved exactly,
+// then drawn — the geometry (lines in R², planes in perspective in R³, the solution as a star with its dotted
+// projections) and the network (x_j → b_i, each arrow weighted by a_ij, the weighted sums) — and both views meet on
+// the same solution, checked. Nothing is drawn by the model: it only writes the system.
+const fracOf = (v) => { if (!isFinite(v)) return "∞"; const r = Math.round(v); if (Math.abs(v - r) < 1e-9) return String(r);
+  for (let d = 2; d <= 64; d++) { const n = Math.round(v * d); if (Math.abs(v - n / d) < 1e-9) return `${n}/${d}`; } return v.toFixed(3).replace(".", ","); };
+const numFr = (v) => fracOf(v).replace(/^-/, "−");
+function systemParse(src) {
+  const raw = String(src).replace(/[−–]/g, "-");
+  const txt = /\[\s*\[/.test(raw) ? raw : raw.replace(/(\d),(?=\d)/g, "$1.");  // 2,5 is a decimal in an equation, never inside [[…]]
+  let A = null, B = null;
+  const mA = txt.match(/A\s*=\s*(\[\s*\[[\s\S]*?\]\s*\])/), mB = txt.match(/B\s*=\s*(\[[^\]]*\])/);
+  if (mA && mB) { try { A = JSON.parse(mA[1]); B = JSON.parse(mB[1]).map(Number); } catch (e) { A = null; } }
+  let vars = [];
+  if (!A) {  // equations, one per line: 3x - y = 5 · x + y - z = 2 · 2x1 + x2 = 4
+    const eqs = txt.split(/\n|;/).map((l) => l.trim()).filter((l) => /=/.test(l) && /[a-z]/i.test(l));
+    const rows = eqs.map((l) => {
+      const [lhs, rhs] = l.split("="), co = {};
+      for (const t of lhs.replace(/\s+/g, "").match(/[+-]?[\d.]*\*?[a-z]\w*/gi) || []) {
+        const m = t.match(/^([+-]?)([\d.]*)\*?([a-z]\w*)$/i); if (!m) continue;
+        const v = m[3].toLowerCase(); co[v] = (co[v] || 0) + (m[1] === "-" ? -1 : 1) * (m[2] ? parseFloat(m[2]) : 1);
+        if (!vars.includes(v)) vars.push(v);
+      }
+      return { co, b: parseFloat(rhs) };
+    });
+    const order = ["x", "y", "z", "t", "x1", "x2", "x3", "x4"];
+    vars.sort((a, b) => (order.indexOf(a) + 99 * (order.indexOf(a) < 0)) - (order.indexOf(b) + 99 * (order.indexOf(b) < 0)) || a.localeCompare(b));
+    A = rows.map((r) => vars.map((v) => r.co[v] || 0)); B = rows.map((r) => r.b);
+  }
+  if (!A || !A.length || A.some((r) => r.length !== A[0].length) || B.length !== A.length || B.some((x) => !isFinite(x))) return null;
+  const n = A[0].length;
+  if (n < 2 || n > 3 || A.length > 4) return null;
+  if (!vars.length) vars = n === 2 ? ["x", "y"] : ["x", "y", "z"];
+  return { A: A.map((r) => r.map(Number)), B, n, vars };
+}
+function systemSolve(A, B) {  // Gauss–Jordan: {kind: "unique"|"none"|"many", x}
+  const m = A.length, n = A[0].length, M = A.map((r, i) => [...r, B[i]]);
+  let row = 0; const piv = [];
+  for (let c = 0; c < n && row < m; c++) {
+    let best = row; for (let r = row; r < m; r++) if (Math.abs(M[r][c]) > Math.abs(M[best][c])) best = r;
+    if (Math.abs(M[best][c]) < 1e-12) continue;
+    [M[row], M[best]] = [M[best], M[row]];
+    const pv = M[row][c]; M[row] = M[row].map((v) => v / pv);
+    for (let r = 0; r < m; r++) if (r !== row) { const f = M[r][c]; M[r] = M[r].map((v, k) => v - f * M[row][k]); }
+    piv.push(c); row++;
+  }
+  for (let r = row; r < m; r++) if (Math.abs(M[r][n]) > 1e-9) return { kind: "none" };
+  if (row < n) return { kind: "many" };
+  const x = Array(n).fill(0); piv.forEach((c, r) => (x[c] = M[r][n]));
+  return { kind: "unique", x };
+}
+const SYS_COL = ["#d9534f", "#3d7cc9", "#2f9a6f", "#9a5cc9"];
+function systemHtml(src) {
+  const P = systemParse(src); if (!P) return null;
+  const { A, B, n, vars } = P, sol = systemSolve(A, B), m = A.length;
+  const lab = (v, i) => (vars[i] || v);
+  const term = (a, v, first) => { if (Math.abs(a) < 1e-12) return ""; const s = a < 0 ? (first ? "−" : " − ") : (first ? "" : " + "); const k = Math.abs(a); return s + (k === 1 ? "" : numFr(k)) + v; };
+  const eqText = (r) => A[r].map((a, j) => term(a, vars[j], A[r].slice(0, j).every((x) => Math.abs(x) < 1e-12))).join("") + " = " + numFr(B[r]);
+  const W = 440, H = 380;
+  // ---- panel 1: the geometry
+  let g = "";
+  const solTxt = sol.kind === "unique" ? `(${sol.x.map(numFr).join(" ; ")})` : "";
+  if (n === 2) {
+    const c = sol.kind === "unique" ? sol.x : [0, 0];
+    const span = Math.max(5, Math.ceil(Math.max(Math.abs(c[0]), Math.abs(c[1])) * 0.6) + 3);
+    const xr = [Math.min(-1, Math.floor(c[0] - span)), Math.max(1, Math.ceil(c[0] + span))], yr = [Math.min(-1, Math.floor(c[1] - span)), Math.max(1, Math.ceil(c[1] + span))];
+    const L = 34, R = 14, T = 14, Bm = 30, X = (x) => L + (x - xr[0]) / (xr[1] - xr[0]) * (W - L - R), Y = (y) => T + (yr[1] - y) / (yr[1] - yr[0]) * (H - T - Bm);
+    const step = niceStep(xr[1] - xr[0]), stepY = niceStep(yr[1] - yr[0]);
+    for (let v = Math.ceil(xr[0] / step) * step; v <= xr[1]; v += step) g += `<line x1="${X(v)}" y1="${T}" x2="${X(v)}" y2="${H - Bm}" class="sg"/>` + (v ? `<text x="${X(v)}" y="${Y(0) + 16}" text-anchor="middle" class="st">${numFr(v)}</text>` : "");
+    for (let v = Math.ceil(yr[0] / stepY) * stepY; v <= yr[1]; v += stepY) g += `<line x1="${L}" y1="${Y(v)}" x2="${W - R}" y2="${Y(v)}" class="sg"/>` + (v ? `<text x="${X(0) - 6}" y="${Y(v) + 4}" text-anchor="end" class="st">${numFr(v)}</text>` : "");
+    g += `<line x1="${L}" y1="${Y(0)}" x2="${W - R}" y2="${Y(0)}" class="sa" marker-end="url(#sysar)"/><line x1="${X(0)}" y1="${H - Bm}" x2="${X(0)}" y2="${T}" class="sa" marker-end="url(#sysar)"/>`
+      + `<text x="${W - R - 2}" y="${Y(0) - 7}" text-anchor="end" class="sv">${vars[0]}</text><text x="${X(0) + 7}" y="${T + 12}" class="sv">${vars[1]}</text>`;
+    const labels = [];
+    A.forEach((r, i) => {  // the line a·x + b·y = c, cut to the frame
+      const [a, b] = r, cc = B[i], pts = [];
+      if (Math.abs(b) > 1e-12) { for (const x of xr) { const y = (cc - a * x) / b; if (y >= yr[0] - 1e-9 && y <= yr[1] + 1e-9) pts.push([x, y]); } }
+      if (Math.abs(a) > 1e-12) { for (const y of yr) { const x = (cc - b * y) / a; if (x >= xr[0] - 1e-9 && x <= xr[1] + 1e-9) pts.push([x, y]); } }
+      if (pts.length < 2) return;
+      pts.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+      const [p, q] = [pts[0], pts[pts.length - 1]], col = SYS_COL[i % 4];
+      g += `<line x1="${X(p[0])}" y1="${Y(p[1])}" x2="${X(q[0])}" y2="${Y(q[1])}" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;
+      // its name along the line, on the far side from the solution, pushed off the line, never on another name
+      const S = sol.kind === "unique" ? [X(c[0]), Y(c[1])] : [(X(p[0]) + X(q[0])) / 2, (Y(p[1]) + Y(q[1])) / 2];
+      const ends = [[X(p[0]), Y(p[1])], [X(q[0]), Y(q[1])]], E = ends.sort((u, v) => Math.hypot(v[0] - S[0], v[1] - S[1]) - Math.hypot(u[0] - S[0], u[1] - S[1]))[0];
+      const dx = E[0] - S[0], dy = E[1] - S[1], len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len, side = i % 2 ? -1 : 1;
+      const text = `L${i + 1} : ${eqText(i)}`, tw = text.length * 7.4;
+      let box = null;
+      for (const t of [0.72, 0.58, 0.86, 0.45, 0.32]) {
+        const ax = S[0] + dx * t + nx * 16 * side, ay = S[1] + dy * t + ny * 16 * side;
+        const x1 = Math.min(W - R - tw - 2, Math.max(L + 2, ax - tw / 2)), b = [x1, ay - 13, x1 + tw, ay + 4];
+        if (!labels.some((o) => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]) && b[1] > T && b[3] < H - Bm) { box = b; break; }
+        box = box || b;
+      }
+      labels.push(box);
+      g += `<text x="${box[0]}" y="${box[3] - 4}" fill="${col}" class="sl">${esc(text)}</text>`;
+    });
+    if (sol.kind === "unique") {
+      const sx = X(c[0]), sy = Y(c[1]);
+      g += `<line x1="${sx}" y1="${sy}" x2="${sx}" y2="${Y(0)}" class="sd"/><line x1="${sx}" y1="${sy}" x2="${X(0)}" y2="${sy}" class="sd"/>`
+        + `<path d="${starPath(sx, sy, 11, 4.6)}" class="sstar"/><text x="${sx + 14}" y="${sy - 10}" class="sp">Solution ${solTxt}</text>`;
+    }
+  } else {  // R³: an oblique view; each plane cut to a cube around the solution, drawn translucent
+    const c = sol.kind === "unique" ? sol.x : [0, 0, 0], h = 3;
+    const ox = W * 0.5, oy = H * 0.44, k = 32, kz = 0.55;
+    const PJ = ([x, y, z]) => [ox + (x - c[0]) * k - (z - c[2]) * k * kz * 0.75, oy - (y - c[1]) * k + (z - c[2]) * k * kz * 0.55];
+    // the axes through the origin, as far as the cube
+    const O = [0, 0, 0], ax = [[c[0] + h + 1.5, 0, 0], [0, c[1] + h + 1.5, 0], [0, 0, c[2] + h + 1.5]];
+    const neg = [[Math.min(0, c[0] - h), 0, 0], [0, Math.min(0, c[1] - h), 0], [0, 0, Math.min(0, c[2] - h)]];
+    ax.forEach((e, i) => { const [x1, y1] = PJ(neg[i]), [x2, y2] = PJ(e); g += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="sa" marker-end="url(#sysar)"/><text x="${x2 + 6}" y="${y2 - 4}" class="sv">${vars[i]}</text>`; });
+    const [o0, o1] = PJ(O); g += `<text x="${o0 - 6}" y="${o1 + 15}" text-anchor="end" class="st">0</text>`;
+    const box = [c[0] - h, c[0] + h, c[1] - h, c[1] + h, c[2] - h, c[2] + h];
+    const corners = []; for (const x of box.slice(0, 2)) for (const y of box.slice(2, 4)) for (const z of box.slice(4, 6)) corners.push([x, y, z]);
+    const edges = []; for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) { const d = corners[a].map((v, i) => v !== corners[b][i]).filter(Boolean).length; if (d === 1) edges.push([corners[a], corners[b]]); }
+    A.forEach((r, i) => {
+      const f = (p) => r[0] * p[0] + r[1] * p[1] + r[2] * p[2] - B[i], pts = [];
+      for (const [p, q] of edges) { const fp = f(p), fq = f(q); if (Math.abs(fp) < 1e-12) pts.push(p); if (fp * fq < 0) { const t = fp / (fp - fq); pts.push(p.map((v, j) => v + t * (q[j] - v))); } }
+      if (pts.length < 3) return;
+      const scr = pts.map(PJ), cx = scr.reduce((s, p) => s + p[0], 0) / scr.length, cy = scr.reduce((s, p) => s + p[1], 0) / scr.length;
+      scr.sort((p, q) => Math.atan2(p[1] - cy, p[0] - cx) - Math.atan2(q[1] - cy, q[0] - cx));
+      const col = SYS_COL[i % 4];
+      g += `<polygon points="${scr.map((p) => p.map((v) => v.toFixed(1)).join(",")).join(" ")}" fill="${col}" fill-opacity=".18" stroke="${col}" stroke-width="2"/>`;
+      const top = scr.reduce((a, b) => (b[1] < a[1] ? b : a));
+      g += `<text x="${Math.min(W - 8, Math.max(8, top[0]))}" y="${Math.max(16, top[1] - 6)}" text-anchor="middle" fill="${col}" class="sl">P${i + 1}</text>`;
+    });
+    g += `<g class="slegend">${A.map((r, i) => `<text x="12" y="${H - 14 - (m - 1 - i) * 18}" fill="${SYS_COL[i % 4]}" class="sl">P${i + 1} : ${esc(eqText(i))}</text>`).join("")}</g>`;
+    if (sol.kind === "unique") {
+      const [sx, sy] = PJ(c), [px, py] = PJ([c[0], 0, c[2]]);
+      g += `<line x1="${sx}" y1="${sy}" x2="${px}" y2="${py}" class="sd"/><path d="${starPath(sx, sy, 11, 4.6)}" class="sstar"/><text x="${sx + 14}" y="${sy - 10}" class="sp">Solution ${solTxt}</text>`;
+    }
+  }
+  const geo = `<svg viewBox="0 0 ${W} ${H}" class="sysg"><defs><marker id="sysar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="sah"/></marker>`
+    + `<marker id="sysnet" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="sah"/></marker></defs>${g}</svg>`;
+  // ---- panel 2: the network x_j → b_i weighted by a_ij
+  const NW = 440, NH = Math.max(260, 70 + Math.max(n, m) * 80), xl = 70, xr2 = 250, r0 = 24;
+  const yIn = (j) => 50 + (j + 0.5) * (NH - 70) / n, yOut = (i) => 50 + (i + 0.5) * (NH - 70) / m;
+  let net = `<text x="${xl}" y="26" text-anchor="middle" class="shi">ENTRÉES (X)</text><text x="${xr2}" y="26" text-anchor="middle" class="sho">SORTIES (B)</text>`;
+  A.forEach((r, i) => r.forEach((a, j) => {
+    if (Math.abs(a) < 1e-12) return;
+    const x1 = xl + r0, y1 = yIn(j), x2 = xr2 - r0, y2 = yOut(i), t = m > 1 ? 0.16 + 0.62 * i / (m - 1) : 0.4;  // spread along the arrows: never two weights on one spot
+    net += `<line x1="${x1}" y1="${y1}" x2="${x2 - 4}" y2="${y2}" class="se" marker-end="url(#sysnet)"/>`
+      + `<text x="${x1 + (x2 - x1) * t}" y="${y1 + (y2 - y1) * t - 6}" text-anchor="middle" class="sw">${numFr(a)}</text>`;
+  }));
+  for (let j = 0; j < n; j++) net += `<circle cx="${xl}" cy="${yIn(j)}" r="${r0}" class="sni"/><text x="${xl}" y="${yIn(j) + 6}" text-anchor="middle" class="snt">${esc(lab("x", j))}</text>`;
+  for (let i = 0; i < m; i++) {
+    net += `<circle cx="${xr2}" cy="${yOut(i)}" r="${r0}" class="sno"/><text x="${xr2}" y="${yOut(i) + 6}" text-anchor="middle" class="snt">b${i + 1}</text>`
+      + `<text x="${xr2 + r0 + 10}" y="${yOut(i) + 5}" class="seq">= ${esc(A[i].map((a, j) => term(a, vars[j], A[i].slice(0, j).every((x) => Math.abs(x) < 1e-12))).join(""))} = ${numFr(B[i])}</text>`;
+  }
+  const netSvg = `<svg viewBox="0 0 ${NW} ${NH}" class="sysn"><defs><marker id="sysnet2" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="sah"/></marker></defs>${net.replace(/sysnet\)/g, "sysnet2)")}</svg>`;
+  // ---- the head (A, B as matrices) and the synthesis
+  const mat = (rows) => `\\begin{pmatrix}${rows.map((r) => (Array.isArray(r) ? r : [r]).map((v) => fracOf(v)).join(" & ")).join(" \\\\ ")}\\end{pmatrix}`;
+  const head = `A = ${mat(A)},\\quad B = ${mat(B)}` + (sol.kind === "unique" ? `\\quad\\Longrightarrow\\quad X = ${mat(sol.x)}` : "");
+  const check = sol.kind === "unique" ? A.map((r, i) => `${r.map((a, j) => `${numFr(a)}×${numFr(sol.x[j])}`).join(" + ")} = ${numFr(B[i])}`).join(" · ") : "";
+  const synth = sol.kind === "unique" ? `Les deux vues se rejoignent : ${n === 2 ? "les droites se coupent" : "les plans se coupent"} au point ${solTxt}, et le réseau, avec ces valeurs en entrée, donne exactement B. <span class="schk">Vérification : ${esc(check)}</span>`
+    : sol.kind === "none" ? `Pas de solution : ${n === 2 ? "les droites sont parallèles" : "les plans n'ont aucun point commun à tous"} — aucune entrée X ne donne B dans le réseau.`
+    : `Une infinité de solutions : ${n === 2 ? "les droites sont confondues" : "les plans se coupent selon une droite (ou sont confondus)"}.`;
+  return `<figure class="sysfig"><div class="syshead"><span class="mathx d" data-tex="${esc(head)}">${esc(head)}</span></div>`
+    + `<div class="syspan"><div><div class="systt">I. Géométrie ${n === 2 ? "(droites dans ℝ²)" : "(plans dans ℝ³)"}</div>${geo}</div>`
+    + `<div><div class="systt">II. Réseau (topologie de AX = B)</div>${netSvg}</div></div><div class="syssyn">${synth}</div></figure>`;
+}
+function starPath(cx, cy, R, r) { let d = ""; for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r : R; d += (k ? "L" : "M") + (cx + rr * Math.cos(a)).toFixed(1) + "," + (cy + rr * Math.sin(a)).toFixed(1); } return d + "Z"; }
 function codeBlock(lang, body, file = "", open = false) {
   // an operation posée is written as aligned text (no drawing unless asked with /visuel); with a comma: the old layout
   if (/^pose$/i.test(lang || "") && !open) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, open); const h = poseHtml(body); if (h) return h; }
+  if (/^(systeme|système|systeme-lineaire|matrice-graphe|ax=b)$/i.test(lang || "") && !open) { try { const h = systemHtml(body); if (h) return h; } catch (e) { /* unreadable: shown as written */ } }
   if (/^(pose-texte|operation|calcul-texte)$/i.test(lang || "") && !open) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, open); }
   if (/^(addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)$/i.test(lang || "") && !open) { const h = /÷|:|\/|divis/i.test(body) ? divisionHtml(body) : opLearnHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }
   if (/^(division|divise|apprendre-division)$/i.test(lang || "") && !open) { const h = divisionHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }  // an operation « posée »: computed

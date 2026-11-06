@@ -127,6 +127,29 @@ française), les lignes décalées puis additionnées (multiplication, 3 chiffre
 vérification à la fin. Comme pour la division : le visuel ET les étapes écrites en texte après, puis un exercice.
 Nombres entiers ; une soustraction qui donnerait un nombre négatif ou un calcul avec virgule : en texte.
 
+## 2 ter. Un système linéaire AX = B en deux vues : bloc systeme
+Quand on demande de **représenter, dessiner, visualiser** un système d'équations linéaires ou une équation matricielle
+AX = B (« fais le graphe de ce système », « visualise AX = B », « interprétation géométrique et réseau »), ou avec
+/visuel : écris UN bloc avec seulement le système. Pour un simple « résous ce système » : en texte, sans ce bloc.
+```systeme
+3x - y = 5
+2x + y = 4
+```
+ou avec les matrices :
+```systeme
+A = [[1, 1, -1], [2, -1, 1], [-1, 2, -1]]
+B = [2, 1, 0]
+```
+L'application résout le système exactement (fractions comprises) et dessine : en haut A, B et la solution X ;
+**I. la géométrie** — 2 inconnues : les droites dans le repère, chacune de sa couleur et nommée (L1, L2…), la
+solution en étoile avec ses pointillés vers les axes ; 3 inconnues : les plans en perspective (P1, P2, P3) et le
+point commun ; **II. le réseau** — x₁, x₂… à gauche, b₁, b₂… à droite, chaque flèche pondérée par son coefficient
+a_ij, les sommes à côté ; **la synthèse** — les deux vues donnent la même solution, avec la vérification. Cas sans
+solution (droites parallèles) et infinité de solutions : dits et dessinés.
+- 2 ou 3 inconnues (x, y, z ou x1, x2, x3), 2 à 4 équations. Ne calcule pas la solution toi-même dans le bloc.
+- Avant le bloc : une phrase. Après : la résolution écrite en texte (substitution ou combinaison, ou Gauss), le
+  résultat et ce que montrent les deux vues, en 2 ou 3 phrases.
+
 ## 3. Courbes de fonctions : bloc graphe
 ```graphe
 f(x) = x^2 - 2x - 3
