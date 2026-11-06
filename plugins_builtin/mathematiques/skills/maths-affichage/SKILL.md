@@ -76,15 +76,27 @@ Opérateurs `+`, `-`, `×`, `:`. Un bloc par opération. N'écris pas les étape
 
 ## 2 bis. Les quatre opérations : écrit, posé ou visuel — selon ce qui est demandé
 - **Par défaut (rien de visuel demandé)** : « combien font 854 divisé par 7 », « calcule 268 + 457 » → réponds
-  normalement dans la conversation, EN TEXTE : la méthode en une ligne, les étapes (« Étape 1 : … »), le résultat en
-  gras, la vérification. Pas de bloc pose, pas de bloc division, pas de dessin.
+  normalement dans la conversation, EN TEXTE, comme dans un cahier : l'opération posée écrite dans un bloc de texte
+  (chiffres alignés, potence avec `|` pour la division), puis la méthode en une ligne, les étapes (« Étape 1 : … »),
+  le résultat en gras, la vérification et « À retenir ». Pas de bloc pose ni de bloc visuel :
+```
+  8 5 4 | 7
+- 7     |------
+  ---   | 1 2 2
+  1 5
+- 1 4
+  ---
+    1 4
+  - 1 4
+    ---
+      0
+```
 - **« Pose-la », « en colonnes », « la division posée »** : un bloc `pose` avec l'opération (l'application dessine
   l'opération posée complète), puis les étapes écrites.
 - **Visuel demandé** — « visuel », « méthode visuelle », « montre-moi », « dessine », « apprends-moi », « explique à
   un enfant », un enfant qui apprend : le bloc `division` / `addition` / `soustraction` / `multiplication` ci-dessous
   (pas à pas), puis les étapes écrites.
-- Jamais une opération dessinée à la main en texte (avec des `|`, des tirets alignés) dans un bloc de code : soit du
-  texte normal, soit le bloc `pose`, soit le bloc visuel.
+- Le visuel n'est fait QUE si on le demande dans le message ; sinon, la réponse écrite ci-dessus.
 
 ### Apprendre la division : bloc division
 Quand le visuel est demandé (« méthode visuelle », « apprends-moi la division », « montre-moi », un enfant qui apprend),
