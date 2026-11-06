@@ -403,7 +403,14 @@ header select { max-width: 220px; text-overflow: ellipsis; }
 .fb .rate.on.r2 { background: #3fb9a022; border-color: #3fb9a0; color: #2f9c86; }
 .icon.on { background: var(--hover); }
 .msgacts { display: flex; gap: 2px; margin-top: 4px; opacity: 0; transition: opacity .15s; align-items: center; }
-.turn:hover .msgacts, .turn:focus-within .msgacts { opacity: 1; }  /* like a coding assistant: the actions of an answer show on hover */
+.turn:hover .msgacts, .turn:focus-within .msgacts { opacity: 1; }
+/* your message: its actions (time, copy, edit) show under the bubble on hover, without keeping an empty line */
+.turn.user { position: relative; } .turn.user > .msgacts { position: absolute; right: 0; top: 100%; margin-top: 2px; z-index: 2; }
+.msgacts .fb { margin-left: 10px; flex-wrap: nowrap; } .msgacts .fb > .muted { display: none; }
+.conv .pinic { display: inline-flex; width: 12px; height: 12px; margin-right: 4px; color: var(--muted); vertical-align: -1px; } .conv .pinic svg { width: 12px; height: 12px; }  /* on the actions row the three words say enough */
+.msgacts { flex-wrap: wrap; row-gap: 2px; } .msgacts > * { white-space: nowrap; }  /* a narrow window: whole items go to the next line, none is cut in two */
+/* a rating given stays in sight, the other buttons only on hover */
+.turn:not(:hover) .msgacts:has(.rate.on) { opacity: 1; } .turn:not(:hover) .msgacts:has(.rate.on) > :not(.fb) { visibility: hidden; }  /* like a coding assistant: the actions of an answer show on hover */
 .stats, .time { font-size: 12px; color: var(--muted); margin-left: 6px; }
 .who { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
 .who .robot { width: 20px; height: 20px; }
@@ -4078,7 +4085,7 @@ async function loadList() { list = await api("/api/conversations"); renderList()
 function convRow(c, sub) {
   const d = document.createElement("div");
   d.className = "conv" + (sub ? " sub" : "") + (current?.id === c.id ? " active" : "");
-  d.innerHTML = `${runs[c.id] ? '<span class="adot rund" title="Naim travaille ici"></span>' : ""}<span class="cicon ${c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat"}">${typeof svgI === "function" ? svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat") : ""}</span><span class="t">${c.pinned ? "📌 " : ""}${esc(c.title || "Sans titre")}</span>${(c.tags || []).length ? `<span class="tags">${c.tags.slice(0, 2).map((t) => `<span class="tag">#${esc(t)}</span>`).join("")}</span>` : ""}${c.mode === "agent" && !sub ? '<span class="badge">agent</span>' : ""}<span class="when">${relTime(c.updated)}</span><span class="acts"><button class="icon" data-a="menu" title="Options">⋯</button></span>`;
+  d.innerHTML = `${runs[c.id] ? '<span class="adot rund" title="Naim travaille ici"></span>' : ""}<span class="cicon ${c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat"}">${typeof svgI === "function" ? svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat") : ""}</span><span class="t">${c.pinned ? `<span class="pinic">${typeof svgI === "function" ? svgI("pin") : ""}</span>` : ""}${esc(titleText(c.title) || "Sans titre")}</span>${(c.tags || []).length ? `<span class="tags">${c.tags.slice(0, 2).map((t) => `<span class="tag">#${esc(t)}</span>`).join("")}</span>` : ""}${c.mode === "agent" && !sub ? '<span class="badge">agent</span>' : ""}<span class="when">${relTime(c.updated)}</span><span class="acts"><button class="icon" data-a="menu" title="Options">⋯</button></span>`;
   d.onclick = (e) => {
     if (e.target.closest("[data-a=menu]")) { e.stopPropagation(); return convMenu(e.target, c); }
     openConv(c.id);
@@ -4276,7 +4283,9 @@ let draftId = null;
 const convIdForFiles = () => current?.id || (draftId ||= newId());
 async function saveConv(conv = current) { if (conv) await api(`/api/conversations/${conv.id}`, { method: "PUT", body: conv }); }
 function newConv() { current = null; draftId = null; pending = []; renderPending(); setView("chat"); renderList(); renderThread(); updateTitle(); }
-function updateTitle() { if (typeof renderGoalBar === "function") renderGoalBar(); if (S.params_open && typeof renderParams === "function" && !$("#params").contains(document.activeElement)) renderParams(); $("#titleBtn").innerHTML = `<span class="tt">${esc(current?.title || "Nouvelle conversation")}</span>${typeof svgI === "function" ? svgI("chevd") : ""}`; document.title = current ? `${current.title} · Naim` : "Naim"; $("#navHome").classList.toggle("on", view === "chat" && !current); }
+// a title shown as words: an old title made from a pasted text loses its marks (« ## 4. Équation » → « 4. Équation »)
+const titleText = (t) => String(t || "").split("\n").map((l) => l.replace(/^\s*(#{1,6}|>|[-*]|\d+\.)\s+(?=\S)/, (m, k) => (/^\d/.test(k) ? m : "")).replace(/\*\*|__|`+|\$\$?/g, "").trim()).find(Boolean) || "";
+function updateTitle() { if (typeof renderGoalBar === "function") renderGoalBar(); if (S.params_open && typeof renderParams === "function" && !$("#params").contains(document.activeElement)) renderParams(); $("#titleBtn").innerHTML = `<span class="tt">${esc(titleText(current?.title) || "Nouvelle conversation")}</span>${typeof svgI === "function" ? svgI("chevd") : ""}`; document.title = current ? `${titleText(current.title)} · Naim` : "Naim"; $("#navHome").classList.toggle("on", view === "chat" && !current); }
 $("#backBtn").onclick = () => { setView("chat"); if (current) renderThread(); };
 $("#titleBtn").onclick = (e) => {
   e.stopPropagation();
@@ -4351,7 +4360,7 @@ function renderThread() {
          ["check", "Quiz", "Fais-moi un quiz de 5 questions sur "]];
     const hb = $("#homeBelow"); hb.hidden = false;
     hb.innerHTML = `<div id="dreamCard"></div><div class="hchips">${chips.map(([ic, l, p]) => `<button class="hchip" data-p="${esc(p)}" title="${esc(p)}">${svgI(ic)}${esc(l)}</button>`).join("")}</div>
-      ${rec.length ? `<div class="hrec"><div class="hrt">Récents</div>${rec.slice(0, 5).map((c) => `<button class="hrow" data-open="${c.id}">${svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat")}<span class="hrn">${esc((c.title || "Sans titre").replace(/^⏱\s*/, ""))}</span><span class="hrw">${relTime(c.updated)}</span></button>`).join("")}</div>` : ""}`;
+      ${rec.length ? `<div class="hrec"><div class="hrt">Récents</div>${rec.slice(0, 5).map((c) => `<button class="hrow" data-open="${c.id}">${svgI(c.scheduled ? "sched" : c.mode === "agent" ? "agent" : "chat")}<span class="hrn">${esc(titleText((c.title || "Sans titre").replace(/^⏱\s*/, "")))}</span><span class="hrw">${relTime(c.updated)}</span></button>`).join("")}</div>` : ""}`;
     $$(".hchip", hb).forEach((b) => (b.onclick = () => { $("#input").value = b.dataset.p; $("#input").focus(); $("#input").dispatchEvent(new Event("input")); }));
     $$("[data-open]", hb).forEach((b) => (b.onclick = () => openConv(b.dataset.open)));
     dreamCard();
@@ -5269,7 +5278,9 @@ function addBot(m, idx) {
           `<a href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title ? x.title + "\n" + x.url : x.url)}"><b>${k + 1}</b>${esc(x.site)}</a>`).join("");
         d.insertBefore(sb, $(".msgacts", d));
       }
-      if (box.children.length) d.insertBefore(box, $(".msgacts", d));
+      // only the rating: it sits on the row of the other actions (no line of its own under every answer)
+      if (box.children.length === 1 && box.firstElementChild.classList.contains("fb") && $(".msgacts", d)) { $(".msgacts .fb", d)?.remove(); $(".msgacts", d).appendChild(box.firstElementChild); }
+      else if (box.children.length) d.insertBefore(box, $(".msgacts", d));
       $(".suggest", d)?.remove();
       const sug = suggestionsOf(r.content || "");
       if (sug.length && m === current?.messages[current.messages.length - 1]) {
