@@ -1,0 +1,18 @@
+{
+  "name": "diaporama",
+  "version": "1.0",
+  "description": "Des présentations PowerPoint professionnelles : thème choisi pour le sujet, diapositives variées (grands chiffres, étapes, comparaison, graphiques natifs, tableau), notes d'orateur, aperçu vérifié de chaque diapositive ; lire et modifier un PowerPoint existant sans le refaire.",
+  "skills": "skills",
+  "triggers": {
+    "presentation-pro": "\\b(powerpoint|pptx|potx|diaporamas?|diapos?|diapositives?|keynote|slides?|deck|pitch ?deck|support de pr[ée]sentation|soutenance|expos[ée] (oral|en classe|avec)|(fais|faire|cr[ée]e|pr[ée]pare|g[ée]n[èe]re|r[ée]alise)\\w*[^.?!]{0,30}\\bpr[ée]sentation\\b(?! (?:d'une? |du |de la |de l'|de (?:mon|ma|mes|ton|ta|notre|votre|son|sa|leur) )?(?:site|page|web|appli|application|entreprise en une page)))\\b"
+  },
+  "commands": [
+    {
+      "cmd": "/presentation",
+      "arg": "<sujet ou document>",
+      "description": "Une présentation PowerPoint pro sur ce sujet ou ce document",
+      "prompt": "Avec le skill presentation-pro, fais une présentation PowerPoint professionnelle (thème choisi pour le sujet, diapositives variées, notes d'orateur, aperçus vérifiés) sur :"
+    }
+  ],
+  "priority": true
+}

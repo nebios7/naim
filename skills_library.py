@@ -139,13 +139,10 @@ Le chemin du document, ce qu'il contient en 2 lignes, et ce que tu as vérifié 
 """),
     "presentation": ("Créer une présentation PowerPoint (.pptx) claire, une idée par diapositive.", """# Présentation
 
-- Bibliothèque : `python-pptx`.
-- Plan : titre, 5 à 10 diapositives d'une idée chacune, conclusion. 3 à 5 puces courtes par diapositive.
-- `prs.slide_layouts[0]` (titre), `[1]` (titre + contenu). Images : `slide.shapes.add_picture`.
-- Graphiques : `slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, ...)` avec `CategoryChartData`.
-- Enregistrer puis `open fichier.pptx` pour que l'utilisateur la voie.
-- Version PDF : une page HTML avec une diapositive par `<section style="page-break-after: always">` (format paysage),
-  puis `convert_document` avec orientation=landscape.
+Une présentation PowerPoint se fait avec le skill **presentation-pro** (plugin diaporama) : charge-le avec
+use_skill("presentation-pro") et suis-le. Tu écris le plan en JSON, son outil `diapo.py` fait le PowerPoint
+(thème, diapositives variées, graphiques natifs, notes), les aperçus à regarder et le contrôle du texte ;
+il lit et modifie aussi un PowerPoint existant sans le refaire.
 """),
     # ------------------------------------------------------------------ data
     "analyse-donnees": ("Analyser un CSV/Excel avec pandas et produire des graphiques et un résumé.", """# Analyse de données

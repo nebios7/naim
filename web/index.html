@@ -2012,6 +2012,27 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md .mathx .katex { font-size: 1.08em; }
 .bubble b.uh { font-size: 1.05em; }
 .bubble .mathx.d { display: block; margin: 8px 0; overflow-x: auto; overflow-y: hidden; white-space: normal; }
+/* a division to learn: a white board, big round digits, the colours of a school book, one step at a time */
+.dvfig { margin: 12px 0; background: #fff; color: #111; border-radius: 14px; padding: 12px 14px 12px; width: fit-content; max-width: 100%; }
+.dvfig svg text { font: 800 38px "Arial Rounded MT Bold", "SF Pro Rounded", -apple-system, sans-serif; }
+.dvfig .dvk { fill: #111; } .dvfig .dvq, .dvfig .dvp, .dvfig .dvm { fill: #3d6fe0; } .dvfig .dvdown { fill: #2f9a55; }
+.dvfig .dvbar { stroke: #111; stroke-width: 6; stroke-linecap: round; }
+.dvfig .dvline { stroke: #3d6fe0; stroke-width: 4.5; stroke-linecap: round; }
+.dvfig .dvar { stroke: #4cb06a; stroke-width: 5; stroke-linecap: round; } .dvfig .dvah { fill: #4cb06a; }
+.dvfig .dvbx { fill: none; stroke-width: 4; } .dvfig .dvbx.r { stroke: #e53935; } .dvfig .dvbx.g { stroke: #2e9e4f; } .dvfig .dvbx.b { stroke: #3d6fe0; }
+.dvfig .dvbx.o { stroke: #e8832a; stroke-dasharray: 7 6; }
+.dvfig .dvhi { fill: #ffe9a8; opacity: .7; }
+.dvfig .dvlab { font: 800 26px "Arial Rounded MT Bold", -apple-system, sans-serif !important; } .dvfig .dvlab.r { fill: #e53935; } .dvfig .dvlab.g { fill: #2e9e4f; } .dvfig .dvlab.b { fill: #3d6fe0; } .dvfig .dvlab.o { fill: #e8832a; }
+.dvfig [data-s], .dvfig [data-only] { transition: opacity .35s ease, transform .35s ease; }
+.dvfig .dvoff { opacity: 0; }
+.dvfig .dvsay { min-height: 48px; margin-top: 6px; font: 17px/1.45 -apple-system, "SF Pro Text", sans-serif; color: #222; max-width: 560px; }
+.dvfig .dvsay b.r { color: #e53935; } .dvfig .dvsay b.g { color: #2e9e4f; } .dvfig .dvsay b.b { color: #3d6fe0; } .dvfig .dvsay b.o { color: #e8832a; } .dvfig .dvsay b.gr { color: #2f9a55; }
+.dvfig .dvbtn { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.dvfig .dvbtn button { border: 1.5px solid #d6d3cc; background: #fff; color: #222; border-radius: 999px; padding: 6px 16px; font: 600 14px -apple-system, sans-serif; cursor: pointer; }
+.dvfig .dvbtn button.on { background: #3d6fe0; border-color: #3d6fe0; color: #fff; }
+.dvfig .dvbtn button:disabled { opacity: .4; cursor: default; }
+.dvfig .dvn { color: #888; font: 13px -apple-system, sans-serif; min-width: 48px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .dvfig [data-s], .dvfig [data-only] { transition: none; } }
 .md figure.pose { margin: 12px 0; display: flex; width: fit-content; max-width: 100%; flex-direction: column; gap: 8px; padding: 14px 20px 12px;
   border: 1px solid var(--line); border-radius: 12px; background: var(--code); }
 .md figure.pose table { border-collapse: collapse; margin: 0; font: 500 19px/1.55 "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace;
@@ -3183,8 +3204,101 @@ function flashHtml(q) {
     + `<div class="fcfoot">${cards.length} fiche${cards.length > 1 ? "s" : ""} · clique sur une fiche pour la retourner</div></div>`;
 }
 document.addEventListener("click", (e) => { const c = e.target.closest("[data-fc]"); if (c) c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true"); });
+// ---- a long division to LEARN (```division  854 : 7): the names first (dividende, diviseur, quotient, reste), then
+// step by step as on the board — how many times, the product to take away, what remains, the digit brought down by a
+// green arrow — each step said in a child's words; at the end the check. Computed here, exactly (whole numbers).
+function divisionHtml(src) {
+  const m = String(src).replace(/\s+/g, " ").match(/(\d[\d ]*)\s*(?:÷|:|\/|divis[ée] par)\s*(\d[\d ]*)/i);
+  if (!m) return null;
+  const A = m[1].replace(/\s/g, ""), B = m[2].replace(/\s/g, ""), N = BigInt(B);
+  if (N === 0n || A.length > 9 || B.length > 4) return null;
+  const digs = A.split("").map(Number), n = digs.length;
+  // the steps of the French method: the first part of the dividend big enough, then one digit brought down at a time
+  let end = 0, part = BigInt(digs[0]);
+  while (part < N && end < n - 1) { end++; part = part * 10n + BigInt(digs[end]); }
+  const steps = [];
+  for (;;) {
+    const q = part / N, prod = q * N, rem = part - prod;
+    steps.push({ end, part, q, prod, rem });
+    if (end >= n - 1) break;
+    end++; part = rem * 10n + BigInt(digs[end]);
+  }
+  const quotient = steps.map((x) => x.q.toString()).join(""), rest = steps[steps.length - 1].rem;
+  // the picture: a grid of columns (one per digit, one for the sign), rows: dividend, then product / remainder per step
+  const CW = 36, RH = 64, X0 = 34, Y0 = 72, col = (c) => X0 + c * CW, rowY = (r) => Y0 + r * RH;
+  const leftW = Math.max(col(n + 1) + 14, col(1) + n * CW / 2 + 92), rightX = leftW + 26, H = rowY(2 * steps.length + 1) + 20;
+  const W = rightX + Math.max(B.length * 26 + 190, Math.max(3, quotient.length) * CW + 170);
+  const els = [];  // each piece says from which sub-step it shows (data-s)
+  const num = (txt, endCol, row, cls, s, pre = "") => {
+    const t = String(txt), start = endCol - t.length + 1;
+    let out = pre ? `<text text-anchor="middle" class="dvm ${cls}" data-s="${s}" x="${col(start - 1) + CW / 2}" y="${rowY(row)}">−</text>` : "";
+    [...t].forEach((d, i) => (out += `<text text-anchor="middle" class="${cls}" data-s="${s}" x="${col(start + i) + CW / 2}" y="${rowY(row)}">${d}</text>`));
+    return out;
+  };
+  // the dividend, the divisor, the potence
+  els.push(num(A, n, 0, "dvk", 0));
+  els.push(`<line class="dvbar" x1="${leftW}" y1="${Y0 - 52}" x2="${leftW}" y2="${H - 24}"/><line class="dvbar" x1="${leftW}" y1="${Y0 + 16}" x2="${W - 30}" y2="${Y0 + 16}"/>`);
+  els.push(`<text class="dvk" data-s="0" x="${rightX + CW / 2}" y="${Y0}" text-anchor="start">${B}</text>`);
+  // the names (sub-step 0 only)
+  const A_w = n * CW;
+  els.push(`<g class="dvnames" data-only="0"><rect x="${col(1) - 8}" y="${Y0 - 44}" width="${A_w + 16}" height="58" rx="10" class="dvbx r"/><text text-anchor="middle" class="dvlab r" x="${col(1) + A_w / 2}" y="${Y0 + 44}">dividende</text>`
+    + `<rect x="${rightX - 6}" y="${Y0 - 44}" width="${B.length * 26 + 22}" height="58" rx="10" class="dvbx g"/><text class="dvlab g" x="${rightX + B.length * 26 + 30}" y="${Y0 - 6}" text-anchor="start">diviseur</text>`
+    + `<rect x="${rightX - 6}" y="${Y0 + 30}" width="${Math.max(3, quotient.length) * CW + 10}" height="54" rx="10" class="dvbx b"/><text class="dvlab b" x="${rightX + Math.max(3, quotient.length) * CW + 16}" y="${Y0 + 66}" text-anchor="start">quotient</text>`
+    + `<rect x="${col(n) - 8}" y="${rowY(2 * steps.length) - 42}" width="${CW + 16}" height="52" rx="8" class="dvbx o"/><text class="dvlab o" x="${col(n) - 18}" y="${rowY(2 * steps.length) - 6}" text-anchor="end">reste</text></g>`);
+  const say = ["Voici la division <b>" + A + " ÷ " + B + "</b>. On partage <b class=r>" + A + "</b> (le dividende) en groupes de <b class=g>" + B + "</b> (le diviseur). On cherche le <b class=b>quotient</b> (combien de groupes) et le <b class=o>reste</b> (ce qui reste)."];
+  let s = 1;
+  steps.forEach((st, k) => {
+    const pr = 1 + 2 * k, rr = 2 + 2 * k, ec = st.end + 1, startPart = ec - st.part.toString().length + 1;
+    const first = k === 0;
+    // 1. how many times: the quotient digit
+    els.push(`<text text-anchor="middle" class="dvq" data-s="${s}" x="${rightX + k * CW + CW / 2}" y="${rowY(1) + 6}">${st.q}</text>`);
+    if (first) els.push(`<rect class="dvhi" data-only="${s}" x="${col(startPart) - 2}" y="${Y0 - 40}" width="${(ec - startPart + 1) * CW + 4}" height="52" rx="8"/>`);
+    say.push(`Dans <b>${st.part}</b>, combien de fois <b class=g>${B}</b> ? <b class=b>${st.q} fois</b>${st.q === 0n ? ` (${B} est plus grand que ${st.part})` : ""}. J'écris <b class=b>${st.q}</b> au quotient.`); s++;
+    // 2. the product to take away, under the part, with its line
+    const pw = Math.max(st.prod.toString().length, st.part.toString().length);
+    els.push(num(st.prod.toString(), ec, pr, "dvp", s, "−"));
+    els.push(`<line class="dvline" data-s="${s}" x1="${col(ec - pw) + 4}" y1="${rowY(pr) + 16}" x2="${col(ec + 1) - 2}" y2="${rowY(pr) + 16}"/>`);
+    say.push(`<b class=b>${st.q} × ${B} = ${st.prod}</b>. J'écris <b>${st.prod}</b> sous <b>${st.part}</b> pour l'enlever.`); s++;
+    // 3. what remains
+    els.push(num(st.rem.toString(), ec, rr, "dvp", s));
+    say.push(`<b>${st.part} − ${st.prod} = ${st.rem}</b>.${st.rem < N ? ` ${st.rem} est plus petit que ${B} : c'est bon.` : ""}`); s++;
+    // 4. the next digit brought down (green arrow)
+    if (k < steps.length - 1) {
+      const c = st.end + 1, x = col(c + 1) + CW / 2;
+      els.push(`<g data-s="${s}"><line class="dvar" x1="${x}" y1="${Y0 + 14}" x2="${x}" y2="${rowY(rr) - 40}"/><path class="dvah" d="M${x - 9},${rowY(rr) - 44} L${x + 9},${rowY(rr) - 44} L${x},${rowY(rr) - 30} Z"/></g>`);
+      els.push(`<text text-anchor="middle" class="dvp dvdown" data-s="${s}" x="${x}" y="${rowY(rr)}">${digs[c]}</text>`);
+      say.push(`J'abaisse le <b class=gr>${digs[c]}</b> : ça fait <b>${steps[k + 1].part}</b>.`); s++;
+    }
+  });
+  els.push(`<rect class="dvbx o" data-s="${s}" x="${col(n - rest.toString().length + 1) - 8}" y="${rowY(2 * steps.length) - 42}" width="${rest.toString().length * CW + 16}" height="52" rx="8"/>`);
+  say.push(rest === 0n ? `Il ne reste rien : le <b class=o>reste est 0</b>. La division tombe juste !<br><b class=b>${A} ÷ ${B} = ${quotient}</b>`
+                       : `Plus de chiffre à abaisser : le <b class=o>reste est ${rest}</b>.<br><b class=b>${A} ÷ ${B} = ${quotient}</b>, reste <b class=o>${rest}</b>`);
+  s++;
+  say.push(`On vérifie : <b class=g>${B}</b> × <b class=b>${quotient}</b> + <b class=o>${rest}</b> = <b class=r>${A}</b> ✓`);
+  const last = s;
+  return `<figure class="dvfig" data-step="0" data-last="${last}" data-say="${esc(JSON.stringify(say))}">`
+    + `<svg viewBox="0 0 ${W} ${H}" width="${W}" style="max-width:100%">${els.join("")}</svg>`
+    + `<div class="dvsay"></div><div class="dvbtn"><button data-dv="-1">Précédent</button><span class="dvn"></span><button data-dv="1" class="on">Suivant</button><button data-dv="all">Tout voir</button></div></figure>`;
+}
+function divDraw(f) {
+  const st = +f.dataset.step, say = JSON.parse(f.dataset.say || "[]");
+  f.querySelectorAll("[data-s]").forEach((e) => e.classList.toggle("dvoff", +e.dataset.s > st));
+  f.querySelectorAll("[data-only]").forEach((e) => e.classList.toggle("dvoff", +e.dataset.only !== st));
+  f.querySelector(".dvsay").innerHTML = say[st] || "";
+  f.querySelector(".dvn").textContent = `${st + 1} / ${say.length}`;
+  f.querySelector('[data-dv="-1"]').disabled = st <= 0; f.querySelector('[data-dv="1"]').disabled = st >= say.length - 1;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-dv]"); if (!b) return;
+  const f = b.closest(".dvfig"), max = JSON.parse(f.dataset.say).length - 1;
+  f.dataset.step = b.dataset.dv === "all" ? max : Math.max(0, Math.min(max, +f.dataset.step + +b.dataset.dv));
+  divDraw(f);
+});
+new MutationObserver(() => document.querySelectorAll(".dvfig:not([data-drawn])").forEach((f) => { f.dataset.drawn = 1; divDraw(f); }))
+  .observe(document.body, { childList: true, subtree: true });
 function codeBlock(lang, body, file = "", open = false) {
-  if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }  // an operation « posée »: computed
+  if (/^pose$/i.test(lang || "")) { const h = poseHtml(body); if (h) return h; }
+  if (/^(division|divise|apprendre-division)$/i.test(lang || "") && !open) { const h = divisionHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }  // an operation « posée »: computed
   if (open && /^(graphe|graph|courbe|fonction|svg|pose)$/i.test(lang || "")) {
     return `<figure class="mfig mwait"><span>${/^pose$/i.test(lang) ? "Calcul posé" : /^svg$/i.test(lang) ? "Figure" : "Courbe"} en cours…</span></figure>`;
   }
