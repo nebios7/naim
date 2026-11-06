@@ -3017,3 +3017,29 @@ class TypographicEdits(unittest.TestCase):
         self.assertTrue(server.ends_announcing("Le cours est prêt. Je prépare maintenant le cours de 4ème année."))
         self.assertFalse(server.ends_announcing("Le PDF est prêt : 3annes/cours.pdf."))
         self.assertFalse(server.ends_announcing("Voulez-vous que je continue maintenant ?"))
+
+
+class SvgCheck(unittest.TestCase):
+    """A figure is measured before it is shown: what goes out of the frame, labels on top of each other or cut by a
+    line, a point's name far from its point — a clean figure says nothing."""
+
+    def test_clean_figure_passes(self):
+        import svgcheck
+        good = ('<svg viewBox="0 0 240 220" font-size="14"><circle cx="120" cy="110" r="80" fill="none" stroke="#000"/>'
+                '<line x1="40" y1="110" x2="200" y2="110" stroke="#000"/><circle cx="120" cy="110" r="3" fill="#222"/>'
+                '<text x="114" y="128">O</text><text x="22" y="114">A</text><text x="205" y="114">B</text></svg>')
+        self.assertEqual(svgcheck.check(good), [])
+
+    def test_defects_are_found_with_their_place(self):
+        import svgcheck
+        bad = ('<svg viewBox="0 0 200 150" font-size="14"><polygon points="20,20 60,20 60,50 20,50" fill="none" stroke="black"/>'
+               '<text x="18" y="18">A</text><text x="20" y="18">B</text><text x="180" y="140">Côté du carré</text>'
+               '<text x="150" y="20">C</text></svg>')
+        probs = " | ".join(svgcheck.check(bad))
+        self.assertIn("sort du cadre", probs)
+        self.assertIn("se chevauchent", probs)
+        self.assertIn("loin de tout point", probs)
+
+    def test_broken_xml_is_said(self):
+        import svgcheck
+        self.assertIn("ne se lit pas", svgcheck.check("<svg viewBox='0 0 10 10'><rect></svg>")[0])

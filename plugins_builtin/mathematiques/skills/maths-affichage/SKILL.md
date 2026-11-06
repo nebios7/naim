@@ -75,22 +75,17 @@ Par exemple `python3 -c "…recette…; x, y = pell(61); print(x, y, x*x - 61*y*
 Opérateurs `+`, `-`, `×`, `:`. Un bloc par opération. N'écris pas les étapes : l'application les calcule.
 
 ## 2 bis. Les quatre opérations : écrit, posé ou visuel — selon ce qui est demandé
-- **Par défaut (rien de visuel demandé)** : « combien font 854 divisé par 7 », « calcule 268 + 457 » → réponds
-  normalement dans la conversation, EN TEXTE, comme dans un cahier : l'opération posée écrite dans un bloc de texte
-  (chiffres alignés, potence avec `|` pour la division), puis la méthode en une ligne, les étapes (« Étape 1 : … »),
-  le résultat en gras, la vérification et « À retenir ». Pas de bloc pose ni de bloc visuel :
+- **Par défaut (rien de visuel demandé)** : « combien font 854 divisé par 7 », « apprends-moi la division pour le
+  CM1 », « calcule 268 + 457 » → réponds normalement dans la conversation, EN TEXTE, comme dans un cahier.
+  L'opération posée : NE L'ÉCRIS PAS à la main (les colonnes se décalent) — écris un bloc ```pose-texte avec
+  seulement l'opération, l'application l'écrit en texte, parfaitement alignée :
+```pose-texte
+854 : 7
 ```
-  8 5 4 | 7
-- 7     |------
-  ---   | 1 2 2
-  1 5
-- 1 4
-  ---
-    1 4
-  - 1 4
-    ---
-      0
-```
+  (marche aussi pour `268 + 457`, `503 - 276`, `347 x 26`). Une ligne simple pour annoncer le calcul reste écrite
+  par toi, dans un petit bloc texte comme avant (`12 ÷ 3 = ?`) : c'est seulement l'opération posée en colonnes
+  (potence, soustractions) qui passe par ```pose-texte. Puis la méthode en une ligne, les étapes
+  (« Étape 1 : … »), le résultat en gras, la vérification et « À retenir ». Pas de bloc pose ni de bloc visuel.
 - **« Pose-la », « en colonnes », « la division posée »** : un bloc `pose` avec l'opération (l'application dessine
   l'opération posée complète), puis les étapes écrites.
 - **Visuel demandé** — SEULEMENT si le message dit « visuel », « méthode visuelle », « en visuel », « dessine » ou
@@ -175,7 +170,23 @@ la réponse avec la figure s'écrit dans la conversation.
 
 ## 4. Figures de géométrie sans repère : bloc svg
 Environ 280 × 220, `viewBox`, traits épais `stroke-width="2"`, noms des points en Helvetica, longueurs écrites, angle
-droit marqué par un petit carré, codage des égalités par des petits traits. Exemples à adapter :
+droit marqué par un petit carré, codage des égalités par des petits traits.
+
+**Tu ne vois pas ton dessin : calcule-le, ne le devine pas.**
+1. **D'abord les points, en vraies mesures** (cm, angles), puis l'échelle : `échelle = min(240 / largeur, 180 / hauteur)`
+   (marge de 20 autour). Pour un triangle, un cercle, un angle, un polygone régulier : calcule les sommets
+   (`x = cx + r·cos θ`, `y = cy − r·sin θ` — en SVG, y descend), avec run_command et Python si ce n'est pas immédiat.
+   Écris la liste des points avant le SVG.
+2. **Les noms à l'extérieur de la figure** : depuis le centre de la figure, pousse chaque nom de 12 à 16 unités
+   dans la direction de son sommet (`text-anchor="middle"`). Une longueur : au milieu du côté, décalée vers l'extérieur.
+3. **Jamais un texte sur un trait** ni deux textes l'un sur l'autre ; rien hors du viewBox ; la figure occupe
+   l'essentiel du cadre.
+4. L'application **mesure ton SVG** avant de l'afficher (hors cadre, étiquettes qui se chevauchent, texte coupé par un
+   trait, nom loin de son point, figure trop petite) et te renvoie les défauts avec leurs coordonnées : corrige-les
+   en recalculant. Un fichier .svg écrit est mesuré de la même façon (`python3 ~/Library/Application\ Support/Naim/app/svgcheck.py fichier.svg`).
+5. Une figure dans un repère (coordonnées, vecteurs, transformation) : le bloc `graphe`, qui place tout seul.
+
+Exemples à adapter :
 
 Cercle de centre O et de rayon 3 cm, avec un diamètre :
 ```svg

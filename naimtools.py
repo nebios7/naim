@@ -3739,6 +3739,16 @@ class Agent:
             result = (str(result) + " — The user said NO. Respect it: do NOT try any other way to do this (no sudo, no other "
                       "command, no screen control, no other tool). Tell the user in one sentence that you did not do it "
                       "because they refused, and ask what they want instead.")
+        if name in ("write_file", "edit_file", "multi_edit") and str(result).startswith("ok") and str(args.get("path", "")).lower().endswith(".svg"):
+            # a drawing written: measured like a person would look at it (out of the frame, labels on top of each
+            # other, a label cut by a line, a name far from its point) — the model does not see what it draws
+            try:
+                import svgcheck
+                probs = svgcheck.check(self.resolve(str(args["path"])).read_text(encoding="utf-8"))
+                if probs:
+                    result = str(result) + "\n\n[Vérification du dessin — à corriger avant de le livrer :\n- " + "\n- ".join(probs) + "]"
+            except Exception:  # noqa: BLE001 — a drawing that cannot be measured is not refused
+                pass
         if name in ("write_file", "edit_file") and str(result).startswith("ok") and str(args.get("path", "")).endswith(".swift"):
             self._swift_dirty = str(args["path"]).split("/Sources/")[0] if "/Sources/" in str(args["path"]) else "."
         if name == "simulator" and args.get("action") in ("build_run", "new_app") and str(result).startswith("ok"):

@@ -199,6 +199,7 @@ LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, 
 
 
 SIM_BLOCK_RE = re.compile(r"```simulation[ \t]*\n(.*?)```", re.S)
+SVG_BLOCK_RE = re.compile(r"```svg[ \t]*\n\s*(<svg[\s\S]*?</svg>)\s*```", re.I)
 # a ```mermaid block, with the title line just before it (« **Architecture de la scène :** »)
 MERMAID_BLOCK_RE = re.compile(r"(\n[^\n]{0,80}:\**[ \t]*\n)?\n*```mermaid[ \t]*\n.*?```[ \t]*", re.S)
 DIAGRAM_ASK_RE = re.compile(r"\b(sch[ée]ma\w*|diagramme\w*|organigramme|flowchart|logigramme|graphe|arbre|carte mentale|mind ?map"
@@ -2339,7 +2340,7 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = rewrites = loops = sim_checks = 0
+        copies = rewrites = loops = sim_checks = svg_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2736,6 +2737,25 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "user", "content": "(Vérification de ta simulation : elle ne marche pas encore.\n"
                                      + problems + "\n\nCorrige et redonne ta réponse entière : une phrase puis le bloc ```simulation "
                                      "complet, corrigé, sur le plan de l'exemple vérifié.)"})
+                    shown = 0
+                    continue
+            if not calls and not stop.is_set() and svg_checks < 2 and SVG_BLOCK_RE.search(content):
+                # a figure drawn in the answer is measured before it is shown (the model does not see its own SVG):
+                # out of the frame, labels on top of each other or cut by a line, a name far from its point → redrawn
+                try:
+                    import svgcheck
+                    probs = [f"figure {i + 1} : {p}" if len(SVG_BLOCK_RE.findall(content)) > 1 else p
+                             for i, blk in enumerate(SVG_BLOCK_RE.findall(content)) for p in svgcheck.check(blk)]
+                except Exception:  # noqa: BLE001
+                    probs = []
+                if probs:
+                    svg_checks += 1
+                    self.event({"type": "retract", "chars": shown})
+                    self.event({"type": "status", "text": "Naim corrige sa figure…"})
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": "(Vérification de ta figure, mesurée sur ton SVG :\n- " + "\n- ".join(probs[:10])
+                                     + "\n\nCorrige les coordonnées (calcule-les, ne les devine pas) et redonne ta réponse entière, "
+                                       "avec le bloc ```svg corrigé.)"})
                     shown = 0
                     continue
             if not calls and not stop.is_set() and (dead := helper.link_note(content)):
