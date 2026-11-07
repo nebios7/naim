@@ -304,6 +304,10 @@ body.noside aside#side { display: none; }
 /* the sessions list's right edge: drag it to widen or narrow the list (a blue line shows it), double click = default */
 .sidegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 7px; cursor: col-resize; z-index: 6; }
 .sidegrip:hover, .sidegrip.drag { background: linear-gradient(to right, transparent 2px, #4a9eff 2px, #4a9eff 4px, transparent 4px); }
+/* the terminal's top edge: drag it to make the terminal taller or shorter, like the side list's edge */
+.termgrip { position: absolute; left: 0; right: 0; top: 0; height: 8px; cursor: row-resize; z-index: 6; }  /* inside the panel: the whole zone can be caught */
+.termgrip:hover, .termgrip.drag { background: linear-gradient(to bottom, #4a9eff 0, #4a9eff 2px, transparent 2px); }
+body.resizing-v, body.resizing-v * { cursor: row-resize !important; user-select: none !important; }
 body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 10px; }
 .logo { width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center; }
@@ -624,7 +628,7 @@ footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #fold
 body.dragging .dropzone { display: grid; }
 
 /* ================= terminal */
-#term { height: 240px; min-height: 120px; border-top: 1px solid var(--line); background: var(--term); color: var(--term-t); display: flex; flex-direction: column; resize: vertical; overflow: hidden; }
+#term { position: relative; height: 240px; min-height: 120px; border-top: 1px solid var(--line); background: var(--term); color: var(--term-t); display: flex; flex-direction: column; overflow: hidden; }
 .thead { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 12px; font-size: 12px; color: #9b9a94; border-bottom: 1px solid #2c2c2a; }
 .thead .icon { color: #9b9a94; }
 .thead .icon:hover { background: #2a2a28; color: #fff; }
@@ -4502,7 +4506,7 @@ addEventListener("resize", () => fitViewport());
 if (document.documentElement.classList.contains("macapp") && window.webkit?.messageHandlers?.naimWindow) {
   const bar = (e) => {
     const t = e.target;
-    if (t.closest("button, a, input, textarea, select, label, [contenteditable], .seg, .menu, #ctxmenu, .sidegrip")) return false;
+    if (t.closest("button, a, input, textarea, select, label, [contenteditable], .seg, .menu, #ctxmenu, .sidegrip, .termgrip")) return false;
     if (t.closest("main > header, main > .pagebar")) return true;
     const z = parseFloat(document.documentElement.style.zoom) || 1;
     return !!t.closest("aside#side") && e.clientY * z < 52;  // the strip of the three buttons
@@ -9525,6 +9529,22 @@ function buildRail() {
       addEventListener("mousemove", move); addEventListener("mouseup", up);
     });
     grip.addEventListener("dblclick", (e) => { e.stopPropagation(); S.side_width = 0; document.documentElement.style.removeProperty("--sidew"); saveSettings(); });
+  }
+  const termEl = $("#term");
+  if (termEl && !$(".termgrip", termEl)) {  // the terminal's height, dragged by its top edge (kept between openings)
+    const tg = document.createElement("div"); tg.className = "termgrip"; tg.title = "Tirer pour agrandir ou réduire le terminal · double-clic : taille d'origine";
+    termEl.prepend(tg);
+    if (+S.term_height) termEl.style.height = +S.term_height + "px";
+    tg.addEventListener("mousedown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const h0 = parseFloat(getComputedStyle(termEl).height), k = termEl.getBoundingClientRect().height / h0 || 1, y0 = e.clientY;
+      const max = Math.max(200, (termEl.parentElement?.getBoundingClientRect().height || innerHeight) / k - 160);
+      let h = h0; tg.classList.add("drag"); document.body.classList.add("resizing-v");
+      const move = (ev) => { h = Math.round(Math.min(max, Math.max(120, h0 - (ev.clientY - y0) / k))); termEl.style.height = h + "px"; };
+      const up = () => { removeEventListener("mousemove", move); removeEventListener("mouseup", up); tg.classList.remove("drag"); document.body.classList.remove("resizing-v"); S.term_height = h; saveSettings(); };
+      addEventListener("mousemove", move); addEventListener("mouseup", up);
+    });
+    tg.addEventListener("dblclick", (e) => { e.stopPropagation(); S.term_height = 0; termEl.style.height = ""; saveSettings(); });
   }
   $$("#rail [data-go], #sidenav [data-go], #sideSettings").forEach((b) => (b.onclick = () => {
     const g = b.dataset.go;
