@@ -628,7 +628,7 @@ footer > .ctools #permPill, footer > .ctools #effortPill, footer > .ctools #fold
 body.dragging .dropzone { display: grid; }
 
 /* ================= terminal */
-#term { position: relative; height: 240px; min-height: 120px; border-top: 1px solid var(--line); background: var(--term); color: var(--term-t); display: flex; flex-direction: column; overflow: hidden; }
+#term { position: relative; height: 240px; min-height: 110px; max-height: max(110px, calc(100% - 300px)); flex-shrink: 1; border-top: 1px solid var(--line); background: var(--term); color: var(--term-t); display: flex; flex-direction: column; overflow: hidden; }
 .thead { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 12px; font-size: 12px; color: #9b9a94; border-bottom: 1px solid #2c2c2a; }
 .thead .icon { color: #9b9a94; }
 .thead .icon:hover { background: #2a2a28; color: #fff; }
