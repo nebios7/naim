@@ -2299,6 +2299,10 @@ class Handler(BaseHTTPRequestHandler):
         helper._bg_intent = bool(Agent.BG_INTENT_RE.search(body.get("message") or ""))
         helper.prior_text = " ".join(str(m.get("content") or "") for m in (body.get("history") or []))
         # what the USER asked earlier in this conversation (« un cours avec des images »): still asked for its next chapters
+        # a question to look something up (« recherche le programme du CM1 ») and no file asked: answered in the
+        # conversation with its sources, never as files dropped in the open folder
+        helper.no_files = bool(re.search(r"\b(recherch\w*|cherch\w*|trouv\w*|procur\w*|renseign\w*|informe\w*|quel(?:le)?s? (?:est|sont)|c'est quoi|explique\w*)\b",
+                                         body.get("message") or "", re.I)) and not FILE_WORK_RE.search(body.get("message") or "")
         helper.prior_asks = " ".join(str(m.get("content") or "") for m in (body.get("history") or []) if m.get("role") == "user")
         helper.request_text = body.get("message") or ""  # « le fichier de Paul » with two Paul: asked, not chosen at random
         with _lock:
@@ -2341,7 +2345,7 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = 0
+        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2754,6 +2758,24 @@ class Handler(BaseHTTPRequestHandler):
                                  "division, addition, soustraction ou multiplication.)"})
                 shown = 0
                 continue
+            if not calls and not stop.is_set() and calc_checks < 2:
+                # the arithmetic of the answer computed again before it is shown (a small model miscalculates in its
+                # head: « 854 ÷ 7 = 121 reste 4 »): wrong, the answer goes back with the right results
+                try:
+                    import calccheck
+                    wrong = calccheck.check(content)
+                except Exception:  # noqa: BLE001
+                    wrong = []
+                if wrong:
+                    calc_checks += 1
+                    self.event({"type": "retract", "chars": shown})
+                    self.event({"type": "status", "text": "Naim vérifie ses calculs…"})
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": "(Vérification de tes calculs : des résultats sont faux.\n- " + "\n- ".join(wrong)
+                                     + "\n\nRedonne ta réponse entière avec les bons résultats : corrige aussi les étapes qui y "
+                                       "mènent, pas seulement la ligne fausse.)"})
+                    shown = 0
+                    continue
             if not calls and not stop.is_set() and svg_checks < 2 and SVG_BLOCK_RE.search(content):
                 # a figure drawn in the answer is measured before it is shown (the model does not see its own SVG):
                 # out of the frame, labels on top of each other or cut by a line, a name far from its point → redrawn

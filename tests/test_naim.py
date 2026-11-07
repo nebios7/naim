@@ -3155,3 +3155,33 @@ class AgentWorkTools(unittest.TestCase):
         self.assertIn("moved to the background by itself", out)
         out2 = a.run_command("sleep 8", timeout=5)  # silent: stopped as before
         self.assertIn("timed out", out2)
+
+
+class CalcCheck(unittest.TestCase):
+    """The arithmetic of an answer is computed again: a wrong result (or a wrong remainder) is found, the right ones
+    and what is not arithmetic (hours, formulas, years, blocks the app computes) are left alone."""
+
+    def test_wrong_results_found(self):
+        import calccheck
+        probs = " | ".join(calccheck.check("854 ÷ 7 = 121 avec un reste de 4. Vérification : 121 × 7 + 4 = 854. Et 12 × 12 = 124."))
+        self.assertIn("122, reste 0", probs)
+        self.assertIn("851", probs)
+        self.assertIn("144", probs)
+
+    def test_right_ones_and_non_arithmetic_left_alone(self):
+        import calccheck
+        ok = ("7 × 12 = 84, 85 - 84 = 1, 963 ÷ 3 = 321, 100 ÷ 7 = 14 (reste 2), 2,5 + 1,25 = 3,75, 1 000 + 250 = 1 250. "
+              "À 10:30. $z^2 + (2i-3)z = 0$ et 2x + y = 4. 2024-2025 = année.\n```pose-texte\n854 : 7 = 1\n```")
+        self.assertEqual(calccheck.check(ok), [])
+
+
+class NoFilesForAQuestion(unittest.TestCase):
+    """A request to look something up, with no file asked, is answered in the conversation: writing a file is refused
+    with what to do instead."""
+
+    def test_write_refused_when_no_file_asked(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+        a.no_files = True
+        self.assertIn("DANS la conversation", a.call_tool("write_file", {"path": "programme.md", "content": "x"}))
+        a.no_files = False
+        self.assertTrue(str(a.call_tool("write_file", {"path": "programme.md", "content": "x"})).startswith("ok"))

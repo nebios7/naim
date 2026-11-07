@@ -3916,6 +3916,10 @@ class Agent:
               "confier_tache": self.confier_tache, "lire_terminal": self.lire_terminal,
               "copie_travail": self.copie_travail, "partager_page": self.partager_page,
               "wait": self.wait}.get(name)
+        if getattr(self, "no_files", False) and name in ("write_file", "make_diagram", "convert_document", "notebook_edit"):
+            return ("refused: l'utilisateur a demandé une information, pas un fichier. Réponds DANS la conversation : un "
+                    "résumé clair et organisé (titres, listes), avec les liens des sources à la fin. Ne crée un fichier "
+                    "que s'il le demande (« fais-en un PDF », « enregistre-le »).")
         rule = self._rule_for(name, args) if self.rules else None
         if rule == "deny":
             return f"denied by the user's permission rules for {name}"
