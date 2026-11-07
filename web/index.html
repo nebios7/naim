@@ -3636,9 +3636,11 @@ function systemHtml(src) {
 function starPath(cx, cy, R, r) { let d = ""; for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r : R; d += (k ? "L" : "M") + (cx + rr * Math.cos(a)).toFixed(1) + "," + (cy + rr * Math.sin(a)).toFixed(1); } return d + "Z"; }
 function codeBlock(lang, body, file = "", open = false) {
   // an operation posée is written as aligned text (no drawing unless asked with /visuel); with a comma: the old layout
-  if (/^pose$/i.test(lang || "") && !open) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, open); const h = poseHtml(body); if (h) return h; }
+  // drawn as soon as the operation can be read, while Naim still writes the block: it never jumps from one raw line
+  // to the whole layout when the block closes (the text under it stays in place)
+  if (/^pose$/i.test(lang || "")) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, false); if (!open) { const h = poseHtml(body); if (h) return h; } }
   if (/^(systeme|système|systeme-lineaire|matrice-graphe|ax=b)$/i.test(lang || "") && !open) { try { const h = systemHtml(body); if (h) return h; } catch (e) { /* unreadable: shown as written */ } }
-  if (/^(pose-texte|operation|calcul-texte)$/i.test(lang || "") && !open) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, open); }
+  if (/^(pose-texte|operation|calcul-texte)$/i.test(lang || "")) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, false); }
   if (/^(addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)$/i.test(lang || "") && !open) { const h = /÷|:|\/|divis/i.test(body) ? divisionHtml(body) : opLearnHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }
   if (/^(division|divise|apprendre-division)$/i.test(lang || "") && !open) { const h = divisionHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }  // an operation « posée »: computed
   if (open && /^(graphe|graph|courbe|fonction|svg|pose)$/i.test(lang || "")) {
