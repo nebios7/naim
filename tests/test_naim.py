@@ -3185,3 +3185,17 @@ class NoFilesForAQuestion(unittest.TestCase):
         self.assertIn("DANS la conversation", a.call_tool("write_file", {"path": "programme.md", "content": "x"}))
         a.no_files = False
         self.assertTrue(str(a.call_tool("write_file", {"path": "programme.md", "content": "x"})).startswith("ok"))
+
+
+class EquationsAreMaths(unittest.TestCase):
+    """An equation written out (« 3x - y = 7 », even with « ststem » mistyped) picks the maths skill; a solar system or
+    an hour does not."""
+
+    def test_written_equations_pick_maths(self):
+        import json
+        import re
+        t = json.loads((ROOT / "plugins_builtin/mathematiques/plugin.json").read_text())["triggers"]["maths-affichage"]
+        for s in ("maintenant tu fais pour ce ststem 3x - y = 7 et 2x - 9y = 14", "résous 2x + 3y = 12"):
+            self.assertTrue(re.search(t, s.lower()), s)
+        for s in ("le système solaire", "mon rendez-vous à 14h"):
+            self.assertFalse(re.search(t, s.lower()), s)

@@ -2416,7 +2416,9 @@ class Handler(BaseHTTPRequestHandler):
                     keep = ("app-macos", "react-app", "react-native")  # an application stays an application
                 found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k and k["name"] in keep] if keep else []
                 if not found and re.search(r"\b(respect\w*|pas mis|pas fait|toujours|encore|m[êe]me style|le style|l'affichage|enrichi\w*|"
-                                           r"refai\w*|recommence\w*|c'?est pas [cç]a|pas ce que|la suite|suivant\w*|continu\w*|de plus|en plus)\b", m_, re.I):
+                                           r"refai\w*|recommence\w*|c'?est pas [cç]a|pas ce que|la suite|suivant\w*|continu\w*|de plus|en plus|"
+                                           r"maintenant|pareil|idem|(?:la )?m[êe]me chose|et pour|fais(?:-le)? pour|pour (?:ce|cette|ces|celui|celle)\b|"
+                                           r"avec (?:ce|cette|ces)\b|celui-ci|celle-ci|un autre|une autre)\b", m_, re.I):
                     # a remark on the work under way (« tu n'as pas respecté le style ») or its next part (« fais la suite »)
                     # keeps that work's skill — the one of the document being made (pdf-pro…) before a subject or a sending
                     found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k]
