@@ -193,6 +193,32 @@ INSTALL_PLUGIN_TOOL = {"type": "function", "function": {"name": "install_plugin"
         "source": {"type": "string", "description": "https://github.com/owner/repo or owner/repo"},
         "name": {"type": "string", "description": "the plugin, when the marketplace holds several"}}, "required": ["source"]}}}
 
+# what the user ran in Naim's own Terminal panel (commands and their output), newest last
+import collections as _collections
+TERMINAL_LOG = _collections.deque(maxlen=600)
+TERMINAL_TOOL = {"type": "function", "function": {"name": "lire_terminal", "description": (
+    "Read what the user ran in Naim's Terminal panel: the commands and their output, newest last. Use it when the user "
+    "talks about it (« l'erreur dans le terminal », « la commande que je viens de lancer », « regarde le terminal »)."),
+    "parameters": {"type": "object", "properties": {
+        "lignes": {"type": "integer", "description": "how many last lines (default 120)"}}}}}
+# a big or risky change made on an isolated copy of the project: the original stays as it is until the user agrees
+WORKCOPY_TOOL = {"type": "function", "function": {"name": "copie_travail", "description": (
+    "Work on an isolated copy of the project before a big or risky change (refactoring, migration, many files, an "
+    "experiment): creer → a copy (a git worktree when the project uses git) where you make and test the changes; "
+    "comparer → what differs from the original; appliquer → the changes put into the original (the user confirms); "
+    "abandonner → the copy goes to the Trash, the original untouched."),
+    "parameters": {"type": "object", "properties": {
+        "action": {"type": "string", "enum": ["creer", "comparer", "appliquer", "abandonner"]},
+        "copie": {"type": "string", "description": "the copy's folder (default: the last one made for this project)"}},
+        "required": ["action"]}}}
+# a page or a file shown on another device of the same Wi-Fi (a phone, a tablet, a colleague's computer): a secret link
+SHARE_TOOL = {"type": "function", "function": {"name": "partager_page", "description": (
+    "Share a page (HTML), a PDF or an image made here with the user's other devices on the same Wi-Fi: a private link "
+    "that works while Naim is open (the user confirms). arreter → the link stops working."),
+    "parameters": {"type": "object", "properties": {
+        "action": {"type": "string", "enum": ["partager", "arreter"]},
+        "chemin": {"type": "string", "description": "the file to share, or the link to stop"}}, "required": ["action"]}}}
+
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
     "Find the user's own files anywhere on the Mac (Bureau, Documents, Téléchargements…), like the Finder: by words in "
     "the file NAME and in the CONTENT of documents, programs' code left out, newest first. Use it whenever the user "
@@ -791,6 +817,7 @@ class Agent:
                 tools.append(INSTALL_MCP_TOOL)
             tools.append(ADD_HOOK_TOOL)
             tools.append(INSTALL_PLUGIN_TOOL)
+            tools += [TERMINAL_TOOL, WORKCOPY_TOOL, SHARE_TOOL]
             if self.external.get("on"):
                 tools.append(EXTERNAL_TOOL)
         if self.features["simulator"] and not self.subagent:
@@ -2227,7 +2254,7 @@ class Agent:
                     pass
             threading.Thread(target=feed, daemon=True).start()
         lines, deadline = [], time.time() + timeout
-        fg = self._fg = {"proc": proc, "adopted": None}
+        fg = self._fg = {"proc": proc, "adopted": None, "last": 0}  # last output: never yet
         self._detach_req = threading.Event()
         killer = threading.Thread(target=self._watch, args=(proc, deadline, fg), daemon=True)
         killer.start()
@@ -2236,6 +2263,7 @@ class Agent:
             for line in proc.stdout:
                 line = ANSI_RE.sub("", line)  # colour codes of terminal tools (npm, git…): unreadable outside a terminal
                 bg = fg["adopted"]
+                fg["last"] = time.time()
                 if bg is None:
                     lines.append(line)
                     self.emit({"type": "output", "text": line})
@@ -2257,7 +2285,9 @@ class Agent:
                 fg["adopted"] = bg
                 self._fg = None
                 self.emit({"type": "detached", "id": bg.id})
-                return (f"moved to the background by the user: process {bg.id} ({command[:80]}) is still running. Do NOT "
+                who = (f"moved to the background by itself (still working after {timeout} s)" if fg.get("auto")
+                       else "moved to the background by the user")
+                return (f"{who}: process {bg.id} ({command[:80]}) is still running. Do NOT "
                         "run it again. Go on with the next step; you are told when it ends (or use process_output / wait "
                         f"with id {bg.id}).\nOutput so far:\n{''.join(lines)[-1500:]}")
         self._fg = None
@@ -3434,7 +3464,17 @@ class Agent:
         while proc.poll() is None:
             if fg is not None and fg.get("adopted") is not None:
                 return  # in the background now: neither the time limit nor the Stop button ends it
-            if self.cancel.is_set() or time.time() > deadline:
+            if self.cancel.is_set():
+                os.killpg(proc.pid, 9)
+                return
+            if time.time() > deadline:
+                # still writing (tests, an install, a build): moved to the background, Naim goes on and is told when
+                # it ends; silent for 30 s (it waits for the keyboard, it is stuck): stopped, as before
+                if (fg is not None and getattr(self, "conv_id", None) and not getattr(self, "subagent", False)
+                        and time.time() - fg.get("last", 0) < 30):
+                    fg["auto"] = True
+                    self._detach_req.set()
+                    return
                 os.killpg(proc.pid, 9)
                 return
             time.sleep(0.2)
@@ -3672,6 +3712,189 @@ class Agent:
                 + (" ; si tu ne peux vraiment pas le vérifier, dis clairement dans ta réponse que ce n'est pas vérifié et pourquoi."
                    if last else "."))
 
+    # ------------------------------------------------------------------ the terminal, an isolated copy, sharing
+    def lire_terminal(self, lignes=120):
+        lines = list(TERMINAL_LOG)[-max(10, min(int(lignes or 120), 600)):]
+        if not lines:
+            return "Le terminal de Naim est vide : l'utilisateur n'y a rien lancé depuis l'ouverture de Naim."
+        return "Terminal de Naim (le plus récent en bas) :\n" + "".join(l if l.endswith("\n") else l + "\n" for l in lines)[-12000:]
+
+    COPIES = ext.HOME / "copies"
+
+    def _copies_index(self):
+        f = self.COPIES / "index.json"
+        try:
+            return json.loads(f.read_text())
+        except (OSError, ValueError):
+            return {}
+
+    def _copies_save(self, idx):
+        self.COPIES.mkdir(parents=True, exist_ok=True)
+        (self.COPIES / "index.json").write_text(json.dumps(idx, ensure_ascii=False, indent=1))
+
+    @staticmethod
+    def _tree_files(root):
+        out = {}
+        for dirpath, dirs, files in os.walk(root):
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not os.path.islink(os.path.join(dirpath, d))]
+            for f in files:
+                full = os.path.join(dirpath, f)
+                if not os.path.islink(full) and f != ".DS_Store":
+                    out[os.path.relpath(full, root)] = full
+        return out
+
+    def copie_travail(self, action, copie=""):
+        import filecmp
+        import shutil
+        idx, root = self._copies_index(), Path(self.root).resolve()
+        if action == "creer":
+            if root == Path.home() or len(root.parts) < 3:
+                return "error: ouvre d'abord le dossier du projet (pas tout le dossier personnel) avant d'en faire une copie"
+            if sum(1 for _ in zip(range(30001), self._tree_files(root))) > 30000:
+                return "error: le projet a plus de 30 000 fichiers : trop gros pour une copie de travail"
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            dest = self.COPIES / f"{root.name}-{stamp}"
+            self.COPIES.mkdir(parents=True, exist_ok=True)
+            git = (root / ".git").exists() and shutil.which("git")
+            if git:
+                r = subprocess.run(["git", "-C", str(root), "worktree", "add", "-b", f"naim/copie-{stamp}", str(dest)],
+                                   capture_output=True, text=True, timeout=120)
+                if r.returncode != 0:
+                    git = None
+            if not git:
+                shutil.copytree(root, dest, symlinks=True, ignore=shutil.ignore_patterns(*SKIP_DIRS))
+            for big in ("node_modules", ".venv", "venv"):  # heavy folders: shared by a link (the copy still runs)
+                if (root / big).is_dir() and not (dest / big).exists():
+                    os.symlink(root / big, dest / big)
+            idx[str(dest)] = {"orig": str(root), "git": bool(git), "made": stamp}
+            self._copies_save(idx)
+            return (f"ok: copie de travail créée : {dest}" + (" (git worktree, branche naim/copie-" + stamp + ")" if git else "")
+                    + f"\nTravaille DEDANS (chemins complets, ou run_command avec cd \"{dest}\") : l'original {root} ne bouge "
+                    "pas. Fais les changements et teste-les dans la copie. Ensuite copie_travail comparer, puis appliquer "
+                    "(l'utilisateur confirme) ou abandonner.")
+        mine = {k: v for k, v in idx.items() if v.get("orig") == str(root) or k == str(root)}
+        key = str(Path(copie).expanduser().resolve()) if copie else (max(mine, key=lambda k: mine[k]["made"]) if mine else "")
+        if key not in idx:
+            return "error: aucune copie de travail pour ce projet (copie_travail creer d'abord)"
+        dest, orig = Path(key), Path(idx[key]["orig"])
+        a, b = self._tree_files(orig), self._tree_files(dest)
+        changed = sorted(k for k in a.keys() & b.keys() if not filecmp.cmp(a[k], b[k], shallow=False))
+        added, removed = sorted(b.keys() - a.keys()), sorted(a.keys() - b.keys())
+        if action == "comparer":
+            if not (changed or added or removed):
+                return f"La copie {dest} est identique à l'original : rien à appliquer."
+            show = lambda title, l: f"{title} ({len(l)}) : " + ", ".join(l[:30]) + (" …" if len(l) > 30 else "") if l else ""
+            return "\n".join(x for x in (f"Copie {dest} → original {orig} :", show("modifiés", changed), show("nouveaux", added),
+                                         show("supprimés dans la copie", removed)) if x)
+        if action == "appliquer":
+            if not (changed or added or removed):
+                return "rien à appliquer : la copie est identique à l'original"
+            summary = f"{len(changed)} modifiés, {len(added)} nouveaux, {len(removed)} supprimés\n" + "\n".join((changed + added + removed)[:40])
+            if not self.approve("Appliquer la copie de travail à l'original", summary):
+                return "denied by the user"
+            for rel in changed + added:
+                (orig / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(b[rel], orig / rel)
+            trash = Path.home() / ".Trash"
+            for rel in removed:  # never deleted: moved to the Trash
+                target = trash / f"{Path(rel).name}-{time.strftime('%H%M%S')}"
+                shutil.move(a[rel], target)
+            idx[key]["applied"] = time.strftime("%Y%m%d-%H%M%S")
+            self._copies_save(idx)
+            return (f"ok: appliqué à {orig} : {len(changed)} modifiés, {len(added)} nouveaux, {len(removed)} mis à la "
+                    "Corbeille. La copie reste là (copie_travail abandonner pour la ranger).")
+        if action == "abandonner":
+            trash = Path.home() / ".Trash"
+            shutil.move(str(dest), str(trash / f"{dest.name}-copie-naim"))
+            if idx[key].get("git"):
+                subprocess.run(["git", "-C", str(orig), "worktree", "prune"], capture_output=True, timeout=60)
+            idx.pop(key, None)
+            self._copies_save(idx)
+            return f"ok: copie {dest.name} mise à la Corbeille ; l'original {orig} n'a pas changé"
+        return "error: action inconnue (creer, comparer, appliquer, abandonner)"
+
+    SHARES = ext.HOME / "partages"
+    SHARE_HOST, SHARE_PORT = "0.0.0.0", 8770
+    _share_server = None
+
+    @classmethod
+    def _share_start(cls):
+        if Agent._share_server:
+            return
+        import functools
+        import http.server
+        cls.SHARES.mkdir(parents=True, exist_ok=True)
+
+        class H(http.server.SimpleHTTPRequestHandler):
+            def list_directory(self, path):  # nothing listed: only a page whose secret link is known can be opened
+                self.send_error(404)
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.ThreadingHTTPServer((cls.SHARE_HOST, cls.SHARE_PORT), functools.partial(H, directory=str(cls.SHARES)))
+        threading.Thread(target=srv.serve_forever, daemon=True, name="naim-partage").start()
+        Agent._share_server = srv
+
+    @staticmethod
+    def _lan_ip():
+        for itf in ("en0", "en1"):
+            try:
+                ip = subprocess.run(["ipconfig", "getifaddr", itf], capture_output=True, text=True, timeout=5).stdout.strip()
+                if ip:
+                    return ip
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        import socket
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as so:
+                so.connect(("10.255.255.255", 1))
+                return so.getsockname()[0]
+        except OSError:
+            return "127.0.0.1"
+
+    def partager_page(self, action, chemin=""):
+        import secrets
+        import shutil
+        if action == "arreter":
+            tok = re.findall(r"[\w-]{10,}", str(chemin))
+            gone = [t for t in tok if (self.SHARES / t).is_dir()]
+            for t in gone:
+                shutil.move(str(self.SHARES / t), str(Path.home() / ".Trash" / f"partage-{t}"))
+            if not any(self.SHARES.glob("*/")) and Agent._share_server:
+                Agent._share_server.shutdown()
+                Agent._share_server.server_close()
+                Agent._share_server = None
+            return f"ok: {len(gone)} lien(s) arrêté(s)" if gone else "error: aucun partage trouvé pour ce lien"
+        p = self.resolve(chemin) if chemin else None
+        if not p or not p.exists():
+            return f"error: fichier introuvable : {chemin}"
+        if not self.approve("Partager sur le Wi-Fi", f"{p}\n\nVisible depuis les appareils du même réseau Wi-Fi qui ont le "
+                            "lien secret, tant que Naim est ouvert. « arrêter » le retire."):
+            return "denied by the user"
+        tok = secrets.token_urlsafe(12)
+        dest = self.SHARES / tok
+        dest.mkdir(parents=True)
+        if p.is_dir():
+            shutil.copytree(p, dest / p.name, ignore=shutil.ignore_patterns(*SKIP_DIRS))
+            name = p.name + "/"
+        else:
+            shutil.copy2(p, dest / p.name)
+            name = p.name
+            if p.suffix.lower() in (".html", ".htm"):  # the images and styles it points to, beside it
+                for ref in re.findall(r'(?:src|href)=["\'](?!https?:|data:|#|mailto:)([^"\'?#]+)', p.read_text(errors="ignore")):
+                    src = (p.parent / ref).resolve()
+                    if src.is_file() and p.parent in src.parents:
+                        (dest / ref).parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(src, dest / ref)
+        try:
+            self._share_start()
+        except OSError as e:
+            return f"error: le partage ne peut pas démarrer ({e})"
+        from urllib.parse import quote
+        url = f"http://{self._lan_ip()}:{self.SHARE_PORT}/{tok}/{quote(name)}"
+        return (f"ok: lien privé : {url}\nIl marche sur les appareils du même Wi-Fi tant que Naim est ouvert. La première "
+                "fois, le Mac peut demander d'autoriser les connexions entrantes. Pour l'arrêter : partager_page arreter avec ce lien.")
+
     def call_tool(self, name, args):
         fn = {"list_files": self.list_files, "read_file": self.read_file, "write_file": self.write_file,
               "edit_file": self.edit_file, "search": self.search, "run_command": self.run_command,
@@ -3690,7 +3913,8 @@ class Agent:
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
               "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
               "chercher_sur_mac": self.chercher_sur_mac, "chercher_skill": self.chercher_skill, "chercher_mcp": self.chercher_mcp,
-              "confier_tache": self.confier_tache,
+              "confier_tache": self.confier_tache, "lire_terminal": self.lire_terminal,
+              "copie_travail": self.copie_travail, "partager_page": self.partager_page,
               "wait": self.wait}.get(name)
         rule = self._rule_for(name, args) if self.rules else None
         if rule == "deny":

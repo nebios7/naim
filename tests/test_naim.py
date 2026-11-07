@@ -3063,3 +3063,95 @@ class VisualOnlyOnRequest(unittest.TestCase):
         cmds = json.loads((ROOT / "plugins_builtin/mathematiques/plugin.json").read_text())["commands"]
         c = next(c for c in cmds if c["cmd"] == "/visuel")
         self.assertTrue(c["prompt"].startswith("[visuel]"))
+
+
+class AgentWorkTools(unittest.TestCase):
+    """The terminal read back, an isolated working copy (create, compare, apply, abandon — never deleting), a page shared
+    by a secret link, a long command moved to the background instead of killed."""
+
+    def _agent(self, root):
+        global re
+        import re
+        a = naimtools.Agent(root, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+        return a
+
+    def test_terminal_is_read_back(self):
+        naimtools.TERMINAL_LOG.clear()
+        a = self._agent(tempfile.mkdtemp())
+        self.assertIn("vide", a.lire_terminal())
+        naimtools.TERMINAL_LOG.extend(["$ npm test   (dans /tmp)\n", "1 failing\n", "[fin : code 1]\n"])
+        out = a.lire_terminal()
+        self.assertIn("npm test", out)
+        self.assertIn("1 failing", out)
+
+    def test_working_copy_create_compare_apply_abandon(self):
+        import shutil
+        home = Path(tempfile.mkdtemp())
+        proj = home / "Documents" / "projet"
+        proj.mkdir(parents=True)
+        (proj / "a.py").write_text("x = 1\n")
+        (proj / "b.py").write_text("old\n")
+        a = self._agent(str(proj))
+        a.COPIES = home / ".naim" / "copies"
+        trash = home / ".Trash"
+        trash.mkdir()
+        old_home = Path.home
+        Path.home = staticmethod(lambda: home)
+        try:
+            out = a.copie_travail("creer")
+            self.assertTrue(out.startswith("ok"), out)
+            copy = Path(re.search(r"créée : (\S+)", out).group(1))
+            (copy / "a.py").write_text("x = 2\n")
+            (copy / "c.py").write_text("new\n")
+            (copy / "b.py").unlink()
+            self.assertEqual((proj / "a.py").read_text(), "x = 1\n")  # the original untouched while working
+            cmp = a.copie_travail("comparer")
+            self.assertIn("a.py", cmp)
+            self.assertIn("c.py", cmp)
+            self.assertIn("b.py", cmp)
+            self.assertTrue(a.copie_travail("appliquer").startswith("ok"))
+            self.assertEqual((proj / "a.py").read_text(), "x = 2\n")
+            self.assertTrue((proj / "c.py").exists())
+            self.assertFalse((proj / "b.py").exists())
+            self.assertTrue(any(trash.iterdir()))  # the removed file went to the Trash, not deleted
+            self.assertTrue(a.copie_travail("abandonner").startswith("ok"))
+            self.assertFalse(copy.exists())
+        finally:
+            Path.home = old_home
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_page_shared_by_a_secret_link(self):
+        import urllib.request
+        d = Path(tempfile.mkdtemp())
+        (d / "page.html").write_text('<h1>Bonjour</h1><img src="img/a.png">')
+        (d / "img").mkdir()
+        (d / "img" / "a.png").write_bytes(b"\x89PNG")
+        a = self._agent(str(d))
+        a.SHARES = d / "partages"
+        saved = (naimtools.Agent.SHARES, naimtools.Agent.SHARE_HOST, naimtools.Agent.SHARE_PORT)
+        self.addCleanup(lambda: setattr(naimtools.Agent, "SHARES", saved[0]) or setattr(naimtools.Agent, "SHARE_HOST", saved[1])
+                        or setattr(naimtools.Agent, "SHARE_PORT", saved[2]))
+        naimtools.Agent.SHARES, naimtools.Agent.SHARE_HOST, naimtools.Agent.SHARE_PORT = d / "partages", "127.0.0.1", 18770
+        a._lan_ip = lambda: "127.0.0.1"
+        out = a.partager_page("partager", "page.html")
+        self.assertTrue(out.startswith("ok"), out)
+        url = re.search(r"(http://\S+)", out).group(1)
+        self.assertIn("Bonjour", urllib.request.urlopen(url, timeout=5).read().decode())
+        self.assertEqual(urllib.request.urlopen(url.rsplit("/", 1)[0] + "/img/a.png", timeout=5).read(), b"\x89PNG")
+        with self.assertRaises(Exception):  # nothing listed without the secret link
+            urllib.request.urlopen("http://127.0.0.1:18770/", timeout=5)
+        old_home = Path.home
+        Path.home = staticmethod(lambda: d)
+        (d / ".Trash").mkdir()
+        try:
+            self.assertTrue(a.partager_page("arreter", url).startswith("ok"))
+        finally:
+            Path.home = old_home
+
+    def test_long_working_command_goes_to_the_background(self):
+        a = self._agent(tempfile.mkdtemp())
+        a.conv_id = "test"
+        out = a.run_command("for i in 1 2 3 4 5 6 7 8; do echo $i; sleep 1; done", timeout=5)
+        self.assertIn("moved to the background by itself", out)
+        out2 = a.run_command("sleep 8", timeout=5)  # silent: stopped as before
+        self.assertIn("timed out", out2)

@@ -3244,9 +3244,14 @@ def _terminal(self, body):
                     return
                 time.sleep(0.2)
         threading.Thread(target=watch, daemon=True).start()
+        import naimtools as _nt
+        _nt.TERMINAL_LOG.append(f"$ {body.get('command', '')}   (dans {cwd})\n")  # what Naim can read with lire_terminal
         for line in proc.stdout:
             self.event({"type": "output", "text": line})
-        self.event({"type": "exit", "code": proc.wait()})
+            _nt.TERMINAL_LOG.append(line)
+        code = proc.wait()
+        _nt.TERMINAL_LOG.append(f"[fin : code {code}]\n")
+        self.event({"type": "exit", "code": code})
     except (BrokenPipeError, ConnectionResetError):
         stop.set()
     finally:
