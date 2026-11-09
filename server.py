@@ -329,9 +329,18 @@ def existing_document(root, message):
     return None
 
 
+# any « j'ai / je l'ai + participle in -é » (augmenté, baissé, éteint is in the list above…): the list of verbs could
+# never be complete — « J'ai augmenté le volume de deux crans » with no tool passed. Thinking verbs are not actions.
+ANY_DONE_RE = re.compile(r"\b(?:j'ai|je l'ai|je les ai|je lui ai)\s+(?:bien |maintenant |d[ée]j[àa] |aussi )?"
+                         r"(?!(?:pens|remarqu|constat|not|compris|oubli|demand|h[ée]sit|essay|cherch|trouv[ée] (?:que|qu')|"
+                         r"rencontr|lu|vu)\w*)[a-zàâçéèêëîïôûù]{3,}[ée]e?s?\b"
+                         r"|\b(?:c'est|ce sont) (?:fait|allum[ée]|[ée]teint|ouvert|ferm[ée]|coup[ée]|baiss[ée]|augment[ée]|mont[ée])\b", re.I)
+
+
 def claims_done(text):
     """A sentence (not a question) saying an action was done."""
-    return any(DONE_CLAIM_RE.search(s) for s in re.split(r"(?<=[.!?…])\s+|\n+", text or "") if s.strip() and not s.strip().endswith("?"))
+    return any(DONE_CLAIM_RE.search(s) or ANY_DONE_RE.search(s)
+               for s in re.split(r"(?<=[.!?…])\s+|\n+", text or "") if s.strip() and not s.strip().endswith("?"))
 
 
 # a maths request (« corrige l'exercice », « pose la multiplication ») is answered in the conversation, with formulas and

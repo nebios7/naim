@@ -4055,6 +4055,19 @@ class Agent:
                                         "ligne, puis prends une méthode connue — la recette d'un skill (use_skill), une bibliothèque "
                                         "standard, ou web_search « <le problème> python » pour la méthode établie — ou simplifie "
                                         "le script pour isoler ce qui casse.]")
+        # any tool: the very same call (same tool, same arguments) failing again is not retried a third time — three
+        # identical multi_edit on a folder, three identical web pages that refuse… — the error says what to change
+        sig = (name, json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)[:2000])
+        if re.match(r"(error|refused|denied|exit code [1-9])", str(result)):
+            prev_sig, prev_n = getattr(self, "_same_fail", (None, 0))
+            n_same = prev_n + 1 if prev_sig == sig else 1
+            self._same_fail = (sig, n_same)
+            if n_same >= 2:
+                result = str(result) + (f"\n\n[Ce même appel ({name}, mêmes paramètres) a déjà échoué : ne le refais pas à "
+                                        "l'identique. Lis l'erreur, change ce qu'elle dit (le chemin, l'outil, la méthode), ou dis à "
+                                        "l'utilisateur ce qui bloque.]")
+        else:
+            self._same_fail = (None, 0)
         if name in ("read_file", "write_file", "edit_file", "multi_edit") and args.get("path") \
                 and not str(result).startswith(("error", "refused", "denied")):
             try:

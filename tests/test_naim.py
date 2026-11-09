@@ -2561,6 +2561,28 @@ class SkillChoiceByMeaning(unittest.TestCase):
         self.assertIn("s'il ne correspond pas au sujet de cette", src)
 
 
+class NoFalseDoneNoSameRetry(unittest.TestCase):
+    """« J'ai augmenté le volume » with no tool used is caught whatever the verb; the very same failing call is not
+    repeated a third time, whatever the tool."""
+
+    def test_any_done_claim(self):
+        import server
+        for t in ("J'ai augmenté le volume de la télé de deux crans", "Je l'ai éteinte.", "J'ai baissé le son."):
+            self.assertTrue(server.claims_done(t), t)
+        for t in ("J'ai pensé à une autre solution.", "J'ai compris ta demande.", "Tu veux que je baisse le son ?",
+                  "Je vais baisser le son.", "J'ai essayé mais la télé refuse."):
+            self.assertFalse(server.claims_done(t), t)
+
+    def test_same_failing_call(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            call = {"path": "absent.txt", "offset": 1, "limit": 5}
+            first = str(a.call_tool("read_file", call))
+            second = str(a.call_tool("read_file", call))
+            self.assertNotIn("même appel", first)
+            self.assertIn("même appel", second)
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"
