@@ -2493,6 +2493,19 @@ class ConnectATool(unittest.TestCase):
         for t in ("connecte-toi au wifi", "branche l'imprimante", "intègre ce chapitre dans le cours", "installe python"):
             self.assertNotRegex(t, trig)
 
+    def test_home_device(self):
+        """A device of the home: the same method, its documented local control, no make written in the skill."""
+        import re
+        base = Path(__file__).resolve().parents[1] / "plugins_builtin/connecteurs"
+        trig = json.loads((base / "plugin.json").read_text())["triggers"]["connecter-outil"]
+        for t in ("je veux que naim puisse contrôler ma télé", "pilote la lampe du salon"):
+            self.assertRegex(t, trig)
+        self.assertNotRegex("contrôle le code", trig)
+        skill = (base / "skills/connecter-outil/SKILL.md").read_text()
+        self.assertIn("scan.py --annonces", skill)
+        self.assertIn("~/.naim/outils/", skill)
+        self.assertFalse(re.search(r"samsung|tizen|webos|roku|vizio|philips|sonos", skill, re.I))
+
 
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""

@@ -69,6 +69,32 @@ Contenu, court et vrai :
    sandbox quand il existe (Stripe : clés `sk_test`, `--livemode` jamais par défaut).
 5. **Pièges** rencontrés pendant l'installation ou la vérification (s'il y en a eu).
 
+## Un appareil de la maison (télé, enceinte, lampe, imprimante, box…) : pas de CLI, son contrôle sur le réseau local
+
+Quand l'utilisateur veut que Naim pilote un appareil chez lui, la méthode change, l'esprit reste : la voie
+documentée de l'appareil lui-même, un accès que l'utilisateur accorde, puis un skill global.
+
+1. **Le trouver et savoir ce qu'il est** : skill reseau-local, `scan.py --annonces` (son nom, son modèle, ses services
+   annoncés), puis `scan.py <adresse>` pour ses ports. Ne conclus rien d'un simple ping.
+2. **Son moyen de contrôle documenté** : cherche sur le web « <modèle annoncé> local API » / « remote control API »,
+   et lis la doc de l'éditeur ou d'un projet open source connu qui le pilote. Note ce que tu as lu : le port, le
+   protocole (HTTP, websocket, MQTT…), comment l'appareil autorise un nouveau client. Rien d'inventé : si aucune voie
+   documentée n'existe, dis-le, n'essaie pas au hasard.
+3. **L'accès, c'est l'utilisateur qui l'accorde** : beaucoup d'appareils affichent une demande (« Autoriser cet
+   appareil ? ») ou demandent d'appuyer sur un bouton. Lance la première connexion, dis-lui exactement quoi accepter
+   sur l'appareil, attends. Un jeton rendu par l'appareil se garde dans `~/.naim/outils/<appareil>/` (jamais dans la
+   conversation, jamais dans un dépôt).
+4. **Un petit script à toi** dans `~/.naim/outils/<appareil>/` (Python de la bibliothèque standard si possible) :
+   quelques actions nommées clairement (allumer, éteindre, volume, ouvrir une appli, touches de la télécommande,
+   état), l'adresse dans une variable en tête du fichier. Essaie chaque action une fois et regarde le résultat avant
+   de l'écrire dans le skill.
+5. **Le skill global** (`create_skill`, scope utilisateur), nommé d'après l'appareil tel que l'utilisateur l'appelle
+   (« television », « enceinte-salon ») : l'adresse, le chemin du script, chaque action avec sa commande exacte,
+   comment refaire l'autorisation si le jeton est refusé, et que faire si l'adresse a changé (relancer
+   `scan.py --annonces`).
+6. **Prudence** : réinitialiser, changer un réglage, installer ou supprimer quelque chose sur l'appareil se fait
+   seulement après accord explicite, et après une sauvegarde de ce qui peut l'être.
+
 ## 6. Prouver que c'est branché
 
 - Lance une commande en lecture seule qui montre que tout marche (lister ses projets, `whoami`, la liste des produits

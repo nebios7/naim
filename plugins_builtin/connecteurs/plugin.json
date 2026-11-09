@@ -1,24 +1,24 @@
 {
   "name": "connecteurs",
-  "version": "1.1",
-  "description": "Brancher n'importe quel outil à Naim : il trouve son CLI officiel, l'installe, vérifie qu'il marche, te laisse te connecter à ton compte, puis écrit un skill global pour s'en servir ensuite tout seul (Stripe, Supabase, Vercel, GitHub, AWS, Firebase…).",
+  "version": "1.2",
+  "description": "Brancher n'importe quel outil à Naim : il trouve son CLI officiel (ou, pour un appareil de la maison, son contrôle documenté sur le réseau local), l'installe, vérifie qu'il marche, te laisse te connecter ou autoriser l'accès, puis écrit un skill global pour s'en servir ensuite tout seul.",
   "skills": "skills",
   "triggers": {
-    "connecter-outil": "\\bconnect[- ]?tool\\b|\\bconnecter[- ]outil\\b|\\b(connect\\w*|branch\\w*|int[éèe]gr\\w*|install\\w*|ajout\\w*|configur\\w*|relie\\w*)\\b[^.?!]{0,50}\\b(cli|outil en ligne de commande|ligne de commande|commande officielle|outil officiel)\\b|\\b(connect\\w*|branch\\w*|int[éèe]gr\\w*|relie\\w*)\\b[^.?!]{0,40}\\b(à|a|dans|avec|sur) (naim|toi)\\b"
+    "connecter-outil": "\\bconnect[- ]?tool\\b|\\bconnecter[- ]outil\\b|\\b(connect\\w*|branch\\w*|int[éèe]gr\\w*|install\\w*|ajout\\w*|configur\\w*|relie\\w*)\\b[^.?!]{0,50}\\b(cli|outil en ligne de commande|ligne de commande|commande officielle|outil officiel)\\b|\\b(connect\\w*|branch\\w*|int[éèe]gr\\w*|relie\\w*)\\b[^.?!]{0,40}\\b(à|a|dans|avec|sur) (naim|toi)\\b|\\b(contr[ôo]l\\w*|pilot\\w*)\\b[^.?!]{0,40}\\b(ma|mon|mes|la|le|les|l')\\s?(t[ée]l[ée]\\w*|tv|enceinte\\w*|lampe\\w*|ampoule\\w*|imprimante\\w*|appareil\\w*|box|clim\\w*|thermostat\\w*|aspirateur\\w*|volets?)\\b"
   },
   "priority": true,
   "commands": [
     {
       "cmd": "/connect-tool",
       "arg": "<l'outil ou le service>",
-      "description": "Brancher un outil à Naim (Stripe, GitHub, Supabase, Vercel…) : installé, vérifié, ton compte connecté, un skill pour s'en resservir",
-      "prompt": "Avec le skill connecter-outil, branche cet outil à Naim (trouve son outil officiel ou son serveur MCP, installe-le, vérifie qu'il marche, laisse-moi me connecter à mon compte, puis écris le skill pour t'en resservir) :"
+      "description": "Brancher un outil à Naim (Stripe, GitHub, Vercel… ou un appareil de la maison : télé, enceinte, lampe) : installé, vérifié, ton compte connecté, un skill pour s'en resservir",
+      "prompt": "Avec le skill connecter-outil, branche cet outil à Naim (trouve son outil officiel, son serveur MCP, ou pour un appareil de la maison son contrôle documenté sur le réseau local, installe-le, vérifie qu'il marche, laisse-moi me connecter à mon compte ou autoriser l'accès, puis écris le skill pour t'en resservir) :"
     },
     {
       "cmd": "/connecter",
       "arg": "<l'outil ou le service>",
       "description": "Comme /connect-tool : brancher un outil ou un service à Naim",
-      "prompt": "Avec le skill connecter-outil, branche cet outil à Naim (trouve son outil officiel ou son serveur MCP, installe-le, vérifie qu'il marche, laisse-moi me connecter à mon compte, puis écris le skill pour t'en resservir) :"
+      "prompt": "Avec le skill connecter-outil, branche cet outil à Naim (trouve son outil officiel, son serveur MCP, ou pour un appareil de la maison son contrôle documenté sur le réseau local, installe-le, vérifie qu'il marche, laisse-moi me connecter à mon compte ou autoriser l'accès, puis écris le skill pour t'en resservir) :"
     }
   ]
 }
