@@ -1,6 +1,6 @@
 {
   "name": "installer",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Installer tout seul ce qu'il faut (paquets Python ou JavaScript, outils du Mac) au bon endroit, puis vérifier que ça marche.",
   "skills": "skills",
   "triggers": {

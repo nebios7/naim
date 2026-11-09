@@ -3199,3 +3199,21 @@ class EquationsAreMaths(unittest.TestCase):
             self.assertTrue(re.search(t, s.lower()), s)
         for s in ("le système solaire", "mon rendez-vous à 14h"):
             self.assertFalse(re.search(t, s.lower()), s)
+
+
+class NetworkMethod(unittest.TestCase):
+    """The network skill teaches a method, not devices: no brand is written in it; a device is found by what it
+    announces (Bonjour), and a project's README is checked before installing on it. /connect-tool exists."""
+
+    def test_no_brand_in_the_network_skill(self):
+        import re
+        d = ROOT / "plugins_builtin/reseau/skills/reseau-local"
+        text = (d / "scan.py").read_text() + (d / "SKILL.md").read_text()
+        self.assertFalse(re.search(r"samsung|tizen|webos|roku|vizio", text, re.I))
+        self.assertIn("_services._dns-sd._udp", text)  # every announced kind of service, nothing listed in advance
+        self.assertIn("README", text)
+
+    def test_connect_tool_command(self):
+        import json
+        cmds = json.loads((ROOT / "plugins_builtin/connecteurs/plugin.json").read_text())["commands"]
+        self.assertIn("/connect-tool", [c["cmd"] for c in cmds])

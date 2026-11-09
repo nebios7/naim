@@ -5,6 +5,10 @@ description: Installer tout seul ce qu'il faut pour une tâche (paquet Python, p
 
 # Installer ce qu'il faut, tout seul et proprement
 
+**Installer quelque chose SUR un autre appareil** (une télé, une box, un téléphone, un Raspberry — pas ce Mac) : ce
+skill ne suffit pas. D'abord trouver l'appareil et savoir ce qu'il est, puis vérifier dans le README du projet qu'il le
+prend en charge : la méthode est dans le skill **reseau-local** (use_skill("reseau-local")). Ensuite seulement, installer.
+
 ## 1. Le bon nom (le module qu'on importe n'a pas toujours le nom du paquet)
 | Besoin | Python (pip) | Outil du Mac (brew) |
 |---|---|---|
