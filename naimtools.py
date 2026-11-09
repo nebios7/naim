@@ -936,19 +936,19 @@ class Agent:
         if self.features["skills"]:
             skills = [s for s in ext.list_skills(self.root, self.disabled_skills) if s["enabled"]]
             if skills:
-                # skills picked by their own keywords are loaded automatically when a request names them: only their
-                # name here; the others keep a short description (what makes Naim think of them)
+                # every skill keeps a short description, so Naim picks one by what the request MEANS when no keyword
+                # matched (« connecte-toi à ma télé »); the skills that also have keywords get a shorter line, since
+                # those are often loaded by themselves already
                 try:
                     import plugins
                     auto = set(ext.SKILL_TRIGGERS) | set(plugins.triggers())
                 except Exception:  # noqa: BLE001
                     auto = set(ext.SKILL_TRIGGERS)
-                described = [s for s in skills if s["name"] not in auto]
-                named = sorted(s["name"] for s in skills if s["name"] in auto)
-                parts.append("Available skills (call use_skill to load one before a task it covers; after solving a new "
-                             "kind of task, you may save the method with create_skill):\n"
-                             + "\n".join(f"- {s['name']}: {_short_desc(s['description'])}" for s in described)
-                             + (f"\nAlso (loaded by themselves when the request is about them): {', '.join(named)}" if named else ""))
+                parts.append("Available skills (choose by what the request means, not only its words; call use_skill to "
+                             "load one before a task it covers; after solving a new kind of task, you may save the method "
+                             "with create_skill):\n"
+                             + "\n".join(f"- {s['name']}: {_short_desc(s['description'], 70 if s['name'] in auto else 110)}"
+                                         for s in skills))
             try:
                 import skills_bibliotheque
                 n = skills_bibliotheque.count()

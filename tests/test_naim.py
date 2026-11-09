@@ -2497,14 +2497,29 @@ class ConnectATool(unittest.TestCase):
         """A device of the home: the same method, its documented local control, no make written in the skill."""
         import re
         base = Path(__file__).resolve().parents[1] / "plugins_builtin/connecteurs"
-        trig = json.loads((base / "plugin.json").read_text())["triggers"]["connecter-outil"]
-        for t in ("je veux que naim puisse contrôler ma télé", "pilote la lampe du salon"):
-            self.assertRegex(t, trig)
-        self.assertNotRegex("contrôle le code", trig)
         skill = (base / "skills/connecter-outil/SKILL.md").read_text()
+        # picked by what the request means (its description in the skills list), not by device keywords
+        trig = json.loads((base / "plugin.json").read_text())["triggers"]["connecter-outil"]
+        self.assertNotRegex(trig, r"t\[ée\]l|enceinte|lampe")
+        self.assertIn("appareil", skill.split("\n")[2])
         self.assertIn("scan.py --annonces", skill)
         self.assertIn("~/.naim/outils/", skill)
         self.assertFalse(re.search(r"samsung|tizen|webos|roku|vizio|philips|sonos", skill, re.I))
+
+
+class EverySkillDescribed(unittest.TestCase):
+    """The skills list in the prompt: every skill with a short description, those with keywords too, so a request
+    is matched by what it means when no keyword fits."""
+
+    def test_described(self):
+        src = (Path(__file__).resolve().parents[1] / "naimtools.py").read_text()
+        self.assertNotIn("Also (loaded by themselves", src)
+        self.assertIn("choose by what the request means", src)
+        self.assertIn("_short_desc(s['description'], 70 if s['name'] in auto else 110)", src)
+
+    def test_library_rule(self):
+        text = (Path(__file__).resolve().parents[1] / "NAIM.default.md").read_text()
+        self.assertIn("lis d'abord son exemple d'utilisation", text)
 
 
 class ImproveTheSystem(unittest.TestCase):

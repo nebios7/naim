@@ -1,6 +1,6 @@
 ---
 name: connecter-outil
-description: Brancher un outil (Stripe, Supabase, Vercel, GitHub, AWS, Firebase…) à Naim avec son CLI officiel - le trouver, l'installer, le vérifier, laisser l'utilisateur se connecter à son compte, puis écrire un skill global pour s'en servir ensuite tout seul.
+description: Connecter Naim à un service ou un appareil pour le piloter. Service en ligne (Stripe, GitHub, Vercel…) avec son CLI officiel, ou appareil de la maison (télé, enceinte, lampe…) avec son contrôle documenté sur le réseau local - le trouver, l'installer, le vérifier, laisser l'utilisateur se connecter ou autoriser l'accès, puis écrire un skill global pour s'en servir ensuite tout seul.
 ---
 
 # Brancher un outil à Naim : son CLI officiel, puis un skill global
