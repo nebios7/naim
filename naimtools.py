@@ -3962,6 +3962,17 @@ class Agent:
             return ("refused: l'utilisateur a demandé une information, pas un fichier. Réponds DANS la conversation : un "
                     "résumé clair et organisé (titres, listes), avec les liens des sources à la fin. Ne crée un fichier "
                     "que s'il le demande (« fais-en un PDF », « enregistre-le »).")
+        if name == "computer" and isinstance(args, dict) and args.get("action") == "screenshot" \
+                and getattr(self, "_shot_refused_for", None) != self.request_text \
+                and not re.search(TOOL_GROUPS["ecran"][2] + r"|regarde|vois|voir|affich\w*|montre|appli\w*|\bapp\b|safari|chrome|"
+                                  r"finder|onglet|bouton|menu|ic[oô]ne|bureau",
+                                  f"{self.request_text} {getattr(self, 'prior_asks', '')}", re.I):
+            # a screenshot of the Mac for a request that has nothing to do with the screen (« connecte-toi à ma télé »):
+            # not a way to look around — the tools of the task first (once per request: asked again, it is allowed)
+            self._shot_refused_for = self.request_text
+            return ("refused: rien dans la demande ne concerne l'écran du Mac, une fenêtre ou une application : une capture "
+                    "d'écran n'apporte rien ici et l'utilisateur ne veut pas qu'on regarde son écran sans raison. Utilise les "
+                    "outils de la tâche (run_command, use_skill, web_search, read_file…).")
         rule = self._rule_for(name, args) if self.rules else None
         if rule == "deny":
             return f"denied by the user's permission rules for {name}"

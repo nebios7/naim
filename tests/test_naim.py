@@ -2583,6 +2583,24 @@ class NoFalseDoneNoSameRetry(unittest.TestCase):
             self.assertIn("même appel", second)
 
 
+class ScreenOnlyWhenAsked(unittest.TestCase):
+    """A screenshot of the Mac is refused when nothing in the request is about the screen, a window or an app (once per
+    request); « Envoyer maintenant » stops only the run it was clicked in, never the new request it sends."""
+
+    def test_screenshot(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            a.request_text = "connecte-toi à ma télé"
+            self.assertIn("ne concerne l'écran", str(a.call_tool("computer", {"action": "screenshot"})))
+            a.request_text = "regarde ce qu'il y a sur mon écran"
+            self.assertNotIn("ne concerne l'écran", str(a.call_tool("computer", {"action": "screenshot"})))
+
+    def test_send_now_keeps_the_new_run(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn("if (runs[run.conv.id]?.controller === ctl) ctl.abort();", html)
+        self.assertNotIn("setTimeout(() => runs[run.conv.id]?.controller.abort(), 4000)", html)
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"

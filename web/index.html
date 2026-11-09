@@ -6534,7 +6534,10 @@ async function stop() {
   if (!run) return;
   if (run.conv.goal?.active) { run.conv.goal.active = false; run.conv.goal.why = "arrêté"; renderGoalBar(); }
   await api("/api/stop", { method: "POST", body: { run_id: run.id } }).catch(() => {});
-  setTimeout(() => runs[run.conv.id]?.controller.abort(), 4000);
+  // the safety cut aims at THIS run only: by then a message sent with « Envoyer maintenant » may be the new run of the
+  // conversation, and cutting it left an empty answer
+  const ctl = run.controller;
+  setTimeout(() => { if (runs[run.conv.id]?.controller === ctl) ctl.abort(); }, 4000);
 }
 function setBusy(on) { updateSendBtn(); updateLiveBar(); guidePlaceholder(); }
 // while Naim works, the input itself says it can guide him (always visible, whatever the window width)
