@@ -2522,6 +2522,27 @@ class EverySkillDescribed(unittest.TestCase):
         self.assertIn("lis d'abord son exemple d'utilisation", text)
 
 
+class OwnToolsRemembered(unittest.TestCase):
+    """The tools Naim made for itself (~/.naim/outils/<name>/) are named in the prompt, so a new conversation reuses them;
+    the network skill is not pulled by device words (« connecte-toi à ma télé » is about connecting, chosen by meaning)."""
+
+    def test_listed(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "lampe").mkdir()
+            (Path(d) / "lampe" / "lampe.py").write_text("x")
+            (Path(d) / "lampe" / ".venv").mkdir()
+            out = naimtools._own_tools(d)
+            self.assertIn("lampe.py", out)
+            self.assertIn("+ .venv", out)
+            self.assertIn("reuse them", out)
+            self.assertEqual(naimtools._own_tools(Path(d) / "absent"), "")
+
+    def test_network_not_pulled_by_device_words(self):
+        import re
+        t = json.loads((ROOT / "plugins_builtin/reseau/plugin.json").read_text())["triggers"]["reseau-local"]
+        self.assertNotRegex(t, r"t\[ée\]l")
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"

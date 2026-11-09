@@ -256,6 +256,28 @@ def _short_desc(text, limit=110):
     return first if len(first) <= limit else first[:limit].rsplit(" ", 1)[0] + "…"
 
 
+def _own_tools(base=None, limit=12):
+    """The tools Naim made for itself in earlier conversations (~/.naim/outils/<name>/: a script, a token, a venv), so a
+    new conversation starts from them instead of from nothing. Only names and their main files: reading them is a tool call."""
+    base = Path(base) if base else Path.home() / ".naim" / "outils"
+    try:
+        dirs = sorted(d for d in base.iterdir() if d.is_dir() and not d.name.startswith("."))[:limit]
+    except OSError:
+        return ""
+    lines = []
+    for d in dirs:
+        try:
+            files = sorted(f.name for f in d.iterdir() if not f.name.startswith(".") and f.name not in ("__pycache__", "node_modules"))[:6]
+        except OSError:
+            files = []
+        venv = " (+ .venv)" if (d / ".venv").is_dir() else ""
+        lines.append(f"- {d}: {', '.join(files) or 'vide'}{venv}")
+    if not lines:
+        return ""
+    return ("Your own tools, made in earlier conversations (read their files and reuse them before starting again; "
+            "keep new work for the same thing in the same folder):\n" + "\n".join(lines))
+
+
 def _conversations_dir():
     return Path(os.environ.get("NAIM_DATA", Path.home() / "Library/Application Support/Naim")) / "conversations"
 
@@ -949,6 +971,8 @@ class Agent:
                              "with create_skill):\n"
                              + "\n".join(f"- {s['name']}: {_short_desc(s['description'], 70 if s['name'] in auto else 110)}"
                                          for s in skills))
+            if own := _own_tools():
+                parts.append(own)
             try:
                 import skills_bibliotheque
                 n = skills_bibliotheque.count()
