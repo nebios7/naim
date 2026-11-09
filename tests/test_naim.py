@@ -2601,6 +2601,28 @@ class ScreenOnlyWhenAsked(unittest.TestCase):
         self.assertNotIn("setTimeout(() => runs[run.conv.id]?.controller.abort(), 4000)", html)
 
 
+class SkillsByMeaningNote(unittest.TestCase):
+    """A request that matches no skill's keywords gets the closest skills by meaning in front of it; an edit tool called
+    without a file says it edits files, not the earlier answer."""
+
+    def test_closest_by_meaning(self):
+        skills = [{"name": "connecter-outil", "description": "Connecter Naim à un service ou un appareil (télé, lampe) pour le piloter."},
+                  {"name": "pdf-pro", "description": "Faire un PDF propre."}]
+        near = naimtools.closest_skills("connecte-toi à ma télé Samsung", skills, n=2, min_score=2)
+        self.assertEqual([s["name"] for _, s in near], ["connecter-outil"])
+        self.assertEqual(naimtools.closest_skills("bonjour", skills, n=2, min_score=2), [])
+
+    def test_server_note(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn("elif not sk and (near := _skills_by_meaning(", src)
+
+    def test_edit_without_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            out = str(a.call_tool("multi_edit", {"edits": [{"old_text": "a", "new_text": "b"}]}))
+            self.assertIn("modifie un FICHIER", out)
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"

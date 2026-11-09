@@ -337,6 +337,22 @@ ANY_DONE_RE = re.compile(r"\b(?:j'ai|je l'ai|je les ai|je lui ai)\s+(?:bien |mai
                          r"|\b(?:c'est|ce sont) (?:fait|allum[ée]|[ée]teint|ouvert|ferm[ée]|coup[ée]|baiss[ée]|augment[ée]|mont[ée])\b", re.I)
 
 
+def _skills_by_meaning(message, helper):
+    """The skills closest by meaning to a request that matched no skill's keywords, as a note for the model (or "")."""
+    try:
+        import naimtools as _nt
+        skills = [s for s in ext.list_skills(helper.root, helper.disabled_skills) if s["enabled"]]
+        near = _nt.closest_skills(message, skills, n=2, min_score=2)
+    except Exception:  # noqa: BLE001
+        return ""
+    if not near:
+        return ""
+    return ("[Skills proches de cette demande, d'après leur description : "
+            + " ; ".join(f"{s['name']} ({_nt._short_desc(s.get('description'), 90)})" for _, s in near)
+            + ". Si l'un correspond à ce qui est demandé, charge-le avec use_skill AVANT d'agir et suis sa méthode ; "
+            "ne pose pas à l'utilisateur une question que tes outils peuvent résoudre.]")
+
+
 def claims_done(text):
     """A sentence (not a question) saying an action was done."""
     return any(DONE_CLAIM_RE.search(s) or ANY_DONE_RE.search(s)
@@ -2472,6 +2488,10 @@ class Handler(BaseHTTPRequestHandler):
                 import libs
                 if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
                     messages[-1] = dict(messages[-1], content=messages[-1]["content"] + "\n\n" + lp)
+            elif not sk and (near := _skills_by_meaning(body["message"] or "", helper)):
+                # no keyword of any skill in the request (« connecte-toi à ma télé »): the skills closest by MEANING are put
+                # in front of it — a list of sixty descriptions in the instructions was not enough to think of them
+                messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + near)
             elif file_work or files:
                 # a task, but no active skill for it: the closest ones of the library are proposed
                 import skills_bibliotheque

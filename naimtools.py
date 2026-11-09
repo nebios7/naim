@@ -256,18 +256,29 @@ def _short_desc(text, limit=110):
     return first if len(first) <= limit else first[:limit].rsplit(" ", 1)[0] + "…"
 
 
+_STOP_STEMS = {"les", "des", "une", "pour", "avec", "dans", "sur", "que", "qui", "est", "son", "ses", "mon", "mes", "ton",
+               "tes", "the", "and", "par", "plus", "tout", "toute", "fais", "faire", "peux", "veux", "moi", "toi", "c'est",
+               "cette", "comme", "mais", "aussi", "leur", "nous", "vous"}
+
+
+def closest_skills(text, skills, n=3, min_score=1):
+    """The skills whose name and description share the most words (by their first 5 letters, accents aside) with a
+    text: what a request MEANS, when no keyword of a skill matched it. [(score, skill)], best first."""
+    import unicodedata
+
+    def stems(t):
+        t = unicodedata.normalize("NFKD", str(t).lower()).encode("ascii", "ignore").decode()
+        return {w[:5] for w in re.findall(r"[a-z]{3,}", t) if w not in _STOP_STEMS}
+    want = stems(re.sub(r"[_-]+", " ", text))
+    scored = sorted(((len(want & stems(s["name"] + " " + str(s.get("description") or ""))), s) for s in skills),
+                    key=lambda x: -x[0])
+    return [(k, s) for k, s in scored if k >= min_score][:n]
+
+
 def _closest_skills(asked, skills, n=3):
     """A skill name that does not exist (« tele_connect »): the skills closest by MEANING to the words of that name, with
     their description, instead of a bare list of sixty names where the right one cannot be recognised."""
-    import unicodedata
-
-    def stems(text):
-        t = unicodedata.normalize("NFKD", str(text).lower()).encode("ascii", "ignore").decode()
-        return {w[:5] for w in re.findall(r"[a-z]{3,}", t)}
-    want = stems(re.sub(r"[_-]+", " ", asked))
-    scored = sorted(((len(want & stems(s["name"] + " " + str(s.get("description") or ""))), s) for s in skills),
-                    key=lambda x: -x[0])
-    best = [s for k, s in scored if k][:n]
+    best = [s for _, s in closest_skills(asked, skills, n)]
     if not best:
         return " Available: " + ", ".join(s["name"] for s in skills)
     return (" The closest by meaning (load one with use_skill, its exact name):\n"
@@ -4184,6 +4195,11 @@ class Agent:
                         " (always give path first, then content). " + to + "A long file is written in parts of about 150 "
                         "lines: first write_file(path, content=<first part>), then write_file(path, content=<next part>, "
                         "append=true) for each following part (a chapter, a section), until the end.")
+            if name in ("edit_file", "multi_edit") and "'path'" in str(e):
+                # no path: it tried to « edit » its own earlier answer (« -La télé est-elle connectée ? +Je vais lister… »)
+                return (f"error: {name} modifie un FICHIER, il lui faut path (le chemin du fichier). Ta réponse précédente "
+                        "n'est pas un fichier : on ne la modifie pas. Pour te corriger, écris simplement la correction dans ta "
+                        "réponse, puis fais l'action avec l'outil de la tâche (run_command, use_skill…).")
             return f"error: bad arguments for {name}: {e}"
         except ValueError as e:
             return f"error: {e}"
