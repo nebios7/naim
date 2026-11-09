@@ -2543,6 +2543,24 @@ class OwnToolsRemembered(unittest.TestCase):
         self.assertNotRegex(t, r"t\[ée\]l")
 
 
+class SkillChoiceByMeaning(unittest.TestCase):
+    """A skill name that does not exist gets the closest ones by meaning, with their description; a skill picked from the
+    last message's words is checked against the subject of the conversation."""
+
+    def test_closest(self):
+        skills = [{"name": "connecter-outil", "description": "Connecter Naim à un service ou un appareil (télé, lampe) pour le piloter."},
+                  {"name": "pdf-pro", "description": "Faire un PDF propre."},
+                  {"name": "mac", "description": "Envoyer un SMS, régler le volume du Mac."}]
+        out = naimtools._closest_skills("tele_connect", skills)
+        self.assertIn("connecter-outil", out.split("\n")[1])
+        self.assertNotIn("pdf-pro", out)
+        self.assertIn("Available:", naimtools._closest_skills("zzz", skills))
+
+    def test_follow_up_fits_the_subject(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn("s'il ne correspond pas au sujet de cette", src)
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"

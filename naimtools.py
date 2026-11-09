@@ -256,6 +256,24 @@ def _short_desc(text, limit=110):
     return first if len(first) <= limit else first[:limit].rsplit(" ", 1)[0] + "…"
 
 
+def _closest_skills(asked, skills, n=3):
+    """A skill name that does not exist (« tele_connect »): the skills closest by MEANING to the words of that name, with
+    their description, instead of a bare list of sixty names where the right one cannot be recognised."""
+    import unicodedata
+
+    def stems(text):
+        t = unicodedata.normalize("NFKD", str(text).lower()).encode("ascii", "ignore").decode()
+        return {w[:5] for w in re.findall(r"[a-z]{3,}", t)}
+    want = stems(re.sub(r"[_-]+", " ", asked))
+    scored = sorted(((len(want & stems(s["name"] + " " + str(s.get("description") or ""))), s) for s in skills),
+                    key=lambda x: -x[0])
+    best = [s for k, s in scored if k][:n]
+    if not best:
+        return " Available: " + ", ".join(s["name"] for s in skills)
+    return (" The closest by meaning (load one with use_skill, its exact name):\n"
+            + "\n".join(f"- {s['name']}: {_short_desc(s.get('description'))}" for s in best))
+
+
 def _own_tools(base=None, limit=12):
     """The tools Naim made for itself in earlier conversations (~/.naim/outils/<name>/: a script, a token, a venv), so a
     new conversation starts from them instead of from nothing. Only names and their main files: reading them is a tool call."""
@@ -2589,7 +2607,7 @@ class Agent:
     def use_skill(self, name):
         s = ext.find_skill(name, self.root)
         if not s:
-            return f"error: unknown skill {name}. Available: " + ", ".join(x["name"] for x in ext.list_skills(self.root))
+            return f"error: unknown skill {name}." + _closest_skills(name, ext.list_skills(self.root))
         _, body = ext.parse_skill(Path(s["path"]))
         files = f"\n\nFiles in the skill folder ({Path(s['path']).parent}): " + ", ".join(s["files"]) if s["files"] else ""
         self.emit({"type": "skill", "name": s["name"]})
