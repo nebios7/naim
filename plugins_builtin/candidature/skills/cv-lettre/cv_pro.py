@@ -57,8 +57,41 @@ def accent(name):
     return pro.accent_css(name)
 
 
+def text_of(x):
+    """Any value of cv.json as words: a dict ({"langue": "Anglais", "niveau": "B2"}) or a list is never shown with its
+    braces and quotes — its values are joined (« Anglais — B2 »), a list with commas."""
+    if isinstance(x, dict):
+        return " — ".join(t for t in (text_of(v) for v in x.values()) if t)
+    if isinstance(x, (list, tuple)):
+        return ", ".join(t for t in (text_of(v) for v in x) if t)
+    return str(x if x is not None else "").strip()
+
+
 def esc(t):
-    return html.escape(str(t or "").strip())
+    return html.escape(text_of(t))
+
+
+NAME_KEYS = ("langue", "language", "nom", "name", "intitule", "titre", "label")
+LEVEL_KEYS = ("niveau", "level", "maitrise", "degre", "note", "certification")
+
+
+def lang_pair(l):
+    """One language as [name, level], whatever cv.json gives: ["Anglais", "B2"], {"langue": …, "niveau": …},
+    {"Anglais": "B2"}, or « Anglais (B2) » / « Anglais : B2 »."""
+    if isinstance(l, (list, tuple)):
+        return [text_of(l[0]).capitalize() if l else "", text_of(list(l[1:]))]
+    if isinstance(l, dict):
+        low = {slug(k): v for k, v in l.items()}
+        name = next((low[k] for k in NAME_KEYS if str(low.get(k) or "").strip()), "")
+        level = next((low[k] for k in LEVEL_KEYS if str(low.get(k) or "").strip()), "")
+        if not name and len(l) == 1:  # {"Anglais": "B2"}
+            name, level = next(iter(l.items()))
+        if not name:
+            vals = [v for v in l.values() if str(v or "").strip()]
+            name, level = (vals[0] if vals else ""), vals[1:]
+        return [text_of(name).capitalize(), text_of(level)]
+    m = re.match(r"(.+?)\s*[(:—-]\s*([^)]*)\)?$", str(l))
+    return [m.group(1).strip().capitalize(), m.group(2)] if m else [str(l).capitalize(), ""]
 
 
 def photo(path):
@@ -127,7 +160,8 @@ def tidy(cv):
                          for k, v in cv["contact"].items() if str(v or "").strip()]
     cv["experiences"] = [entry(e, "poste") for e in cv.get("experiences") or []]
     cv["formations"] = [entry(f, "diplome") for f in cv.get("formations") or []]
-    langs, groups = list(cv.get("langues") or []), []
+    L = cv.get("langues") or []
+    langs, groups = ([[k, v] for k, v in L.items()] if isinstance(L, dict) else list(L)), []  # {"Anglais": "B2"} too
     comp = cv.get("competences") or {}
     if isinstance(comp, dict):
         for k, v in list(comp.items()):
@@ -136,12 +170,10 @@ def tidy(cv):
             if slug(k).startswith("langue"):
                 langs += v if isinstance(v, list) else [v]
             else:
-                groups.append([GROUPS.get(slug(k), k.replace("_", " ").capitalize()), ", ".join(map(str, v)) if isinstance(v, list) else str(v)])
+                groups.append([GROUPS.get(slug(k), k.replace("_", " ").capitalize()), text_of(v)])
             del comp[k]
     cv["competences"], cv["groupes"] = comp, groups
-    cv["langues"] = [l if isinstance(l, (list, tuple)) else
-                     (lambda m: [m.group(1).strip().capitalize(), m.group(2)] if m else [str(l).capitalize(), ""])(
-                         re.match(r"(.+?)\s*[(:—-]\s*([^)]*)\)?$", str(l))) for l in langs]
+    cv["langues"] = [lang_pair(l) for l in langs]
     sections = list(cv.get("sections") or [])
     for k in [k for k in cv if k not in KNOWN and k != "groupes"]:
         v, title = cv.pop(k), TITLES.get(slug(k), k.replace("_", " ").capitalize())

@@ -2688,6 +2688,24 @@ class NewsletterFeatures(unittest.TestCase):
         self.assertIn("Décider seul ce qui est réversible", (ROOT / "NAIM.default.md").read_text())
 
 
+class CvNeverShowsBraces(unittest.TestCase):
+    """cv.json written with dicts ({"langue": "Anglais", "niveau": "B2"}, missions as dicts, skills as dicts): the CV shows
+    words, never braces or quoted keys."""
+
+    def test_render(self):
+        import importlib.util, re
+        spec = importlib.util.spec_from_file_location("cv_pro", ROOT / "plugins_builtin/candidature/skills/cv-lettre/cv_pro.py")
+        cv = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cv)
+        data = {"nom": "T", "langues": [{"langue": "Anglais", "niveau": "niveau professionnel"}],
+                "competences": {"Outils": [{"nom": "Excel", "niveau": "avancé"}]},
+                "experiences": [{"poste": "Aide", "missions": [{"tache": "Soins"}]}]}
+        page = cv.body(cv.tidy(data))
+        self.assertFalse(re.search(r"[{}]|&#x27;\w+&#x27;:", page))
+        self.assertIn("<span>Anglais</span><span>niveau professionnel</span>", page)
+        self.assertEqual(cv.tidy({"nom": "T", "langues": {"Espagnol": "A2"}})["langues"], [["Espagnol", "A2"]])
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"
