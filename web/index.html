@@ -3319,21 +3319,37 @@ function opLearnHtml(src) {
       const r = 3 + j;
       if (j) { st++; for (let z = 0; z < j; z++) T(u - z, r, "0", "dvz", st); say.push(`Deuxième ligne : on multiplie par le chiffre des <b>${name(j)}</b> (${b[j]}). On décale d'un rang : j'écris <b>0</b>${j > 1 ? " deux fois" : ""} à droite.`.replace("Deuxième", j === 1 ? "Deuxième" : "Troisième")); }
       let carry = 0;
+      const lineCarries = [];  // its carries, small and red above the number, shown while this line is written
       for (let k = 0; k < a.length; k++) {
         st++;
         const pr = a[k] * b[j] + carry, d = pr % 10, c = Math.floor(pr / 10);
         T(u - k - j, r, d, "dvq", st);
+        if (c && k < a.length - 1) { small(u - k - 1, 1, c, st, 0, -36); lineCarries.push(els.length - 1); }
         say.push(`<b>${a[k]} × ${b[j]}</b>${carry ? ` + <b class=r>${carry}</b> (la retenue)` : ""} = <b>${pr}</b>. ${c ? `J'écris <b class=b>${d}</b> et je retiens <b class=r>${c}</b>.` : `J'écris <b class=b>${d}</b>.`}`);
         carry = c;
       }
       if (carry) { st++; T(u - a.length - j, r, carry, "dvq", st); say.push(`Je finis la ligne avec la retenue <b class=r>${carry}</b>.`); }
+      if (b.length > 1) lineCarries.forEach((i) => (els[i] = els[i].replace(" data-s=", ` data-until="${st}" data-s=`)));  // the next line has its own
       parts.push(BigInt(A) * BigInt(b[j]) * 10n ** BigInt(j));
     }
     result = (BigInt(A) * BigInt(B)).toString();
     rows = 3 + b.length;
     if (b.length > 1) {
-      st++; line(u - result.length, u, 2 + b.length, st); write(result, u, 3 + b.length, "dvq dvsum", st); T(u - result.length, 2 + b.length, "+", "dvk", st);
-      say.push(`J'additionne les lignes : ${parts.map(String).join(" + ")} = <b class=b>${result}</b>.`); rows++;
+      // the lines added column by column, like an addition: each column its sentence, each carry small and red
+      st++; line(u - result.length, u, 2 + b.length, st); T(u - result.length, 2 + b.length, "+", "dvk", st);
+      say.push(`J'additionne les lignes : ${parts.map(String).join(" + ")}. Colonne par colonne, en commençant par la droite.`);
+      const ps = parts.map((x) => x.toString().split("").reverse().map(Number)), width = Math.max(...ps.map((x) => x.length));
+      let carry = 0;
+      for (let k = 0; k < width || carry; k++) {
+        st++;
+        const ds = ps.map((x) => x[k]).filter((x) => x !== undefined), sum = ds.reduce((p, q) => p + q, 0) + carry, d = sum % 10, c = Math.floor(sum / 10);
+        T(u - k, 3 + b.length, k >= width ? sum : d, "dvq dvsum", st);
+        if (k >= width) { say.push(`Il reste la retenue <b class=r>${carry}</b> : je l'écris devant.`); break; }
+        if (c) small(u - k - 1, 3, c, st, -CW * 0.42, -26);
+        say.push(`Colonne des <b>${name(k)}</b> : ${ds.join(" + ")}${carry ? ` + <b class=r>${carry}</b> (la retenue)` : ""} = <b>${sum}</b>. ${c ? `J'écris <b class=b>${d}</b> et je retiens <b class=r>${c}</b>.` : `J'écris <b class=b>${d}</b>.`}`);
+        carry = c;
+      }
+      rows++;
     }
     st++; say.push(`<b class=b>${A} × ${B} = ${result}</b>. Astuce pour vérifier : ${A} est à peu près ${Math.round(Number(A) / 10 ** (A.length - 1)) * 10 ** (A.length - 1)}, ${B} à peu près ${Math.round(Number(B) / 10 ** (B.length - 1)) * 10 ** (B.length - 1)} : le résultat doit être proche de ${(Math.round(Number(A) / 10 ** (A.length - 1)) * 10 ** (A.length - 1)) * (Math.round(Number(B) / 10 ** (B.length - 1)) * 10 ** (B.length - 1))}.`);
   }
@@ -3423,7 +3439,7 @@ function divisionHtml(src, still = false) {
 }
 function divDraw(f) {
   const st = +f.dataset.step, say = JSON.parse(f.dataset.say || "[]");
-  f.querySelectorAll("[data-s]").forEach((e) => e.classList.toggle("dvoff", +e.dataset.s > st));
+  f.querySelectorAll("[data-s]").forEach((e) => e.classList.toggle("dvoff", +e.dataset.s > st || (e.dataset.until !== undefined && st > +e.dataset.until)));
   f.querySelectorAll("[data-only]").forEach((e) => e.classList.toggle("dvoff", +e.dataset.only !== st));
   f.querySelector(".dvsay").innerHTML = say[st] || "";
   f.querySelector(".dvn").textContent = `${st + 1} / ${say.length}`;

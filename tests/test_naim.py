@@ -3534,3 +3534,35 @@ class TrainingWindowChosen(unittest.TestCase):
         self.assertIn('if (t === "learning") { loadLearning(); loadAutoTrain(); }', s)
         i = s.index("async function loadAutoTrain()")
         self.assertFalse(any(c in s[i:i + 6000] for c in "⏳▶↻"))
+
+
+class MultiplicationStepByStep(unittest.TestCase):
+    """/visuel multiplication: each line's carries small and red above the number (while that line is written), the
+    lines added column by column with their carries and one sentence per step, like the addition."""
+
+    JS = r"""
+const fs = require('fs'), src = fs.readFileSync(process.argv[1], 'utf8');
+const grab = (n) => { const i = src.search(new RegExp('^function ' + n + '\\(', 'm')); let d = 0, j = src.indexOf('{', i);
+  for (; j < src.length; j++) { if (src[j] == '{') d++; else if (src[j] == '}' && --d == 0) break; } return src.slice(i, j + 1); };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+eval(src.match(/^const COLNAME[^\n]*/m)[0].replace(/^const /, 'var ') + '\n' + grab('opLearnHtml'));
+const h = opLearnHtml('347 × 26');
+const say = JSON.parse(h.match(/data-say="([^"]*)"/)[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+console.log(JSON.stringify({ carries: (h.match(/class="dvc"/g) || []).length, until: (h.match(/data-until=/g) || []).length,
+  steps: say.length, empty: say.filter((x) => !x.trim()).length, col: say.some((x) => /Colonne des <b>dizaines<\/b> : 8 \+ 4 = <b>12<\/b>/.test(x)),
+  four: /data-s="1"[^>]*>4</.test(h) }));
+"""
+
+    def test_carries_and_sentences(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node absent")
+        r = subprocess.run(["node", "-e", self.JS, str(ROOT / "web/index.html")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        o = json.loads(r.stdout)
+        self.assertEqual(o["empty"], 0)
+        self.assertTrue(o["col"])
+        self.assertTrue(o["four"])  # 7 × 6 = 42: the 4 is written small above
+        self.assertGreaterEqual(o["carries"], 5)  # 4, 2 (first line), 1 (second line), 1, 1 (the sum)
+        self.assertEqual(o["until"], 3)  # the carries of each line go when the next line starts
+        self.assertIn("dataset.until", (ROOT / "web/index.html").read_text().split("function divDraw", 1)[1][:600])
