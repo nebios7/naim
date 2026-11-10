@@ -6,7 +6,8 @@ description: Écrire des maths comme dans un manuel — formules en LaTeX (algè
 # Maths comme dans un manuel
 
 Réponds dans la conversation (pas de fichier, pas d'image PNG, pas d'outil) sauf si on te demande un fichier.
-L'application dessine quatre choses à ta place : utilise-les toujours.
+L'application dessine ces choses à ta place : utilise-les toujours. Ce tableau est la liste complète : quand on te
+demande quels graphes tu sais faire, cite ces types et donne tout de suite un exemple dessiné ; n'en promets pas d'autres.
 
 | Besoin | Écris | L'application fait |
 |---|---|---|
@@ -16,6 +17,10 @@ L'application dessine quatre choses à ta place : utilise-les toujours.
 | Une addition, une soustraction, une multiplication, SEULEMENT après /visuel | un bloc `addition`, `soustraction` ou `multiplication` avec SEULEMENT l'opération | colonne par colonne, les retenues en rouge, une phrase par étape |
 | La courbe d'une fonction | un bloc `graphe` avec la fonction | le repère et la courbe exacte |
 | Une figure dans un repère (points, polygones, vecteurs, transformation) | un bloc `graphe` avec les points et les figures | le repère orthonormé et la figure exacte |
+| Une courbe paramétrée, polaire ou implicite (cercle, ellipse, cardioïde, spirale, x² + y² = 4) | un bloc `graphe` (voir 3 bis) | la courbe exacte, repère orthonormé |
+| Une région (inéquations, programmation linéaire) | un bloc `graphe` avec `y >= …`, `x + y <= …` | la zone hachurée en couleur et sa frontière |
+| Des mesures : nuage de points, droite d'ajustement | un bloc `graphe` avec `nuage :` et `ajustement` | les points, la droite des moindres carrés, son équation et r |
+| Statistiques : diagramme en barres, histogramme, courbe d'évolution, camembert, anneau | un bloc `diagramme` (voir 3 ter) | le diagramme avec ses valeurs et ses pourcentages |
 | Une figure de géométrie sans repère (cercle, angle, solide) | un bloc `svg` | la figure sur fond blanc |
 
 Jamais de formule dans un bloc de code, jamais de calcul « dessiné » avec des tirets ou des espaces.
@@ -184,6 +189,44 @@ coordonnées
 - `segment A B`, `vecteur A B` (une flèche), `droite A B` (la droite entière) ;
 - `coordonnées` : écrit A(1 ; 1) à côté de chaque point ; `orthonormé` : impose le repère orthonormé avec des courbes ;
 - un nom entre « » après la figure l'écrit au milieu : `polygone ABCD « initiale »`.
+
+### 3 bis. Autres courbes, régions et données : toujours le bloc graphe
+**Un seul graphe, celui qui répond à la question** : un cercle demandé → seulement l'équation du cercle ; un système
+d'inéquations → seulement ses inéquations ; des mesures → seulement le nuage. Ne mets jamais dans le bloc une courbe
+que la question ne demande pas, et n'ajoute pas d'exemple « pour montrer ». Chaque ligne ci-dessous est un exemple à part.
+- cercle de rayon 2 :
+```graphe
+x^2 + y^2 = 4
+```
+- région d'un système d'inéquations :
+```graphe
+y >= x^2 - 2
+x + y < 3
+```
+- courbe paramétrée : `x(t) = cos(3t)` puis `y(t) = sin(2t)` (une paire par courbe), `t : a..b` (par défaut 0..2pi) ;
+- courbe polaire : `r = 1 + cos(θ)` (ou `theta`) ;
+- courbe implicite : une équation en x et y, `x^2 + y^2 = 4`, `y^2 = x`, `x = 3` (droite verticale) ;
+- région : une inéquation, `y >= 2x + 1`, `x + y <= 3` ; la frontière est en pointillés si l'inégalité est stricte ;
+- données : `nuage : (1;2,1) (2;3,9) (3;6,2)` (des points), `ligne : (…) (…)` (points reliés), puis `ajustement`
+  pour la droite des moindres carrés (l'application calcule a, b et r : ne les recalcule pas à la main).
+
+### 3 ter. Statistiques : bloc diagramme
+```diagramme
+type: barres
+titre: Ventes par mois
+séries: 2025, 2026
+Janvier: 12, 15
+Février: 18, 21
+Mars: 9, 14
+```
+- `type:` `barres`, `histogramme` (barres collées, classes `[0;5[ : 3`), `lignes` (évolution), `camembert` ou `anneau` ;
+- une ligne par catégorie `nom : valeur` (plusieurs valeurs séparées par des virgules = plusieurs séries, nommées par
+  `séries:`) ; facultatif : `titre:`, `unité: €` ;
+- le camembert calcule seul les pourcentages : donne les valeurs, pas les pourcentages.
+Pour les données de l'utilisateur (budget, notes, ventes), le même bloc : jamais un tableau dessiné en texte.
+Le type suit la question : une évolution dans le temps → `lignes` ; des parts d'un total → `camembert` ; comparer des
+catégories → `barres` ; des notes ou des mesures regroupées en classes → `histogramme`. Un seul diagramme, avec les
+vraies valeurs de l'utilisateur (jamais des valeurs inventées).
 Jamais de diagramme Mermaid ni de page HTML pour une figure de maths, jamais de PDF si on ne demande pas de document :
 la réponse avec la figure s'écrit dans la conversation.
 

@@ -3464,3 +3464,47 @@ class NetworkMethod(unittest.TestCase):
         import json
         cmds = json.loads((ROOT / "plugins_builtin/connecteurs/plugin.json").read_text())["commands"]
         self.assertIn("/connect-tool", [c["cmd"] for c in cmds])
+
+
+class MoreGraphTypes(unittest.TestCase):
+    """The graphe block draws parametric, polar and implicit curves, regions and data; the diagramme block draws
+    bars, histograms, lines and pies - and the maths skill lists exactly these."""
+
+    JS = r"""
+const fs = require('fs'), src = fs.readFileSync(process.argv[1], 'utf8');
+const grab = (n) => { const i = src.search(new RegExp('^function ' + n + '\\(', 'm')); let d = 0, j = src.indexOf('{', i);
+  for (; j < src.length; j++) { if (src[j] == '{') d++; else if (src[j] == '}' && --d == 0) break; } return src.slice(i, j + 1); };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const frNum = (v) => String(+v.toFixed(6)).replace('.', ',').replace('-', '−');
+var graphSeq = 0;
+eval(['mathFn', 'niceStep', 'graphHtml', 'chartHtml'].map(grab).join('\n'));
+const out = {};
+const G = { param: 'x(t) = cos(3t)\ny(t) = sin(2t)', polar: 'r = 1 + cos(θ)', implicit: 'x^2 + y^2 = 4',
+  region: 'y >= x^2 - 2\nx + y < 3', data: 'nuage : (1;2,1) (2;3,9) (3;6,2)\najustement', old: 'f(x) = x^2 - 2x - 3\nA(0;-3)' };
+for (const k in G) { const h = graphHtml(G[k]); out[k] = h ? (h.match(/<path d="M/g) || []).length + (h.match(/<circle/g) || []).length + (h.match(/<rect x/g) || []).length : 0; out[k + '_fit'] = /ajustement : y = /.test(h || ''); }
+const C = { barres: 'type: barres\nA: 1, 2\nB: 3, 4', histo: 'type: histogramme\n[0;5[ : 3\n[5;10[ : 8', lignes: 'type: lignes\nLun: 12,5\nMar: 14',
+  camembert: 'type: camembert\nLoyer: 700\nCourses: 300' };
+for (const k in C) { const h = chartHtml(C[k]); out[k] = h ? h.length : 0; out[k + '_pct'] = /70 %/.test(h || ''); }
+out.fn_xy = mathFn('x^2 + y^2')(3, 4, 0); out.fn_t = mathFn('cos(t)')(0, 0, 0); out.fn_old = mathFn('2x + 1')(3);
+console.log(JSON.stringify(out));
+"""
+
+    def test_every_type_is_drawn(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node absent")
+        r = subprocess.run(["node", "-e", self.JS, str(ROOT / "web/index.html")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        o = json.loads(r.stdout)
+        for k in ("param", "polar", "implicit", "region", "data", "old", "barres", "histo", "lignes", "camembert"):
+            self.assertGreater(o[k], 0, k)
+        self.assertTrue(o["data_fit"])
+        self.assertTrue(o["camembert_pct"])
+        self.assertEqual((o["fn_xy"], o["fn_t"], o["fn_old"]), (25, 1, 7))
+
+    def test_skill_lists_the_types(self):
+        s = (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text()
+        for w in ("x(t) =", "r = 1 + cos(θ)", "nuage :", "ajustement", "```diagramme", "camembert", "histogramme", "n'en promets pas d'autres",
+                  "Un seul graphe, celui qui répond à la question", "Le type suit la question"):
+            self.assertIn(w, s)
+        self.assertIn("diagramme", (ROOT / "web/index.html").read_text())

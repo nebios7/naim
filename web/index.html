@@ -3653,8 +3653,11 @@ function codeBlock(lang, body, file = "", open = false) {
   if (/^(pose-texte|operation|calcul-texte)$/i.test(lang || "")) { const t = poseText(body); if (t) return codeBlockRaw("texte", t.text, file, false); }
   if (/^(addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)$/i.test(lang || "") && !open) { const h = /÷|:|\/|divis/i.test(body) ? divisionHtml(body) : opLearnHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }
   if (/^(division|divise|apprendre-division)$/i.test(lang || "") && !open) { const h = divisionHtml(body); if (h) return h; const p = poseHtml(body); if (p) return p; }  // an operation « posée »: computed
-  if (open && /^(graphe|graph|courbe|fonction|svg|pose)$/i.test(lang || "")) {
-    return `<figure class="mfig mwait"><span>${/^pose$/i.test(lang) ? "Calcul posé" : /^svg$/i.test(lang) ? "Figure" : "Courbe"} en cours…</span></figure>`;
+  if (open && /^(graphe|graph|courbe|fonction|svg|pose|diagramme|chart|statistiques?)$/i.test(lang || "")) {
+    return `<figure class="mfig mwait"><span>${/^pose$/i.test(lang) ? "Calcul posé" : /^svg$/i.test(lang) ? "Figure" : /^(diagramme|chart|stat)/i.test(lang) ? "Diagramme" : "Courbe"} en cours…</span></figure>`;
+  }
+  if (/^(diagramme|chart|statistiques?)$/i.test(lang || "") && !open) {  // a statistics chart: bars, histogram, lines, pie
+    try { const h = chartHtml(body); if (h) return h; } catch (e) { /* unreadable: shown as written */ }
   }
   if (/^(graphe|graph|courbe|fonction)$/i.test(lang || "") && !open) {  // a function's graph: computed and drawn
     try { const h = graphHtml(body); if (h) return h; } catch (e) { /* unreadable: shown as written */ }
@@ -3990,7 +3993,7 @@ function poseHtml(src) {
 // nothing is evaluated as code
 function mathFn(src) {
   const s = String(src).toLowerCase().replace(/\s+/g, "").replace(/(\d),(\d)/g, "$1.$2").replace(/[×·]/g, "*")
-    .replace(/[−–]/g, "-").replace(/÷/g, "/").replace(/²/g, "^2").replace(/³/g, "^3").replace(/π/g, "pi").replace(/√/g, "sqrt")
+    .replace(/[−–]/g, "-").replace(/÷/g, "/").replace(/²/g, "^2").replace(/³/g, "^3").replace(/π/g, "pi").replace(/θ/g, "theta").replace(/√/g, "sqrt")
     .replace(/log_?\{?2\}?/g, "ldeux").replace(/log_?\{?10\}?/g, "log").replace(/\\/g, "");
   let i = 0;
   const FN = { sin: Math.sin, cos: Math.cos, tan: Math.tan, exp: Math.exp, ln: Math.log, log: Math.log10, sqrt: Math.sqrt,
@@ -3999,22 +4002,22 @@ function mathFn(src) {
   const startsAtom = () => /[\d.(a-z]/.test(s[i] || "");
   function expr() {
     let f = term();
-    while (s[i] === "+" || s[i] === "-") { const op = s[i++], a = f, b = term(); f = op === "+" ? (x) => a(x) + b(x) : (x) => a(x) - b(x); }
+    while (s[i] === "+" || s[i] === "-") { const op = s[i++], a = f, b = term(); f = op === "+" ? (x, y, t) => a(x, y, t) + b(x, y, t) : (x, y, t) => a(x, y, t) - b(x, y, t); }
     return f;
   }
   function term() {
     let f = power();
     for (;;) {
-      if (s[i] === "*" || s[i] === "/") { const op = s[i++], a = f, b = power(); f = op === "*" ? (x) => a(x) * b(x) : (x) => a(x) / b(x); }
-      else if (startsAtom()) { const a = f, b = power(); f = (x) => a(x) * b(x); }  // 2x, 3(x+1), x sin(x)
+      if (s[i] === "*" || s[i] === "/") { const op = s[i++], a = f, b = power(); f = op === "*" ? (x, y, t) => a(x, y, t) * b(x, y, t) : (x, y, t) => a(x, y, t) / b(x, y, t); }
+      else if (startsAtom()) { const a = f, b = power(); f = (x, y, t) => a(x, y, t) * b(x, y, t); }  // 2x, 3(x+1), x sin(x)
       else return f;
     }
   }
   function power() {
-    if (s[i] === "-") { i++; const a = power(); return (x) => -a(x); }
+    if (s[i] === "-") { i++; const a = power(); return (x, y, t) => -a(x, y, t); }
     if (s[i] === "+") { i++; return power(); }
     const base = atom();
-    if (s[i] === "^") { i++; const e = power(); return (x) => Math.pow(base(x), e(x)); }
+    if (s[i] === "^") { i++; const e = power(); return (x, y, t) => Math.pow(base(x, y, t), e(x, y, t)); }
     return base;
   }
   function atom() {
@@ -4027,11 +4030,14 @@ function mathFn(src) {
       if (w[0].startsWith(name)) {
         i += name.length;
         const g = FN[name], a = s[i] === "(" ? atom() : power();
-        return (x) => g(a(x));
+        return (x, y, t) => g(a(x, y, t));
       }
     }
     if (w[0].startsWith("pi")) { i += 2; return () => Math.PI; }
+    if (w[0].startsWith("theta")) { i += 5; return (x, y, t) => t; }  // the angle of a polar curve
     if (w[0][0] === "x") { i += 1; return (x) => x; }
+    if (w[0][0] === "y") { i += 1; return (x, y) => y; }  // an implicit curve: x² + y² = 4
+    if (w[0][0] === "t") { i += 1; return (x, y, t) => t; }  // the parameter of a parametric curve
     if (w[0][0] === "e") { i += 1; return () => Math.E; }
     return fail();
   }
@@ -4047,13 +4053,39 @@ const frNum = (v) => String(+v.toFixed(6)).replace(".", ",").replace("-", "−")
 let graphSeq = 0;
 function graphHtml(src) {
   const curves = [], points = [], shapes = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
-  let xr = null, yr = null, ortho = false, showXY = false;
+  const params = [], polars = [], implicits = [], series = [];  // x(t), y(t) · r = f(θ) · x² + y² = 4, y > 2x · data
+  let xr = null, yr = null, tr = null, ortho = false, showXY = false, fit = false;
+  // the pairs of a data line: « (1;2) (2;3,5) », « (1, 2) (2, 3) », « 1;2 | 2;3 »
+  const pairs = (t) => (t.match(/\(([^()]*)\)/g) || t.split("|")).map((q) => {
+    const in_ = q.replace(/[()]/g, "").trim(), parts = in_.includes(";") ? in_.split(";") : (in_.match(/,/g) || []).length === 1 ? in_.split(",") : in_.split(/,\s+|\s+/);
+    const v = parts.map((x) => parseFloat(x.trim().replace(",", ".").replace(/[−–]/g, "-")));
+    return v.length === 2 && v.every(Number.isFinite) ? { x: v[0], y: v[1] } : null;
+  }).filter(Boolean);
   // the names of a figure: « A B C D », « A, B, C », « ABCD », « A'B'C'D' », « A1 B1 C1 »
   const names = (t) => { t = t.trim(); return /[\s,;]/.test(t) ? t.split(/[\s,;]+/).filter(Boolean) : t.match(/[A-Z][₀-₉0-9]*['’]*/g) || []; };
   for (const raw of String(src).split("\n")) {
     const l = raw.trim();
     if (!l) continue;
     let m;
+    if ((m = l.match(/^([xy])\s*\(\s*(?:t|θ|theta)\s*\)\s*=\s*(.+)$/i))) {  // a parametric curve: x(t) = …, then y(t) = …
+      const k = m[1].toLowerCase(); let p = params.at(-1);
+      if (!p || p[k]) { p = {}; params.push(p); }
+      try { p[k] = mathFn(m[2]); p[k + "s"] = m[2]; } catch (e) { /* unreadable: this curve is left out */ }
+      continue;
+    }
+    if ((m = l.match(/^r\s*(?:\(\s*(?:t|θ|theta)\s*\))?\s*=\s*(.+)$/i))) {  // a polar curve: r = 1 + cos(θ)
+      try { polars.push({ text: m[1], f: mathFn(m[1]) }); } catch (e) { /* unreadable */ }
+      continue;
+    }
+    if ((m = l.match(/^(?:t|θ|theta)\s*(?::|∈|dans)\s*\[?\s*(.+?)\s*(?:\.\.|;|à)\s*(.+?)\s*\]?$/i))) {
+      tr = [mathFn(m[1])(0), mathFn(m[2])(0)]; continue;
+    }
+    if ((m = l.match(/^(nuage|donn[ée]es|points|ligne|s[ée]rie)s?\s*(?:de points\s*)?:\s*(.+)$/i))) {  // measured data
+      const pts = pairs(m[2]);
+      if (pts.length) series.push({ kind: /^(ligne|s[ée]rie)/i.test(m[1]) ? "line" : "dots", pts });
+      continue;
+    }
+    if (/^(r[ée]gression|ajustement|droite d'ajustement|tendance)/i.test(l)) { fit = true; continue; }
     if ((m = l.match(/^(polygone|polygon|triangle|quadrilat[èe]re|figure|segment|vecteur|vector|droite|line)s?\s*:?\s+(.+)$/i))) {
       // geometry: a figure through named points, a segment, a vector (an arrow), a line through two points
       const k = m[1].toLowerCase(), kind = /^seg/.test(k) ? "seg" : /^vec/.test(k) ? "vec" : /^(droite|line)/.test(k) ? "line" : "poly";
@@ -4075,10 +4107,27 @@ function graphHtml(src) {
       if (Number.isFinite(px) && Number.isFinite(py)) points.push({ name: m[1], x: px, y: py });
     } else if ((m = l.match(/^(?:([a-zA-Z]\w*)\s*\(\s*x\s*\)|y)\s*=\s*(.+)$/))) {
       try { curves.push({ name: m[1] || "y", text: m[2], f: mathFn(m[2]) }); } catch (e) { /* one curve unreadable: the others are drawn */ }
+    } else if ((m = l.match(/^([^<>=≤≥:]+?)\s*(<=|>=|≤|≥|<|>|=)\s*([^<>=≤≥:]+)$/)) && /[xy]/i.test(m[1] + m[3])) {
+      // an implicit curve (x² + y² = 4, x = 3) or a region (y > 2x + 1, x + y ≤ 3)
+      try { const a = mathFn(m[1]), b = mathFn(m[3]); implicits.push({ text: l, op: m[2].replace("<=", "≤").replace(">=", "≥"), F: (x, y) => a(x, y, 0) - b(x, y, 0) }); } catch (e) { /* unreadable */ }
     }  // any other line (a comment, a title): ignored, the graph is still drawn
   }
-  if (!curves.length && !points.length) return null;
-  if (shapes.length && !curves.length) ortho = true;  // a figure is drawn in an orthonormal frame: a square stays a square
+  const tParam = tr || [0, 2 * Math.PI], NT = 720;
+  const paths = params.filter((p) => p.x && p.y).map((p) => ({ text: `x(t) = ${p.xs} ; y(t) = ${p.ys}`, pts: Array.from({ length: NT + 1 }, (_, k) => { const t = tParam[0] + (tParam[1] - tParam[0]) * k / NT; return [p.x(0, 0, t), p.y(0, 0, t)]; }) }))
+    .concat(polars.map((p) => ({ text: `r = ${p.text}`, pts: Array.from({ length: NT + 1 }, (_, k) => { const t = tParam[0] + (tParam[1] - tParam[0]) * k / NT, r = p.f(0, 0, t); return [r * Math.cos(t), r * Math.sin(t)]; }) })));
+  if (!curves.length && !points.length && !paths.length && !implicits.length && !series.length) return null;
+  if (shapes.length && !curves.length) ortho = true;
+  if ((paths.length || implicits.length) && !curves.length && !series.length) ortho = true;  // a circle stays round
+  const extra = paths.flatMap((p) => p.pts.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)).map(([x, y]) => ({ x, y })))
+    .concat(series.flatMap((sr) => sr.pts));
+  if (extra.length && !xr) {  // what the drawn curves and the data cover, with a margin
+    const xs = extra.concat(points).map((q) => q.x), lo = Math.min(...xs), hi = Math.max(...xs), pad = Math.max((hi - lo) * 0.08, 0.5);
+    xr = series.length ? [lo - pad, hi + pad] : [Math.min(lo - pad, 0), Math.max(hi + pad, 0)];
+  }
+  if (extra.length && !yr && !curves.length) {
+    const ys = extra.concat(points).map((q) => q.y), lo = Math.min(...ys), hi = Math.max(...ys), pad = Math.max((hi - lo) * 0.1, 0.5);
+    yr = series.length ? [lo - pad, hi + pad] : [Math.min(lo - pad, 0), Math.max(hi + pad, 0)];
+  }  // a figure is drawn in an orthonormal frame: a square stays a square
   if (ortho && !xr && !yr && points.length) {  // the figure and the origin, with a margin
     const xs = points.map((p) => p.x).concat(0), ys = points.map((p) => p.y).concat(0);
     xr = [Math.min(...xs) - 1, Math.max(...xs) + 1]; yr = [Math.min(...ys) - 1, Math.max(...ys) + 1];
@@ -4086,10 +4135,10 @@ function graphHtml(src) {
   xr ||= points.length ? [Math.min(-1, ...points.map((p) => p.x)) - 1, Math.max(1, ...points.map((p) => p.x)) + 1] : [-5, 5];
   const N = 480, samples = curves.map((c) => Array.from({ length: N + 1 }, (_, k) => { const x = xr[0] + (xr[1] - xr[0]) * k / N, y = c.f(x); return [x, Number.isFinite(y) ? y : NaN]; }));
   if (!yr) {  // what the curves show, without their far ends (an asymptote does not crush the rest)
-    const ys = samples.flat().map((p) => p[1]).filter(Number.isFinite).concat(points.map((p) => p.y)).sort((a, b) => a - b);
+    const ys = samples.flat().map((p) => p[1]).filter(Number.isFinite).concat(points.map((p) => p.y), extra.map((q) => q.y)).sort((a, b) => a - b);
     const lo = ys.length ? ys[Math.floor(ys.length * 0.03)] : -5, hi = ys.length ? ys[Math.ceil(ys.length * 0.97) - 1] : 5;
     const pad = Math.max(0.5, (hi - lo) * 0.1);
-    yr = [Math.min(lo - pad, 0), Math.max(hi + pad, 0)];
+    yr = series.length ? [lo - pad, hi + pad] : [Math.min(lo - pad, 0), Math.max(hi + pad, 0)];
     if (yr[1] - yr[0] < 1) yr = [yr[0] - 1, yr[1] + 1];
   }
   let W = 520, H = 340;
@@ -4115,7 +4164,7 @@ function graphHtml(src) {
   g += `<line x1="${L}" y1="${ax}" x2="${W - R}" y2="${ax}" stroke="#555" stroke-width="1.2" marker-end="url(#${id}f)"/>`
     + `<line x1="${ay}" y1="${H - B}" x2="${ay}" y2="${T}" stroke="#555" stroke-width="1.2" marker-end="url(#${id}f)"/>`
     + `<text x="${W - R - 2}" y="${ax - 6}" text-anchor="end" font-style="italic">x</text><text x="${ay + 6}" y="${T + 10}" font-style="italic">y</text>`
-    + `<text x="${ay - 5}" y="${ax + 14}" text-anchor="end">0</text>`;
+    + (xr[0] <= 0 && xr[1] >= 0 && yr[0] <= 0 && yr[1] >= 0 ? `<text x="${ay - 5}" y="${ax + 14}" text-anchor="end">0</text>` : "");  // the origin only when it is in the frame
   const COLORS = ["#c4553a", "#3d7cc9", "#2f9a6f", "#9a5cc9", "#c98a1f"];
   curves.forEach((c, n) => {
     let d = "", prev = null;
@@ -4128,6 +4177,63 @@ function graphHtml(src) {
     g += `<path d="${d}" fill="none" stroke="${COLORS[n % COLORS.length]}" stroke-width="2.2" clip-path="url(#${id}z)"/>`;
     const lab = samples[n].filter(([, y]) => Number.isFinite(y) && y > yr[0] && y < yr[1]).at(-Math.round(N * 0.06) || -1);
     if (lab) g += `<text x="${X(lab[0]) - 4}" y="${Y(lab[1]) - 8}" text-anchor="end" fill="${COLORS[n % COLORS.length]}" font-weight="600" font-style="italic">${esc(c.name === "y" ? "" : "C" + c.name)}</text>`;
+  });
+  let ci = curves.length;  // each drawn thing takes the next colour
+  const legendMore = [];
+  implicits.forEach((im) => {  // a region shaded row by row, then its border (dashed when strict) by marching squares
+    const col = COLORS[ci++ % COLORS.length], GX = 160, GY = Math.round(GX * (H - T - B) / (W - L - R)) || 100;
+    const gx = (i) => xr[0] + (xr[1] - xr[0]) * i / GX, gy = (j) => yr[1] - (yr[1] - yr[0]) * j / GY;
+    const v = Array.from({ length: GY + 1 }, (_, j) => Array.from({ length: GX + 1 }, (_, i) => im.F(gx(i), gy(j))));
+    if (im.op !== "=") {
+      const ok = (val) => (/[>≥]/.test(im.op) ? val >= 0 : val <= 0);
+      const cw = (W - L - R) / GX, chh = (H - T - B) / GY;
+      for (let j = 0; j < GY; j++) {
+        let start = -1;
+        for (let i = 0; i <= GX; i++) {
+          const inside = i < GX && ok((v[j][i] + v[j][i + 1] + v[j + 1][i] + v[j + 1][i + 1]) / 4);
+          if (inside && start < 0) start = i;
+          if (!inside && start >= 0) { g += `<rect x="${(L + start * cw).toFixed(1)}" y="${(T + j * chh).toFixed(1)}" width="${((i - start) * cw + 0.4).toFixed(1)}" height="${(chh + 0.4).toFixed(1)}" fill="${col}" fill-opacity=".16"/>`; start = -1; }
+        }
+      }
+    }
+    let d = "";
+    const P = (i, j) => `${(L + i * (W - L - R) / GX).toFixed(1)},${(T + j * (H - T - B) / GY).toFixed(1)}`;
+    for (let j = 0; j < GY; j++) for (let i = 0; i < GX; i++) {
+      const c = [v[j][i], v[j][i + 1], v[j + 1][i + 1], v[j + 1][i]];
+      if (!c.every(Number.isFinite)) continue;
+      const corners = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], cut = [];
+      for (let k = 0; k < 4; k++) {
+        const a = c[k], b = c[(k + 1) % 4];
+        if ((a < 0) !== (b < 0) && Math.abs(a - b) < 1e6) { const u = a / (a - b), [i0, j0] = corners[k], [i1, j1] = corners[(k + 1) % 4]; cut.push([i0 + (i1 - i0) * u, j0 + (j1 - j0) * u]); }
+      }
+      for (let k = 0; k + 1 < cut.length; k += 2) d += `M${P(...cut[k])}L${P(...cut[k + 1])}`;
+    }
+    g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="2.2" stroke-linecap="round"${/[<>]/.test(im.op) ? ' stroke-dasharray="6 4"' : ""} clip-path="url(#${id}z)"/>`;
+    legendMore.push([col, im.text]);
+  });
+  paths.forEach((p) => {  // parametric and polar curves
+    const col = COLORS[ci++ % COLORS.length]; let d = "", prev = false;
+    for (const [x, y] of p.pts) {
+      const ok = Number.isFinite(x) && Number.isFinite(y) && Math.abs(x) < 1e6 && Math.abs(y) < 1e6;
+      if (ok) d += `${prev ? "L" : "M"}${X(x).toFixed(1)},${Y(y).toFixed(1)}`;
+      prev = ok;
+    }
+    g += `<path d="${d}" fill="none" stroke="${col}" stroke-width="2.2" stroke-linejoin="round" clip-path="url(#${id}z)"/>`;
+    legendMore.push([col, p.text]);
+  });
+  series.forEach((sr, n) => {  // measured data: the points (joined for a line), and the least-squares line when asked
+    const col = COLORS[ci++ % COLORS.length], pts = [...sr.pts].sort((a, b) => (sr.kind === "line" ? a.x - b.x : 0));
+    if (sr.kind === "line") g += `<polyline points="${pts.map((q) => `${X(q.x).toFixed(1)},${Y(q.y).toFixed(1)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" clip-path="url(#${id}z)"/>`;
+    pts.forEach((q) => { g += `<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.y).toFixed(1)}" r="3.4" fill="${col}" stroke="#fff" stroke-width="1"/>`; });
+    if (fit && pts.length >= 2) {
+      const k = pts.length, mx = pts.reduce((a, q) => a + q.x, 0) / k, my = pts.reduce((a, q) => a + q.y, 0) / k;
+      const sxy = pts.reduce((a, q) => a + (q.x - mx) * (q.y - my), 0), sxx = pts.reduce((a, q) => a + (q.x - mx) ** 2, 0), syy = pts.reduce((a, q) => a + (q.y - my) ** 2, 0);
+      if (sxx > 0) {
+        const a = sxy / sxx, b = my - a * mx, r = syy > 0 ? sxy / Math.sqrt(sxx * syy) : 1;
+        g += `<line x1="${X(xr[0])}" y1="${Y(a * xr[0] + b)}" x2="${X(xr[1])}" y2="${Y(a * xr[1] + b)}" stroke="${col}" stroke-width="1.6" stroke-dasharray="7 4" clip-path="url(#${id}z)"/>`;
+        legendMore.push([col, `ajustement : y = ${frNum(+a.toPrecision(4))}x ${b < 0 ? "−" : "+"} ${frNum(Math.abs(+b.toPrecision(4)))} (r = ${frNum(+r.toFixed(3))})`]);
+      }
+    } else if (series.length > 1) legendMore.push([col, `série ${n + 1}`]);
   });
   // the figures, under the points: filled lightly in their own colour, a vector ends in an arrow
   const byName = Object.fromEntries(points.map((pt) => [pt.name.replace(/’/g, "'"), pt]));
@@ -4163,8 +4269,80 @@ function graphHtml(src) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" font-family="Helvetica, Arial" font-size="11" fill="#333">`
     + `<defs><marker id="${id}f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>`
     + arrows + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}</svg>`;
-  const legend = curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join("");
+  const legend = curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join("")
+    + legendMore.map(([col, t]) => `<span style="color:${col}">${esc(t)}</span>`).join("");
   return `<figure class="mfig mgraph">${svg}<figcaption>${legend}</figcaption></figure>`;
+}
+
+// ---- a statistics chart (```diagramme): bars, histogram, lines or a pie, from « label : value » lines
+function chartHtml(src) {
+  let type = "barres", title = "", unit = "", names = [];
+  const rows = [];
+  for (const raw of String(src).split("\n")) {
+    const l = raw.trim(); let m;
+    if (!l || /^#/.test(l)) continue;
+    if ((m = l.match(/^type\s*[:=]\s*(.+)$/i))) { type = m[1].trim().toLowerCase(); continue; }
+    if ((m = l.match(/^titre\s*[:=]\s*(.+)$/i))) { title = m[1].trim(); continue; }
+    if ((m = l.match(/^unit[ée]\s*[:=]\s*(.+)$/i))) { unit = m[1].trim(); continue; }
+    if ((m = l.match(/^(s[ée]ries?|l[ée]gendes?)\s*[:=]\s*(.+)$/i))) { names = m[2].split(/\s*[,;|]\s*/).filter(Boolean); continue; }
+    if ((m = l.match(/^(.*\S)\s*[:=]\s*([-−+\d.,;|\s%€$]+)$/))) {
+      const vals = m[2].replace(/[%€$]/g, "").replace(/[−–]/g, "-").replace(/(\d),(\d)/g, "$1.$2").trim().split(/\s*[;|]\s*|,\s*|\s+/).filter(Boolean).map(Number);
+      if (vals.length && vals.every(Number.isFinite)) rows.push({ label: m[1].replace(/^[-*•]\s*/, ""), vals });
+    }
+  }
+  if (!rows.length) return null;
+  const COL = ["#c4553a", "#3d7cc9", "#2f9a6f", "#9a5cc9", "#c98a1f", "#5b9a8b", "#b4473f", "#8a877f"];
+  const ns = Math.max(...rows.map((r) => r.vals.length)), fmt = (v) => frNum(+(+v).toPrecision(6)) + (unit ? " " + unit : "");
+  const cap = (extra = "") => `<figcaption>${title ? `<b>${esc(title)}</b>` : ""}${extra}</figcaption>`;
+  const legend = ns > 1 ? Array.from({ length: ns }, (_, k) => `<span style="color:${COL[k % COL.length]}">${esc(names[k] || "série " + (k + 1))}</span>`).join("") : "";
+  if (/camembert|secteur|circulaire|anneau|donut|pie/.test(type)) {  // a pie of the first values, each slice with its share
+    const vals = rows.map((r) => Math.max(0, r.vals[0])), tot = vals.reduce((a, b) => a + b, 0);
+    if (!(tot > 0)) return null;
+    const W = 520, H = 300, cx = 150, cy = 150, R = 120, ri = /anneau|donut/.test(type) ? 64 : 0;
+    let a0 = -Math.PI / 2, g = "";
+    vals.forEach((v, k) => {
+      const a1 = a0 + v / tot * 2 * Math.PI, big = a1 - a0 > Math.PI ? 1 : 0, col = COL[k % COL.length];
+      const pt = (r, a) => `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`;
+      if (v >= tot) g += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${col}"/>`;
+      else if (v > 0) g += `<path d="M${ri ? pt(ri, a0) : cx + "," + cy}L${pt(R, a0)}A${R},${R} 0 ${big} 1 ${pt(R, a1)}${ri ? `L${pt(ri, a1)}A${ri},${ri} 0 ${big} 0 ${pt(ri, a0)}` : ""}Z" fill="${col}" stroke="#fff" stroke-width="2"/>`;
+      const share = v / tot * 100, am = (a0 + a1) / 2;
+      if (share >= 4) g += `<text x="${(cx + (ri ? (R + ri) / 2 : R * 0.64) * Math.cos(am)).toFixed(1)}" y="${(cy + (ri ? (R + ri) / 2 : R * 0.64) * Math.sin(am) + 4).toFixed(1)}" text-anchor="middle" fill="#fff" font-weight="700">${frNum(+share.toFixed(1))} %</text>`;
+      g += `<rect x="300" y="${26 + k * 24}" width="12" height="12" rx="3" fill="${col}"/><text x="320" y="${36 + k * 24}">${esc(rows[k].label)} · ${esc(fmt(v))}</text>`;
+      a0 = a1;
+    });
+    if (ri) g += `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-weight="700" font-size="14">${esc(fmt(tot))}</text>`;
+    const h = Math.max(H, 40 + rows.length * 24);
+    return `<figure class="mfig mgraph"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${h}" width="${W}" font-family="Helvetica, Arial" font-size="12" fill="#333">${g}</svg>${cap()}</figure>`;
+  }
+  const lines = /ligne|courbe|line|[ée]volution/.test(type), histo = /histo/.test(type);
+  const all = rows.flatMap((r) => r.vals), lo0 = Math.min(0, ...all), hi0 = Math.max(0, ...all);
+  const step = niceStep((hi0 - lo0) || 1), lo = Math.floor(lo0 / step) * step, hi = Math.ceil(hi0 / step) * step || step;
+  const long = Math.max(...rows.map((r) => r.label.length)), tilt = rows.length * Math.max(6, long) * 6.2 > 470;
+  const W = Math.max(420, Math.min(760, 60 + rows.length * (lines ? 46 : 26 + ns * 22))), L = 48, R = 14, T = 18, B = tilt ? 34 + Math.min(long, 18) * 4.6 : 34, H = 300 + (B - 34);
+  const X0 = L, Xw = W - L - R, Y = (v) => T + (hi - v) / (hi - lo) * (H - T - B), slot = Xw / rows.length;
+  let g = "";
+  for (let v = lo; v <= hi + 1e-9; v += step) g += `<line x1="${L}" y1="${Y(v)}" x2="${W - R}" y2="${Y(v)}" stroke="${Math.abs(v) < 1e-9 ? "#555" : "#e6e2da"}"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${frNum(+v.toPrecision(6))}</text>`;
+  rows.forEach((r, i) => {
+    const cx = X0 + slot * (i + 0.5);
+    g += tilt ? `<text transform="translate(${cx.toFixed(1)},${H - B + 14}) rotate(-35)" text-anchor="end">${esc(r.label.slice(0, 24))}</text>`
+      : `<text x="${cx.toFixed(1)}" y="${H - B + 16}" text-anchor="middle">${esc(r.label)}</text>`;
+  });
+  if (lines) {
+    for (let k = 0; k < ns; k++) {
+      const pts = rows.map((r, i) => (Number.isFinite(r.vals[k]) ? [X0 + slot * (i + 0.5), Y(r.vals[k]), r.vals[k]] : null)).filter(Boolean), col = COL[k % COL.length];
+      g += `<polyline points="${pts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round"/>`;
+      pts.forEach((q) => { g += `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="3.6" fill="${col}" stroke="#fff" stroke-width="1.2"/>`; });
+      if (ns === 1 && rows.length <= 14) pts.forEach((q) => { g += `<text x="${q[0].toFixed(1)}" y="${(q[1] - 9).toFixed(1)}" text-anchor="middle" fill="${col}" font-weight="600">${esc(frNum(+(+q[2]).toPrecision(6)))}</text>`; });
+    }
+  } else {
+    const gap = histo ? 0 : slot * 0.22, bw = (slot - gap) / ns;
+    rows.forEach((r, i) => r.vals.forEach((v, k) => {
+      const x = X0 + slot * i + gap / 2 + bw * k, y0 = Y(Math.max(0, v)), h = Math.abs(Y(v) - Y(0)), col = COL[(ns > 1 ? k : histo ? 0 : i) % COL.length];
+      g += `<rect x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${Math.max(1, bw - (histo ? 0 : 2)).toFixed(1)}" height="${h.toFixed(1)}" rx="${histo ? 0 : 3}" fill="${col}"${histo ? ' stroke="#fff" stroke-width="1"' : ""}/>`;
+      if (bw >= 18) g += `<text x="${(x + bw / 2 - 1).toFixed(1)}" y="${(v >= 0 ? y0 - 5 : y0 + h + 13).toFixed(1)}" text-anchor="middle" font-size="11" fill="#444">${esc(frNum(+(+v).toPrecision(6)))}</text>`;
+    }));
+  }
+  return `<figure class="mfig mgraph"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" font-family="Helvetica, Arial" font-size="11.5" fill="#333">${g}</svg>${cap(legend)}</figure>`;
 }
 
 function mdBlocks(src) {
