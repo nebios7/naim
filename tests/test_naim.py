@@ -3508,3 +3508,29 @@ console.log(JSON.stringify(out));
                   "Un seul graphe, celui qui répond à la question", "Le type suit la question"):
             self.assertIn(w, s)
         self.assertIn("diagramme", (ROOT / "web/index.html").read_text())
+
+
+class TrainingWindowChosen(unittest.TestCase):
+    """The automatic training starts in the hours the user chose (default 1 h - 6 h), a window may pass midnight,
+    and one night gives one attempt; the panel shows in Apprentissage with line icons."""
+
+    def test_window(self):
+        try:
+            import autotrain
+        except ImportError:
+            self.skipTest("training module absent")
+        from datetime import datetime
+        d = lambda h: datetime(2026, 11, 10, h)
+        self.assertEqual(autotrain.window({}), (1, 6))
+        self.assertEqual([autotrain.in_window(d(h), {})[0] for h in (0, 1, 5, 6, 23)], [False, True, True, False, False])
+        late = {"auto_train_from": "23", "auto_train_to": "5"}
+        self.assertEqual(autotrain.in_window(d(23), late), (True, "2026-11-10"))
+        self.assertEqual(autotrain.in_window(d(2), late), (True, "2026-11-09"))  # the night that began the day before
+        self.assertFalse(autotrain.in_window(d(12), late)[0])
+
+    def test_panel(self):
+        s = (ROOT / "web/index.html").read_text()
+        self.assertIn('sel("auto_train_from"', s)
+        self.assertIn('if (t === "learning") { loadLearning(); loadAutoTrain(); }', s)
+        i = s.index("async function loadAutoTrain()")
+        self.assertFalse(any(c in s[i:i + 6000] for c in "⏳▶↻"))

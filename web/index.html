@@ -2651,7 +2651,7 @@ const DEFAULTS = {
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
   vision_model: "", stop_temp_processes: true, keep_final_app: true, planMode: false, enable_web: true, enable_memory: true, enable_skills: true, enable_mcp: true, enable_subagents: true,
-  enable_computer: true, enable_simulator: true, auto_computer: false, computer_power: false, screen_images: false, enable_email: true, email_allowed: "", enable_learning: true, enable_review: true, auto_train: false, auto_train_min: 150, auto_preview: true, onboarded: false, share_feedback: false, share_auto: false, memory_auto: true, memory_limit: 60, params_open: false, presets: {}, folders: [], accent: "sobre",
+  enable_computer: true, enable_simulator: true, auto_computer: false, computer_power: false, screen_images: false, enable_email: true, email_allowed: "", enable_learning: true, enable_review: true, auto_train: false, auto_train_min: 150, auto_train_from: 1, auto_train_to: 6, auto_preview: true, onboarded: false, share_feedback: false, share_auto: false, memory_auto: true, memory_limit: 60, params_open: false, presets: {}, folders: [], accent: "sobre",
   auto_mcp: false, disabled_skills: [],
   auto_writes: false, auto_commands: false, max_steps: 30, blocked_commands: "rm -rf /\nsudo \nmkfs\n:(){ :|:& };:",
 };
@@ -7850,8 +7850,9 @@ function range(key, min, max, step, fmt = (v) => v) { return `<input type="range
 function sel(key, opts) { return `<select data-k="${key}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(S[key]) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`; }
 const FMT = { max_steps: (v) => (+v >= 310 ? "sans limite" : `${v}`), external_timeout: (v) => `${Math.round(v / 60)} min`, zoom: (v) => `${Math.round(v * 100)} %`, font_size: (v) => `${v} px`, temperature: (v) => (+v).toFixed(2), top_p: (v) => (+v).toFixed(2), repeat_penalty: (v) => (+v).toFixed(2) };
 const autoTrainHTML = () => `<div class="sgroup" id="autoTrain" hidden>
-      <div class="srow col"><div class="sl"><b>Apprentissage automatique</b><small>La nuit (1 h – 6 h), sur secteur et quand Naim ne travaille pas : il rassemble ses tâches réussies et celles de la communauté, entraîne une nouvelle version, <b>l'examine</b> (code + outils, le même test que le README) et l'installe <b>seulement si elle fait au moins aussi bien</b>. L'ancienne version est gardée : tu peux y revenir en un clic.</small></div></div>
+      <div class="srow col"><div class="sl"><b>Apprentissage automatique</b><small>La nuit (${S.auto_train_from ?? 1} h – ${S.auto_train_to ?? 6} h), sur secteur et quand Naim ne travaille pas : il rassemble ses tâches réussies et celles de la communauté, entraîne une nouvelle version, <b>l'examine</b> (code + outils, le même test que le README) et l'installe <b>seulement si elle fait au moins aussi bien</b>. L'ancienne version est gardée : tu peux y revenir en un clic.</small></div></div>
       ${row("Activer l'apprentissage automatique", "Désactivé par défaut. Un entraînement dure environ 1 h 30 (examen compris) ; Naim est indisponible pendant ce temps.", sw("auto_train"))}
+      ${row("Plage horaire", "Quand l'entraînement automatique peut commencer. Par défaut de 1 h à 6 h ; une plage peut passer minuit (23 h – 5 h).", `<span style="display:flex;gap:6px;align-items:center">De ${sel("auto_train_from", Array.from({ length: 24 }, (_, h) => [String(h), h + " h"]))} à ${sel("auto_train_to", Array.from({ length: 24 }, (_, h) => [String(h), h + " h"]))}</span>`)}
       ${row("Nouveaux exemples avant un entraînement", "En dessous, rien ne se passe (un entraînement sur trop peu d'exemples n'apporte rien).", `<input class="field" type="number" data-k="auto_train_min" data-num min="20" max="5000" step="10" value="${S.auto_train_min}" style="width:90px">`)}
       <div class="srow col" id="autoTrainBox"><small class="muted">Chargement…</small></div>
     </div>`;
@@ -8130,7 +8131,7 @@ function showSettingsTab(t) {
   if (t === "engine") loadEngine();
   if (t === "skills") loadSkillsPage();
   if (t === "memory") loadMemory();
-  if (t === "learning") loadLearning();
+  if (t === "learning") { loadLearning(); loadAutoTrain(); }
   if (t === "libs") loadLibs();
   if (t === "plugins") loadPlugins();
   if (t === "aide") loadAide();
@@ -8935,9 +8936,9 @@ async function loadAutoTrain() {
   const need = S.auto_train_min || 150, newEx = Math.max(0, r.examples - (r.examples_at_last_train || 0));
   const since = r.running && r.since ? Math.round((Date.now() / 1000 - r.since) / 60) : 0;
   $("#autoTrainBox").innerHTML = `
-    <div class="sl"><b>${r.running ? `⏳ En cours : ${esc(r.running)} (depuis ${since} min)` : `Version en service : ${esc(cur?.label || "v2")}`}</b>
+    <div class="sl"><b>${r.running ? `En cours : ${esc(r.running)} (depuis ${since} min)` : `Version en service : ${esc(cur?.label || "v2")}`}</b>
       <small>${esc(sc(cur?.scores))} · nouveaux exemples : ${newEx}/${need}${r.last_attempt ? ` · dernier essai : ${esc(r.last_attempt)}` : ""}</small></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="atRun" ${r.running ? "disabled" : ""} title="Lance tout de suite, sans attendre la nuit ni le nombre d'exemples">▶ Entraîner maintenant</button><button class="btn" id="atRefresh">↻</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="atRun" ${r.running ? "disabled" : ""} title="Lance tout de suite, sans attendre la nuit ni le nombre d'exemples">${svgI("play")}Entraîner maintenant</button><button class="btn ib" id="atRefresh" title="Actualiser">${svgI("refresh")}</button></div>
     ${r.versions.length > 1 ? `<div class="sl" style="margin-top:8px"><b>Versions gardées</b></div>` + r.versions.filter((v) => !v.current).map((v) => `<div class="srow"><div class="sl"><b>${esc(v.label)}</b><small>${esc(sc(v.scores))}${v.date ? " · " + esc(v.date) : ""}</small></div><div class="sc"><button class="btn" data-rb="${esc(v.label)}">↶ Revenir à cette version</button>${v.label !== "v2" ? `<button class="icon" data-vdel="${esc(v.label)}" title="Supprimer cette version (libère environ 5,6 Go)">🗑</button>` : ""}</div></div>`).join("") : ""}
     ${r.history.length ? `<div class="sl" style="margin-top:8px"><b>Historique</b></div>` + r.history.map((h) => `<div class="srow"><div class="sl"><b>${esc(h.date)} — ${esc(h.result || "")}</b><small>${h.scores ? esc(h.reason || sc(h.scores)) : h.examples != null ? `${h.examples} exemples` : ""}${h.minutes ? ` · ${h.minutes} min` : ""}</small></div></div>`).join("") : ""}`;
   $("#atRefresh").onclick = loadAutoTrain;
