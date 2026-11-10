@@ -43,7 +43,12 @@ TIGHT = ["",
          "p.profil{font-size:9.8pt;line-height:1.45}.niveaux li{padding:.7mm 0}h2.rubrique{margin-bottom:2mm}</style>\n",
          "<style>@page{margin:12mm 14mm}body{font-size:8.9pt;line-height:1.35}header h1{font-size:21pt}.poste{grid-template-columns:"
          "25mm 1fr;margin-bottom:2mm}.poste h3{font-size:10.3pt}.poste .ou{margin:0 0 .8mm}section.carte{margin-bottom:3mm}"
-         "p.profil{font-size:9.2pt}</style>\n"]
+         "p.profil{font-size:9.2pt}</style>\n",
+         # one page asked: smaller still, tighter rows (the content itself is shortened in cv.json if it is not enough)
+         "<style>@page{margin:9mm 11mm}body{font-size:8.2pt;line-height:1.28}header{padding-bottom:2.5mm;margin-bottom:3mm}"
+         "header h1{font-size:18pt}header .band{margin:2mm 0}.poste{grid-template-columns:22mm 1fr;margin-bottom:1.4mm}"
+         ".poste h3{font-size:9.6pt}.poste li{margin:0}.poste .ou{margin:0 0 .4mm}section.carte{margin-bottom:2.2mm}"
+         "p.profil{font-size:8.6pt;line-height:1.32}.niveaux li{padding:.35mm 0}h2.rubrique{margin-bottom:1.2mm}</style>\n"]
 
 
 def accent(name):
@@ -73,6 +78,20 @@ def esc(t):
 
 NAME_KEYS = ("langue", "language", "nom", "name", "intitule", "titre", "label")
 LEVEL_KEYS = ("niveau", "level", "maitrise", "degre", "note", "certification")
+
+
+def split_top(text):
+    """« A (x, y), B ; C » -> ["A (x, y)", "B", "C"]: cut at commas, semicolons, « · », « | » and new lines, but never
+    inside parentheses (a level « professionnel, technique » stays whole)."""
+    parts, depth, cur = [], 0, ""
+    for ch in str(text):
+        depth += ch in "([" and 1 or (-1 if ch in ")]" and depth else 0)
+        if depth == 0 and ch in ",;|·\n":
+            parts.append(cur); cur = ""
+        else:
+            cur += ch
+    parts.append(cur)
+    return [x.strip() for x in parts if x.strip()]
 
 
 def lang_pair(l):
@@ -143,7 +162,7 @@ TITLES = {"projets": "Projets", "publications": "Publications", "certifications"
 GROUPS = {"basesdedonnees": "Bases de données", "systemes": "Systèmes", "methodes": "Méthodes", "reseaux": "Réseaux",
           "securite": "Sécurité", "logiciels": "Logiciels", "electronique": "Électronique"}
 KNOWN = {"nom", "titre", "kicker", "photo", "couleur", "contact", "profil", "experiences", "formations", "sections", "competences",
-         "langues", "ordre"}
+         "langues", "ordre", "pages"}
 
 
 def slug(t):
@@ -155,15 +174,30 @@ def tidy(cv):
     """cv.json as Naim wrote it -> the keys this script draws. Nothing of the source is dropped: a key with another
     name (projets, publications, entreprise, missions, skill groups, a contact dict) still reaches the page."""
     cv = dict(cv)
+    if isinstance(cv.get("contact"), str):  # « Bordeaux | 06 … | a@b.fr »: one item per part, never per letter
+        cv["contact"] = [["", x] + ([x] if re.match(r"https?://", x) else []) for x in split_top(cv["contact"])]
+    elif isinstance(cv.get("contact"), list):  # a list of words: each one shown, without a label
+        cv["contact"] = [c if isinstance(c, (list, tuple)) else ["", text_of(c)] for c in cv["contact"]]
     if isinstance(cv.get("contact"), dict):
         cv["contact"] = [[LABELS.get(slug(k), k.replace("_", " ").capitalize()), v] + ([v] if re.match(r"https?://", str(v)) else [])
                          for k, v in cv["contact"].items() if str(v or "").strip()]
+    # a field meant as a list but written as one sentence or one dict is never read letter by letter (55 « langues »)
+    for k in ("experiences", "formations"):
+        if isinstance(cv.get(k), (str, dict)):
+            cv[k] = [cv[k]]
     cv["experiences"] = [entry(e, "poste") for e in cv.get("experiences") or []]
     cv["formations"] = [entry(f, "diplome") for f in cv.get("formations") or []]
     L = cv.get("langues") or []
+    if isinstance(L, str):  # « Anglais (professionnel, technique), Espagnol (A2) »: one language per part, never per letter
+        L = split_top(L)
     langs, groups = ([[k, v] for k, v in L.items()] if isinstance(L, dict) else list(L)), []  # {"Anglais": "B2"} too
     comp = cv.get("competences") or {}
+    if isinstance(comp, str):
+        comp = split_top(comp)
     if isinstance(comp, dict):
+        for k in ("fortes", "autres"):
+            if isinstance(comp.get(k), str):
+                comp[k] = split_top(comp[k])
         for k, v in list(comp.items()):
             if k in ("fortes", "autres"):
                 continue
@@ -244,9 +278,10 @@ def body(cv):
     return "\n\n".join(out)
 
 
-def to_pdf(page, remake=None):
+def to_pdf(page, remake=None, want=2):
     """The PDF next to the page (pdf-pro); if it fails the page is still there and convert_document does it.
-    remake(level) writes the page again tighter: used while the PDF has more than two pages."""
+    remake(level) writes the page again tighter: used while the PDF has more pages than wanted ("pages" in cv.json, 2
+    by default)."""
     import subprocess
     page = page.resolve()
     pdf = page.with_suffix(".pdf")
@@ -260,12 +295,16 @@ def to_pdf(page, remake=None):
         return f"PDF non fait ({(r.stderr or r.stdout).strip()[-300:]}) : fais-le avec l'outil convert_document."
     pages = re.search(r"\((\d+) pages?\)", r.stdout)
     level = getattr(remake, "level", 0)
-    if remake and pages and int(pages.group(1)) > 2 and level + 1 < len(TIGHT):
+    if remake and pages and int(pages.group(1)) > want and level + 1 < len(TIGHT):
         remake.level = level + 1
         remake(remake.level)
-        return to_pdf(page, remake)
+        return to_pdf(page, remake, want)
+    over = (f" Encore {pages.group(1)} pages pour {want} voulue(s), même au plus serré : raccourcis le TEXTE dans cv.json "
+            "(missions en une ligne, moins de projets, compétences regroupées), puis relance la même commande. Ne modifie "
+            "pas le .html et ne touche pas au PDF : ils sont refaits à chaque lancement."
+            if pages and int(pages.group(1)) > want else "")
     return (f"PDF : {pdf}" + (f" ({pages.group(1)} page(s))" if pages else "") + ". Regarde-le avec look_at ; pour changer "
-            f"quelque chose, corrige cv.json et relance la même commande.")
+            f"quelque chose, corrige cv.json et relance la même commande." + over)
 
 
 def main():
@@ -307,7 +346,11 @@ def main():
           f"{n_comp} compétence(s), {len(cv['langues'])} langue(s), autres rubriques : {other}, "
           f"photo : {'oui' if cv.get('photo') else 'non'}. Compare chaque nombre avec le CV source (et sa photo) : "
           f"un 0 ou un manque = une rubrique du source absente du CV, corrige cv.json et relance.")
-    print(to_pdf(dst, write))
+    try:  # « sur une seule page »: "pages": 1 in cv.json
+        want = max(1, int(cv.get("pages") or 2))
+    except (TypeError, ValueError):
+        want = 2
+    print(to_pdf(dst, write, want))
 
 
 if __name__ == "__main__":

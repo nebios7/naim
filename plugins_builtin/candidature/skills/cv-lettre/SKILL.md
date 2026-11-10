@@ -70,7 +70,10 @@ tête de la lettre (`[["Ville", …], ["Tél.", …], ["E-mail", …]]`) : le sc
 1. Les deux scripts font AUSSI le PDF (style pdf-pro, A4), à côté du .html : leur dernière ligne dit « PDF : <chemin> ».
    Rien à convertir. S'ils disent « PDF non fait », utilise l'outil `convert_document` (un outil, pas une commande du
    Terminal). Si tu modifies un .html après coup, refais son PDF avec la commande que le script a donnée.
-2. `look_at` du PDF : le style est-il celui du modèle ? CV en 1-2 pages, lettre en 1 page ? Sinon corrige le .html
-   (resserre les marges ou le texte) et reconvertis.
+2. `look_at` du PDF : le style est-il celui du modèle ? CV en 1-2 pages, lettre en 1 page ?
+   - Un nombre de pages demandé (« sur une seule page ») : `"pages": 1` dans cv.json, puis relance la même commande ;
+     le script resserre tout seul jusqu'à ce nombre. S'il dit « Encore N pages », raccourcis le TEXTE de cv.json.
+   - Ne modifie jamais le .html d'un CV ni le PDF pour le changer : le script les refait à chaque lancement, tes
+     changements disparaissent. Tout passe par cv.json.
 3. Réponds avec les chemins exacts des PDF (le CV, la lettre) et ce qui a été enrichi. Seulement les PDF : les .html,
    .pro.html, cv.json, textes.json et lettre.txt sont des brouillons, on ne les cite pas. Jamais un fichier vide ou sans nom.

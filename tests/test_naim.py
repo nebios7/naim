@@ -2706,6 +2706,41 @@ class CvNeverShowsBraces(unittest.TestCase):
         self.assertEqual(cv.tidy({"nom": "T", "langues": {"Espagnol": "A2"}})["langues"], [["Espagnol", "A2"]])
 
 
+class CvFieldsAsSentences(unittest.TestCase):
+    """Fields written as one sentence (contact, languages, skills) are cut into parts, never read letter by letter; a page
+    count asked ("pages": 1) tightens to it; pdf-pro puts its theme BEFORE a whole page's own styles."""
+
+    def _cv(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cv_pro", ROOT / "plugins_builtin/candidature/skills/cv-lettre/cv_pro.py")
+        cv = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cv)
+        return cv
+
+    def test_sentences(self):
+        cv = self._cv()
+        t = cv.tidy({"nom": "T", "contact": "Bordeaux | 06 52 90 96 62 | a@b.fr",
+                     "langues": "Anglais (niveau professionnel, technique et académique), Espagnol (A2)",
+                     "competences": {"fortes": "Python, SQL"}})
+        self.assertEqual([c[1] for c in t["contact"]], ["Bordeaux", "06 52 90 96 62", "a@b.fr"])
+        self.assertEqual(t["langues"], [["Anglais", "niveau professionnel, technique et académique"], ["Espagnol", "A2"]])
+        self.assertEqual(t["competences"]["fortes"], ["Python", "SQL"])
+
+    def test_pages_wanted(self):
+        src = (ROOT / "plugins_builtin/candidature/skills/cv-lettre/cv_pro.py").read_text()
+        self.assertIn('want = max(1, int(cv.get("pages") or 2))', src)
+        self.assertIn("int(pages.group(1)) > want", src)
+        self.assertIn('"pages": 1', (ROOT / "plugins_builtin/candidature/skills/cv-lettre/SKILL.md").read_text())
+
+    def test_theme_first(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pdfpro", ROOT / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        pp = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pp)
+        out = pp.page('<html><head><style>.mine{color:red}</style></head><body><p class="mine">x</p></body></html>')
+        self.assertLess(out.index("--clay"), out.index(".mine{color:red}"))
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"

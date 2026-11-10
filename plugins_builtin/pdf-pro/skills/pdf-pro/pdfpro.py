@@ -475,7 +475,15 @@ def page(body, title="Document"):
     if re.search(r"<html[\s>]", body, re.I):  # a whole page already: the theme joins its head
         head_extra = f'<style>{(HERE / "theme.css").read_text()}</style>'
         asked = "".join(re.findall(r"<style>:root\{--clay:[^<]*</style>", body))  # a colour asked (« gris »): after the theme, it wins
-        return re.sub(r"</head>", lambda m: head_extra + asked + _katex() + "</head>", body, count=1, flags=re.I) if "</head>" in body.lower() else body
+        if "</head>" not in body.lower():
+            return body
+        # the theme FIRST, the page's own styles after it: they keep the last word (a CV's layout, its tightening for one
+        # page — put after them, the theme's « li { font-size: 11pt } » made every bullet big and the CV took 3 pages)
+        opened = re.search(r"<head\b[^>]*>", body, re.I)
+        if opened:
+            body = body[:opened.end()] + head_extra + body[opened.end():]
+            return re.sub(r"</head>", lambda m: asked + _katex() + "</head>", body, count=1, flags=re.I)
+        return re.sub(r"</head>", lambda m: head_extra + asked + _katex() + "</head>", body, count=1, flags=re.I)
     t = re.search(r"<h1[^>]*>(.*?)</h1>", body, re.S)
     title = re.sub(r"<[^>]+>", "", t.group(1)).strip() if t else title
     return (f'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{html.escape(title)}</title>'
