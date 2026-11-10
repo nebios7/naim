@@ -41,6 +41,34 @@ def pdf_text(path):
     return body, note
 
 
+def docx_text(path):
+    """A Word file read with its structure (# titles, - lists, | tables |), its comments and its tracked changes
+    written so they can be read; None when pandoc is missing or fails (textutil then gives the plain text)."""
+    import shutil
+    pandoc = shutil.which("pandoc") or next((p for p in ("/opt/homebrew/bin/pandoc", "/usr/local/bin/pandoc") if Path(p).exists()), None)
+    if not pandoc:
+        return None
+    try:
+        r = subprocess.run([pandoc, "--track-changes=all", "-t", "gfm", "--wrap=none", str(path)], capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode:
+        return None
+    t = r.stdout.decode("utf-8", "replace")
+    attr = lambda a, k: (re.search(rf'{k}="([^"]*)"', a) or [None, ""])[1]
+    t = re.sub(r'<span class="comment-start"([^>]*)>(.*?)</span>',
+               lambda m: f"[Commentaire de {attr(m.group(1), 'author') or '?'} : {m.group(2).strip()}] ", t, flags=re.S)
+    t = re.sub(r'<span class="comment-end"[^>]*></span>', "", t)
+    t = re.sub(r'<span class="insertion"([^>]*)>(.*?)</span>',
+               lambda m: f"[ajouté par {attr(m.group(1), 'author') or '?'} : {m.group(2)}]", t, flags=re.S)
+    t = re.sub(r'<span class="deletion"([^>]*)>(.*?)</span>',
+               lambda m: f"[supprimé par {attr(m.group(1), 'author') or '?'} : {m.group(2)}]", t, flags=re.S)
+    t = re.sub(r'<span class="paragraph-(insertion|deletion)"[^>]*></span>', "", t)
+    t = re.sub(r"!\[[^\]]*\]\([^)]*\)(\{[^}]*\})?", "[image]", t)  # the pictures themselves are listed below
+    t = re.sub(r"\n- \n", "\n", t)
+    return t, "structure gardée : titres (#), listes, tableaux, commentaires, modifications suivies"
+
+
 def textutil(path):
     r = subprocess.run(["textutil", "-convert", "txt", "-stdout", str(path)], capture_output=True, timeout=120)
     if r.returncode != 0:
@@ -131,7 +159,8 @@ def extract(path):
     elif ext == ".pptx":
         text, note = pptx_text(path)
     elif ext in (".docx", ".doc", ".rtf", ".odt", ".html", ".webarchive", ".pages"):
-        text, note = textutil(path)
+        got = docx_text(path) if ext == ".docx" else None
+        text, note = got or textutil(path)
         if ext == ".docx":
             text += pictures_of(path)
     else:

@@ -3603,3 +3603,33 @@ class SystemBlockIsTheQuestion(unittest.TestCase):
         self.assertIn("Le bloc contient exactement le système de la question", s)
         self.assertIn("pas de C, pas de D", s)
         self.assertIn("4 inconnues ou plus : pas de bloc", s)
+
+
+class WordReadWithStructure(unittest.TestCase):
+    """A Word file is read with its titles, lists, tables and comments (pandoc), the plain text when pandoc is absent."""
+
+    def test_structure(self):
+        import shutil
+        import docs
+        py = Path.home() / ".naim/docs-venv/bin/python"
+        if not shutil.which("pandoc") or not py.exists():
+            self.skipTest("pandoc or python-docx absent")
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "t.docx"
+            subprocess.run([str(py), "-c", (
+                "from docx import Document\nd=Document();d.add_heading('Rapport',1);d.add_paragraph('Un',style='List Bullet')\n"
+                "t=d.add_table(rows=2,cols=2);t.cell(0,0).text='Mois';t.cell(0,1).text='Ventes';t.cell(1,0).text='Janvier';"
+                "t.cell(1,1).text='12'\np=d.add_paragraph('Phrase.')\nd.add_comment(p.runs,text='A verifier',author='Prof')\n"
+                f"d.save({str(f)!r})")], check=True, capture_output=True, timeout=60)
+            text, note = docs.extract(f)
+            self.assertIn("# Rapport", text)
+            self.assertIn("- Un", text)
+            self.assertRegex(text, r"\| Janvier\s*\| 12")
+            self.assertIn("[Commentaire de Prof : A verifier] Phrase.", text)
+            orig = docs.docx_text
+            try:
+                docs.docx_text = lambda path: None  # no pandoc: the plain text, as before
+                plain, _ = docs.extract(f)
+            finally:
+                docs.docx_text = orig
+            self.assertIn("Janvier", plain)
