@@ -275,6 +275,26 @@ def closest_skills(text, skills, n=3, min_score=1):
     return [(k, s) for k, s in scored if k >= min_score][:n]
 
 
+# the apps for which Naim has its own tool: a dedicated tool before an AppleScript written from memory
+_APP_TOOLS = {"contacts": "chercher_contact (lire une fiche) et modifier_contact (changer un numéro, un e-mail…)",
+              "mail": "send_email, mail_inbox, mail_draft_reply, mail_junk, mail_done",
+              "calendar": "le skill mac (recette des rendez-vous)", "messages": "le skill mac (recette SMS / iMessage)"}
+
+
+def _applescript_hint(command):
+    """An AppleScript that failed on its syntax or its objects: the app's own dictionary says what exists (its classes,
+    properties and commands), and a dedicated tool may already do it — never a third guess of the syntax."""
+    apps = list(dict.fromkeys(re.findall(r'(?:tell|application)\s+(?:application\s+)?"([^"]+)"', command)))
+    app = apps[0] if apps else ""
+    tool = _APP_TOOLS.get(app.lower())
+    look = (f'`(sdef "/System/Applications/{app}.app" 2>/dev/null || sdef "/Applications/{app}.app") | '
+            f'grep -i -B2 -A8 "<le mot : phone, contact, volume…>"`' if app else '`sdef "/Applications/<App>.app" | grep -i <mot>`')
+    return ("\n\n[AppleScript refusé : la syntaxe ou l'objet n'existe pas comme tu l'as écrit. "
+            + (f"Un outil à toi fait déjà ça pour {app} : {tool} — utilise-le plutôt qu'un script. " if tool else "")
+            + f"Sinon, lis les vraies commandes de l'application dans son dictionnaire : {look}, puis écris le script avec "
+            "ces noms-là. N'invente pas une troisième version.]")
+
+
 def _closest_skills(asked, skills, n=3):
     """A skill name that does not exist (« tele_connect »): the skills closest by MEANING to the words of that name, with
     their description, instead of a bare list of sixty names where the right one cannot be recognised."""
@@ -957,8 +977,11 @@ class Agent:
                 "asked.") if s else ""
 
     def _system_prompt(self):
-        # the project folder comes after the fixed text: llama.cpp then reuses what it already read from one project to another
-        base = AGENT_PROMPT + "\n\n" + today_line() + f"\nProject directory: {self.root}"
+        # everything fixed first (the engine reads the tools, then this text, and reuses what did not change since the last
+        # request); what changes from one day, project or conversation to another goes at the END (`tail`): the date and
+        # the project folder sat right after the first part, and the ~4,000 tokens after them were read again each time
+        base = AGENT_PROMPT
+        tail = []
         if getattr(self, "power", False) and not self.scheduled:
             base = base.replace(
                 "- Never type passwords, card numbers or other secrets, and never buy, send or delete anything on screen:\n"
@@ -981,9 +1004,9 @@ class Agent:
             parts.append(f"The user's global instructions (~/.naim/NAIM.md):\n{glob}")
         name, text = ext.project_instructions(self.root)
         if text:
-            parts.append(f"Project instructions from {name} (follow them):\n{text}")
+            tail.append(f"Project instructions from {name} (follow them):\n{text}")
         if self.features["memory"] and (mem := ext.memory_prompt()):
-            parts.append(mem + "\nUse `remember` when the user tells you something durable about themselves or their projects.")
+            tail.append(mem + "\nUse `remember` when the user tells you something durable about themselves or their projects.")
         if self.features["skills"]:
             skills = [s for s in ext.list_skills(self.root, self.disabled_skills) if s["enabled"]]
             if skills:
@@ -1001,7 +1024,7 @@ class Agent:
                              + "\n".join(f"- {s['name']}: {_short_desc(s['description'], 70 if s['name'] in auto else 110)}"
                                          for s in skills))
             if own := _own_tools():
-                parts.append(own)
+                tail.append(own)
             try:
                 import skills_bibliotheque
                 n = skills_bibliotheque.count()
@@ -1058,7 +1081,7 @@ class Agent:
             parts.append(PLAN_PROMPT)
         if self.extra_system:
             parts.append(f"User instructions:\n{self.extra_system}")
-        return "\n\n".join(parts)
+        return "\n\n".join(parts + tail + [today_line() + f"\nProject directory: {self.root}"])
 
     # ------------------------------------------------------------------ helpers
     # macOS shows these folders in French but they are named in English on the disk (« Téléchargements » = Downloads)
@@ -4068,6 +4091,9 @@ class Agent:
                                     "node <module>, web <sujet> <mot>) — il donne les noms proches qui existent" if doc.exists() else
                                     "`python3 -c \"import m; print(dir(m))\"`, `python3 -c \"import m; help(m.f)\"`, `<commande> --help`")
                                     + ", ou web_search « <module> <fonction> documentation ». Puis utilise le vrai nom.]")
+        if name == "run_command" and re.match(r"exit code [1-9]", str(result)) and "osascript" in str(args.get("command") or "") \
+                and re.search(r"syntax error|execution error|script error", str(result)):
+            result = str(result) + _applescript_hint(str(args.get("command") or ""))
         if name == "run_command":
             failed_run = bool(re.match(r"(error|exit code [1-9])", str(result)))
             self._fail_streak = self._fail_streak + 1 if failed_run else 0

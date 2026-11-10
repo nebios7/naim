@@ -2623,6 +2623,37 @@ class SkillsByMeaningNote(unittest.TestCase):
             self.assertIn("modifie un FICHIER", out)
 
 
+class AppleScriptFromTheDictionary(unittest.TestCase):
+    """A failed AppleScript points to the dedicated tool when Naim has one, else to the app's own dictionary (sdef)."""
+
+    def test_hint(self):
+        h = naimtools._applescript_hint('osascript -e \'tell application "Contacts" to set phone of contact 1 to "x"\'')
+        self.assertIn("modifier_contact", h)
+        self.assertIn('sdef "/System/Applications/Contacts.app"', h)
+        h2 = naimtools._applescript_hint('osascript -e \'tell application "Music" to play\'')
+        self.assertNotIn("Un outil à toi", h2)
+        self.assertIn("Music.app", h2)
+
+
+class FixedInstructionsFirst(unittest.TestCase):
+    """The instructions keep their fixed text first and what changes (date, project folder, memory) at the end: from one
+    project to another almost all of them is the same, so the engine reuses what it already read."""
+
+    def test_shared_prefix(self):
+        with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
+            x = naimtools.Agent(d1, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True).messages[0]["content"]
+            y = naimtools.Agent(d2, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True).messages[0]["content"]
+            n = 0
+            while n < min(len(x), len(y)) and x[n] == y[n]:
+                n += 1
+            self.assertGreater(n / len(x), 0.9)
+            self.assertIn("Project directory:", x[-600:])
+
+    def test_chat_date_last(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('system += (f"\\n\\n{mem}" if mem else "") + "\\n\\n" + today_line()', src)
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"
