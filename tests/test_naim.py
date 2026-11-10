@@ -2654,6 +2654,40 @@ class FixedInstructionsFirst(unittest.TestCase):
         self.assertIn('system += (f"\\n\\n{mem}" if mem else "") + "\\n\\n" + today_line()', src)
 
 
+class GuideWithoutStopping(unittest.TestCase):
+    """A message typed while Naim works is read at once (even while it reads or thinks) and the same answer goes on with
+    it; « Envoyer maintenant » asks for that, it never stops the answer to send a new request."""
+
+    def test_server(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('if helper._inbox and (time.time() - last_redirect > 20 or getattr(helper, "_steer_now", False)):', src)
+        self.assertNotIn("if helper._inbox and content.strip() and time.time() - last_redirect > 20", src)
+        self.assertIn("if not calls and not stop.is_set() and helper._inbox and step < limit - 1:", src)
+        self.assertIn('agent._steer_now = True', src)
+
+    def test_send_now_button(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn('body: { run_id: run.id, now: true }', html)
+        self.assertNotIn('"Envoyé comme nouvelle demande"', html)
+
+
+class NewsletterFeatures(unittest.TestCase):
+    """/storage and /usage commands, « ultrathink » (reasoning for one message, with its badge), waiting messages kept
+    across a restart, and the rule « decide alone what can be undone »."""
+
+    def test_ui(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn('["/storage", ""', html)
+        self.assertIn('["/usage", ""', html)
+        self.assertIn("think: S.think || /\\bultrathink\\b/i.test(String(message", html)
+        self.assertIn('<div id="ultra" hidden>', html)
+        self.assertIn('function keepQueue(id, q)', html)
+        self.assertIn("keepQueue(live.conv.id, live.queue)", html)
+
+    def test_rule(self):
+        self.assertIn("Décider seul ce qui est réversible", (ROOT / "NAIM.default.md").read_text())
+
+
 class ImproveTheSystem(unittest.TestCase):
     """/ameliore-systeme: a digest of the conversations (long tasks, failing tools, unhappy follow-ups), nothing changed."""
     P = Path(__file__).resolve().parents[1] / "plugins_builtin/ameliore-systeme"

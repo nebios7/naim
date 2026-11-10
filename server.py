@@ -1312,12 +1312,14 @@ class Handler(BaseHTTPRequestHandler):
             text = str(body.get("text") or "").strip()[:4000]
             if agent and text:
                 agent.interject(text)
+            if agent and body.get("now"):  # « Envoyer maintenant »: read at once, the same answer goes on with it
+                agent._steer_now = True
             if text and STOP_WORDS_RE.search(text):  # « stop » typed: the reply stops now, in Chat as in Agent
                 with _lock:
                     flag = _runs.get(body.get("run_id"))
                 if flag:
                     flag.set()
-            self.send_json({"ok": bool(agent and text)})
+            self.send_json({"ok": bool(agent and (text or body.get("now")))})
         elif path == "/api/interject/cancel":  # « Annuler » on a waiting message: taken back if not read yet
             body = self.read_json()
             with _lock:
@@ -2613,9 +2615,11 @@ class Handler(BaseHTTPRequestHandler):
                 if stop.is_set():
                     stream.close()  # hang up: llama.cpp stops writing at once
                     break
-                if helper._inbox and content.strip() and time.time() - last_redirect > 20:  # the user speaks while
-                    stream.close()  # Naim answers: it stops here and goes on with what was just said (at most every 20 s)
-                    redirected, last_redirect = True, time.time()
+                if helper._inbox and (time.time() - last_redirect > 20 or getattr(helper, "_steer_now", False)):  # the user speaks while Naim reads, thinks or
+                    # answers: it stops here and goes on with what was just said (at most every 20 s) — not only once it
+                    # wrote some text: during the reading (« 99 % ») the message waited, then went as a new request
+                    stream.close()
+                    redirected, last_redirect, helper._steer_now = True, time.time(), False
                     break
                 if repeating(content) or ("\n" in str(chunk.get("message", {}).get("content") or "")
                                           and (loop_at := loop_start(shown_part(content))) is not None):
@@ -2886,6 +2890,13 @@ class Handler(BaseHTTPRequestHandler):
                 # only the address was): a precise correction under it, checked by the code
                 self.event({"type": "token", "text": fix})
                 content += fix
+            if not calls and not stop.is_set() and helper._inbox and step < limit - 1:
+                # the user wrote while this answer was being finished: the same answer goes on with it, as when it is read
+                # between two steps — never « Arrêté » then a new request
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content})
+                    self.event({"type": "token", "text": "\n\n"})
+                continue
             if stop.is_set() or not calls:
                 break
             if any(c["function"]["name"] == "run_command" for c in calls):

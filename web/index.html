@@ -806,6 +806,15 @@ body.vnarrow #panel.show { margin: 0; inset: 0 !important; width: auto !importan
 .psec { font-size: 11.5px; color: var(--muted); padding: 8px 10px 4px; text-transform: uppercase; letter-spacing: .4px; }
 /* ---------------- v5: slash menu, images, git, sub-agents, reply actions, editors */
 .composer { position: relative; }
+/* « ultrathink » typed: a small badge says this one message is thought through (its word in a moving gradient) */
+#ultra { display: flex; align-items: center; gap: 7px; margin: 2px 0 6px; font-size: 12px; color: var(--muted); animation: ultraIn .28s cubic-bezier(.2,.8,.2,1); }
+#ultra[hidden] { display: none; }
+#ultra svg { width: 14px; height: 14px; color: #c96442; flex: none; }
+#ultra b { font-weight: 600; letter-spacing: .01em; background: linear-gradient(90deg, #c96442, #d4a24c, #6a9fb5, #8a6fc4, #c96442); background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: ultraFlow 3.2s linear infinite; }
+@keyframes ultraFlow { to { background-position: 300% 0; } }
+@keyframes ultraIn { from { transform: translateY(4px); } to { transform: none; } }  /* no opacity: visible even when animations do not run */
+@media (prefers-reduced-motion: reduce) { #ultra, #ultra b { animation: none; } }
 .slash { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 5px; max-height: 320px; overflow-y: auto; z-index: 20; }
 .slash .si { display: flex; gap: 10px; align-items: baseline; padding: 6px 9px; border-radius: 7px; cursor: pointer; font-size: 14px; }
 .slash .si b { font-family: "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; font-weight: 500; min-width: 110px; }
@@ -2450,6 +2459,7 @@ body.voicefirst:not(.busyrun) #talkBtn:not([hidden]):not(.on):hover .tw i { anim
         <div class="composer"><div id="talkGlow" aria-hidden="true"></div>
           <div class="slash" id="slash" hidden></div>
           <div class="atts" id="pending"></div>
+          <div id="ultra" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg><b>ultrathink</b><span>Réflexion poussée pour ce message</span></div>
           <textarea id="input" rows="1" placeholder="Écris à Naim…"></textarea>
           <!-- inside the box, like a coding assistant's composer: attach, voice, send; the settings go below it -->
           <div class="cin">
@@ -4637,7 +4647,7 @@ function guideNote(text, state) {
   const st = state === "wait" ? "En attente" : state === "read" ? "Pris en compte" : "";
   const tip = state === "wait" ? ' title="Naim le lit à sa prochaine étape, sans s\'arrêter"' : "";
   // a choice: wait for its next step, or stop it and send now — on its own line, between the head and the message
-  const now = state === "wait" ? `<button class="gnow" data-sendnow title="Arrête Naim et envoie ce message tout de suite">Envoyer maintenant</button><button class="gnow" data-unsend title="Retire ce message avant que Naim le lise">Annuler</button>` : "";
+  const now = state === "wait" ? `<button class="gnow" data-sendnow title="Naim lit ce message tout de suite et continue sa réponse avec">Envoyer maintenant</button><button class="gnow" data-unsend title="Retire ce message avant que Naim le lise">Annuler</button>` : "";
   return Object.assign(document.createElement("div"), { className: "evnote gnote" + (state === "wait" ? " pending" : ""),
     innerHTML: `<div class="ghead"><span class="evic">${svgI("chat")}</span><span>Ton message pendant le travail</span>${st ? `<span class="gstate"${tip}>${st}</span>` : ""}</div>${now ? `<div class="gfoot">${now}</div>` : ""}<div class="gtext">${esc(words)}</div>` });
 }
@@ -4735,7 +4745,13 @@ async function openConv(id) {
   if (own && own !== S.project && !TEMP_DIR_RE.test(own)) { S.project = own; saveSettings(); if (current.mode !== "agent") toast(`Dossier de cette conversation : ${own.split("/").pop()}`); }
   applySettings(); setView("chat"); renderList(); renderThread(); updateTitle();
   if (S.mode === "agent" && S.project && $("#panel").classList.contains("show")) loadTree();
+  // a message that waited for Naim when the app quit (closed, updated, crashed): it comes back, ready to send
+  const kept = !runs[id] && keptQueue(id);
+  if (kept && !$("#input").value.trim()) { $("#input").value = kept; autoGrow(); updateSendBtn(); keepQueue(id, []); toast("Ton message en attente est revenu : envoie-le quand tu veux"); }
 }
+// the messages waiting for Naim, per conversation, kept on this Mac so a restart does not lose them
+function keepQueue(id, q) { try { q?.length ? localStorage.setItem("naim-queue-" + id, JSON.stringify(q)) : localStorage.removeItem("naim-queue-" + id); } catch {} }
+function keptQueue(id) { try { return (JSON.parse(localStorage.getItem("naim-queue-" + id) || "[]") || []).join("\n\n"); } catch { return ""; } }
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 // files attached before the first message: the conversation's id is chosen then, its folder (Fichiers/Joints/<id>) too
 let draftId = null;
@@ -6081,7 +6097,7 @@ async function send(textArg, attsArg, opts = {}) {
     const r = canGuide ? await api("/api/interject", { method: "POST", body: { run_id: live.id, text } }) : { ok: false };
     if (r.ok) { const st = { type: "event", icon: "💬", text: note }; live.reply.steps.push(st); (live.pendingNotes ||= []).push(st);
       live.v?.event("💬", note); [...(live.v?.el.querySelectorAll(".flow .evnote") || [])].pop()?.classList.add("pending"); (live.v._notes ||= []).push({ text: note, at: null }); if (!talk.on) toast("Naim en tiendra compte à sa prochaine étape"); }
-    else { (live.queue ||= []).push(text); if (!talk.on) toast("Message gardé : envoyé dès que Naim a fini"); }
+    else { (live.queue ||= []).push(text); keepQueue(live.conv.id, live.queue); if (!talk.on) toast("Message gardé : envoyé dès que Naim a fini"); }
     return;
   }
   if ((!text && !atts.length) || live) return;
@@ -6168,7 +6184,8 @@ async function stream(reply, v, message, hist, extra = {}) {
   try {
     const res = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: run.controller.signal,
-      body: JSON.stringify({ run_id: runId, conv_id: conv.id, mode: S.mode, model: S.model, think: S.think, project: S.project, auto_yes: S.autoYes,
+      // « ultrathink » in the message: Naim reasons for this one message only, the setting stays as it is
+      body: JSON.stringify({ run_id: runId, conv_id: conv.id, mode: S.mode, model: S.model, think: S.think || /\bultrathink\b/i.test(String(message || "")), project: S.project, auto_yes: S.autoYes,
         history: hist, message, settings: settingsPayload(), images: extra.images?.length ? extra.images : undefined, plan: !!extra.plan,
         voice: talk.on || undefined }),  // conversation mode: an answer made to be heard
     });
@@ -6344,6 +6361,7 @@ async function stream(reply, v, message, hist, extra = {}) {
   modsFire("reply", reply.content || "");
   await saveConv(conv); loadList();
   mentionFiles = null;  // files may have been created: the @ list is rebuilt next time
+  keepQueue(conv.id, []);  // sent now (or nothing waited): nothing to bring back after a restart
   if (run.queue?.length && current === conv) setTimeout(() => send(run.queue.join("\n\n")), 300);
   else goalAfter(conv, reply);
   const quiet = talk.on && conv.mode !== "agent";  // a spoken conversation: no notification, no sound
@@ -6509,12 +6527,12 @@ function goalAfter(conv, reply) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest?.("[data-sendnow]"); if (!b) return;
   const run = curRun(), note = b.closest(".gnote"); if (!run || !note) return;
-  const text = $(".gtext", note).textContent;
-  (run.queue ||= []).push(text);
-  note.classList.remove("pending"); $(".gfoot", note)?.remove();
-  const st = $(".gstate", note); if (st) { st.textContent = "Envoyé comme nouvelle demande"; st.removeAttribute("title"); }
-  run.pendingNotes = (run.pendingNotes || []).filter((x) => !String(x.text).endsWith(text));
-  await stop();
+  // read at once by the answer under way, which goes on with it — like a message read between two steps: no « Arrêté »,
+  // no new request
+  const r = await api("/api/interject", { method: "POST", body: { run_id: run.id, now: true } }).catch(() => ({}));
+  if (!r.ok) { toast("Naim le lira à sa prochaine étape"); return; }
+  $(".gfoot [data-sendnow]", note)?.remove();
+  const st = $(".gstate", note); if (st) { st.textContent = "Naim le lit maintenant"; st.removeAttribute("title"); }
 });
 // « Annuler » on a waiting message: taken back before Naim reads it (said plainly when it was read already)
 document.addEventListener("click", async (e) => {
@@ -6554,6 +6572,7 @@ function guidePlaceholder() {
 }
 function updateSendBtn() {
   const typing = !!$("#input").value.trim(), busy = !!curRun();
+  const u = $("#ultra"); if (u) u.hidden = !/\bultrathink\b/i.test($("#input").value);
   const sign = busy && !typing ? "■" : "↑", sb = $("#send");
   if (sb.textContent !== sign) { sb.textContent = sign; sb.classList.remove("swap"); void sb.offsetWidth; sb.classList.add("swap"); }
   $("#send").title = !busy ? "Envoyer" : typing ? "Envoyer à Naim pendant qu'il travaille (il en tient compte sans s'arrêter)" : "Arrêter (Échap)";
@@ -6901,6 +6920,8 @@ const SLASH = [
   ["/chat", "", "Passer en mode Chat", () => setMode("chat")],
   ["/new", "", "Nouvelle conversation", () => newConv()],
   ["/compact", "", "Résumer le début de la conversation (plus rapide)", () => compactNow()],
+  ["/storage", "", "Voir la place que prend Naim sur le disque et la libérer", () => { naimCmd("memory"); setTimeout(() => $("#storageBox")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300); }],
+  ["/usage", "", "Ce que Naim lit avant ta conversation, partie par partie (et ce qui la ralentit)", () => ctxPanel()],
   ["/git", "", "Ouvrir le panneau Git", () => naimCmd("git")],
   ["/mcp", "", "Gérer les serveurs MCP", () => naimCmd("mcp")],
   ["/plugin", "marketplace add <lien> | install <nom> | hooks <nom> on|off", "Ajouter une marketplace de plugins et installer un plugin (aussi ceux faits pour d'autres agents de code)", (a) => pluginCmd(a)],
