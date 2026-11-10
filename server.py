@@ -2374,7 +2374,7 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = 0
+        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2815,6 +2815,28 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "user", "content": "(Vérification de tes calculs : des résultats sont faux.\n- " + "\n- ".join(wrong)
                                      + "\n\nRedonne ta réponse entière avec les bons résultats : corrige aussi les étapes qui y "
                                        "mènent, pas seulement la ligne fausse.)"})
+                    shown = 0
+                    continue
+            if not calls and not stop.is_set() and link_checks < 1 and "http" in content:
+                # the links of the answer tried before it is shown: one it made up (a 404, a name that does not exist)
+                # is found again with the tools, or taken out — never handed over as if it worked
+                try:
+                    import linkcheck
+                    known = " ".join([body.get("message") or ""] + [str(m.get("content") or "") for m in messages
+                                                                    if m.get("role") in ("tool", "user")]
+                                     + [str(m.get("content") or "") for m in (body.get("history") or [])])
+                    bad = linkcheck.dead(content, known)
+                except Exception:  # noqa: BLE001
+                    bad = []
+                if bad:
+                    link_checks += 1
+                    self.event({"type": "retract", "chars": shown})
+                    self.event({"type": "status", "text": "Naim vérifie ses liens…"})
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": "(Vérification de tes liens : ces adresses n'existent pas (erreur 404 "
+                                     "ou site introuvable) :\n- " + "\n- ".join(bad) + "\n\nNe donne jamais un lien que tu n'as pas "
+                                     "trouvé avec tes outils. Cherche la bonne adresse (web_search, puis web_fetch pour la vérifier) "
+                                     "ou retire ce lien, puis redonne ta réponse entière.)"})
                     shown = 0
                     continue
             if not calls and not stop.is_set() and svg_checks < 2 and SVG_BLOCK_RE.search(content):

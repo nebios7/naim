@@ -3566,3 +3566,40 @@ console.log(JSON.stringify({ carries: (h.match(/class="dvc"/g) || []).length, un
         self.assertGreaterEqual(o["carries"], 5)  # 4, 2 (first line), 1 (second line), 1, 1 (the sum)
         self.assertEqual(o["until"], 3)  # the carries of each line go when the next line starts
         self.assertIn("dataset.until", (ROOT / "web/index.html").read_text().split("function divDraw", 1)[1][:600])
+
+
+class LinksChecked(unittest.TestCase):
+    """The links of an answer that no tool and no user gave are tried before it is shown: a 404 or a name that does
+    not exist sends the answer back; refused or slow sites, local addresses and given links are left alone."""
+
+    def test_dead_links(self):
+        import linkcheck
+        t = ("Voir https://a.fr/guide. et [doc](https://b.fr/x), aussi http://localhost:8000 et https://c.fr/ok, "
+             "https://d.fr/robots")
+        self.assertEqual(linkcheck.links(t)[:2], ["https://a.fr/guide", "https://b.fr/x"])
+        seen = []
+        fake = {"https://a.fr/guide": "dead", "https://b.fr/x": "dead", "https://c.fr/ok": "ok", "https://d.fr/robots": "unknown"}
+        orig = linkcheck._status
+        linkcheck._status = lambda u, timeout: (seen.append(u), fake[u])[1]
+        try:
+            self.assertEqual(linkcheck.dead(t, known="the tool found https://b.fr/x"), ["https://a.fr/guide"])
+        finally:
+            linkcheck._status = orig
+        self.assertNotIn("http://localhost:8000", seen)
+        self.assertNotIn("https://b.fr/x", seen)
+
+    def test_wired_in_the_answer(self):
+        s = (ROOT / "server.py").read_text()
+        self.assertIn("linkcheck.dead(content, known)", s)
+        self.assertIn("Naim vérifie ses liens", s)
+
+
+class SystemBlockIsTheQuestion(unittest.TestCase):
+    """The systeme block holds the very system solved in the text - never other matrices or an invented example -
+    and nothing is drawn beyond 3 unknowns."""
+
+    def test_rule(self):
+        s = (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text()
+        self.assertIn("Le bloc contient exactement le système de la question", s)
+        self.assertIn("pas de C, pas de D", s)
+        self.assertIn("4 inconnues ou plus : pas de bloc", s)
