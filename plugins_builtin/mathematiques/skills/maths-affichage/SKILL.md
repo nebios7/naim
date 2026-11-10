@@ -152,6 +152,11 @@ point commun ; **II. le réseau** — x₁, x₂… à gauche, b₁, b₂… à 
 a_ij, les sommes à côté ; **la synthèse** — les deux vues donnent la même solution, avec la vérification. Cas sans
 solution (droites parallèles) et infinité de solutions : dits et dessinés.
 - 2 ou 3 inconnues (x, y, z ou x1, x2, x3), 2 à 4 équations. Ne calcule pas la solution toi-même dans le bloc.
+- **Le bloc contient exactement le système de la question**, celui que tu résous dans ton texte : recopie ses équations
+  telles quelles (ou A et B qui leur correspondent). Jamais d'autres matrices (pas de C, pas de D), jamais un exemple
+  inventé à la place : le dessin doit montrer le système résolu. Pour un nouveau système demandé sans équations
+  (« et avec trois équations ? »), choisis-le d'abord, écris-le en texte, puis mets ces mêmes équations dans le bloc.
+- 4 inconnues ou plus : pas de bloc (on ne dessine pas en 4 dimensions) ; résous en texte (Gauss) et dis-le en une phrase.
 - Avant le bloc : une phrase. Après : la résolution écrite en texte (substitution ou combinaison, ou Gauss), le
   résultat et ce que montrent les deux vues, en 2 ou 3 phrases.
 
