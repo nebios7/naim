@@ -3633,3 +3633,57 @@ class WordReadWithStructure(unittest.TestCase):
             finally:
                 docs.docx_text = orig
             self.assertIn("Janvier", plain)
+
+
+class EnglishGames(unittest.TestCase):
+    """The anglais skill: a ```anglais block becomes a game card (vocabulary with pictures, images, listening,
+    spelling, pairs, sentences); pictures come once from Wikipedia / Commons and are served from the cache only."""
+
+    def test_plugin(self):
+        import re as _re
+        d = json.loads((ROOT / "plugins_builtin/anglais/plugin.json").read_text())
+        t = d["triggers"]["anglais"]
+        for yes in ("je veux apprendre l'anglais", "un jeu d'anglais", "vocabulaire anglais des fruits", "/anglais fruits"):
+            self.assertTrue(_re.search(t, yes, _re.I), yes)
+        for no in ("traduis ce texte en anglais", "mon prof d'anglais est malade"):
+            self.assertFalse(_re.search(t, no, _re.I), no)
+        s = (ROOT / "plugins_builtin/anglais/skills/anglais/SKILL.md").read_text()
+        self.assertIn("```anglais", s)
+        self.assertIn('"image": "orange fruit"', s)
+
+    def test_cache_names_only(self):
+        import anglais_images
+        self.assertIsNone(anglais_images.path_of("../../etc/passwd"))
+        self.assertIsNone(anglais_images.path_of("index.json"))
+        self.assertEqual(anglais_images.key({"en": "Run", "image": " Running  man "}), "running man")
+        self.assertEqual(anglais_images.key({"en": "Apple"}), "apple")
+        self.assertEqual(anglais_images.resolve([], fetch=False), {})
+
+    def test_card_drawn(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node absent")
+        js = r"""
+const fs = require('fs'), src = fs.readFileSync(process.argv[1], 'utf8');
+const code = src.slice(src.indexOf('// ---- an English game'), src.indexOf('document.addEventListener("click", (e) => {\n  const el = e.target.closest?.(".engame'));
+global.esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+global.svgI = () => '<svg></svg>'; global.api = async () => ({ images: {} }); global.document = { querySelectorAll: () => [] };
+eval(code.replace(/^const /gm, 'global.').replace(/^function (\w+)/gm, 'global.$1 = function $1'));
+const q = { titre: 'Fruits', mots: [{ en: 'apple', fr: 'pomme' }, { en: 'banana', fr: 'banane' }, { en: 'pear', fr: 'poire' }, { en: 'grapes', fr: 'raisin' }],
+  phrases: [{ en: 'I like apples', fr: "J'aime les pommes" }] };
+const el = { dataset: { en: JSON.stringify(q) }, innerHTML: '' }, out = {};
+enDraw(el); out.vocab = (el.innerHTML.match(/class="encard"/g) || []).length; out.tabs = (el.innerHTML.match(/data-eg="/g) || []).length;
+for (const g of ['images', 'ecoute', 'orthographe', 'paires', 'phrases']) { enNew(el, g); enDraw(el); out[g] = el.innerHTML.length > 200; }
+enNew(el, 'images'); out.opts = el._st.opts.every((o, i) => o.includes(el._st.order[i]) && new Set(o).size === o.length && o.length === 4);
+console.log(JSON.stringify(out));
+"""
+        r = subprocess.run(["node", "-e", js, str(ROOT / "web/index.html")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        o = json.loads(r.stdout)
+        self.assertEqual(o["vocab"], 4)
+        self.assertGreaterEqual(o["tabs"], 6)
+        self.assertTrue(all(o[g] for g in ("images", "ecoute", "orthographe", "paires", "phrases")))
+        self.assertTrue(o["opts"])  # each question: the right word among 4 different ones
+        s = (ROOT / "server.py").read_text()
+        self.assertIn('"/api/anglais/images"', s)
+        self.assertIn("anglais_images.path_of", s)

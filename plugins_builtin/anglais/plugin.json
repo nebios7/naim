@@ -1,0 +1,14 @@
+{
+  "name": "anglais",
+  "version": "1.0",
+  "description": "Apprendre l'anglais en jouant dans la conversation : les mots d'un thème avec de vraies images et leur prononciation, puis six jeux (images, écoute, orthographe, paires, phrases) avec score.",
+  "skills": "skills",
+  "triggers": {
+    "anglais": "\\b((apprendre|r[ée]viser|r[ée]vise|travailler|pratiquer|am[ée]liorer|progresser en|jouer en|jeux? (d'|en |pour apprendre l')|cours d'|le[çc]ons? d'|exercices? d'|quiz d')\\s*(l')?anglais|vocabulaire (en |d')?anglais|mots? (en |d')?anglais|learn english|english (games?|lessons?|vocabulary))\\b|(^|\\s)/anglais\\b"
+  },
+  "commands": [
+    {"cmd": "/anglais", "arg": "[thème ou niveau]", "description": "Un jeu pour apprendre l'anglais : mots en images, écoute, orthographe, paires, phrases",
+     "prompt": "Avec le skill anglais, fais-moi un jeu pour apprendre l'anglais sur ce thème (sinon choisis un thème de débutant) :"}
+  ],
+  "priority": true
+}

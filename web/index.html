@@ -1536,6 +1536,42 @@ header#chatHeader { overflow: hidden; }
 .qflash.back { background: var(--code); }
 .qflash .qside { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .qflash .qface { font-size: 1.05em; line-height: 1.5; } .qflash .qturn { font-size: 12px; color: var(--muted); }
+/* an English game: tabs, picture cards to hear, questions with a big picture, letter and word tiles, a memory grid */
+.engame { border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px 12px; margin: 10px 0 12px; background: var(--panel); }
+.enhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; } .enhead b { font-size: 1.05em; font-weight: 600; }
+.enhead span { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; }
+.entabs { flex-wrap: wrap; }
+.enpic { display: block; box-sizing: border-box; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 9px; background: var(--code); }
+.enno { display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; font-weight: 600; color: var(--muted); font-size: 14px; }
+.envocab { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+.encard { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg);
+  color: var(--text); font: inherit; cursor: pointer; text-align: center; transition: border-color .15s, transform .15s; }
+.encard:hover { border-color: var(--muted); transform: translateY(-1px); } .encard b { font-size: 1.02em; } .encard small { color: var(--muted); font-size: 12.5px; }
+.enq { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 14px; } .enq .qq { margin: 0; text-align: center; }
+.enbig { width: min(300px, 100%); }
+.ensay { display: inline-flex; align-items: center; gap: 6px; } .ensay svg { width: 15px; height: 15px; }
+.qexpl .ensay { padding: 2px 8px; margin-left: 4px; vertical-align: middle; }
+.enopts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 460px; margin: 0 auto; }
+.enopt { padding: 6px; border: 2px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; }
+.enopt.ok { border-color: var(--ok); } .enopt.ko { border-color: var(--danger); } .enopt.dim { opacity: .5; } .enopt[disabled] { cursor: default; }
+.enslots { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; }
+.enslots span { width: 34px; height: 42px; display: flex; align-items: center; justify-content: center; border-bottom: 2.5px solid var(--muted);
+  font-size: 1.4em; font-weight: 600; text-transform: lowercase; }
+.enslots span.ok { border-color: var(--ok); color: var(--ok); } .enslots span.ko { border-color: var(--danger); color: var(--danger); }
+.entiles { display: flex; justify-content: center; align-items: center; gap: 7px; flex-wrap: wrap; }
+.entile { min-width: 40px; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text);
+  font-family: inherit; font-size: 1.15em; font-weight: 600; cursor: pointer; box-shadow: 0 1px 0 var(--line); }
+.entile.enword { font-size: 1em; font-weight: 500; } .entile:hover:not([disabled]) { border-color: var(--muted); } .entile[disabled] { opacity: .3; cursor: default; }
+.enline { min-height: 46px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; padding: 8px 12px; margin: 0 0 12px;
+  border: 1.5px dashed var(--line); border-radius: 11px; font-size: 1.08em; }
+.enline em { color: var(--muted); font-size: 13.5px; } .enline.ok { border: 1.5px solid var(--ok); } .enline.ko { border: 1.5px solid var(--danger); }
+.enpairs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.enmem { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; padding: 4px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--code); color: var(--text); font: inherit; cursor: pointer; overflow: hidden; }
+.enmem span { font-size: 1.4em; color: var(--muted); } .enmem.up { background: var(--bg); cursor: default; } .enmem.ok { border-color: var(--ok); }
+.enmem .enpic { height: 100%; aspect-ratio: auto; } .enmem b { font-size: 1.05em; }
+.encredit { margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+@media (max-width: 560px) { .enpairs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 /* an answer stopped before the end: one quiet line with « Continuer » */
 .cutoff { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; padding: 8px 10px 8px 12px; border: 1px solid var(--line);
   border-radius: 10px; color: var(--muted); font-size: 13px; background: var(--code); }
@@ -2889,6 +2925,150 @@ document.addEventListener("click", (e) => {
   quizDraw(el);
 });
 new MutationObserver(() => $$(".quizcard[data-quiz]:not([data-ready])").forEach(quizDraw)).observe(document.body, { childList: true, subtree: true });
+// ---- an English game (```anglais): the words learnt with their pictures, then played six ways — pictures from
+// Wikipedia / Commons kept on this Mac (/api/anglais/images), the words said by the Mac's English voice
+const EN_GAMES = [["mots", "Vocabulaire"], ["images", "Images"], ["ecoute", "Écoute"], ["orthographe", "Orthographe"], ["paires", "Paires"], ["phrases", "Phrases"]];
+const enImgs = {}, enAsked = {};
+const enKey = (w) => String(w.image || w.en || "").replace(/\s+/g, " ").trim().toLowerCase();
+const enShuffle = (a) => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const enNorm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, "").replace(/\s+/g, " ").trim();
+function enSay(t) {
+  try {
+    const u = new SpeechSynthesisUtterance(String(t)), vs = speechSynthesis.getVoices();
+    u.lang = "en-GB"; u.rate = 0.88;
+    u.voice = vs.find((v) => /^en[-_]GB/i.test(v.lang)) || vs.find((v) => /^en/i.test(v.lang)) || null;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch (e) { /* no voice: the word is still written */ }
+}
+function enPic(w, cls = "") {
+  const im = enImgs[enKey(w)];
+  return im ? `<img class="enpic ${cls}" src="${esc(im.src)}" alt="${esc(w.en)}" title="${esc(im.credit)}">`
+    : `<span class="enpic enno ${cls}">${esc(w.fr || w.en)}</span>`;
+}
+function enGames(q) {
+  const want = Array.isArray(q.jeux) && q.jeux.length ? q.jeux.map((x) => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")) : null;
+  return EN_GAMES.filter(([k]) => (k !== "phrases" || (q.phrases || []).length) && (k !== "paires" || q.mots.length >= 3)
+    && (k === "mots" || !want || want.some((x) => x.startsWith(k.slice(0, 4)))));
+}
+function enNew(el, game) {  // a new round of this game, in a new order
+  const q = el._q, W = q.mots, all = W.map((_, k) => k), st = { game, i: 0, score: 0 };
+  if (/^(images|ecoute|orthographe)$/.test(game)) st.order = enShuffle(all);
+  if (/^(images|ecoute)$/.test(game)) st.opts = st.order.map((k) => enShuffle([k, ...enShuffle(all.filter((j) => j !== k)).slice(0, Math.min(3, W.length - 1))]));
+  if (game === "orthographe") { st.used = []; st.tiles = enShuffle([...W[st.order[0]].en.replace(/\s+/g, "")].map((c, k) => k)); }
+  if (game === "paires") { const pick = enShuffle(all).slice(0, 6); st.cards = enShuffle(pick.flatMap((k) => [{ k, t: "pic" }, { k, t: "word" }])); st.open = []; st.done = []; st.tries = 0; }
+  if (game === "phrases") { st.order = enShuffle((q.phrases || []).map((_, k) => k)); st.built = []; st.tiles = enShuffle(q.phrases[st.order[0]].en.split(/\s+/).map((_, k) => k)); }
+  el._st = st;
+}
+const enSpeak = (t, label = "Écouter") => `<button class="btn ensay" data-esay="${esc(t)}" title="Écouter la prononciation">${svgI("wave")}${label}</button>`;
+function enDraw(el) {
+  let q; try { q = JSON.parse(el.dataset.en); } catch (e) { return; }
+  q.mots = (q.mots || []).filter((w) => w && w.en); q.phrases = (q.phrases || []).filter((p) => p && p.en);
+  el._q = q; el.dataset.ready = "1";
+  const missing = q.mots.filter((w) => !(enKey(w) in enImgs) && !enAsked[enKey(w)]);
+  if (missing.length) {  // the pictures, asked once for the whole game; the words show at once without them
+    missing.forEach((w) => (enAsked[enKey(w)] = 1));
+    api("/api/anglais/images", { method: "POST", body: { items: missing.map((w) => ({ en: w.en, image: w.image })) } })
+      .then((r) => { Object.assign(enImgs, r.images || {}); document.querySelectorAll(".engame[data-ready]").forEach((g) => g.isConnected && enDraw(g)); })
+      .catch(() => {});
+  }
+  const games = enGames(q);
+  if (!el._st || !games.some(([k]) => k === el._st.game)) enNew(el, "mots");
+  const st = el._st, W = q.mots;
+  const tabs = `<div class="qtabs entabs">${games.map(([k, l]) => `<button data-eg="${k}" class="${st.game === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
+  let body = "", foot = "";
+  const n = st.order ? st.order.length : 0;
+  const end = () => {
+    const tot = st.game === "paires" ? st.cards.length / 2 : n, sc = st.game === "paires" ? `${tot} paires en ${st.tries} essais` : `${st.score} / ${tot}`;
+    const good = st.game === "paires" ? st.tries <= tot + 2 : st.score === tot;
+    return `<div class="qscore"><b>${sc}</b><span>${good ? "Excellent, tout est juste." : "Bien joué : refais une partie pour retenir les mots manqués."}</span></div>`
+      + `<div class="qfoot"><span>${esc(q.titre || "Anglais")}</span><button class="btn primary" data-erestart>Rejouer</button></div>`;
+  };
+  if (st.game === "mots") {
+    body = `<div class="envocab">${W.map((w, k) => `<button class="encard" data-esay="${esc(w.en)}" title="Écouter « ${esc(w.en)} »">${enPic(w)}<b>${esc(w.en)}</b><small>${esc(w.fr || "")}</small></button>`).join("")}</div>`;
+    foot = `<div class="qfoot"><span>${W.length} mots · clique une carte pour l'entendre</span><button class="btn primary" data-eg="${games[1] ? games[1][0] : "mots"}">Jouer</button></div>`;
+  } else if (st.game !== "paires" && st.i >= n) {
+    body = end();
+  } else if (st.game === "images" || st.game === "ecoute") {
+    const k = st.order[st.i], w = W[k], picked = st.picked;
+    const opts = st.opts[st.i].map((j) => {
+      const s = picked == null ? "" : j === k ? "ok" : j === picked ? "ko" : "dim";
+      return st.game === "images"
+        ? `<button class="qopt ${s}" data-eopt="${j}" ${picked == null ? "" : "disabled"}><span class="qdot"></span><span>${esc(W[j].en)}</span></button>`
+        : `<button class="enopt ${s}" data-eopt="${j}" ${picked == null ? "" : "disabled"}>${enPic(W[j])}</button>`;
+    }).join("");
+    const ask = st.game === "images" ? `<div class="enq">${enPic(w, "enbig")}<div class="qq">Comment dit-on cela en anglais ?</div></div>`
+      : `<div class="enq"><div class="qq">Écoute le mot, puis choisis la bonne image.</div>${enSpeak(w.en, "Écouter le mot")}</div>`;
+    const after = picked == null ? "" : `<div class="qexpl ${picked === k ? "ok" : "ko"}"><b>${picked === k ? "Bravo !" : "Pas tout à fait."}</b> ${esc(w.en)} = ${esc(w.fr || "")} ${enSpeak(w.en, "")}</div>`;
+    body = `${ask}<div class="${st.game === "images" ? "qopts" : "enopts"}">${opts}</div>${after}`;
+    foot = `<div class="qfoot"><span>Question ${st.i + 1} sur ${n} · ${st.score} juste${st.score > 1 ? "s" : ""}</span><button class="btn ${picked == null ? "" : "primary"}" data-enext ${picked == null ? "disabled" : ""}>${st.i === n - 1 ? "Voir le score" : "Suivant"}</button></div>`;
+  } else if (st.game === "orthographe") {
+    const w = W[st.order[st.i]], letters = [...w.en.replace(/\s+/g, "")], typed = st.used.map((t) => letters[t]).join(""), full = st.used.length === letters.length;
+    const right = full && typed.toLowerCase() === letters.join("").toLowerCase();
+    body = `<div class="enq">${enPic(w, "enbig")}<div class="qq">Écris le mot en anglais (${letters.length} lettres).</div>${enSpeak(w.en)}</div>`
+      + `<div class="enslots">${letters.map((_, i) => `<span class="${full ? (right ? "ok" : "ko") : ""}">${esc(st.used[i] != null ? letters[st.used[i]] : "")}</span>`).join("")}</div>`
+      + `<div class="entiles">${st.tiles.map((t) => `<button class="entile" data-etile="${t}" ${st.used.includes(t) || full ? "disabled" : ""}>${esc(letters[t].toLowerCase())}</button>`).join("")}`
+      + `<button class="btn" data-edel ${st.used.length && !full ? "" : "disabled"}>Effacer</button></div>`
+      + (full ? `<div class="qexpl ${right ? "ok" : "ko"}"><b>${right ? "Bravo !" : "Presque."}</b> ${right ? "" : `Le mot s'écrit <b>${esc(w.en)}</b>.`} ${esc(w.en)} = ${esc(w.fr || "")}</div>` : "");
+    foot = `<div class="qfoot"><span>Mot ${st.i + 1} sur ${n} · ${st.score} juste${st.score > 1 ? "s" : ""}</span><button class="btn ${full ? "primary" : ""}" data-enext ${full ? "" : "disabled"}>${st.i === n - 1 ? "Voir le score" : "Suivant"}</button></div>`;
+  } else if (st.game === "paires") {
+    if (st.done.length === st.cards.length) body = end();
+    else {
+      body = `<div class="qq">Retrouve les paires : une image et son mot anglais.</div><div class="enpairs">${st.cards.map((c, i) => {
+        const up = st.open.includes(i) || st.done.includes(i), w = W[c.k];
+        return `<button class="enmem ${up ? "up" : ""} ${st.done.includes(i) ? "ok" : ""}" data-ecard="${i}" ${up ? "disabled" : ""}>${up ? (c.t === "pic" ? enPic(w) : `<b>${esc(w.en)}</b>`) : "<span>?</span>"}</button>`;
+      }).join("")}</div>`;
+      foot = `<div class="qfoot"><span>${st.done.length / 2} paire${st.done.length > 2 ? "s" : ""} sur ${st.cards.length / 2} · ${st.tries} essai${st.tries > 1 ? "s" : ""}</span><button class="btn" data-erestart>Mélanger</button></div>`;
+    }
+  } else if (st.game === "phrases") {
+    const p = q.phrases[st.order[st.i]], words = p.en.split(/\s+/), full = st.built.length === words.length;
+    const right = full && enNorm(st.built.map((t) => words[t]).join(" ")) === enNorm(p.en);
+    body = `<div class="enq"><div class="qq">Remets les mots dans l'ordre : <i>${esc(p.fr || "")}</i></div></div>`
+      + `<div class="enline ${full ? (right ? "ok" : "ko") : ""}">${st.built.map((t) => `<span>${esc(words[t])}</span>`).join(" ") || "<em>Clique les mots dans l'ordre</em>"}</div>`
+      + `<div class="entiles">${st.tiles.map((t) => `<button class="entile enword" data-etile="${t}" ${st.built.includes(t) || full ? "disabled" : ""}>${esc(words[t])}</button>`).join("")}`
+      + `<button class="btn" data-edel ${st.built.length && !full ? "" : "disabled"}>Effacer</button></div>`
+      + (full ? `<div class="qexpl ${right ? "ok" : "ko"}"><b>${right ? "Bravo !" : "Pas tout à fait."}</b> ${right ? "" : `La phrase : <b>${esc(p.en)}</b>`} ${enSpeak(p.en, "")}</div>` : "");
+    foot = `<div class="qfoot"><span>Phrase ${st.i + 1} sur ${n} · ${st.score} juste${st.score > 1 ? "s" : ""}</span><button class="btn ${full ? "primary" : ""}" data-enext ${full ? "" : "disabled"}>${st.i === n - 1 ? "Voir le score" : "Suivant"}</button></div>`;
+  }
+  const credit = Object.keys(enImgs).length ? `<div class="encredit">Images : Wikipédia et Wikimedia Commons, licences libres (survole une image pour son auteur)</div>` : "";
+  el.innerHTML = `<div class="enhead"><b>${esc(q.titre || "Anglais")}</b>${q.niveau ? `<span>${esc(q.niveau)}</span>` : ""}</div>${tabs}${body}${foot}${credit}`;
+}
+document.addEventListener("click", (e) => {
+  const el = e.target.closest?.(".engame[data-en]"); if (!el || !el._st) return;
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  const st = el._st, q = el._q, W = q.mots;
+  if (b.dataset.esay != null) { enSay(b.dataset.esay); if (!b.dataset.eg) return; }
+  if (b.dataset.eg) { enNew(el, b.dataset.eg); if (b.dataset.eg === "ecoute") enSay(W[el._st.order[0]].en); }
+  else if (b.dataset.eopt != null) { const k = st.order[st.i]; st.picked = +b.dataset.eopt; if (st.picked === k) st.score++; enSay(W[k].en); }
+  else if (b.hasAttribute("data-enext")) {
+    st.i++; delete st.picked;
+    if (st.game === "orthographe" && st.i < st.order.length) { st.used = []; st.tiles = enShuffle([...W[st.order[st.i]].en.replace(/\s+/g, "")].map((c, k) => k)); }
+    if (st.game === "phrases" && st.i < st.order.length) { st.built = []; st.tiles = enShuffle(q.phrases[st.order[st.i]].en.split(/\s+/).map((_, k) => k)); }
+    if (st.game === "ecoute" && st.i < st.order.length) enSay(W[st.order[st.i]].en);
+  } else if (b.dataset.etile != null) {
+    const t = +b.dataset.etile;
+    if (st.game === "orthographe") {
+      st.used.push(t); const w = W[st.order[st.i]], letters = [...w.en.replace(/\s+/g, "")];
+      if (st.used.length === letters.length) { if (st.used.map((x) => letters[x]).join("").toLowerCase() === letters.join("").toLowerCase()) st.score++; enSay(w.en); }
+    } else {
+      st.built.push(t); const p = q.phrases[st.order[st.i]], words = p.en.split(/\s+/);
+      if (st.built.length === words.length) { if (enNorm(st.built.map((x) => words[x]).join(" ")) === enNorm(p.en)) st.score++; enSay(p.en); }
+    }
+  } else if (b.hasAttribute("data-edel")) { (st.game === "orthographe" ? st.used : st.built).pop(); }
+  else if (b.dataset.ecard != null) {
+    if (st.open.length >= 2) return;
+    const i = +b.dataset.ecard; st.open.push(i);
+    if (st.cards[i].t === "word") enSay(W[st.cards[i].k].en);
+    if (st.open.length === 2) {
+      st.tries++;
+      const [a, c] = st.open;
+      if (st.cards[a].k === st.cards[c].k) { st.done.push(a, c); st.open = []; }
+      else setTimeout(() => { st.open = []; enDraw(el); }, 1000);
+    }
+  } else if (b.hasAttribute("data-erestart")) enNew(el, st.game);
+  else return;
+  enDraw(el);
+});
+new MutationObserver(() => $$(".engame[data-en]:not([data-ready])").forEach(enDraw)).observe(document.body, { childList: true, subtree: true });
 
 // a file named by its whole path in an answer (`/Users/…/Fichiers/CV.pdf`): its name, clickable (opens it; ⌥-click:
 // shows it in the Finder), the whole path on hover, as in a pro tool
@@ -3704,6 +3884,12 @@ function codeBlock(lang, body, file = "", open = false) {
     try { const q = JSON.parse(json); if (q && !(q.questions || []).length && Array.isArray(q.cartes) && q.cartes.length) { const h = flashHtml(q); if (h) return h + (after ? md(after) : ""); }
       if (q && !Array.isArray(q.questions) && Array.isArray(q.cartes) && q.cartes.length) q.questions = [];
       if (q && Array.isArray(q.questions) && (q.questions.length || q.cartes?.length)) return `<div class="quizcard" data-quiz="${esc(JSON.stringify(q))}"></div>` + (after ? md(after) : ""); } catch (e) { if (open) return wait(); }
+  }
+  if (/^(anglais|english|jeu-anglais)$/i.test(lang || "")) {  // an English game: words with pictures, six ways to play
+    const j = jsonBlock(body, open);
+    if (!j) { if (typeof quill !== "undefined") { quill.last = performance.now(); quill.cmd = false; quill.rate = quill.rate || 120; }
+      return `<div class="quizcard qwait">${liveIcon("write")}<span>Naim prépare le jeu d'anglais${(body.match(/"en"\s*:/g) || []).length ? ` · ${(body.match(/"en"\s*:/g) || []).length} mots` : "…"}</span></div>`; }
+    if (Array.isArray(j.data?.mots) && j.data.mots.length) return `<div class="engame" data-en="${esc(JSON.stringify(j.data))}"></div>` + (j.after ? md(j.after) : "");
   }
   if (/^(bd|comic|sketchnotes?|carte|mindmap|carte-mentale)$/i.test(lang || "") && (/^(bd|comic|sketch)/i.test(lang) || /^\s*\{/.test(body))) {  // drawn by the application from Naim's JSON: never raw code
     const kind = /^sketch/i.test(lang) ? "sk" : /^(carte|mindmap)/i.test(lang) ? "mm" : "bd", j = jsonBlock(body, open);

@@ -1115,6 +1115,19 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "max-age=86400" if path.startswith("/vendor") else "no-store")
             self.end_headers()
             self.wfile.write(data)
+        elif path == "/api/anglais/img":  # a picture of the English games, from its cache
+            import anglais_images
+            f = anglais_images.path_of(q.get("f", ""))
+            if not f:
+                self.send_error(404)
+                return
+            data = f.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(f.name)[0] or "image/jpeg")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=604800")
+            self.end_headers()
+            self.wfile.write(data)
         elif path == "/api/owner":
             mod = _private("owner_admin") if self._owner_ok() else None
             self.send_json(mod.payload() if mod and mod.available() else {"available": False})
@@ -1305,6 +1318,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"summary": compact_conversation(body)})
             except Exception as e:  # the engine is busy or stopped: the conversation is simply sent whole
                 self.send_json({"error": str(e)[:300]})
+        elif path == "/api/anglais/images":  # one free picture per word of an English game (downloaded once)
+            import anglais_images
+            items = [i for i in (self.read_json().get("items") or []) if isinstance(i, dict)]
+            try:
+                got = anglais_images.resolve(items)
+            except Exception as e:  # noqa: BLE001 — the game is played with words alone
+                self.send_json({"images": {}, "error": str(e)[:200]})
+                return
+            self.send_json({"images": {k: {"src": "/api/anglais/img?f=" + v["file"], "credit": v.get("credit", "")} for k, v in got.items()}})
         elif path == "/api/interject":
             body = self.read_json()
             with _lock:
