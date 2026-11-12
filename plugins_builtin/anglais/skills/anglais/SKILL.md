@@ -7,8 +7,8 @@ description: Apprendre l'anglais en jouant dans la conversation — les mots d'u
 
 Le jeu s'affiche DANS la conversation : pas de fichier, pas de page HTML, pas d'outil. Tu écris une phrase, puis UN
 bloc ```anglais (du JSON), puis une phrase. L'application fait le reste : elle trouve une vraie image libre pour
-chaque mot (Wikipédia, gardée sur le Mac), fait entendre les mots avec la voix anglaise du Mac, et propose six
-onglets : Vocabulaire (les cartes à écouter), Images, Écoute, Orthographe, Paires, Phrases — avec le score.
+chaque mot (Wikipédia, gardée sur le Mac), fait entendre les mots avec ta voix anglaise (Admin › Mes voix ; la voix
+du Mac seulement si elle manque), et propose six onglets : Vocabulaire (les cartes à écouter), Images, Écoute, Orthographe, Paires, Phrases — avec le score.
 
 ## 1. Le contenu
 - **Un thème** par jeu (celui demandé, sinon un thème de débutant : les fruits, les animaux, la maison, les
@@ -18,6 +18,17 @@ onglets : Vocabulaire (les cartes à écouter), Images, Écoute, Orthographe, Pa
 - **4 à 6 phrases** courtes qui utilisent ces mots (débutant : 3 à 6 mots par phrase). Pour un point de grammaire
   demandé (présent simple, prétérit, comparatifs, prépositions…), les phrases montrent CE point.
 - Un anglais juste et naturel, l'orthographe britannique ou américaine mais pas les deux mélangées. Rien d'inventé.
+
+## 1 bis. Chercher sur le web quand il le faut
+- **Les données** : un programme ou un manuel précis (« le vocabulaire de 6e », « les mots du chapitre 3 de mon
+  livre »), un thème pointu (métiers de la santé, vocabulaire du code, anglais des affaires), des expressions ou des
+  phrases authentiques : cherche d'abord (web_search, puis web_fetch de la meilleure page) et prends les mots et les
+  phrases de cette source. Un document joint : lis-le (read_file) et prends ses mots.
+- **Les images** : l'image automatique ne montre pas bien le mot (un mot abstrait, une marque, un objet rare) ?
+  Cherche une image sur le web (web_search « <mot> photo » ou une banque d'images libres), ouvre la page (web_fetch)
+  et mets l'adresse DIRECTE de l'image (qui finit souvent par .jpg, .png ou .webp) dans `photo`. Jamais une adresse
+  devinée : seulement une adresse lue dans un résultat de tes outils. Une adresse morte est remplacée par l'image
+  automatique.
 
 ## 2. Le bloc (JSON valide : guillemets droits, pas de virgule finale, le bloc FERMÉ par ``` sur sa propre ligne)
 ```anglais
@@ -41,6 +52,8 @@ onglets : Vocabulaire (les cartes à écouter), Images, Écoute, Orthographe, Pa
 - `image` (seulement si besoin) : ce que l'image doit montrer, en anglais, quand le mot seul serait ambigu ou
   abstrait — « orange fruit » (pas la couleur), « running » pour run, « smiling child » pour happy, « grape » pour
   grapes. Le mieux : le titre de l'article Wikipédia anglais qui montre ce mot.
+- `photo` (facultatif) : l'adresse d'une image trouvée sur le web pour ce mot (voir 1 bis) ; elle passe avant
+  l'image automatique et sa source est écrite au survol.
 - `phrases` : chaque phrase sans ponctuation finale compliquée ; l'utilisateur remet ses mots dans l'ordre.
 - `jeux` (facultatif) : limiter les onglets, par exemple `["images", "ecoute"]` pour un petit enfant.
 

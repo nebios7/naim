@@ -35,6 +35,21 @@ def key(item):
     return re.sub(r"\s+", " ", str(item.get("image") or item.get("en") or "")).strip().lower()
 
 
+def _photo(url):
+    """An image address Naim found on the web (web_search): downloaded if it really is a picture (< 6 MB)."""
+    u = urllib.parse.urlparse(str(url or ""))
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return None
+    req = urllib.request.Request(url, headers={**UA, "Accept": "image/*", "Referer": f"{u.scheme}://{u.hostname}/"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        kind = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        data = r.read(6_000_001)
+    ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}.get(kind)
+    if not ext or len(data) > 6_000_000 or len(data) < 500:
+        return None
+    return data, ext, f"source : {u.hostname.removeprefix('www.')}"
+
+
 def _load():
     try:
         return json.loads(INDEX.read_text())
@@ -99,14 +114,28 @@ def _commons_search(word):
 
 def resolve(items, fetch=True):
     """{key: {"file": cached name, "credit": …}} for the words of a game; a word with no picture is left out."""
-    keys = []
+    keys, photos = [], {}
     for it in items or []:
         k = key(it)
         if k and k not in keys:
             keys.append(k)
+        if k and it.get("photo"):
+            photos[k] = str(it["photo"])
     keys = keys[:40]
     with _lock:
         idx = _load()
+        for k, url in photos.items():  # an image found on the web for this word: it wins over the automatic one
+            if not fetch or idx.get(k, {}).get("source") == url and (DIR / idx[k]["file"]).exists():
+                continue
+            try:
+                got = _photo(url)
+            except Exception:  # noqa: BLE001 — a dead address: the automatic picture instead
+                got = None
+            if got:
+                DIR.mkdir(parents=True, exist_ok=True)
+                name = hashlib.sha1((k + url).encode()).hexdigest()[:16] + got[1]
+                (DIR / name).write_bytes(got[0])
+                idx[k] = {"file": name, "credit": got[2], "source": url}
         missing = [k for k in keys if k not in idx or not (DIR / idx[k].get("file", "-")).exists()]
         if missing and fetch:
             DIR.mkdir(parents=True, exist_ok=True)
@@ -139,6 +168,8 @@ def resolve(items, fetch=True):
                 except Exception:  # noqa: BLE001
                     continue
                 idx[k] = {"file": name, "credit": credit, "source": f}
+        if fetch and (missing or photos):
+            DIR.mkdir(parents=True, exist_ok=True)
             INDEX.write_text(json.dumps(idx, ensure_ascii=False, indent=1))
     return {k: idx[k] for k in keys if k in idx and (DIR / idx[k]["file"]).exists()}
 

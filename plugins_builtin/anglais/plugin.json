@@ -1,6 +1,6 @@
 {
   "name": "anglais",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Apprendre l'anglais en jouant dans la conversation : les mots d'un thème avec de vraies images et leur prononciation, puis six jeux (images, écoute, orthographe, paires, phrases) avec score.",
   "skills": "skills",
   "triggers": {

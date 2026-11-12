@@ -3687,3 +3687,25 @@ console.log(JSON.stringify(out));
         s = (ROOT / "server.py").read_text()
         self.assertIn('"/api/anglais/images"', s)
         self.assertIn("anglais_images.path_of", s)
+
+
+class EnglishGamesVoiceAndWeb(unittest.TestCase):
+    """The English games speak with Naim's own English voice (the Mac's only without it), and take data and
+    pictures found on the web: a photo address read in a tool result wins over the automatic picture."""
+
+    def test_voice(self):
+        s = (ROOT / "web/index.html").read_text()
+        i = s.index("async function enSay(")
+        self.assertIn('lang: "en"', s[i:i + 900])
+        self.assertIn("enSayMac(t)", s[i:i + 900])
+        self.assertIn('naim_voice.speak_english(b.get("text", "")) if b.get("lang") == "en"', (ROOT / "server.py").read_text())
+        import naim_voice
+        self.assertEqual(naim_voice.EN_VOICES[0], "alba-en")
+
+    def test_web_photo(self):
+        import anglais_images
+        self.assertIsNone(anglais_images._photo("file:///etc/passwd"))
+        self.assertIsNone(anglais_images._photo("javascript:alert(1)"))
+        s = (ROOT / "plugins_builtin/anglais/skills/anglais/SKILL.md").read_text()
+        for w in ("web_search", "web_fetch", "`photo`", "Jamais une adresse\n  devinée"):
+            self.assertIn(w.replace("\\n", "\n"), s)

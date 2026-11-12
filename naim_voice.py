@@ -264,6 +264,44 @@ def say_to_file(text, out, onnx=None, kyutai_ref=None):
         raise RuntimeError(r.get("error") or "voix indisponible")
 
 
+EN_VOICES = ("alba-en", "lessac-en")  # Naim's English voices (British, then American), installed in Admin › Mes voix
+_en_procs, _en_lock = {}, threading.Lock()
+
+
+def english_voice():
+    """The English voice Naim has installed (a Piper model), or None."""
+    for name in EN_VOICES:
+        f = DIR / "installees" / f"{name}.onnx"
+        if f.exists() and PYTHON.exists():
+            return f
+    return None
+
+
+def speak_english(text):
+    """WAV bytes of an English word or sentence said by Naim's English voice (the English games)."""
+    f = english_voice()
+    if not f:
+        raise RuntimeError("aucune voix anglaise installée")
+    text = re.sub(r"\s+", " ", re.sub(r"[*_`#|]+", " ", text or "")).strip()[:600]
+    if not text:
+        return b""
+    with _en_lock:
+        p = _en_procs.get(f)
+        if p is None or p.poll() is not None:  # one worker per voice, kept: each word then comes at once
+            p = _en_procs[f] = subprocess.Popen([str(PYTHON), "-c", WORKER, str(f), "-"], stdin=subprocess.PIPE,
+                                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as t:
+            out = t.name
+        p.stdin.write(json.dumps({"text": text, "out": out}) + "\n")
+        p.stdin.flush()
+        r = _reply(p)
+    data = Path(out).read_bytes() if r.get("ok") else b""
+    Path(out).unlink(missing_ok=True)
+    if not r.get("ok"):
+        raise RuntimeError(r.get("error") or "voix anglaise indisponible")
+    return data
+
+
 def speak(text, engine="rapide"):
     """WAV bytes of the text read by Naim's voice (empty bytes if there is nothing to read)."""
     text = clean(text)[:1500]

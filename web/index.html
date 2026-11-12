@@ -2932,7 +2932,22 @@ const enImgs = {}, enAsked = {};
 const enKey = (w) => String(w.image || w.en || "").replace(/\s+/g, " ").trim().toLowerCase();
 const enShuffle = (a) => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const enNorm = (t) => String(t).toLowerCase().replace(/[^a-z0-9' ]/g, "").replace(/\s+/g, " ").trim();
-function enSay(t) {
+// Naim's own English voice (Admin › Mes voix: alba-en, lessac-en) says the word; the Mac's voice only without it
+const enClips = {};
+let enPlayer = null;
+async function enSay(t) {
+  t = String(t || "").trim(); if (!t) return;
+  try {
+    if (!enClips[t]) {
+      const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json", "X-Naim": "1" }, body: JSON.stringify({ text: t, lang: "en" }) });
+      if (!r.ok) throw new Error("no English voice");
+      enClips[t] = URL.createObjectURL(await r.blob());
+    }
+    enPlayer ||= new Audio(); enPlayer.pause(); enPlayer.src = enClips[t]; await enPlayer.play(); return;
+  } catch (e) { /* the Mac's English voice below */ }
+  enSayMac(t);
+}
+function enSayMac(t) {
   try {
     const u = new SpeechSynthesisUtterance(String(t)), vs = speechSynthesis.getVoices();
     u.lang = "en-GB"; u.rate = 0.88;
@@ -2942,7 +2957,7 @@ function enSay(t) {
 }
 function enPic(w, cls = "") {
   const im = enImgs[enKey(w)];
-  return im ? `<img class="enpic ${cls}" src="${esc(im.src)}" alt="${esc(w.en)}" title="${esc(im.credit)}">`
+  return im ? `<img class="enpic ${cls}" src="${esc(im.src)}" alt="${esc(w.en)}" title="${esc(im.credit)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'enpic enno ${cls}',textContent:${esc(JSON.stringify(w.fr || w.en))}}))">`
     : `<span class="enpic enno ${cls}">${esc(w.fr || w.en)}</span>`;
 }
 function enGames(q) {
@@ -2967,7 +2982,7 @@ function enDraw(el) {
   const missing = q.mots.filter((w) => !(enKey(w) in enImgs) && !enAsked[enKey(w)]);
   if (missing.length) {  // the pictures, asked once for the whole game; the words show at once without them
     missing.forEach((w) => (enAsked[enKey(w)] = 1));
-    api("/api/anglais/images", { method: "POST", body: { items: missing.map((w) => ({ en: w.en, image: w.image })) } })
+    api("/api/anglais/images", { method: "POST", body: { items: missing.map((w) => ({ en: w.en, image: w.image, photo: w.photo })) } })
       .then((r) => { Object.assign(enImgs, r.images || {}); document.querySelectorAll(".engame[data-ready]").forEach((g) => g.isConnected && enDraw(g)); })
       .catch(() => {});
   }
@@ -3029,7 +3044,7 @@ function enDraw(el) {
       + (full ? `<div class="qexpl ${right ? "ok" : "ko"}"><b>${right ? "Bravo !" : "Pas tout à fait."}</b> ${right ? "" : `La phrase : <b>${esc(p.en)}</b>`} ${enSpeak(p.en, "")}</div>` : "");
     foot = `<div class="qfoot"><span>Phrase ${st.i + 1} sur ${n} · ${st.score} juste${st.score > 1 ? "s" : ""}</span><button class="btn ${full ? "primary" : ""}" data-enext ${full ? "" : "disabled"}>${st.i === n - 1 ? "Voir le score" : "Suivant"}</button></div>`;
   }
-  const credit = Object.keys(enImgs).length ? `<div class="encredit">Images : Wikipédia et Wikimedia Commons, licences libres (survole une image pour son auteur)</div>` : "";
+  const credit = Object.keys(enImgs).length ? `<div class="encredit">Images : Wikipédia, Wikimedia Commons et les sites indiqués (survole une image pour sa source)</div>` : "";
   el.innerHTML = `<div class="enhead"><b>${esc(q.titre || "Anglais")}</b>${q.niveau ? `<span>${esc(q.niveau)}</span>` : ""}</div>${tabs}${body}${foot}${credit}`;
 }
 document.addEventListener("click", (e) => {
