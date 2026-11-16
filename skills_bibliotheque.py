@@ -200,14 +200,19 @@ def search(query, n=8, min_score=1):
     base = _words(query)
     if not base:
         return []
+    # a name typed as it is written (« visuels-inline », « pdf.styles »): its pieces are searched too, the way the
+    # skills' own names are cut into words; the exact name always comes first
+    base = list(dict.fromkeys(base + [p for w in base if re.search(r"[-.]", w)
+                                      for p in re.split(r"[-.]+", w) if len(p) > 1 and p not in STOP]))
+    exact = _plain(query).strip()
     words = list(dict.fromkeys(base + [t for w in base for t in (FR_EN.get(w, "").split() + [EN_FR.get(w, "")]) if t]))
     data = _tokens()
     weight = _rarity(words, data)
     scored = []
     for s, (name, desc, head) in data:
-        score = 0
+        score = 100 if exact in (_plain(s["name"]), _plain(s["dir"])) else 0
         for w in words:
-            score += weight[w] * (4 * _hit(w, name) + 2 * _hit(w, desc) + 1 * _hit(w, head))
+            score += weight.get(w, 0) * (4 * _hit(w, name) + 2 * _hit(w, desc) + 1 * _hit(w, head))
         if score >= min_score:
             scored.append((score, s))
     scored.sort(key=lambda x: -x[0])

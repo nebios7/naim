@@ -656,6 +656,17 @@ class Navigation(unittest.TestCase):
         with mock.patch("skills_bibliotheque._tokens", return_value=[(s, bags), (dict(s), bags)]):
             self.assertEqual(len(lib.search("convertir un pdf")), 1)
 
+    def test_library_finds_a_skill_by_its_written_name(self):
+        from unittest import mock
+        import skills_bibliotheque as lib
+        mk = lambda n, d: ({"name": n, "dir": n, "description": d, "head": ""},  # noqa: E731
+                           (frozenset(n.split("-")), frozenset(d.lower().split()), frozenset()))
+        data = [mk("visuels", "Créer un logo ou une affiche"), mk("visuels-inline", "Schéma ou graphique dans la conversation"),
+                mk("pdf-styles", "PDF soignés")]
+        with mock.patch("skills_bibliotheque._tokens", return_value=data):
+            self.assertEqual(lib.search("visuels-inline")[0]["name"], "visuels-inline")  # the hyphen no longer hides it
+            self.assertEqual(lib.search("pdf-styles")[0]["name"], "pdf-styles")
+
 
 class VisualInTheChat(unittest.TestCase):
     """« l'heure dans un carré beau », « affiche-le dans le chat »: a live visual drawn in the conversation (a ```visuel
@@ -3404,6 +3415,37 @@ class AgentWorkTools(unittest.TestCase):
         self.assertIn("timed out", out2)
 
 
+class RepeatCheck(unittest.TestCase):
+    """An answer that pastes back whole sentences of an earlier answer (under a new first line) is found; a new answer,
+    a corrected drawing or a repeated formula is not."""
+
+    EARLIER = ("La fonction est une surface en 3D.\n\n**Explication du graphe :**\n"
+               "- La surface est un paraboloïde elliptique ouvert vers le haut.\n"
+               "- Le gradient $\\nabla f = (2x, 3)$ est constant en $y$ et linéaire en $x$.\n"
+               "- Au point $(1, 2)$, le gradient vaut $(2, 3)$, ce qui donne la pente la plus forte.\n\n"
+               "Veux-tu que je dessine aussi la courbe de niveau pour $z=1$ ou que je calcule autre chose ?")
+
+    def test_pasted_back_answer_found(self):
+        import repeatcheck
+        again = ("Je vais utiliser un autre bloc pour le graphe.\n\n**Explication :**\n"
+                 "- La surface est un paraboloïde elliptique ouvert vers le haut.\n"
+                 "- Le gradient $\\nabla f = (2x, 3)$ est constant en $y$ et linéaire en $x$.\n"
+                 "- Au point $(1, 2)$, le gradient vaut $(2, 3)$, ce qui donne la pente la plus forte.\n\n"
+                 "Veux-tu que je dessine aussi la courbe de niveau pour $z=1$ ou que je calcule autre chose ?")
+        self.assertGreaterEqual(len(repeatcheck.check(again, [self.EARLIER])), 3)
+
+    def test_new_answer_and_code_left_alone(self):
+        import repeatcheck
+        new = ("Voici la courbe de niveau pour z = 1, que tu as demandée.\n\n"
+               "Elle a pour équation y = (1 - x²) / 3 : c'est la même parabole, décalée de 1/3 vers le haut.\n"
+               "Chaque courbe de niveau est une copie de la précédente, montée d'un tiers d'unité.\n"
+               "Le gradient reste perpendiculaire à chacune de ces courbes, en tout point.")
+        self.assertEqual(repeatcheck.check(new, [self.EARLIER]), [])
+        drawing = "```visuel\n" + "\n".join(f'<line x1="{i}" y1="0" x2="{i}" y2="100" class="leader"/>' for i in range(40)) + "\n```"
+        self.assertEqual(repeatcheck.check("Le dessin corrigé :\n" + drawing, [drawing]), [])
+        self.assertEqual(repeatcheck.check(self.EARLIER, []), [])
+
+
 class CalcCheck(unittest.TestCase):
     """The arithmetic of an answer is computed again: a wrong result (or a wrong remainder) is found, the right ones
     and what is not arithmetic (hours, formulas, years, blocks the app computes) are left alone."""
@@ -3508,6 +3550,58 @@ console.log(JSON.stringify(out));
                   "Un seul graphe, celui qui répond à la question", "Le type suit la question"):
             self.assertIn(w, s)
         self.assertIn("diagramme", (ROOT / "web/index.html").read_text())
+
+
+class TrainingCorrectsItself(unittest.TestCase):
+    """The automatic training judges a new version on its own work (steps of real tasks it never trained on) against
+    the version in use measured the same night, and after a version set aside it changes its own recipe for the next
+    try, bounded, without anyone stepping in."""
+
+    def setUp(self):
+        try:
+            import autotrain
+        except ImportError:
+            self.skipTest("training module absent")
+        self.a = autotrain
+
+    def s(self, code, tools, work=None, ident=None):
+        d = {"code": code, "code_total": 41, "tools": tools, "tools_total": 20}
+        if work is not None:
+            d.update(work=work, work_total=60)
+        if ident is not None:
+            d.update(identity=ident, identity_total=6)
+        return d
+
+    def test_decision(self):
+        cur = self.s(35, 20, 30)
+        self.assertTrue(self.a.decide(self.s(33, 20, 38, 6), cur)[0])     # better at its work, code within the noise
+        self.assertFalse(self.a.decide(self.s(31, 20, 45, 6), cur)[0])    # forgot too much code
+        self.assertFalse(self.a.decide(self.s(33, 20, 30, 6), cur)[0])    # nothing gained, code down
+        self.assertTrue(self.a.decide(self.s(35, 20, 30, 6), cur)[0])     # equal everywhere
+        self.assertFalse(self.a.decide(self.s(35, 20, 40, 3), cur)[0])    # introduces itself everywhere
+        self.assertFalse(self.a.decide(self.s(33, 20), self.s(35, 20))[0])  # no work exam: as before, overall
+
+    def test_recipe_changes_by_itself_and_stays_bounded(self):
+        r, why = self.a.adjust({}, self.s(30, 20, 35), self.s(35, 20, 30))
+        self.assertLess(r["lr"], self.a.RECIPE["lr"])
+        self.assertIn("doucement", why)
+        r, why = self.a.adjust({}, self.s(35, 20, 30), self.s(35, 20, 30))
+        self.assertGreater(r["passes"], 1.0)
+        for _ in range(10):
+            r, _ = self.a.adjust(r, self.s(35, 20, 30), self.s(35, 20, 30))
+        self.assertLessEqual(r["passes"], 2.5)
+        for _ in range(10):
+            r, _ = self.a.adjust(r, self.s(20, 20, 30), self.s(35, 20, 30))
+        self.assertGreaterEqual(r["lr"], 1.0e-5)
+
+    def test_next_action_read(self):
+        na = self.a._next_action
+        self.assertEqual(na({"tool_calls": [{"function": {"name": "write_file"}}]}), "write_file")
+        self.assertEqual(na({"content": '<tool_call>\n{"name": "run_command", "arguments": {}}\n</tool_call>'}), "run_command")
+        self.assertEqual(na({"content": "C'est fait : le fichier est prêt."}), "fin")
+        msgs = self.a._for_ollama([{"role": "assistant", "content": "", "tool_calls": [
+            {"type": "function", "function": {"name": "read_file", "arguments": '{"path": "a.txt"}'}}]}])
+        self.assertEqual(msgs[0]["tool_calls"][0]["function"]["arguments"], {"path": "a.txt"})
 
 
 class TrainingWindowChosen(unittest.TestCase):

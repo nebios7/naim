@@ -8385,12 +8385,28 @@ async function loadDynIndex() {
 }
 $("#sSearch").addEventListener("focus", () => { if (!dynIndex) loadDynIndex(); });
 $("#sSearch").addEventListener("blur", () => setTimeout(() => { if (!$("#sSearch").value) dynIndex = null; }, 300));
+// the skills library (thousands of skills, not loaded by any tab): asked to the server as the search is typed
+let libHits = [], libAsked = "", libTimer;
+function askLibrary(raw) {
+  clearTimeout(libTimer);
+  if (raw.length < 2) { libHits = []; libAsked = raw; return; }
+  libTimer = setTimeout(async () => {
+    const r = await api("/api/skills/bibliotheque", { method: "POST", body: { q: raw, offset: 0, limit: 6 } }).catch(() => null);
+    if ($("#sSearch").value.trim() !== raw) return;  // typed further meanwhile
+    libAsked = raw;
+    libHits = (r?.skills || []).map((k) => ({ tab: "skills", label: "Bibliothèque", title: k.name, sub: k.description || "", lib: k.name }));
+    $("#sSearch").dispatchEvent(new Event("input"));
+  }, 220);
+}
 $("#sSearch").addEventListener("input", (e) => {
-  const q = fold(e.target.value.trim()), box = $("#sResults");
+  const raw = e.target.value.trim(), q = fold(raw), box = $("#sResults");
   $$("#stabs .stablist > button").forEach((b) => (b.hidden = !!q));
-  if (!q) { box.hidden = true; return; }
+  if (!q) { box.hidden = true; libHits = []; return; }
+  if (raw !== libAsked) askLibrary(raw);
   const words = q.split(/\s+/);
-  const hits = [...settingsIndex(), ...(dynIndex || [])].filter((x) => words.every((w) => fold(`${x.title} ${x.sub} ${x.label}`).includes(w))).slice(0, 30);
+  const found = [...settingsIndex(), ...(dynIndex || [])].filter((x) => words.every((w) => fold(`${x.title} ${x.sub} ${x.label}`).includes(w)));
+  const known = new Set(found.map((x) => x.title));  // an active skill is not shown a second time from the library
+  const hits = [...found.slice(0, 24), ...(raw === libAsked ? libHits.filter((x) => !known.has(x.title)) : [])].slice(0, 30);
   box.hidden = false;
   box.innerHTML = hits.length ? hits.map((x, i) => `<button data-i="${i}">${esc(x.title)}<small>${esc(x.label)}${x.sub ? " · " + esc(x.sub.slice(0, 70)) : ""}</small></button>`).join("") : '<div class="none">Aucun réglage trouvé</div>';
   $$("button", box).forEach((b) => (b.onclick = () => {
@@ -8398,9 +8414,23 @@ $("#sSearch").addEventListener("input", (e) => {
     e.target.value = ""; box.hidden = true; $$("#stabs .stablist > button").forEach((bb) => (bb.hidden = false));
     showSettingsTab(x.tab);
     const flash = (r) => { r.scrollIntoView({ block: "center", behavior: "smooth" }); r.classList.add("flash"); setTimeout(() => r.classList.remove("flash"), 1700); };
+    let tries = 0;
+    if (x.lib) {  // a library skill: the library search of the Skills tab is filled with its name, then its row shown
+      const fill = () => {
+        const inp = $("#libQ");  // drawn at once, listened to only once the tab has read the active skills
+        if (!inp || !inp.oninput) { if (++tries < 50) setTimeout(fill, 100); return; }
+        inp.value = x.lib; inp.dispatchEvent(new Event("input"));
+        const seek = () => {
+          const r = $$("#libFound .srow").find((el) => ($(".sl b", el)?.textContent || "").trim() === x.lib);
+          if (r) flash(r); else if (++tries < 60) setTimeout(seek, 100);
+        };
+        setTimeout(seek, 300);
+      };
+      fill();
+      return;
+    }
     if (!x.row) { const r = $$("#spane .srow").find((el) => $(".sl b", el)?.textContent.trim() === x.title); if (r) flash(r); return; }
     // a skill or a plugin: its row appears once the tab has loaded its list
-    let tries = 0;
     const seek = () => {
       const r = $$(x.tab === "skills" ? "#skillList .srow" : "#plgList .acard", $("#spane")).find((el) => ($("b", el)?.textContent || "").trim().split(/\s+/).includes(x.row));
       if (r) flash(r); else if (++tries < 30) setTimeout(seek, 100);
@@ -9005,9 +9035,11 @@ async function loadSkillsPage() {
     };
     return el;
   };
+  let libReq = 0;
   const libLoad = async (q = libQuery, more = false) => {
     libQuery = q; if (!more) libShown = 0;
-    const r = await api("/api/skills/bibliotheque", { method: "POST", body: { q, offset: libShown, limit: 50 } }).catch(() => null); if (!r) return;
+    const mine = ++libReq;  // only the latest request is drawn (the first full list must not cover a search typed meanwhile)
+    const r = await api("/api/skills/bibliotheque", { method: "POST", body: { q, offset: libShown, limit: 50 } }).catch(() => null); if (!r || mine !== libReq) return;
     $("#libInfo").textContent = `${r.count.toLocaleString("fr-FR")} skill${r.count > 1 ? "s" : ""} · Naim les cherche et les charge tout seul quand une tâche en a besoin`;
     $("#libOpen").onclick = () => api("/api/reveal", { method: "POST", body: { path: r.path } });
     const box = $("#libFound"); if (!more) box.innerHTML = "";
@@ -9159,7 +9191,7 @@ async function loadAutoTrain() {
       <small>${esc(sc(cur?.scores))} · nouveaux exemples : ${newEx}/${need}${r.last_attempt ? ` · dernier essai : ${esc(r.last_attempt)}` : ""}</small></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="atRun" ${r.running ? "disabled" : ""} title="Lance tout de suite, sans attendre la nuit ni le nombre d'exemples">${svgI("play")}Entraîner maintenant</button><button class="btn ib" id="atRefresh" title="Actualiser">${svgI("refresh")}</button></div>
     ${r.versions.length > 1 ? `<div class="sl" style="margin-top:8px"><b>Versions gardées</b></div>` + r.versions.filter((v) => !v.current).map((v) => `<div class="srow"><div class="sl"><b>${esc(v.label)}</b><small>${esc(sc(v.scores))}${v.date ? " · " + esc(v.date) : ""}</small></div><div class="sc"><button class="btn" data-rb="${esc(v.label)}">↶ Revenir à cette version</button>${v.label !== "v2" ? `<button class="icon" data-vdel="${esc(v.label)}" title="Supprimer cette version (libère environ 5,6 Go)">🗑</button>` : ""}</div></div>`).join("") : ""}
-    ${r.history.length ? `<div class="sl" style="margin-top:8px"><b>Historique</b></div>` + r.history.map((h) => `<div class="srow"><div class="sl"><b>${esc(h.date)} — ${esc(h.result || "")}</b><small>${h.scores ? esc(h.reason || sc(h.scores)) : h.examples != null ? `${h.examples} exemples` : ""}${h.minutes ? ` · ${h.minutes} min` : ""}</small></div></div>`).join("") : ""}`;
+    ${r.history.length ? `<div class="sl" style="margin-top:8px"><b>Historique</b></div>` + r.history.map((h) => `<div class="srow"><div class="sl"><b>${esc(h.date)} — ${esc(h.result || "")}</b><small>${h.scores ? esc(h.reason || sc(h.scores)) : h.examples != null ? `${h.examples} exemples` : ""}${h.minutes ? ` · ${h.minutes} min` : ""}</small>${h.diagnostic ? `<small>Ce qu'il change tout seul : ${esc(h.diagnostic)}</small>` : ""}</div></div>`).join("") : ""}`;
   $("#atRefresh").onclick = loadAutoTrain;
   $("#atRun").onclick = async () => { if (!confirm("Lancer l'entraînement maintenant ?\n\nNaim va se fermer pour laisser toute la puissance à l'entraînement (environ 1 h 30). Une fenêtre « Naim — Entraînement » suit la progression et te permet de rouvrir Naim à la fin, ou de revenir à une version précédente.")) return; const x = await api("/api/autotrain/run", { method: "POST", body: {} }); toast(x.error || "La fenêtre d'entraînement s'ouvre, Naim va se fermer…"); };
   $$("[data-vdel]", grp).forEach((b) => (b.onclick = async () => { if (!confirm(`Supprimer la version ${b.dataset.vdel} ?\n\nTu ne pourras plus y revenir. La version en service et la v2 d'origine sont toujours gardées.`)) return; const x = await api("/api/autotrain/delete", { method: "POST", body: { label: b.dataset.vdel } }); toast(x.error || `Version ${x.label} supprimée (${(x.freed / 1e9).toFixed(1)} Go libérés)`); loadAutoTrain(); }));

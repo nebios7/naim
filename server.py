@@ -2398,7 +2398,8 @@ class Handler(BaseHTTPRequestHandler):
         heard = []  # what the user said while Naim worked
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
-        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = 0
+        earlier_answers = [str(m.get("content") or "") for m in messages if m.get("role") == "assistant"]
+        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = repeat_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2839,6 +2840,26 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "user", "content": "(Vérification de tes calculs : des résultats sont faux.\n- " + "\n- ".join(wrong)
                                      + "\n\nRedonne ta réponse entière avec les bons résultats : corrige aussi les étapes qui y "
                                        "mènent, pas seulement la ligne fausse.)"})
+                    shown = 0
+                    continue
+            if not calls and not stop.is_set() and repeat_checks < 1 and earlier_answers:
+                # whole sentences of its earlier answers pasted back (the same explanation and the same closing question,
+                # turn after turn, under a new first line): the answer goes back to say only what is new
+                try:
+                    import repeatcheck
+                    copied = repeatcheck.check(content, earlier_answers)
+                except Exception:  # noqa: BLE001
+                    copied = []
+                if copied:
+                    repeat_checks += 1
+                    self.event({"type": "retract", "chars": shown})
+                    self.event({"type": "status", "text": "Naim évite de se répéter…"})
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": "(Tu recopies des phrases de tes réponses précédentes, mot pour mot :\n- "
+                                     + "\n- ".join(c[:160] for c in copied[:6])
+                                     + "\n\nL'utilisateur les a déjà lues. Redonne ta réponse en apportant seulement ce qui est "
+                                       "nouveau : ce qu'il vient de demander, fait vraiment. Ne réexplique pas ce que tu as déjà "
+                                       "expliqué et ne repose pas la même question à la fin.)"})
                     shown = 0
                     continue
             if not calls and not stop.is_set() and link_checks < 1 and "http" in content:
