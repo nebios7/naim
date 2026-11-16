@@ -806,7 +806,7 @@ class Agent:
                  auto_mcp=False, stop_temp_processes=True, keep_final_app=True, permissions="", hooks="",
                  auto_verify=True, auto_skill=True, minimal_mode=True, command_timeout=120, loop_limit=4,
                  auto_computer=False, screen_images=False, email_allowed=(), email=True, scheduled=False,
-                 learning=True, max_subagents=6, asker=None, review=True, power=False, external=None):
+                 learning=True, max_subagents=6, asker=None, review=True, power=False, external=None, fast=False):
         self.external = external or {}
         self.root = Path(root).expanduser().resolve()
         if not self.root.is_dir():
@@ -825,6 +825,13 @@ class Agent:
         self.features = {"web": True, "memory": True, "skills": True, "mcp": True, "subagents": True, "computer": True,
                          "simulator": True, "browser": True, "email": bool(email), **(features or {})}
         self.plan, self.subagent, self.auto_mcp = plan, subagent, auto_mcp
+        # fast mode (« Mode rapide »): the basic tools only. The full Agent gives the engine ~16,000 tokens of tools and
+        # instructions to read (about 2.5 minutes each time it has lost them); this one about a third of that. Measured
+        # on an M4: what is read first is what makes Naim wait, far more than what it then writes.
+        self.fast = bool(fast) and not subagent
+        if self.fast:
+            self.features.update(memory=False, skills=False, mcp=False, subagents=False, computer=False, simulator=False,
+                                 browser=False, email=False)
         self.stop_temp_processes, self.started = stop_temp_processes, []
         self.keep_final_app = keep_final_app
         self.rules = self._parse_rules(permissions)
@@ -862,6 +869,17 @@ class Agent:
         self.messages = [{"role": "system", "content": self._system_prompt()}] + list(history or [])
 
     def _build_tools(self):
+        if self.fast:  # files, commands, search, web: nothing specialised, nothing loaded later (the list never changes)
+            grouped = {n for names, _d, _r in TOOL_GROUPS.values() for n in names}
+            tools = [t for t in TOOLS if t["function"]["name"] not in grouped] + [TODO_TOOL]
+            if self.features["web"]:
+                tools += WEB_TOOLS
+            if self.asker and not self.scheduled:
+                tools.append(ASK_TOOL)
+            self._mcp_on_demand, self._mcp_deferred, self._tool_groups = [], [], {}
+            if self.plan:
+                tools = [t for t in tools if t["function"]["name"] in READ_ONLY]
+            return tools, {}
         tools = list(TOOLS) + [TODO_TOOL]
         if self.features["web"]:
             tools += WEB_TOOLS
@@ -994,6 +1012,11 @@ class Agent:
             base = re.sub(r"Minimal version first.*?instead of doing them\.\n\n", "", base, flags=re.S)
         parts = [base]
         parts.append(WRITING_STYLE)
+        if getattr(self, "fast", False):
+            parts.append("Fast mode is ON: you only have the basic tools (files, commands, search"
+                         + (", web" if self.features["web"] else "") + "). If the task needs e-mail, the Mac's screen, a "
+                         "browser, a PDF or Word document, a diagram, a skill, an MCP server or sub-agents, do not try "
+                         "another way: tell the user in one sentence to turn « Mode rapide » off for this task.")
         try:
             import naim_check
             if les := naim_check.lessons():  # rules Naim wrote after its own failed checks

@@ -2686,7 +2686,7 @@ const DEFAULTS = {
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
-  vision_model: "", stop_temp_processes: true, keep_final_app: true, planMode: false, enable_web: true, enable_memory: true, enable_skills: true, enable_mcp: true, enable_subagents: true,
+  vision_model: "", stop_temp_processes: true, keep_final_app: true, planMode: false, fastMode: false, enable_web: true, enable_memory: true, enable_skills: true, enable_mcp: true, enable_subagents: true,
   enable_computer: true, enable_simulator: true, auto_computer: false, computer_power: false, screen_images: false, enable_email: true, email_allowed: "", enable_learning: true, enable_review: true, auto_train: false, auto_train_min: 150, auto_train_from: 1, auto_train_to: 6, auto_preview: true, onboarded: false, share_feedback: false, share_auto: false, memory_auto: true, memory_limit: 60, params_open: false, presets: {}, folders: [], accent: "sobre",
   auto_mcp: false, disabled_skills: [],
   auto_writes: false, auto_commands: false, max_steps: 30, blocked_commands: "rm -rf /\nsudo \nmkfs\n:(){ :|:& };:",
@@ -4868,6 +4868,7 @@ const COMMANDS = {
   memory: () => { setView("settings"); showSettingsTab("memory"); },
   undo: () => undoLast(),
   plan: () => { S.planMode = !S.planMode; saveSettings(); applySettings(); toast(S.planMode ? "Plan d'abord : activé" : "Plan d'abord : désactivé"); },
+  rapide: () => { S.fastMode = !S.fastMode; saveSettings(); applySettings(); toast(S.fastMode ? "Mode rapide : activé (outils de base seulement)" : "Mode rapide : désactivé"); },
   permmode: () => { const order = PERM_MODES.map((m) => m.id); setPermMode(order[(order.indexOf(permMode()) + 1) % order.length]); },
   processes: () => { setView("chat"); $("#panel").classList.contains("show") && !$("#pProcs").hidden ? closePanel() : showPanel("procs"); },
   files: () => { setView("chat"); if (S.mode !== "agent") setMode("agent"); $("#panel").classList.contains("show") && !$("#pFiles").hidden ? closePanel() : showPanel("files"); },
@@ -8242,6 +8243,7 @@ const TABS = {
       ${row("Autoriser automatiquement les commandes", "⚠ Naim pourra exécuter des commandes sans te demander.", sw("auto_commands"))}
       ${row("Tout autoriser", "Équivalent de la case « Tout autoriser » en haut.", sw("autoYes"))}
       ${row("Plan d'abord par défaut", "L'agent propose un plan et attend « Exécuter ».", sw("planMode"))}
+      ${row("Mode rapide", "Les outils de base seulement (fichiers, commandes, recherche, web) : Naim a trois fois moins à lire et démarre plus vite. Sans e-mail, écran, navigateur, documents, skills, serveurs MCP ni sous-agents.", sw("fastMode"))}
       ${row("Recherche web", "Outils web_search et web_fetch.", sw("enable_web"))}
       ${row("Sous-agents", "Naim peut répartir une grosse tâche entre plusieurs sous-agents.", sw("enable_subagents"))}
       ${row("Vérifier qu'il n'invente rien", "Quand Naim produit un document à partir des tiens (CV, lettre, rapport), il compare les deux et retire ce qui n'y figure pas. Ajoute un peu de temps.", sw("enable_review"))}
@@ -10140,7 +10142,7 @@ function renderParams() {
     <div class="psec"><b>Contexte</b>
       <select data-ps="num_ctx">${ctxs.map((c) => `<option value="${c}" ${+S.num_ctx === c ? "selected" : ""}>${c / 1024}k tokens</option>`).join("")}</select>
       <small class="muted" style="display:block;margin-top:6px">Avec llama.cpp, Naim utilise 32k. Plus grand = plus de mémoire, plus lent.</small></div>
-    <div class="psec"><b>Mode</b>${tog("think", "Raisonnement")}${tog("planMode", "Plan d'abord (agent)")}${tog("autoYes", "Tout autoriser")}</div>
+    <div class="psec"><b>Mode</b>${tog("think", "Raisonnement")}${tog("planMode", "Plan d'abord (agent)")}${tog("fastMode", "Mode rapide (agent)")}${tog("autoYes", "Tout autoriser")}</div>
     <div class="psec"><b>Outils de l'agent</b>
       ${tog("enable_web", "Recherche web")}${tog("enable_memory", "Mémoire")}${tog("enable_skills", "Skills")}${tog("enable_mcp", "Serveurs MCP")}
       ${tog("enable_subagents", "Sous-agents")}${tog("enable_computer", "Contrôle de l'écran")}${tog("enable_simulator", "Simulateur iOS")}${tog("enable_email", "Emails")}</div>

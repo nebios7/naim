@@ -3709,3 +3709,55 @@ class EnglishGamesVoiceAndWeb(unittest.TestCase):
         s = (ROOT / "plugins_builtin/anglais/skills/anglais/SKILL.md").read_text()
         for w in ("web_search", "web_fetch", "`photo`", "Jamais une adresse\n  devinée"):
             self.assertIn(w.replace("\\n", "\n"), s)
+
+
+class FastMode(unittest.TestCase):
+    """« Mode rapide »: the basic tools only, so the engine has far less to read."""
+
+    def _agent(self, **kw):
+        return naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True,
+                               options={"backend": "llamacpp"}, **kw)
+
+    def test_fast_mode_keeps_the_basic_tools_only(self):
+        full, fast = self._agent(), self._agent(fast=True)
+        names = {t["function"]["name"] for t in fast.tools}
+        for needed in ("read_file", "write_file", "edit_file", "run_command", "search", "list_files", "todo_write"):
+            if needed in {t["function"]["name"] for t in full.tools}:
+                self.assertIn(needed, names)
+        for heavy in ("computer", "simulator", "browser", "send_email", "use_skill", "delegate", "use_mcp", "planifier",
+                      "convert_document", "make_diagram"):
+            self.assertNotIn(heavy, names)
+        self.assertLess(len(fast.tools), len(full.tools) / 2)
+        size = lambda a: len(json.dumps(a.tools, ensure_ascii=False)) + len(a.messages[0]["content"])
+        self.assertLess(size(fast), size(full) * 0.6)
+
+    def test_fast_mode_says_so_and_turns_the_heavy_features_off(self):
+        fast = self._agent(fast=True)
+        self.assertIn("Fast mode is ON", fast.messages[0]["content"])
+        self.assertNotIn("Available skills", fast.messages[0]["content"])
+        for k in ("skills", "mcp", "subagents", "computer", "simulator", "browser", "email", "memory"):
+            self.assertFalse(fast.features[k], k)
+        self.assertNotIn("Fast mode is ON", self._agent().messages[0]["content"])
+
+    def test_fast_mode_never_applies_to_a_sub_agent_and_respects_plan(self):
+        self.assertFalse(self._agent(fast=True, subagent=True).fast)
+        plan = self._agent(fast=True, plan=True)
+        self.assertTrue(all(t["function"]["name"] in naimtools.READ_ONLY for t in plan.tools))
+
+    def test_the_setting_reaches_the_agent(self):
+        import server
+        self.assertTrue(server.agent_settings({"settings": {"fastMode": True}})["fast"])
+        self.assertFalse(server.agent_settings({"settings": {}})["fast"])
+
+
+class EngineBeforeSlot(unittest.TestCase):
+    """The engine is started before a request chooses its slot: asked earlier, a cold start lost the Agent's slot."""
+
+    def test_the_engine_is_ensured_before_the_payload_is_built(self):
+        from unittest import mock
+        order = []
+        with mock.patch.object(llamacpp.SERVER, "ensure", side_effect=lambda *a, **k: order.append("ensure")), \
+             mock.patch.object(llamacpp, "_payload", side_effect=lambda *a, **k: (order.append("payload"), (_ for _ in ()).throw(RuntimeError("stop")))[1]):
+            with self.assertRaises(RuntimeError):
+                llamacpp.chat([{"role": "system", "content": "x"}, {"role": "user", "content": "y"}], options={"slot": llamacpp.SLOT_AGENT})
+        self.assertEqual(order[:2], ["ensure", "payload"])

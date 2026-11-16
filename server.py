@@ -702,6 +702,7 @@ def agent_settings(body):
     out["features"] = {k: s.get(f"enable_{k}", True) is not False for k in ("web", "memory", "skills", "mcp", "subagents", "computer", "simulator")}
     out["disabled_skills"] = s.get("disabled_skills") or []
     out["auto_mcp"] = bool(s.get("auto_mcp"))
+    out["fast"] = bool(s.get("fastMode"))  # « Mode rapide »: the basic tools only, far less for the engine to read
     out["auto_computer"] = bool(s.get("auto_computer"))
     out["power"] = bool(s.get("computer_power"))  # red switch: everything without asking except sensitive actions
     out["screen_images"] = bool(s.get("screen_images"))

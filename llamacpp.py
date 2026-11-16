@@ -551,6 +551,11 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
         WARM_LOG.append(done)
         reply = {"role": "assistant", "content": "."}
         return iter([{"message": reply, "done": True}]) if stream else reply
+    if not url:
+        # the engine first: a request only keeps its slot when the engine has said how many it has. Asked before the
+        # engine was up, the first request of a cold start lost its slot, was read in another one, and the next step
+        # read the same instructions again in the Agent's slot (measured: 47 s then 62 s for the same 7,800 tokens)
+        SERVER.ensure(int((options or {}).get("num_ctx") or 16384))
     payload = _payload(messages, tools, think, stream, options, vision)
     if url:  # another server (vision, MLX): the main engine's slot numbers mean nothing there
         payload.pop("id_slot", None)
