@@ -93,6 +93,8 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
 
 
 # tools kept for a plain question or a lesson in Chat: look things up, never change files
+# « écris-moi un code python », « affiche le script », « le programme » : the code itself is what is asked
+CODE_ASK_RE = re.compile(r"\b(?:code|script|programme|fonction|algo(?:rithme)?|python|javascript|html|sql|bash)\b", re.I)
 ANSWER_TOOLS = {"confier_tache", "chercher_conversations", "chercher_sur_mac", "read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
                 "browser", "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
@@ -2064,6 +2066,8 @@ class Handler(BaseHTTPRequestHandler):
         messages = [{"role": "system", "content": system}] + history + [user]
         wants_schedule = bool(SCHEDULE_NEED_RE.search(body["message"] or ""))
         files = wants_file(body["message"], body.get("history")) or bool(FILE_OFFER_RE.search(choice))
+        if answer_here(body["message"], *[m.get("content") for m in (body.get("history") or [])[-6:] if m.get("role") == "user"]):
+            files = False  # « affiche le code dans le chat, pas créer un fichier »: the « fichier » it names is the one NOT wanted
         import mailer
         last_answer = next((m.get("content") or "" for m in reversed(body.get("history") or []) if m.get("role") == "assistant"), "")
         address_given = bool(mailer.EMAIL_RE.search(body["message"] or "")) and bool(re.search(r"adresse|e-?mail", last_answer, re.I))
@@ -2399,7 +2403,7 @@ class Handler(BaseHTTPRequestHandler):
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
         earlier_answers = [str(m.get("content") or "") for m in messages if m.get("role") == "assistant"]
-        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = repeat_checks = 0
+        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = repeat_checks = code_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2862,6 +2866,19 @@ class Handler(BaseHTTPRequestHandler):
                                        "expliqué et ne repose pas la même question à la fin.)"})
                     shown = 0
                     continue
+            if (not calls and not stop.is_set() and in_chat and code_checks < 1 and "```" not in content
+                    and CODE_ASK_RE.search(" ".join([body.get("message") or ""] + [str(m.get("content") or "") for m in (body.get("history") or [])[-4:] if m.get("role") == "user"]))):
+                # the code was asked HERE, in the conversation, and the answer only talks about it (« le script s'exécute
+                # correctement »): the answer goes back to show the code itself, in a block the user can read and copy
+                code_checks += 1
+                self.event({"type": "retract", "chars": shown})
+                self.event({"type": "status", "text": "Naim écrit le code dans la conversation…"})
+                messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": "(Je t'ai demandé le code ICI, dans la conversation : ta réponse n'en "
+                                 "contient pas. Écris le code complet dans un bloc Markdown (```python … ``` ou le langage "
+                                 "demandé), puis une ou deux phrases pour dire comment il marche. Aucun fichier.)"})
+                shown = 0
+                continue
             if not calls and not stop.is_set() and link_checks < 1 and "http" in content:
                 # the links of the answer tried before it is shown: one it made up (a 404, a name that does not exist)
                 # is found again with the tools, or taken out — never handed over as if it worked

@@ -3415,6 +3415,33 @@ class AgentWorkTools(unittest.TestCase):
         self.assertIn("timed out", out2)
 
 
+class CodeShownInTheChat(unittest.TestCase):
+    """« affiche le code dans le chat, pas créer un fichier »: the code in the answer, the file refused, and its
+    commands use the same path as write_file when it repeats the folder it is already in."""
+
+    def test_the_file_it_refuses_is_not_a_file_request(self):
+        msgs = ["j’ai dit de l’affciher le code dans le chat pas créer un fichier",
+                "Bah qui calcule A+ B et tu l'affiches ici dans la section chat",
+                "Merci mais le code tu devrais afficher ici dans la session chat"]
+        for m in msgs:
+            self.assertTrue(naimtools.answer_here(m), m)
+        self.assertFalse(naimtools.answer_here("ouvre le chat de Messages"))
+        import server
+        self.assertTrue(server.CODE_ASK_RE.search(msgs[0]))
+
+    def test_a_command_finds_the_file_write_file_made(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "cam3" / "cours_medecine" / "3annes"
+            d.mkdir(parents=True)
+            a = naimtools.Agent(str(d), "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            a.call_tool("write_file", {"path": "cours_medecine/3annes/calc.py", "content": "print(6 * 7)\n"})
+            self.assertTrue((d / "calc.py").is_file())
+            self.assertEqual(a._undouble_command("python3 cours_medecine/3annes/calc.py"), "python3 calc.py")
+            self.assertEqual(a._undouble_command('python3 "cours_medecine/3annes/calc.py"'), 'python3 "calc.py"')
+            self.assertIn("42", a.call_tool("run_command", {"command": "python3 cours_medecine/3annes/calc.py"}))
+            self.assertEqual(a._undouble_command("python3 autre/calc.py"), "python3 autre/calc.py")
+
+
 class RepeatCheck(unittest.TestCase):
     """An answer that pastes back whole sentences of an earlier answer (under a new first line) is found; a new answer,
     a corrected drawing or a repeated formula is not."""

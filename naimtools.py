@@ -455,7 +455,7 @@ STOP_WORDS_RE = re.compile(r"^\s*(?:(?:non|bon|ok|mais|attends)[ ,!.]*)*(stop|st
 # « écris directement dans la session chat », « ici », « pas de fichier »: the answer is written in the conversation,
 # whatever its length — never turned into files (it once made 8 files twice despite it)
 IN_CHAT_RE = re.compile(r"\b(?:dans|sur|en)\s+(?:la |le |cette |ce |notre |ma |mon )?(?:se{1,2}s{1,3}io?n(?: chat)?|conversation|"
-                        r"chat|discussion|messagerie)\b|\b(?:directement|juste|tout)\s+ici\b|\bici m[êe]me\b|"
+                        r"(?:section |fen[êe]tre |zone )?(?:du |de )?chat|discussion|messagerie)\b|\b(?:directement|juste|tout)\s+ici\b|\bici m[êe]me\b|"
                         r"\b[ée]cri[st]?\w*\b[^.?!]{0,30}\bici\b|"
                         r"\b(?:pas|sans|aucun|jamais)\s+(?:de |d'|le |les |des )?fichiers?\b|\bne (?:cr[ée]e|fais|[ée]cris)\s+"
                         r"(?:pas|aucun|jamais)\b[^.?!]{0,25}\bfichiers?\b", re.I)
@@ -1164,6 +1164,17 @@ class Agent:
             return (f"\n[Outil manquant « {name} » : brew install {self.BREW_NAMES[name]} (Homebrew absent : donne à l'utilisateur la "
                     f"commande de https://brew.sh, il la lance lui-même), puis vérifie : {name} --version.]")
         return ""
+
+    def _undouble_command(self, command):
+        """« python3 cours_medecine/3annes/x.py » while the work folder IS …/cours_medecine/3annes: write_file put x.py
+        at its root (_undouble), so the command uses that same path — the file and the command agree."""
+        def fix(m):
+            q, w = m.group(1) or "", m.group(2)
+            if "/" not in w or w.startswith(("/", "~", "-")) or (self.root / w).exists():
+                return m.group(0)
+            short = self._undouble(w)
+            return q + short + q if short != w and (self.root / short).exists() else m.group(0)
+        return re.sub(r"([\"']?)([\w./-]+)\1", fix, command)
 
     def _folder_twice_hint(self, command):
         """« cours-cobol/page.html » typed while the work folder IS cours-cobol: write_file put it at its root (it removes
@@ -4216,6 +4227,8 @@ class Agent:
             # the path of the call that lost it: the content kept is written, not generated a second time (957 lines = 30 min)
             args["content"], cut = self._lost_content
             self._lost_content = None
+        if name == "run_command" and isinstance(args, dict) and isinstance(args.get("command"), str):
+            args = {**args, "command": self._undouble_command(args["command"])}
         if name == "run_command" and isinstance(args, dict) and (hit := self._joint_hit(args.get("command"))):
             return self.JOINT_KEEP.format(name=hit.name, stem=hit.stem, suffix=hit.suffix)
         if name == "run_command" and isinstance(args, dict) and (err := self._copy_over(str(args.get("command") or ""))):
