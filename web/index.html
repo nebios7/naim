@@ -2138,6 +2138,8 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md figure.mwait { display: flex; align-items: center; justify-content: center; width: min(100%, 546px); aspect-ratio: 546 / 393;
   background: var(--code); color: var(--muted); font-size: 13px; }
 .md figure.mgraph svg { display: block; width: 520px; max-width: 100%; height: auto; }
+.md figure.mgraph[data-field] svg { touch-action: none; cursor: crosshair; }
+.md figure.mgraph .gread { margin-top: 4px; width: 0; min-width: 100%; color: #333; font: 13px "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; }
 .md figure.mgraph figcaption { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font: 13px "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; }
 .md .vis { margin: 4px 0 6px; }
 .md .vis iframe.visf { display: block; width: 100%; height: 160px; border: 0; background: transparent; }
@@ -4268,9 +4270,49 @@ function niceStep(span) {  // 1, 2 or 5 × 10^k, about 8 graduations
 }
 const frNum = (v) => String(+v.toFixed(6)).replace(".", ",").replace("-", "−");
 let graphSeq = 0;
+// a function of two variables f(x, y): its level curves (marching squares), its gradient field, and a point to move
+function fieldContour(F, view, level, n) {  // the curve f(x, y) = level, as an SVG path, on an n-cell grid
+  const [x0, x1, y0, y1, L, T, W, H, R, B] = view, GX = n, GY = Math.max(8, Math.round(n * (H - T - B) / (W - L - R)));
+  const gx = (i) => x0 + (x1 - x0) * i / GX, gy = (j) => y1 - (y1 - y0) * j / GY;
+  const v = Array.from({ length: GY + 1 }, (_, j) => Array.from({ length: GX + 1 }, (_, i) => F(gx(i), gy(j)) - level));
+  const P = (i, j) => `${(L + i * (W - L - R) / GX).toFixed(1)},${(T + j * (H - T - B) / GY).toFixed(1)}`;
+  let d = ""; const mids = [];
+  for (let j = 0; j < GY; j++) for (let i = 0; i < GX; i++) {
+    const c = [v[j][i], v[j][i + 1], v[j + 1][i + 1], v[j + 1][i]];
+    if (!c.every(Number.isFinite)) continue;
+    const corners = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], cut = [];
+    for (let k = 0; k < 4; k++) {
+      const a = c[k], b = c[(k + 1) % 4];
+      if ((a < 0) !== (b < 0) && Math.abs(a - b) < 1e9) { const u = a / (a - b), [i0, j0] = corners[k], [i1, j1] = corners[(k + 1) % 4]; cut.push([i0 + (i1 - i0) * u, j0 + (j1 - j0) * u]); }
+    }
+    for (let k = 0; k + 1 < cut.length; k += 2) { d += `M${P(...cut[k])}L${P(...cut[k + 1])}`; mids.push(cut[k]); }
+  }
+  const m = mids.length ? mids[Math.floor(mids.length * 0.62)] : null;
+  return { d, label: m ? [L + m[0] * (W - L - R) / GX, T + m[1] * (H - T - B) / GY] : null };
+}
+function fieldGrad(F, x, y, view) {  // ∇f by central differences, a step small for the window shown
+  const h = Math.max(1e-6, (view[1] - view[0]) * 1e-5);
+  return [(F(x + h, y) - F(x - h, y)) / (2 * h), (F(x, y + h) - F(x, y - h)) / (2 * h)];
+}
+const fieldNum = (v) => (Number.isFinite(v) ? frNum(Math.abs(v) < 1e-9 ? 0 : +v.toPrecision(4)) : "?");
+function fieldProbe(F, view, x, y, id) {  // the point, its level curve (dashed) and ∇f there; the reading under the graph
+  const [x0, x1, y0, y1, L, T, W, H, R, B, k] = view;
+  const X = (u) => L + (u - x0) / (x1 - x0) * (W - L - R), Y = (u) => T + (y1 - u) / (y1 - y0) * (H - T - B);
+  const z = F(x, y), [gx, gy] = fieldGrad(F, x, y, view), len = Math.hypot(gx, gy);
+  let g = "";
+  if (Number.isFinite(z)) g += `<path d="${fieldContour(F, view, z, 90).d}" fill="none" stroke="#222" stroke-width="1.3" stroke-dasharray="5 4" clip-path="url(#${id}z)"/>`;
+  if (Number.isFinite(len) && len > 1e-12) {  // the arrow keeps the field's scale, within the frame
+    const s = Math.min(k, ((x1 - x0) * 0.3) / len);
+    g += `<line x1="${X(x).toFixed(1)}" y1="${Y(y).toFixed(1)}" x2="${X(x + gx * s).toFixed(1)}" y2="${Y(y + gy * s).toFixed(1)}" stroke="#c4553a" stroke-width="2.6" marker-end="url(#${id}gp)"/>`;
+  }
+  g += `<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="6.5" fill="#fff" stroke="#c4553a" stroke-width="2.4" style="cursor:grab"/>`;
+  const read = `f(${fieldNum(x)} ; ${fieldNum(y)}) = ${fieldNum(z)} · ∇f = (${fieldNum(gx)} ; ${fieldNum(gy)}) · |∇f| = ${fieldNum(len)}`;
+  return { g, read };
+}
 function graphHtml(src) {
   const curves = [], points = [], shapes = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
   const params = [], polars = [], implicits = [], series = [];  // x(t), y(t) · r = f(θ) · x² + y² = 4, y > 2x · data
+  const fields = []; let levels = null;  // f(x, y) = …: level curves, gradient, a point to move · « niveaux : 0, 1, 2 »
   let xr = null, yr = null, tr = null, ortho = false, showXY = false, fit = false;
   // the pairs of a data line: « (1;2) (2;3,5) », « (1, 2) (2, 3) », « 1;2 | 2;3 »
   const pairs = (t) => (t.match(/\(([^()]*)\)/g) || t.split("|")).map((q) => {
@@ -4288,6 +4330,15 @@ function graphHtml(src) {
       const k = m[1].toLowerCase(); let p = params.at(-1);
       if (!p || p[k]) { p = {}; params.push(p); }
       try { p[k] = mathFn(m[2]); p[k + "s"] = m[2]; } catch (e) { /* unreadable: this curve is left out */ }
+      continue;
+    }
+    if ((m = l.match(/^(?:([a-zA-Z]\w*)\s*\(\s*x\s*[,;]\s*y\s*\)|z)\s*=\s*(.+)$/))) {  // f(x, y) = x^2 + 3y, z = …
+      try { const f = mathFn(m[2]); fields.push({ name: m[1] || "z", text: m[2], F: (x, y) => f(x, y, 0) }); } catch (e) { /* unreadable */ }
+      continue;
+    }
+    if ((m = l.match(/^(?:niveaux?|contours?|courbes? de niveaux?|lignes? de niveaux?|levels?)\s*(?::|=)\s*(.+)$/i))) {
+      const vals = m[1].split(/[;|]|,\s+|\s+/).map((v) => { try { return mathFn(v.replace(/[{}]/g, ""))(0); } catch (e) { return NaN; } }).filter(Number.isFinite);
+      if (vals.length) levels = (levels || []).concat(vals);
       continue;
     }
     if ((m = l.match(/^r\s*(?:\(\s*(?:t|θ|theta)\s*\))?\s*=\s*(.+)$/i))) {  // a polar curve: r = 1 + cos(θ)
@@ -4332,7 +4383,8 @@ function graphHtml(src) {
   const tParam = tr || [0, 2 * Math.PI], NT = 720;
   const paths = params.filter((p) => p.x && p.y).map((p) => ({ text: `x(t) = ${p.xs} ; y(t) = ${p.ys}`, pts: Array.from({ length: NT + 1 }, (_, k) => { const t = tParam[0] + (tParam[1] - tParam[0]) * k / NT; return [p.x(0, 0, t), p.y(0, 0, t)]; }) }))
     .concat(polars.map((p) => ({ text: `r = ${p.text}`, pts: Array.from({ length: NT + 1 }, (_, k) => { const t = tParam[0] + (tParam[1] - tParam[0]) * k / NT, r = p.f(0, 0, t); return [r * Math.cos(t), r * Math.sin(t)]; }) })));
-  if (!curves.length && !points.length && !paths.length && !implicits.length && !series.length) return null;
+  if (!curves.length && !points.length && !paths.length && !implicits.length && !series.length && !fields.length) return null;
+  if (fields.length) { ortho = true; xr ||= [-3, 3]; yr ||= [-3, 3]; }  // a map of f(x, y): the plane as it is
   if (shapes.length && !curves.length) ortho = true;
   if ((paths.length || implicits.length) && !curves.length && !series.length) ortho = true;  // a circle stays round
   const extra = paths.flatMap((p) => p.pts.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)).map(([x, y]) => ({ x, y })))
@@ -4383,6 +4435,52 @@ function graphHtml(src) {
     + `<text x="${W - R - 2}" y="${ax - 6}" text-anchor="end" font-style="italic">x</text><text x="${ay + 6}" y="${T + 10}" font-style="italic">y</text>`
     + (xr[0] <= 0 && xr[1] >= 0 && yr[0] <= 0 && yr[1] >= 0 ? `<text x="${ay - 5}" y="${ax + 14}" text-anchor="end">0</text>` : "");  // the origin only when it is in the frame
   const COLORS = ["#c4553a", "#3d7cc9", "#2f9a6f", "#9a5cc9", "#c98a1f"];
+  let fieldAttr = "", fieldRead = "";
+  const legendMore = [];
+  fields.slice(0, 1).forEach((fd) => {  // the values in colour (low blue, high orange), the level curves, ∇f, the point
+    const F = fd.F, view0 = [xr[0], xr[1], yr[0], yr[1], L, T, W, H, R, B];
+    const CX = 48, CY = Math.max(8, Math.round(CX * (H - T - B) / (W - L - R))), cw = (W - L - R) / CX, chh = (H - T - B) / CY;
+    const vals = [];
+    for (let j = 0; j < CY; j++) for (let i = 0; i < CX; i++) vals.push(F(xr[0] + (i + 0.5) * (xr[1] - xr[0]) / CX, yr[1] - (j + 0.5) * (yr[1] - yr[0]) / CY));
+    const sorted = vals.filter(Number.isFinite).sort((a, b) => a - b);
+    if (!sorted.length) return;
+    const lo = sorted[Math.floor(sorted.length * 0.02)], hi = sorted[Math.ceil(sorted.length * 0.98) - 1], span = hi - lo || 1;
+    // the colours as one small picture (a BMP made here, smoothed by the browser) instead of thousands of squares
+    const row = (CX * 3 + 3) & ~3, bytes = new Uint8Array(54 + row * CY), dv = new DataView(bytes.buffer);
+    bytes[0] = 66; bytes[1] = 77; dv.setUint32(2, bytes.length, true); dv.setUint32(10, 54, true); dv.setUint32(14, 40, true);
+    dv.setInt32(18, CX, true); dv.setInt32(22, -CY, true); dv.setUint16(26, 1, true); dv.setUint16(28, 24, true);
+    vals.forEach((val, n) => {  // low: blue, high: orange, blended on the white of the figure
+      const t = Number.isFinite(val) ? Math.max(0, Math.min(1, (val - lo) / span)) : 0.5, a = Math.abs(t - 0.5) * 2 * 0.34;
+      const [r, gg, b] = t < 0.5 ? [61, 124, 201] : [214, 120, 60], o = 54 + Math.floor(n / CX) * row + (n % CX) * 3;
+      bytes[o] = Math.round(255 + (b - 255) * a); bytes[o + 1] = Math.round(255 + (gg - 255) * a); bytes[o + 2] = Math.round(255 + (r - 255) * a);
+    });
+    let bin = ""; bytes.forEach((c) => { bin += String.fromCharCode(c); });
+    const shade = `<image href="data:image/bmp;base64,${btoa(bin)}" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" preserveAspectRatio="none"/>`;
+    g = shade + g;  // under the grid and the axes
+    const step = niceStep(span), lv = levels || Array.from({ length: 40 }, (_, k) => (Math.ceil(lo / step) + k) * step).filter((v) => v <= hi + 1e-9);
+    lv.slice(0, 24).forEach((level) => {
+      const c = fieldContour(F, view0, level, 120);
+      if (!c.d) return;
+      g += `<path d="${c.d}" fill="none" stroke="#3d7cc9" stroke-width="1.4" stroke-opacity=".85" clip-path="url(#${id}z)"/>`;
+      if (c.label) g += `<text x="${c.label[0].toFixed(1)}" y="${(c.label[1] + 4).toFixed(1)}" text-anchor="middle" fill="#2b5c99" font-size="10" font-weight="600" stroke="#fff" stroke-width="3" paint-order="stroke">${frNum(+level.toPrecision(4))}</text>`;
+    });
+    const NX = 11, NY = Math.max(5, Math.round(NX * (H - T - B) / (W - L - R))), arrows = [];
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+      const x = xr[0] + (i + 0.5) * (xr[1] - xr[0]) / NX, y = yr[0] + (j + 0.5) * (yr[1] - yr[0]) / NY, [gx, gy] = fieldGrad(F, x, y, view0);
+      if (Number.isFinite(gx) && Number.isFinite(gy)) arrows.push([x, y, gx, gy]);
+    }
+    const big = Math.max(...arrows.map(([, , a, b]) => Math.hypot(a, b)), 1e-12), k = 0.8 * ((xr[1] - xr[0]) / NX) / big;
+    arrows.forEach(([x, y, gx, gy]) => {
+      if (Math.hypot(gx, gy) * k < (xr[1] - xr[0]) / NX * 0.08) return;  // too short to read: left out
+      g += `<line x1="${X(x - gx * k / 2).toFixed(1)}" y1="${Y(y - gy * k / 2).toFixed(1)}" x2="${X(x + gx * k / 2).toFixed(1)}" y2="${Y(y + gy * k / 2).toFixed(1)}" stroke="#2f9a6f" stroke-width="1.3" stroke-opacity=".8" marker-end="url(#${id}ga)"/>`;
+    });
+    const view = view0.concat(k), start = points[0] || { x: (xr[0] + xr[1]) / 2, y: (yr[0] + yr[1]) / 2 };
+    const pr = fieldProbe(F, view, start.x, start.y, id);
+    g += `<g class="gprobe">${pr.g}</g>`;
+    fieldAttr = ` data-field="${esc(fd.text)}" data-view="${view.join(",")}" data-gid="${id}"`;
+    fieldRead = `<div class="gread">${esc(pr.read)}</div>`;
+    legendMore.push(["#3d7cc9", `${fd.name === "z" ? "z" : fd.name + "(x, y)"} = ${fd.text}`], ["#2f9a6f", "flèches : ∇f"], ["#c4553a", "point à déplacer"]);
+  });
   curves.forEach((c, n) => {
     let d = "", prev = null;
     for (const [x, y] of samples[n]) {
@@ -4396,7 +4494,6 @@ function graphHtml(src) {
     if (lab) g += `<text x="${X(lab[0]) - 4}" y="${Y(lab[1]) - 8}" text-anchor="end" fill="${COLORS[n % COLORS.length]}" font-weight="600" font-style="italic">${esc(c.name === "y" ? "" : "C" + c.name)}</text>`;
   });
   let ci = curves.length;  // each drawn thing takes the next colour
-  const legendMore = [];
   implicits.forEach((im) => {  // a region shaded row by row, then its border (dashed when strict) by marching squares
     const col = COLORS[ci++ % COLORS.length], GX = 160, GY = Math.round(GX * (H - T - B) / (W - L - R)) || 100;
     const gx = (i) => xr[0] + (xr[1] - xr[0]) * i / GX, gy = (j) => yr[1] - (yr[1] - yr[0]) * j / GY;
@@ -4485,10 +4582,12 @@ function graphHtml(src) {
   });
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" font-family="Helvetica, Arial" font-size="11" fill="#333">`
     + `<defs><marker id="${id}f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>`
-    + arrows + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}</svg>`;
+    + arrows + `<marker id="${id}ga" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f9a6f"/></marker>`
+    + `<marker id="${id}gp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c4553a"/></marker>`
+    + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}</svg>`;
   const legend = curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join("")
     + legendMore.map(([col, t]) => `<span style="color:${col}">${esc(t)}</span>`).join("");
-  return `<figure class="mfig mgraph">${svg}<figcaption>${legend}</figcaption></figure>`;
+  return `<figure class="mfig mgraph"${fieldAttr}>${svg}<figcaption>${legend}</figcaption>${fieldRead}</figure>`;
 }
 
 // ---- a statistics chart (```diagramme): bars, histogram, lines or a pie, from « label : value » lines
@@ -4687,6 +4786,27 @@ function download(name, text, type = "text/plain") { saveDownload(name, { text: 
 function downloadBlob(name, blob) {
   const r = new FileReader(); r.onload = () => saveDownload(name, { base64: String(r.result).split(",")[1] || "" }); r.readAsDataURL(blob);
 }
+// a map of f(x, y): the point follows a click or a drag, its level curve and ∇f are computed again where it is
+let fieldDrag = null;
+function fieldMove(fig, e) {
+  const svg = fig.querySelector("svg"), view = (fig.dataset.view || "").split(",").map(Number);
+  let F; try { const f = mathFn(fig.dataset.field); F = (x, y) => f(x, y, 0); } catch (err) { return; }
+  const [x0, x1, y0, y1, L, T, W, H, R, B] = view, pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const x = x0 + Math.max(0, Math.min(1, (q.x - L) / (W - L - R))) * (x1 - x0), y = y1 - Math.max(0, Math.min(1, (q.y - T) / (H - T - B))) * (y1 - y0);
+  const pr = fieldProbe(F, view, x, y, fig.dataset.gid);
+  const g = svg.querySelector(".gprobe"), r = fig.querySelector(".gread");
+  if (g) g.innerHTML = pr.g;
+  if (r) r.textContent = pr.read;
+}
+document.addEventListener("pointerdown", (e) => {
+  const fig = e.target.closest?.(".mgraph[data-field]");
+  if (!fig || !e.target.closest("svg")) return;
+  fieldDrag = fig; fieldMove(fig, e); e.preventDefault();
+});
+document.addEventListener("pointermove", (e) => { if (fieldDrag) fieldMove(fieldDrag, e); });
+document.addEventListener("pointerup", () => { fieldDrag = null; });
 document.addEventListener("click", (e) => { if (e.target.closest(".wstop")) stop(); });
 document.addEventListener("click", (e) => { const im = e.target.closest(".md img.mdimg:not(.off)"); if (im) lightbox(im.src); });
 document.addEventListener("click", (e) => { const n = e.target.closest(".evnote.long"); if (n) n.classList.toggle("open"); });

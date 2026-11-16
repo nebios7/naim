@@ -214,6 +214,17 @@ x + y < 3
 - région : une inéquation, `y >= 2x + 1`, `x + y <= 3` ; la frontière est en pointillés si l'inégalité est stricte ;
 - données : `nuage : (1;2,1) (2;3,9) (3;6,2)` (des points), `ligne : (…) (…)` (points reliés), puis `ajustement`
   pour la droite des moindres carrés (l'application calcule a, b et r : ne les recalcule pas à la main).
+- fonction de deux variables (gradient, dérivées partielles, courbes de niveau, extremums, plan tangent) :
+```graphe
+f(x, y) = x^2 + 3y
+x : -3..3
+y : -2..4
+A(1;2)
+```
+  L'application dessine la carte des valeurs en couleur, les courbes de niveau chiffrées, les flèches de ∇f, et un
+  point que l'utilisateur déplace à la souris : f, ∇f et |∇f| s'affichent là où il est (le point part de `A`, s'il y
+  en a un). Facultatif : `niveaux : 0, 1, 2` pour choisir les courbes de niveau. Ne calcule pas ces valeurs dans un
+  dessin : écris seulement la fonction, puis explique avec le calcul en LaTeX.
 
 ### 3 ter. Statistiques : bloc diagramme
 ```diagramme

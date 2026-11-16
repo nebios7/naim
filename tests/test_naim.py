@@ -3571,6 +3571,28 @@ console.log(JSON.stringify(out));
         self.assertTrue(o["camembert_pct"])
         self.assertEqual((o["fn_xy"], o["fn_t"], o["fn_old"]), (25, 1, 7))
 
+    def test_a_function_of_two_variables_is_a_map_with_its_gradient(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node absent")
+        js = self.JS.split("const out = {};")[0].replace("'graphHtml'", "'fieldContour', 'fieldGrad', 'fieldProbe', 'graphHtml'") + r"""
+const fieldNum = (v) => (Number.isFinite(v) ? frNum(Math.abs(v) < 1e-9 ? 0 : +v.toPrecision(4)) : "?");
+global.btoa = global.btoa || ((b) => Buffer.from(b, 'binary').toString('base64'));
+const h = graphHtml('f(x, y) = x^2 + 3y\nx : -3..3\ny : -2..4\nA(1;2)'), lv = graphHtml('z = x*y\nniveaux : 1, 2');
+console.log(JSON.stringify({ read: (h.match(/class="gread">([^<]*)/) || [])[1], probe: /class="gprobe"/.test(h), field: /data-field="x\^2 \+ 3y"/.test(h),
+  img: /<image href="data:image\/bmp;base64,/.test(h), small: h.length < 150000, levels: (lv.match(/stroke="#3d7cc9"/g) || []).length,
+  old: (graphHtml('f(x) = x^2') || '').includes('gprobe') }));
+"""
+        r = subprocess.run(["node", "-e", js, str(ROOT / "web/index.html")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        o = json.loads(r.stdout)
+        self.assertEqual(o["read"], "f(1 ; 2) = 7 · ∇f = (2 ; 3) · |∇f| = 3,606")
+        self.assertTrue(o["probe"] and o["field"] and o["img"] and o["small"])
+        self.assertEqual(o["levels"], 2)
+        self.assertFalse(o["old"])
+        s = (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text()
+        self.assertIn("f(x, y) = x^2 + 3y", s)
+
     def test_skill_lists_the_types(self):
         s = (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text()
         for w in ("x(t) =", "r = 1 + cos(θ)", "nuage :", "ajustement", "```diagramme", "camembert", "histogramme", "n'en promets pas d'autres",
