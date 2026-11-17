@@ -12,6 +12,16 @@ bloc ```html (il resterait du code). Ta réponse : une phrase courte, puis UN bl
 Un tri, une recherche, une boucle, une récursivité à montrer pas à pas : jamais un visuel fait main. C'est un bloc
 ```simulation avec `const ALGO = { … }` (skill animation-algorithme), joué par le moteur de Naim.
 
+## Un graphe de maths : pas ce bloc
+Une courbe, une fonction de x ou de x et y, un gradient, des courbes de niveau, une région, un nuage de points :
+jamais un visuel fait main ni make_diagram (Mermaid ne trace pas de fonction). C'est un bloc ```graphe (skill
+maths-affichage), calculé et dessiné exactement par Naim, avec un point à déplacer pour f(x, y) :
+```graphe
+f(x, y) = x^2 + 3y
+x : -3..3
+y : -2..4
+```
+
 ## Le bloc
 Du HTML (avec son `<style>` et son `<script>`), sans `<html>` ni `<head>` : il est posé dans une page déjà prête, à la
 police et aux couleurs de Naim. Fermé par ``` sur sa propre ligne.

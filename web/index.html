@@ -1675,6 +1675,8 @@ body .suggest .chip:hover { color: var(--text); background: var(--hover); transf
 /* a block of actions: the lines written (+72, green) and the images it looked at, small, on the right */
 .agroup > summary .gadd { color: var(--add-t); font-variant-numeric: tabular-nums; margin-left: 6px; }
 .agroup > summary .gthumbs { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding-left: 10px; flex: none; }
+.agroup code.fopen, .agroup .gthumbs img { cursor: pointer; }
+.agroup code.fopen:hover { text-decoration: underline; text-underline-offset: 2px; }
 .agroup > summary .gthumbs img { height: 26px; max-width: 48px; object-fit: cover; border-radius: 5px; border: 1px solid var(--line); background: var(--panel); }
 .agroup > summary .gthumbs .gmore { color: var(--muted); font-size: 12px; }
 
@@ -5746,7 +5748,7 @@ function actionInfo(name, a = {}, res = "") {
   const q = (t) => `« ${String(t || "").slice(0, 60)} »`;
   const cmd = (c) => `<code>${esc(String(c || "").slice(0, 80))}</code>`;
   // a path shown by its name (the whole path on hover), a command with its paths shortened the same way
-  const file = (p) => p ? `<code title="${esc(String(p))}">${esc(baseName(String(p).replace(/\/+$/, "")).slice(0, 70))}</code>` : "";
+  const file = (p) => p ? `<code class="fopen" data-fpath="${esc(String(p))}" title="Ouvrir ${esc(String(p))}">${esc(baseName(String(p).replace(/\/+$/, "")).slice(0, 70))}</code>` : "";
   const shortCmd = (c) => { const full = String(c || "").replace(/^cd\s+("[^"]+"|\S+)\s*&&\s*/, "");
     const short = full.replace(/(["']?)((?:~|\/)[^"'\s]*\/)([^"'\s/]+)\1/g, (m, qt, dir, name) => qt + name + qt).replace(/\s+/g, " ");
     return `<code title="${esc(String(c || ""))}">${esc(short.length > 90 ? short.slice(0, 89) + "…" : short)}</code>`; };
@@ -5836,8 +5838,34 @@ function groupThumb(group, path, page) {  // the images and pages it looked at, 
   }
   const img = new Image(); img.loading = "lazy"; img.alt = "";
   img.src = `/api/thumb?root=${encodeURIComponent(S.project || "")}&path=${encodeURIComponent(path)}&w=120${page ? "&page=" + page : ""}`;
+  img.dataset.fpath = path; img.title = "Ouvrir " + path;
   img.onerror = () => img.remove(); box.appendChild(img);
 }
+// a file Naim read, wrote or looked at, opened from its step (its name or its thumbnail) in the preview panel: the
+// user sees what Naim saw — an image as an image, a PDF page by page, a page rendered, code and text as text
+function openStepFile(p) {
+  p = String(p || "").trim();
+  if (!p) return;
+  const abs = /^(\/|~\/)/.test(p), root = abs ? p.replace(/\/[^/]*$/, "") || "/" : (S.project || ""), rel = abs ? p.split("/").pop() : p;
+  const q = `root=${encodeURIComponent(root)}&path=${encodeURIComponent(rel)}`, name = rel.split("/").pop(), ext = (name.split(".").pop() || "").toLowerCase();
+  if (/^(png|jpe?g|gif|webp|svg)$/.test(ext)) return showImagePreview(`${location.origin}/api/raw?${q}`, name);
+  if (/^(pdf|docx|pptx)$/.test(ext)) return showPreview(`<!doctype html><meta charset="utf-8"><title>${esc(name)}</title><style>html{background:#525659;min-height:100%}body{margin:0;background:#525659;padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}img{max-width:100%;box-shadow:0 2px 10px #0006;background:#fff}</style><body><scr${""}ipt>
+      let n = 1; const next = () => { const i = new Image(); i.onload = () => { document.body.appendChild(i); n++; if (n <= 1000) next(); }; i.onerror = () => {}; i.src = "${location.origin}/api/thumb?${q}&w=1100&page=" + n; }; next();
+    </scr${""}ipt></body>`);
+  fetch(`/api/raw?${q}`).then((r) => (r.ok ? r.text() : Promise.reject())).then((t) => {
+    if (/^html?$/.test(ext)) return showPreview(t);
+    const big = t.length > 400000, body = big ? t.slice(0, 400000) : t;
+    showPreview(`<!doctype html><meta charset="utf-8"><title>${esc(name)}</title><style>:root{color-scheme:light dark}body{margin:0;font:13px/1.55 "SF Mono",SFMono-Regular,ui-monospace,Menlo,monospace;background:Canvas;color:CanvasText}
+      header{position:sticky;top:0;padding:8px 14px;font:600 12px -apple-system,system-ui;background:Canvas;border-bottom:1px solid #8884}pre{margin:0;padding:12px 14px;white-space:pre-wrap;word-break:break-word}
+      ol{margin:0;padding:12px 14px 12px 56px}li{white-space:pre-wrap;word-break:break-word}li::marker{color:#8889;font-size:11px}</style>
+      <header>${esc(p)} · ${t.split("\n").length} lignes${big ? " (début seulement)" : ""}</header><ol>${body.split("\n").map((l) => `<li>${esc(l) || " "}</li>`).join("")}</ol>`);
+  }).catch(() => toast(`Impossible d'ouvrir ${name} : le fichier n'existe plus ou n'est pas lisible`));
+}
+document.addEventListener("click", (e) => {  // before the row and the block open or close: the file opens instead
+  const f = e.target.closest?.("[data-fpath]");
+  if (!f || !f.closest(".agroup, .arow")) return;
+  e.preventDefault(); e.stopPropagation(); openStepFile(f.dataset.fpath);
+}, true);
 function groupSummary(counts) {  // what was done, said like a person: « Lu 2 fichiers, exécuté 3 commandes »
   const n = (k) => counts[k] || 0, pl = (k, one, many) => `${n(k)} ${n(k) > 1 ? many : one}`;
   const parts = [];

@@ -2734,7 +2734,9 @@ class Agent:
             self.emit({"type": "subagent", "name": name, "status": "start", "task": t.get("task", "")})
             child = Agent(self.root, self.model, self.think, self.auto_yes, self.approver,
                           lambda ev, n=name: self.emit({**ev, "sub": n}) if ev["type"] not in ("status",) else None,
-                          options={k: v for k, v in self.options.items() if k != "slot"},  # sub-agents: any free slot (in parallel) extra_system=self.extra_system, max_steps=min(self.max_steps, 25),
+                          # sub-agents: any free slot (in parallel); the user's instructions and a bounded number of steps
+                          options={k: v for k, v in self.options.items() if k != "slot"},
+                          extra_system=self.extra_system, max_steps=min(self.max_steps, 25),
                           auto_writes=self.auto_writes, auto_commands=self.auto_commands, blocked=self.blocked,
                           run_id=self.run_id, subagent=True, features={**self.features, "subagents": False},
                           disabled_skills=self.disabled_skills, auto_mcp=self.auto_mcp, power=self.power)
@@ -4297,6 +4299,30 @@ class Agent:
                     if st.st_mtime >= since - 1:
                         found.append((st.st_mtime, {"path": self.rel(f), "size": st.st_size, "ext": f.suffix.lower()[1:]}))
         return [x for _, x in sorted(found, key=lambda t: -t[0])[:8]]
+
+    def _changed_files(self, since):
+        """Every file of the project made or changed since `since` (code too, not only documents), newest first, at most
+        12: what a reply that worked on files has to account for. The user's home is never walked."""
+        if self.root.resolve() == Path.home().resolve():
+            return []
+        found = []
+        for dirpath, dirnames, filenames in os.walk(self.root):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+            if len(Path(dirpath).relative_to(self.root).parts) > 4:
+                dirnames[:] = []
+            for name in filenames:
+                if name.startswith((".", "~$")) or name.endswith((".pyc", ".log")):
+                    continue
+                f = Path(dirpath) / name
+                try:
+                    st = f.stat()
+                except OSError:
+                    continue
+                if st.st_mtime >= since - 1:
+                    found.append((st.st_mtime, {"path": self.rel(f), "size": st.st_size, "ext": f.suffix.lower()[1:]}))
+            if len(found) > 400:
+                break
+        return [x for _, x in sorted(found, key=lambda t: -t[0])[:12]]
 
     def _named_outputs(self, text, since, pages=False):
         """Documents a command names (« PDF : ~/…/CV.pdf ») and made since `since`, wherever they are: the folder of an

@@ -294,6 +294,63 @@ def asks_permission(text):
     return len(t) < 500 and last.endswith("?") and bool(PERMISSION_RE.search(last)) and not re.search(r"\bou\b|\b1[.)]|\b2[.)]|\?\s*\n\s*[-*]", t)
 
 
+YES_RE = re.compile(r"\W*(oui|ouais|ok|okay|d'accord|dac|vas[- ]y|go|fais[- ]le|fais[- ]la|je veux bien|volontiers|yes|bien s[uû]r|"
+                    r"carr[ée]ment|parfait|super|top|allez|oui vas[- ]y|ok vas[- ]y|oui stp|oui merci|ok merci|les deux)\W*", re.I)
+
+
+def accepted_offer(message, history):
+    """« ok », « oui vas-y » right after Naim offered to do something (« Veux-tu que je calcule… ? »): the offer, which
+    is now a request to do it (not a polite word to answer in one line); else ''."""
+    msg = (message or "").strip()
+    if not YES_RE.fullmatch(msg):
+        return ""
+    last = next((str(m.get("content") or "") for m in reversed(history or []) if m.get("role") == "assistant"), "").strip()
+    end = re.split(r"(?<=[.!])\s+|\n+", last)[-1].strip() if last else ""
+    return end if end.endswith("?") and PERMISSION_RE.search(end) else ""
+
+
+ACCEPTED_NOTE = ("\n\n[L'utilisateur accepte ta proposition : « {offer} ». Fais-le maintenant, dans cette réponse, avec tes "
+                 "outils s'il le faut (calcul vérifié avec run_command, graphe, fichier…), puis donne le résultat. Si elle "
+                 "proposait plusieurs choses courtes, fais-les toutes ; n'annonce pas ce que tu vas faire sans le faire.]")
+
+
+# a figure of mathematics (a function's graph, a gradient, level curves, a region…): drawn by the application from a
+# ```graphe block, exactly — never boxes and arrows from make_diagram
+MATH_FIG_RE = re.compile(r"\bf\s*\(\s*x\b|\bgradient|∇|\bd[ée]riv[ée]e|\bcourbes? (?:de niveau|repr[ée]sentative|de la fonction|de f)|"
+                         r"\bgraphe (?:de (?:la |cette )?fonction|de f\b)|\btangente\b|\bparabole\b|\bparaboloïde|\bchamp de vecteurs|"
+                         r"\bin[ée]quations?\b|\brep[èe]re orthonorm|\bnuage de points", re.I)
+MATH_FIGURE_REFUSAL = ("refused: this is a figure of mathematics, make_diagram (boxes and arrows) cannot draw it. Write it in your "
+                       "answer as a ```graphe block: the application computes and draws it exactly. One line per thing, e.g.\n"
+                       "```graphe\nf(x, y) = x^2 + 3y\nx : -3..3\ny : -2..4\nA(1;2)\n```\n(f(x) = … for a curve, x^2 + y^2 = 4, "
+                       "y >= 2x + 1, nuage : (1;2) (2;3)…). For a function of x and y the app shows the level curves, the "
+                       "gradient arrows and a point to move. Then explain with the calculation in LaTeX.")
+
+
+def math_figure(request, code=""):
+    """The figure asked is mathematics (by the conversation, or by what it started to draw)."""
+    return bool(MATH_FIG_RE.search(request or "") or re.search(r"\bf\s*\(\s*x\s*[,)]|∇|\bgradient", code or "", re.I))
+
+
+REPORT_NOTE = ("(Ta réponse finale est trop maigre : tu as fait ou changé des fichiers ({files}) et tu ne dis presque rien. "
+               "Termine comme un développeur qui rend son travail, à partir de ce que tu as vraiment fait et vu plus haut, sans "
+               "rien inventer ni rien refaire :\n"
+               "1. Ce qui est fait : chaque fichier avec son chemin et ce qu'il contient (les fonctions ou parties principales).\n"
+               "2. Vérification : ce que les tests ou l'exécution ont réellement donné (quelques résultats chiffrés, ce qui a "
+               "échoué et a été corrigé) ; si une chose n'a pas été testée, dis-le.\n"
+               "3. Comment s'en servir : la commande pour le lancer ou l'utiliser.\n"
+               "4. S'il en reste : ce qui manque ou ce que tu proposes ensuite (une phrase).\n"
+               "Court et précis, en Markdown, sans appeler d'outil.)")
+
+
+def thin_report(content, changed):
+    """The final answer after work on files says almost nothing: no file named, a sentence or two (« Les trois fichiers sont
+    écrits et testés. »)."""
+    text = " ".join(str(content or "").split())
+    names = {Path(f["path"]).name.lower() for f in changed}
+    named = sum(1 for n in names if n in text.lower())
+    return len(text) < 280 or (named == 0 and len(text) < 600)
+
+
 def ends_announcing(text):
     """The answer ends on what it is going to do (« Je vais maintenant le reformuler… »): the work is not done."""
     last = [s for s in re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip()) if s.strip()][-1:]
@@ -2136,6 +2193,8 @@ class Handler(BaseHTTPRequestHandler):
         if (files or web or email or schedule or choice or body.get("images") or body.get("voice") or body.get("_warm")
                 or body.get("_relaunched") or MAC_ACTION_RE.search(msg) or self.TOOL_NEED_RE.search(msg)):
             return False
+        if accepted_offer(msg, body.get("history")):
+            return False  # « ok » to « Veux-tu que je calcule… ? »: the work it offered, with the tools
         if answer_here(msg, *[m.get("content") for m in (body.get("history") or [])[-6:] if m.get("role") == "user"]):
             return True  # « écris-le ici » : the answer itself, written right away
         recent = " ".join(str(m.get("content") or "")[:3000] for m in (body.get("history") or [])[-3:])
@@ -2193,6 +2252,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.event({"type": "stats", "tokens": chunk.get("eval_count", 0),
                             "tps": chunk["eval_count"] / (chunk["eval_duration"] / 1e9),
                             "prompt": chunk.get("prompt_eval_count", 0), "reason": chunk.get("done_reason"), "fast": True})
+        if said.strip() and not stop.is_set() and len(said) < 400 and ends_announcing(said) and not body.get("_verify"):
+            # only « Je vais calculer la norme… » and nothing done (this way has no tools): the announcement leaves the
+            # screen and the work is done for real, with the tools, in the same reply
+            self.event({"type": "retract", "chars": len(said)})
+            self.event({"type": "status", "text": "Naim s'y met…"})
+            return self.chat_agentic({**body, "_verify": True}, first_messages[:-1] + [dict(first_messages[-1], content=str(
+                first_messages[-1].get("content") or "") + "\n\n[Fais-le maintenant, dans cette réponse, avec tes outils s'il "
+                "le faut, puis donne le résultat. N'annonce pas ce que tu vas faire sans le faire.]")], first_options, stop)
         if not said.strip() and not stop.is_set():  # never an empty bubble: say so, instead of nothing
             self.event({"type": "token", "text": "Je n'ai rien réussi à produire cette fois. Réécris ta demande, ou dis « continue »."})
         self.event({"type": "done"})
@@ -2395,7 +2462,8 @@ class Handler(BaseHTTPRequestHandler):
         nudges = 1 if body.get("_relaunched") else 0
         progress, todo_push_at, nudge_at = 0, -1, 0  # tool results that worked, and when the unfinished list last sent it back to work
         refusals = 0  # tool calls refused because the message only asks for an answer
-        plain = trivial_message(body["message"]) and not body.get("_relaunched")  # « salut », « merci » : just an answer
+        offer = accepted_offer(body["message"], body.get("history"))  # « ok » to « Veux-tu que je calcule… ? »: that work
+        plain = trivial_message(body["message"]) and not body.get("_relaunched") and not offer and not body.get("_verify")  # « salut », « merci » : just an answer
         seen_calls, stuck, last_redirect, mac_tried = {}, 0, 0.0, False
         task_at = len(messages) - 1  # the user's request: always kept word for word when the conversation is lightened
         searches = 0  # web searches in a row: now and then Naim takes stock of what it found (no limit: it decides)
@@ -2403,7 +2471,7 @@ class Handler(BaseHTTPRequestHandler):
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
         earlier_answers = [str(m.get("content") or "") for m in messages if m.get("role") == "assistant"]
-        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = repeat_checks = code_checks = 0
+        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = repeat_checks = code_checks = report_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2547,6 +2615,8 @@ class Handler(BaseHTTPRequestHandler):
         lesson = not file_work and not files and bool(  # a lesson, a question: answered here; anything else may change files
             not body.get("_verify") and (plain or in_chat or body.get("_question") or pure_question(m_) or LESSON_RE.search(m_))
             or (not body.get("_verify") and MATH_ASK_RE.search(m_) and not FILE_NAMED_RE.search(m_)))
+        if offer and not body.get("_verify"):
+            messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + ACCEPTED_NOTE.format(offer=offer[:300]))
         if lesson:
             messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                 "\n\n(Réponds ici, dans la conversation : explications courtes et exemples de code complets en blocs "
@@ -2879,6 +2949,17 @@ class Handler(BaseHTTPRequestHandler):
                                  "demandé), puis une ou deux phrases pour dire comment il marche. Aucun fichier.)"})
                 shown = 0
                 continue
+            if (not calls and not stop.is_set() and report_checks < 1 and not in_chat and not plain
+                    and (changed := helper._changed_files(started)) and thin_report(content, changed)):
+                # files were made or changed in this reply and the last answer only says « c'est fait »: like a developer
+                # handing over work, it says what each file holds, what the checks really gave and how to use it
+                report_checks += 1
+                self.event({"type": "retract", "chars": shown})
+                self.event({"type": "status", "text": "Naim rédige son compte rendu…"})
+                messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": REPORT_NOTE.format(files=", ".join(f["path"] for f in changed[:12]))})
+                shown = 0
+                continue
             if not calls and not stop.is_set() and link_checks < 1 and "http" in content:
                 # the links of the answer tried before it is shown: one it made up (a 404, a name that does not exist)
                 # is found again with the tools, or taken out — never handed over as if it worked
@@ -3014,6 +3095,17 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "tool", "tool_name": name, "content": "refused: this is a simple message, "
                                      "answer it directly in one or two sentences, without any tool."})
                     continue
+                if name == "make_diagram" and math_figure(" ".join([body.get("message") or "", offer or ""] + [
+                        str(m.get("content") or "")[:600] for m in (body.get("history") or [])[-4:]]), str(args.get("code") or "")):
+                    refusals += 1  # a function, a gradient, a curve: Mermaid / Graphviz boxes cannot draw it (errors, then « prêt » with nothing)
+                    messages.append({"role": "tool", "tool_name": name, "content": MATH_FIGURE_REFUSAL})
+                    continue
+                if in_chat and name in ("write_file", "edit_file", "creer_fichier", "convert_document"):
+                    refusals += 1  # « affiche-le ici, pas de fichier »: whatever the way it came, no file
+                    messages.append({"role": "tool", "tool_name": name, "content": (
+                        "refused: the user asked for the answer HERE, in the conversation — no file. Write the full content "
+                        "in your reply instead (code in a Markdown block).")})
+                    continue
                 if lesson and name not in ANSWER_TOOLS and not name.startswith("mcp__"):
                     refusals += 1
                     # a question or a lesson: the answer goes in the conversation (the tool list stays the same so that
@@ -3054,7 +3146,7 @@ class Handler(BaseHTTPRequestHandler):
                         result = helper.call_tool(name, args)
                         if name == "send_email":
                             sent, mail_error = (True, None) if str(result).startswith("ok") else (sent, result)
-                        elif (name in ("convert_document", "make_diagram", "run_command", "write_file", "edit_file")
+                        elif (name in ("convert_document", "make_diagram", "run_command", "write_file", "edit_file", "delegate")
                               and helper.root.resolve() != Path.home().resolve() and not str(result).startswith(("error", "refused"))):
                             # a PDF, a plan, an image made by another tool than creer_fichier: shown too, with Ouvrir / Finder
                             here = helper.root if helper.root.resolve() != chatfiles.OUT.resolve() else None
@@ -3072,6 +3164,9 @@ class Handler(BaseHTTPRequestHandler):
                                         new_files.append({"path": rel, "size": fp.stat().st_size, "ext": fp.suffix.lower()[1:]})
                                 except (OSError, ValueError):
                                     pass
+                            if name == "delegate":  # files the sub-agents wrote (code too): shown as this reply's work
+                                new_files += [f for f in helper._changed_files(started) if f["path"] not in known
+                                              and all(f["path"] != g["path"] for g in new_files)]
                             if new_files and (here or not made):
                                 made.extend(reversed(new_files))
                                 self.event({"type": "deliverables", "root": str(helper.root), "files": finals(list(reversed(made)), helper.root)})

@@ -625,6 +625,10 @@ def render(src, out, couleur="", written=True):
     if said:  # an image missing, or one image under several subjects
         print("PROBLÈME À CORRIGER avant de dire que c'est fini : " + " ; ".join(said) + ".")
     text = src.read_text(errors="replace")
+    broken = figure_notes(text) + code_notes(text)
+    if broken:  # what is seen wrong on the page itself: labels on top of each other, a code label left open
+        print("PROBLÈME À CORRIGER dans " + src.name + " avant de dire que c'est fini (corrige, puis relance render) :\n- "
+              + "\n- ".join(broken))
     better = [f"formule {n}" for n in formula_notes(text)] + [n for n in element_notes(text)
                                                                if written or "<caption>" not in n]
     if better:  # drawn, but not written as in a printed course: Naim corrects its page.html, then renders again
@@ -700,6 +704,43 @@ def element_notes(page):
     return notes
 
 
+def figure_notes(page):
+    """The figures drawn by hand in the page (<svg>), measured as the chat measures its own: labels on top of each other,
+    a label cut by a line or out of its frame. The model does not see its SVG: the numbers say where it is wrong."""
+    try:
+        if not _naim_docs():
+            return []
+        import svgcheck
+    except Exception:  # noqa: BLE001 — without Naim's tools, the PDF is made without this check
+        return []
+    out = []
+    for n, svg in enumerate(re.findall(r"<svg\b.*?</svg>", page, re.S | re.I), 1):
+        try:
+            probs = svgcheck.check(svg)
+        except Exception:  # noqa: BLE001
+            probs = []
+        if probs:
+            out.append(f"schéma {n} (le {n}e <svg> de la page), illisible : " + " ; ".join(probs[:6])
+                       + (f" (et {len(probs) - 6} autres)" if len(probs) > 6 else "")
+                       + " — redessine-le aéré : chaque texte à sa place calculée, loin des traits et des autres textes")
+    return out
+
+
+def code_notes(page):
+    """The code blocks read as the PDF will show them: a file label left open (<span class="file">x.py">…) swallows the
+    code, which comes out grey and broken; a tag left in the code shows as text."""
+    out = []
+    for n, (attrs, code) in enumerate(re.findall(r'<pre(\s[^>]*class="[^"]*\bcode\b[^"]*"[^>]*)>(.*?)</pre>', page, re.S), 1):
+        label = re.search(r'<span class="file">', code)
+        if label and not re.search(r'<span class="file">[^<"\n]{1,80}</span>', code):
+            head = re.sub(r"\s+", " ", code[label.end():label.end() + 40])
+            out.append(f"bloc de code {n} : l'étiquette du fichier n'est pas fermée (« {head}… ») : écris "
+                       '<span class="file">nom.py</span> puis le code')
+        elif re.search(r'^[^<\n]{0,60}"\s*>', re.sub(r'<span class="file">[^<]*</span>', "", code).lstrip()):
+            out.append(f'bloc de code {n} : un reste de balise (« "> ») au début du code : enlève-le')
+    return out
+
+
 def _draw_diagrams(text, src):
     """A diagram written in Mermaid (```mermaid in a .md, <pre class="mermaid"> in a page) is DRAWN in the house style,
     as make_diagram does — never its code printed in the PDF (« graph TD A[Reins] --> B… » in a grey box)."""
@@ -739,13 +780,24 @@ def _naim_docs():
     return None
 
 
-def check(pdf):
+def check(pdf, upto=16):
+    """Every page as an image (at most `upto`): a figure or a code block on page 7 is looked at too, not only the cover."""
     pdf = Path(pdf).expanduser().resolve()
-    for n in (1, 2):
+    n, pages = 1, 1
+    while n <= min(pages, upto):
         png = pdf.with_name(f"{pdf.stem}.page{n}.png")
         r = subprocess.run([str(NAIM_PDF), str(pdf), str(png), str(n), "1100"], capture_output=True, text=True, timeout=60)
-        if r.returncode == 0:
-            print(f"page {n} : {png}  (regarde-la avec look_at)")
+        if r.returncode != 0:
+            break
+        try:
+            pages = int(json.loads(r.stdout.strip().splitlines()[-1]).get("pages", pages))
+        except (ValueError, IndexError, AttributeError):
+            pass
+        print(f"page {n} : {png}")
+        n += 1
+    if n > 1:
+        print(f"{n - 1} page(s) sur {pages} : regarde-les toutes avec look_at, surtout celles avec un schéma, un graphique, un "
+              "tableau ou du code (texte superposé, coupé, illisible : corrige page.html et relance render).")
 
 
 # ------------------------------------------------------------------ charts (SVG, the theme's colours)

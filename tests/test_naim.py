@@ -3415,6 +3415,147 @@ class AgentWorkTools(unittest.TestCase):
         self.assertIn("timed out", out2)
 
 
+class StepFilesOpen(unittest.TestCase):
+    """What Naim read, wrote or looked at opens from its step (name or thumbnail), like the deliverable cards."""
+
+    def test_step_files_are_links(self):
+        h = (ROOT / "web/index.html").read_text()
+        self.assertIn('class="fopen" data-fpath=', h)
+        self.assertIn("img.dataset.fpath = path", h)
+        self.assertIn("function openStepFile(p)", h)
+        self.assertIn('f.closest(".agroup, .arow")', h)
+
+    def test_no_raw_script_tag_inside_the_page_script(self):
+        # a literal <script> inside the page's own script made WebKit swallow its end: the whole page stopped working
+        h = (ROOT / "web/index.html").read_text()
+        start = h.index("<script>") + len("<script>")
+        body = h[start:h.rindex("</script>")]
+        self.assertNotIn("<script>", body)
+
+
+class MathFigureIsAGraphe(unittest.TestCase):
+    """A gradient or a function's graph is a ```graphe block drawn by the app, never make_diagram boxes."""
+
+    def test_math_figure_detected(self):
+        import server
+        self.assertTrue(server.math_figure("Veux-tu que je visualise le champ de vecteurs du gradient ?"))
+        self.assertTrue(server.math_figure("vas-y", "graph TD\n A[f(x, y) = x^2 + 3y]"))
+        self.assertFalse(server.math_figure("fais l'organigramme de la connexion des utilisateurs", "graph TD\n A-->B"))
+        self.assertIn("```graphe", server.MATH_FIGURE_REFUSAL)
+
+    def test_visuel_skill_sends_maths_to_graphe(self):
+        s = (ROOT / "plugins_builtin/visuel/skills/visuel/SKILL.md").read_text()
+        self.assertIn("Un graphe de maths : pas ce bloc", s)
+        self.assertIn('"version": "1.2"', (ROOT / "plugins_builtin/visuel/plugin.json").read_text())
+
+
+class OkToAnOfferIsWork(unittest.TestCase):
+    """« ok » after « Veux-tu que je calcule la norme… ? » is that work (with the tools), not a polite word; an answer
+    that only announces it is not left on the screen."""
+
+    def test_ok_after_an_offer(self):
+        import server
+        h = [{"role": "user", "content": "ok merci naim"},
+             {"role": "assistant", "content": "De rien. Veux-tu que je visualise le champ de vecteurs du gradient sur le "
+                                              "graphique ou que je calcule sa norme en un point spécifique ?"}]
+        self.assertIn("calcule sa norme", server.accepted_offer("ok", h))
+        self.assertTrue(server.accepted_offer("oui vas-y", h))
+        self.assertEqual(server.accepted_offer("ok", [{"role": "assistant", "content": "Voilà le résultat : 42."}]), "")
+        self.assertEqual(server.accepted_offer("calcule le gradient de x^2", h), "")
+        srv = server.Handler.__new__(server.Handler)
+        self.assertFalse(srv.quick_answer({"message": "ok", "history": h, "settings": {}}, False, False, False, False, ""))
+        self.assertTrue(srv.quick_answer({"message": "merci", "history": [], "settings": {}}, False, False, False, False, ""))
+        self.assertTrue(server.ends_announcing("Je vais calculer la norme du gradient en un point spécifique."))
+
+
+class SubAgentsKeepTheRules(unittest.TestCase):
+    """A sub-agent gets the user's instructions and at most 25 steps (a comment once swallowed both arguments)."""
+
+    def test_child_gets_instructions_and_step_limit(self):
+        seen = {}
+        real = naimtools.Agent.run
+        def fake_run(agent, task):
+            seen.update(extra=agent.extra_system, steps=agent.max_steps, sub=agent.subagent)
+            return "fait"
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True,
+                                extra_system="Réponds en français.", max_steps=80)
+            naimtools.Agent.run = fake_run
+            try:
+                out = a.delegate([{"name": "lecture", "task": "lis README"}])
+            finally:
+                naimtools.Agent.run = real
+        self.assertIn("fait", out)
+        self.assertEqual(seen, {"extra": "Réponds en français.", "steps": 25, "sub": True})
+
+
+class PdfFiguresAndCodeChecked(unittest.TestCase):
+    """A PDF course: its hand-drawn schemas measured (labels on top of each other), a code label left open found, and
+    every page given to look at — not only the first two (the broken pages 4 and 7 were never seen)."""
+
+    def _pp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pp_fig", ROOT / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py")
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return m
+
+    def test_crowded_schema_and_open_code_label_are_said(self):
+        pp = self._pp()
+        page = ('<figure><svg viewBox="0 0 500 200" font-size="14"><text x="10" y="34">Échelle de température</text>'
+                '<text x="30" y="34">Celsius</text><line x1="40" y1="20" x2="40" y2="190" stroke="#000"/></svg></figure>'
+                '<pre class="code python"><span class="file">conversions.py">"""\nConvertisseurs\n"""\n'
+                'def f(c):\n    return c * 9 / 5 + 32</span></pre>'
+                '<pre class="code python"><span class="file">ok.py</span>x = 1</pre>')
+        figs, code = pp.figure_notes(page), pp.code_notes(page)
+        self.assertEqual(len(figs), 1)
+        self.assertIn("se chevauchent", figs[0])
+        self.assertEqual(len(code), 1)
+        self.assertIn("bloc de code 1", code[0])
+
+    def test_clean_page_says_nothing(self):
+        pp = self._pp()
+        page = ('<figure><svg viewBox="0 0 400 120" font-size="14"><rect x="20" y="40" width="80" height="50" fill="none" '
+                'stroke="#000"/><text x="60" y="110" text-anchor="middle">carré</text></svg></figure>'
+                '<pre class="code python"><span class="file">stats.py</span>def moyenne(v):\n    return sum(v) / len(v)</pre>')
+        self.assertEqual(pp.figure_notes(page), [])
+        self.assertEqual(pp.code_notes(page), [])
+
+    def test_check_gives_every_page(self):
+        src = (ROOT / "plugins_builtin/pdf-pro/skills/pdf-pro/pdfpro.py").read_text()
+        self.assertNotIn("for n in (1, 2):", src)
+        self.assertIn("regarde-les toutes", src)
+
+
+class WorkEndsWithAReport(unittest.TestCase):
+    """After work on files (by itself or its sub-agents), « Les trois fichiers sont écrits et testés. » is not an end:
+    the files are found (code too) and a thin last answer is sent back for a real report."""
+
+    def test_files_changed_in_the_reply_are_found_code_included(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "ancien.py").write_text("x = 1\n")
+            os.utime(Path(d) / "ancien.py", (time.time() - 3600, time.time() - 3600))
+            started = time.time()
+            for n in ("geometrie.py", "stats.py", "conversions.py"):
+                (Path(d) / n).write_text("def f():\n    return 1\n")
+            (Path(d) / ".naim").mkdir()
+            (Path(d) / ".naim" / "tache.md").write_text("x")
+            a = naimtools.Agent(d, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            got = sorted(f["path"] for f in a._changed_files(started))
+        self.assertEqual(got, ["conversions.py", "geometrie.py", "stats.py"])
+
+    def test_a_one_line_end_is_thin_and_a_real_report_is_not(self):
+        import server
+        changed = [{"path": "geometrie.py"}, {"path": "stats.py"}, {"path": "conversions.py"}]
+        self.assertTrue(server.thin_report("Les trois fichiers sont écrits et testés.", changed))
+        report = ("## Fait\n- `geometrie.py` : aire et périmètre du cercle, du carré et du triangle.\n- `stats.py` : moyenne, "
+                  "médiane, écart-type.\n- `conversions.py` : °C↔°F et km↔miles.\n\n## Vérification\nLes trois s'exécutent : "
+                  "cercle r = 5 → A = 78,54 ; moyenne de 10 valeurs = 14,3 ; 100 °C = 212 °F.\n\n## Utilisation\n"
+                  "`python3 geometrie.py`, `python3 stats.py`, `python3 conversions.py`.")
+        self.assertFalse(server.thin_report(report, changed))
+        self.assertIn("{files}", server.REPORT_NOTE)
+
+
 class CodeShownInTheChat(unittest.TestCase):
     """« affiche le code dans le chat, pas créer un fichier »: the code in the answer, the file refused, and its
     commands use the same path as write_file when it repeats the folder it is already in."""

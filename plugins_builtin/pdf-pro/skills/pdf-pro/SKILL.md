@@ -29,7 +29,7 @@ Rien à installer : pas de pip, pas de matplotlib, pas de bibliothèque. L'outil
 T="$HOME/.naim/plugins/pdf-pro/skills/pdf-pro"
 python3 "$T/pdfpro.py" chart bars donnees.json graphique.svg "Titre"     # bars, hbars, line, donut ; « small » à la fin pour deux côte à côte
 python3 "$T/pdfpro.py" render page.html document.pdf                     # le style, les formules, le code coloré → PDF A4
-python3 "$T/pdfpro.py" check document.pdf                                # page 1 et 2 en PNG, à regarder avec look_at
+python3 "$T/pdfpro.py" check document.pdf                                # toutes les pages en PNG, à regarder avec look_at
 ```
 
 **Une police demandée** (« avec la police Marianne », « en Spectral ») : ajoute `--police <nom>` à `render`
@@ -53,8 +53,8 @@ Modèle complet à imiter (couverture, sommaire, chapitres, tableau, code, formu
 3. Écris `page.html` : SEULEMENT le contenu (pas de `<html>`, pas de `<style>`, pas de couleur à toi).
    **Par morceaux**, jamais tout d'un coup (un long fichier en un seul appel se perd) : la couverture et le sommaire
    avec `write_file(page.html, …)`, puis CHAQUE chapitre avec `write_file(page.html, <le chapitre>, append=true)`.
-4. `pdfpro.py render page.html document.pdf`, puis `pdfpro.py check document.pdf` et look_at sur les deux PNG :
-   rien de coupé, formules affichées, graphiques lisibles. Corrige page.html et relance si besoin.
+4. `pdfpro.py render page.html document.pdf`, puis `pdfpro.py check document.pdf` et look_at sur chaque page :
+   rien de coupé, formules affichées, schémas et code lisibles. Un « PROBLÈME À CORRIGER » de render se corrige d'abord. Corrige page.html et relance si besoin.
    Avant de dire « c'est fait » : compare avec la demande et les sources (chaque chapitre, chaque élément demandé) ;
    n'annonce que ce que tu as vu sur la page. Si quelque chose bloque, dis-le au lieu d'improviser un autre format.
 5. Copie le PDF dans le dossier du projet ouvert (ou `~/Documents/Naim/Fichiers`) et donne son chemin : seulement
