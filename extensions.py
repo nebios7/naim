@@ -659,7 +659,7 @@ def list_skills(root=None, disabled=()):
                 meta, body = parse_skill(f)
                 name = meta.get("name") or d.name
                 out.append({"name": name, "dir": d.name, "description": meta.get("description", body.strip().split("\n")[0][:150]),
-                            "scope": scope, "path": str(f), "enabled": name not in disabled,
+                            "scope": scope, "path": str(f), "enabled": name not in disabled, "triggers": meta.get("triggers", ""),
                             "files": sorted(p.name for p in d.iterdir() if p.name != "SKILL.md" and not p.name.startswith("."))})
     return out
 
@@ -1294,6 +1294,15 @@ def match_skill(task, root=None, disabled=()):
                 return lib_skill
     except Exception:  # noqa: BLE001
         pass
+    # a skill the user wrote with its own words (« triggers: » in its SKILL.md, a regular expression): when they match,
+    # it is the one — the user's own method for that request, more specific than any built-in skill
+    for s in skills:
+        if s["scope"] in ("utilisateur", "projet") and s.get("triggers"):
+            try:
+                if re.search(s["triggers"], text, re.I):
+                    return s
+            except re.error:
+                pass
     # a document to make (« un cours de médecine en PDF avec des schémas ») is the document's work: its method (cover,
     # contents, chapters) leads, the diagrams go inside it. « un schéma en PDF de mon réseau » stays a diagram
     if ("schemas" in by_name and "pdf-pro" in by_name and re.search(triggers.get("schemas", r"$^"), text)

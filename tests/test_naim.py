@@ -3320,6 +3320,26 @@ class SvgCheck(unittest.TestCase):
         self.assertIn("ne se lit pas", svgcheck.check("<svg viewBox='0 0 10 10'><rect></svg>")[0])
 
 
+class UserSkillOwnTriggers(unittest.TestCase):
+    """A skill the user wrote can say its own words (« triggers: » in its SKILL.md): they pick it before the built-in
+    skills (« publie le code sur GitHub » is the user's publishing method, not the generic gh skill)."""
+
+    def test_user_skill_triggers_win_and_stay_narrow(self):
+        import tempfile
+        import extensions as ext
+        with tempfile.TemporaryDirectory() as root:
+            d = Path(root) / ".naim/skills/envoi-zorblax"
+            d.mkdir(parents=True)
+            (d / "SKILL.md").write_text("---\nname: envoi-zorblax\ndescription: Publier le code\n"
+                                        "triggers: \\b(publie\\w*)\\b.{0,60}\\b(zorblax)\\b\n---\n\nMéthode.\n")
+            pick = lambda t: (ext.match_skill(t, root) or {}).get("name")
+            self.assertEqual(pick("publie mes notes sur zorblax"), "envoi-zorblax")
+            self.assertEqual(pick("publie tout vers zorblax"), "envoi-zorblax")
+            self.assertNotEqual(pick("fais une pull request sur zorblax"), "envoi-zorblax")
+            (d / "SKILL.md").write_text("---\nname: envoi-zorblax\ndescription: x\ntriggers: ([\n---\n\nM.\n")
+            self.assertNotEqual(pick("publie mes notes sur zorblax"), "envoi-zorblax")  # a broken pattern is ignored
+
+
 class VisualOnlyOnRequest(unittest.TestCase):
     """The step-by-step drawing of an operation only with /visuel: a drawn block in any other answer is written again
     in text; the /visuel command marks its message so it is allowed."""
