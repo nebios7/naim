@@ -4928,3 +4928,31 @@ class ToolsAlwaysTheUserDecidesWhatIsRisky(unittest.TestCase):
         self.assertIsNone(g(f"rm -rf {root}/build"))                   # the working folder: its own work
         self.assertIsNone(g("rm /tmp/naim-essai.txt"))
         self.assertEqual(len(asked), 3)
+
+
+class SameTextReadAgainIsNotGivenAgain(unittest.TestCase):
+    """ls | head -400, -500… -2000 on a long folder: the model read the same first 9000 characters twenty times. A cut
+    output says how much is seen; the same text read again in one answer is not given again."""
+
+    def test_a_cut_output_says_so_and_bigger_shows_nothing_new(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        names = "\n".join(f"fichier-{i:04d}.zip" for i in range(1300))
+        first = a._for_model(names[: len(names) * 1 // 2], 9000)   # head -650
+        self.assertIn("Sortie coupée", first)
+        self.assertIn("lignes sur", first)
+        again = a._for_model(names, 9000)                           # head -1300: the same 9000 characters
+        self.assertIn("Même résultat", again)
+        self.assertEqual(a._same_results, 1)
+
+    def test_new_text_and_short_answers_pass(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        self.assertEqual(a._for_model("exit code 0\n", 9000), "exit code 0\n")
+        self.assertEqual(a._for_model("exit code 0\n", 9000), "exit code 0\n")   # short: never refused
+        long1, long2 = "a" * 500, "b" * 500
+        self.assertEqual(a._for_model(long1, 9000), long1)
+        self.assertEqual(a._for_model(long2, 9000), long2)
+
+    def test_both_ways_use_it(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertEqual(src.count('"content": helper._for_model(result, 9000)'), 2)
+        self.assertIn("result = self._for_model(result, MAX_OUTPUT)", (ROOT / "naimtools.py").read_text())

@@ -5264,6 +5264,31 @@ class Agent:
                 PROCESSES.stop(p.id)
                 self.emit({"type": "process_stopped", "id": p.id, "name": p.name})
 
+    def _for_model(self, result, limit=MAX_OUTPUT):
+        """What the model reads of a tool's output. Cut: it is told how much it sees and that asking for MORE of the same
+        (head -1300, head -1400…) shows nothing new. The very text it already read in this answer: not given again —
+        it is told to go on (the command changed a little, but it learns nothing; it read the same 9000 characters 20
+        times while its memory filled up)."""
+        import hashlib
+        text = str(result)
+        shown = text if len(text) <= limit else text[:limit]
+        key = hashlib.md5(shown.encode(errors="replace")).hexdigest()  # what it reads, the note aside
+        if len(text) > limit:
+            n_all, n_seen = text.count("\n") + 1, shown.count("\n") + 1
+            shown += (f"\n\n[Sortie coupée : tu vois les {limit} premiers caractères ({n_seen} lignes sur {n_all}). Demander "
+                      "plus grand (head plus long, cat entier) te montrera exactement la même chose. Pour aller plus loin : "
+                      "filtre (grep, wc -l, sed -n 'X,Yp'), ou l'outil fait pour ça, qui résume.]")
+        if len(text) < 300 or text.startswith(("error", "refused", "denied")):
+            return shown
+        seen = self.__dict__.setdefault("_seen_results", {})
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] > 1:
+            self._same_results = getattr(self, "_same_results", 0) + 1
+            return ("[Même résultat, mot pour mot, qu'une de tes lectures précédentes dans cette réponse : rien de nouveau, "
+                    "il est déjà plus haut. Ne relis plus : passe à l'étape suivante de ta tâche avec ce que tu as "
+                    "(par exemple la proposition, ou ta réponse).]")
+        return shown
+
     def _loop_check(self, name, args, content):
         """Detect an agent stuck in a loop (same call or same announcement again and again)."""
         if name in ("write_file", "edit_file"):  # same file rewritten with the same content = no progress
@@ -5700,8 +5725,7 @@ class Agent:
                     result = result.replace(secret, "••••••")
                     call["function"]["arguments"] = {**args, "text": "••••••"}
                 self.emit({"type": "tool_result", "name": name, "result": result[-3000:]})
-                if len(result) > MAX_OUTPUT:
-                    result = result[:MAX_OUTPUT] + "\n... (truncated)"
+                result = self._for_model(result, MAX_OUTPUT)
                 if (nudge := self._same_error(name, result)):
                     result += nudge
                 if looping:

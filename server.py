@@ -3280,7 +3280,10 @@ class Handler(BaseHTTPRequestHandler):
                     result += (f"\n\n[Plan {done_n}/{len(helper.todos)} — étape en cours : {cur}. Quand elle est finie, coche-la "
                                "avec update_todos avant de passer à la suivante.]" if cur
                                else f"\n\n[Plan {done_n}/{len(helper.todos)}]")
-                messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
+                before = getattr(helper, "_same_results", 0)
+                messages.append({"role": "tool", "tool_name": name, "content": helper._for_model(result, 9000)})
+                if getattr(helper, "_same_results", 0) > before:  # it read again what it already had: going round in circles
+                    stuck += getattr(helper, "_same_results", 0) >= 3
             if (say := helper.speak_note(content, calls)):
                 # three steps without a word: one sentence for the user — its own message (glued to a file read, it was
                 # copied with the content into the user's file)
@@ -3463,7 +3466,7 @@ class Handler(BaseHTTPRequestHandler):
                     result += ("\n\n[STOP: this tool failed twice with the SAME error. Do not call it again. Tell the user "
                                "the exact error message, your hypothesis about its cause and what would fix it. Never "
                                "invent a vague cause like « formatting problem ».]")
-                messages.append({"role": "tool", "tool_name": name, "content": result[:9000]})
+                messages.append({"role": "tool", "tool_name": name, "content": helper._for_model(result, 9000)})
         if used and not answered and not stop.is_set():
             # attempts used up (or an empty answer): always say what was done or what blocks, never stay silent
             msg = ollama_chat(body.get("model", "naim"), messages + [{"role": "user", "content": (
