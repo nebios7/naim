@@ -3331,7 +3331,27 @@ class VisualOnlyOnRequest(unittest.TestCase):
         self.assertFalse(server.DRAWN_OP_RE.search("```pose-texte\n854 : 7\n```"))
         allowed = lambda m: bool(re.match(r"\s*(\[visuel\]|/visuel\b)", m, re.I))
         self.assertTrue(allowed("[visuel] Avec le skill maths-affichage, explique EN VISUEL : 854 : 7"))
-        self.assertFalse(allowed("apprends-moi la division avec la méthode visuelle"))
+        self.assertFalse(allowed("apprends-moi la division pour CM1"))
+
+    def test_the_word_visuel_asks_for_the_drawing_too(self):
+        import server
+        ask = server.visual_asked
+        self.assertTrue(ask("[visuel] explique EN VISUEL : 854 : 7"))
+        self.assertTrue(ask("OK merci est-ce que maintenant tu peux me faire un visuel de multiplication pour un CM1"))
+        # the follow-up (« plus précis, en vertical ») of a message that asked for the visual
+        self.assertTrue(ask("j'ai dit de me faire le calcul en vertical, sois plus précis",
+                            "fais-moi un visuel de multiplication pour un CM1"))
+        self.assertFalse(ask("tu vas m'apprendre la division pour CM1"))
+        self.assertFalse(ask("explique la division, pas de visuel"))
+        self.assertFalse(ask("fais la multiplication sans visuel"))
+
+    def test_a_drawn_board_is_kept_while_the_answer_is_written(self):
+        # rebuilt at every word written after it, it went back to step 0 and faded in again: the drawing shook
+        html = (ROOT / "web/index.html").read_text()
+        i = html.index("function morphChildren")
+        body = html[i:html.index("\n}\n", i)]
+        self.assertIn('a.classList.contains("dvfig")', body)
+        self.assertIn("a.dataset.say === b.dataset.say", body)
 
     def test_visuel_command_exists(self):
         import json

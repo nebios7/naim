@@ -203,6 +203,18 @@ LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, 
 
 SIM_BLOCK_RE = re.compile(r"```simulation[ \t]*\n(.*?)```", re.S)
 DRAWN_OP_RE = re.compile(r"```(division|addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)[ \t]*\n", re.I)
+
+
+def visual_asked(message, *earlier):
+    """The drawing of an operation was asked: with /visuel, or with the word itself (« fais-moi un visuel », « en
+    visuel ») in this message or the user's message just before (« plus précis, en vertical » follows « un visuel »).
+    « Apprends-moi la division » alone stays in text."""
+    if re.match(r"\s*(\[visuel\]|/visuel\b)", message or "", re.I):
+        return True
+    said = lambda m: re.sub(r"\b(?:pas|sans|jamais)\s+(?:de\s+|du\s+|le\s+|un\s+|en\s+)?visuel\w*", " ", str(m or ""), flags=re.I)
+    return any(re.search(r"\bvisuel(?:le)?s?\b", said(m), re.I) for m in (message, *earlier))
+
+
 SVG_BLOCK_RE = re.compile(r"```svg[ \t]*\n\s*(<svg[\s\S]*?</svg>)\s*```", re.I)
 # a ```mermaid block, with the title line just before it (« **Architecture de la scène :** »)
 MERMAID_BLOCK_RE = re.compile(r"(\n[^\n]{0,80}:\**[ \t]*\n)?\n*```mermaid[ \t]*\n.*?```[ \t]*", re.S)
@@ -2894,7 +2906,7 @@ class Handler(BaseHTTPRequestHandler):
                     shown = 0
                     continue
             if (not calls and not stop.is_set() and drawn_checks < 1 and DRAWN_OP_RE.search(content)
-                    and not re.match(r"\s*(\[visuel\]|/visuel\b)", body.get("message") or "", re.I)):
+                    and not visual_asked(body.get("message"), *[m.get("content") for m in (body.get("history") or []) if m.get("role") == "user"][-1:])):
                 # the step-by-step drawing of an operation only when the user asked for it with /visuel: otherwise the
                 # answer is written again in text (the operation posée through ```pose-texte), as Naim always did
                 drawn_checks += 1

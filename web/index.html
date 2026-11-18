@@ -4109,6 +4109,10 @@ function morphChildren(el, from) {
       // the same visual or simulation (its height set since): kept as it is — rebuilt, it started again from zero at every
       // word written after it, and the page shook
       if (a.tagName === "IFRAME" && b.tagName === "IFRAME" && a.getAttribute("srcdoc") === b.getAttribute("srcdoc")) continue;
+      // the same step-by-step board of an operation (already drawn, on the step the child is reading): kept — rebuilt at
+      // every word written after it, it went back to step 0 and faded in again, and the drawing shook
+      if (a.tagName === "FIGURE" && b.tagName === "FIGURE" && a.classList.contains("dvfig") && a.dataset.say != null
+          && a.dataset.say === b.dataset.say && a.className.replace(/\s+/g, " ").trim() === b.className.replace(/\s+/g, " ").trim()) continue;
       // same kind of block (a paragraph of photos growing, a list getting a new item): updated inside, so what is
       // already shown — a loaded photo — is kept; a code block or anything else is replaced whole
       if (a.tagName === b.tagName && /^(P|UL|OL|LI|DIV|TABLE|THEAD|TBODY|TR|BLOCKQUOTE)$/.test(a.tagName) && !a.classList.contains("code")
