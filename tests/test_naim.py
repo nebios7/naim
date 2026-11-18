@@ -4533,3 +4533,19 @@ class PlanModeRefusalGivesThePlan(unittest.TestCase):
             self.assertFalse((Path(d) / "carte").exists())
             refusal = next(m["content"] for m in a.messages if m.get("role") == "tool")
             self.assertIn("NOT done", refusal)
+
+
+class VoiceSpeedSetting(unittest.TestCase):
+    """« Vitesse de la voix »: chosen in the settings, read by Naim's Piper voices at once (no new training)."""
+
+    def test_speed_reaches_the_voice(self):
+        import naim_voice
+        self.assertEqual(naim_voice.speed_scale(None), 0.95)  # standard: as before
+        self.assertEqual(naim_voice.speed_scale("1.4"), 1.4)
+        self.assertEqual(naim_voice.speed_scale("9"), 2.0)
+        self.assertEqual(naim_voice.speed_scale("abc"), 0.95)
+        self.assertIn('job.get("ls")', naim_voice.WORKER)
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn('voice_speed: "0.95"', html)
+        self.assertIn("speed: S.voice_speed", html)
+        self.assertIn('b.get("speed")', (ROOT / "server.py").read_text())

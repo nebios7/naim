@@ -1950,7 +1950,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 b = self.read_json()
                 wav = (naim_voice.speak_english(b.get("text", "")) if b.get("lang") == "en"  # an English word: Naim's English voice
-                       else naim_voice.speak(b.get("text", ""), b.get("engine") or "rapide"))
+                       else naim_voice.speak(b.get("text", ""), b.get("engine") or "rapide", b.get("speed")))
             except Exception as e:  # noqa: BLE001
                 self.send_json({"error": str(e)}, 503)
             else:

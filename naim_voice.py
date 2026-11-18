@@ -28,9 +28,11 @@ import json, sys, wave
 from piper import PiperVoice
 from piper.config import SynthesisConfig
 voice = PiperVoice.load(sys.argv[1])
-cfg = SynthesisConfig(speaker_id=None if sys.argv[2] == "-" else int(sys.argv[2]), length_scale=0.95, noise_scale=0.6, noise_w_scale=0.8)
+speaker = None if sys.argv[2] == "-" else int(sys.argv[2])
 for line in sys.stdin:
     job = json.loads(line)
+    # « ls »: how slowly it speaks (the voice's speed setting); 0.95 = standard
+    cfg = SynthesisConfig(speaker_id=speaker, length_scale=float(job.get("ls") or 0.95), noise_scale=0.6, noise_w_scale=0.8)
     try:
         with wave.open(job["out"], "wb") as w:
             voice.synthesize_wav(job["text"], w, syn_config=cfg)
@@ -302,17 +304,26 @@ def speak_english(text):
     return data
 
 
-def speak(text, engine="rapide"):
-    """WAV bytes of the text read by Naim's voice (empty bytes if there is nothing to read)."""
+def speed_scale(speed):
+    """The voice speed chosen in the settings as a length scale (bigger = slower); standard 0.95."""
+    try:
+        v = float(speed)
+    except (TypeError, ValueError):
+        return 0.95
+    return min(max(v, 0.6), 2.0)
+
+
+def speak(text, engine="rapide", speed=None):
+    """WAV bytes of the text read by Naim's voice (empty bytes if there is nothing to read). speed: see speed_scale."""
     text = clean(text)[:1500]
     if not text:
         return b""
-    extra = {}
+    extra = {"ls": speed_scale(speed)}  # the voices made with Piper (Naim's own, the stock one) read it
     if engine == "naturelle" and (ref := kyutai_voice()):
         global _ky_used
         import time
         _ky_used = time.time()
-        lock, start, extra = _ky_lock, _kyutai_worker, {"voice": ref}
+        lock, start, extra = _ky_lock, _kyutai_worker, {"voice": ref}  # not a Piper voice: no speed
     elif engine == "naturelle" and fast_natural_available():
         lock, start = _fast_lock, _fast_worker
     elif engine == "naturelle" and natural_available():

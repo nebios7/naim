@@ -2682,6 +2682,7 @@ const workingHTML = (text = "Naim réfléchit…") => `<div class="working-line"
 // ======================================================================= state
 const DEFAULTS = {
   voice_auto: false,
+  voice_speed: "0.95",
   mode: "chat", model: "naim", think: false, project: "", autoYes: false,
   temperature: 0.3, top_p: 0.95, top_k: 20, repeat_penalty: 1.0, num_ctx: 16384, num_predict: 0, seed: -1, keep_alive: "10m",
   external_on: false, external_provider: "cli", external_cli: "", external_url: "", external_model: "", external_key: "", external_timeout: 900,
@@ -5723,7 +5724,7 @@ function voiceSentences(text) {  // sentence by sentence, from what is said (see
   return (t.match(/[^.!?…\n]+[.!?…]*/g) || []).map((x) => x.trim()).filter((x) => x.replace(/[\W_]/g, "").length > 1);
 }
 async function voiceClip(sentence) {
-  const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: sentence, engine: "naturelle" }) });
+  const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: sentence, engine: "naturelle", speed: S.voice_speed }) });
   if (!r.ok) throw new Error("voix indisponible");
   return URL.createObjectURL(await r.blob());
 }
@@ -8392,6 +8393,7 @@ const TABS = {
       ${row("Se vérifier tout seul", "Une fois par jour, quand le Mac est inactif depuis 30 min : 8 essais réels, puis des leçons pour ce qui a raté (~/.naim/lecons.md)", sw("self_check"))}
       ${row("Rêver la nuit", "Quand le Mac est inactif la nuit, Naim relit les moments où tu l'as corrigé et sa mémoire, puis te propose au matin des règles à ajouter à ses consignes. Rien n'est ajouté sans ton accord.", sw("dreaming"))}
       ${row("Lire les réponses à voix haute", "Avec la voix de Naim, sur ce Mac (voix d'un lecteur de livres audio, Multilingual LibriSpeech, CC BY 4.0). Le bouton ♪ sous chaque réponse la lit aussi à la demande.", sw("voice_auto"))}
+      ${row("Vitesse de la voix", "Change tout de suite, sans réentraîner la voix.", sel("voice_speed", [["0.95", "Standard"], ["1.3", "Un peu plus lente"], ["1.4", "Posée (débit des enregistrements d'origine)"], ["1.55", "Lente"]]))}
 
       ${row("Afficher la vitesse (tokens/s)", "", sw("show_stats"))}
       ${row("Outils en mode Chat", "Le Chat peut aussi agir dans la même réponse : lire et écrire des fichiers, lancer des commandes, chercher sur le web, créer des documents, envoyer des e-mails… (avec ta confirmation selon tes réglages). Désactivé : le Chat répond seulement, sauf web, fichiers et e-mails demandés explicitement.", sw("chat_tools"))}
