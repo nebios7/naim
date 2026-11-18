@@ -4840,3 +4840,50 @@ class AttachPickerFitsWhenZoomed(unittest.TestCase):
         self.assertIn("max-height: calc(var(--zh, 100vh) * .88)", html)
         self.assertIn(".aplist { overflow-y: scroll;", html)
         self.assertIn(".aplist::-webkit-scrollbar { width: 12px; }", html)
+
+
+class FrenchFolderNamesAndAYesTypedDuringTheWork(unittest.TestCase):
+    """« Téléchargements » is ~/Downloads for every tool (macOS shows the French name); « .app » in a list of names is
+    not an app being built; a « oui » typed while Naim works, after its proposal, lets it apply that proposal."""
+
+    def test_the_names_macos_shows(self):
+        home = Path.home()
+        for said in ("Téléchargements", "mes téléchargements", "~/Téléchargements", "dossier Téléchargements", "Downloads"):
+            self.assertEqual(naimtools.mac_named_folder(said), home / "Downloads", said)
+        self.assertEqual(naimtools.mac_named_folder("le Bureau"), home / "Desktop")
+        self.assertIsNone(naimtools.mac_named_folder("Factures 2025"))
+        import server
+        self.assertEqual(server.Handler.find_folders("Téléchargements"), [home / "Downloads"])
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        d, err = a._organize_root("Téléchargements")
+        self.assertIsNone(err)
+        self.assertEqual(d, (home / "Downloads").resolve())
+
+    def test_dot_app_in_a_list_of_names_is_not_an_app_built_by_hand(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        script = ("python3 - <<'EOF'\nfrom pathlib import Path\n(Path.home() / 'x').mkdir(exist_ok=True)\n"
+                  "if n.endswith(('.dmg', '.app')):\n    pass\nEOF")
+        self.assertFalse(a.APP_BUNDLE_RE.search(script))
+        self.assertTrue(a.APP_BUNDLE_RE.search("mkdir -p Build/Demo.app/Contents/MacOS"))
+
+    def test_the_refusal_gives_the_exact_call(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        r = a._guard_user_moves('for f in ~/Downloads/*.pdf; do mv "$f" ~/Downloads/pdf/; done')
+        self.assertIn('ranger_dossier(dossier="~/Downloads", action="proposer"', r)
+        self.assertIn("END your answer", r)
+
+    def test_a_yes_typed_during_the_work_applies_the_proposal_shown(self):
+        with tempfile.TemporaryDirectory(dir=Path.home(), prefix=".naim-test-") as root:
+            d = Path(root) / "Telechargements"
+            d.mkdir()
+            (d / "facture.pdf").write_text("x")
+            a = naimtools.Agent(root, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True, run_id="r1")
+            a.ORGANIZE_DIR = Path(root) / "journaux"
+            a.ranger_dossier(str(d), "voir")
+            a.ranger_dossier(str(d), "proposer", {"Factures": ["*facture*"]})
+            self.assertIn("refused", a.ranger_dossier(str(d), "appliquer"))      # nothing said yet
+            a.interject("non attends")
+            self.assertIn("refused", a.ranger_dossier(str(d), "appliquer"))      # not a yes
+            a.interject("oui")
+            self.assertIn("ok: 1", a.ranger_dossier(str(d), "appliquer"))         # the « oui » typed in « guider Naim »
+            self.assertTrue((d / "Factures" / "facture.pdf").exists())

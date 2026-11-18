@@ -2358,6 +2358,9 @@ class Handler(BaseHTTPRequestHandler):
         p = Path(q).expanduser()
         if p.is_absolute() and p.is_dir():
             return [p]
+        from naimtools import mac_named_folder
+        if named := mac_named_folder(q):  # « Téléchargements » = Downloads, « Bureau » = Desktop (French names on screen)
+            return [named]
         norm = lambda t: "".join(c for c in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(c) != "Mn").strip()
         want, hits = norm(Path(q).name), []
         if "/" in q and (Path.home() / q).is_dir():

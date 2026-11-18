@@ -53,6 +53,23 @@ READ_ONLY_CMDS = {"cat", "ls", "head", "tail", "grep", "rg", "stat", "du", "file
 GIT_WRITE = re.compile(r"\bgit\b[^|;&]*?\s(commit|push|reset|checkout|restore|rm|mv|clean|apply|am|merge|rebase|stash|tag|pull|branch\s+-[dD])\b")
 
 
+MAC_FOLDER_NAMES = {"telechargements": "Downloads", "telechargement": "Downloads", "downloads": "Downloads",
+                    "bureau": "Desktop", "desktop": "Desktop", "documents": "Documents", "images": "Pictures",
+                    "photos": "Pictures", "pictures": "Pictures", "musique": "Music", "music": "Music", "videos": "Movies",
+                    "films": "Movies", "movies": "Movies"}
+
+
+def mac_named_folder(name):
+    """« Téléchargements », « mes téléchargements », « ~/Bureau », « dossier Documents » → the real folder in the home
+    (macOS shows Downloads, Desktop… under their French names, but on disk they keep their English ones). None if not one."""
+    import unicodedata
+    t = "".join(c for c in unicodedata.normalize("NFD", str(name or "").lower()) if unicodedata.category(c) != "Mn")
+    t = re.sub(r"^\s*(?:~/|/users/[^/]+/)?", "", t).strip().strip("/")
+    t = re.sub(r"^(?:le |la |les |mon |ma |mes |dossier |repertoire )+", "", t).strip()
+    real = MAC_FOLDER_NAMES.get(t)
+    return Path.home() / real if real and (Path.home() / real).is_dir() else None
+
+
 def is_naim_itself(path):
     try:
         p = Path(path).expanduser().resolve()
@@ -2041,7 +2058,7 @@ class Agent:
     ORGANIZE_PAGE = 120
 
     def _organize_root(self, dossier):
-        d = Path(os.path.expanduser(str(dossier or "").strip() or "~")).resolve()
+        d = (mac_named_folder(dossier) or Path(os.path.expanduser(str(dossier or "").strip() or "~"))).resolve()
         home = Path.home().resolve()
         if not d.is_dir():
             return None, f"error: folder not found: {dossier}"
@@ -2234,7 +2251,7 @@ class Agent:
             if not proposal.exists():
                 return "error: no proposal for this folder: voir, then proposer, show it, and wait for the user's yes"
             prop = _json.loads(proposal.read_text())
-            if prop.get("made_by") == self.run_id:
+            if prop.get("made_by") == self.run_id and not self.user_said_yes_since(prop.get("time", 0)):
                 return ("refused: the proposal was made in this same answer — the user has not seen it yet. Show it to them "
                         "and stop: apply it only after their yes, in their next message.")
             if time.time() - prop.get("time", 0) > 86400:
@@ -2844,9 +2861,14 @@ class Agent:
         bulk = (any(c in str(x) for x in paths for c in "*?") or re.search(r"\bfor\b|\bwhile\b|\bglob\b|listdir|iterdir", command)
                 or len(self.MOVE_RE.findall(command)) > 1)
         if bulk and (outside or standard):
-            return ("refused: this moves many of the user's files at once with the shell — no proposal, no undo. To tidy a "
-                    "folder, use ranger_dossier: action=voir, then action=proposer with a plan (name patterns like "
-                    "\"*.pdf\" or \"*dexter*\" work), show it to the user and wait for their yes. Nothing was moved.")
+            where = next((str(x.parent if x.suffix else x).replace(str(home), "~", 1) for x in real
+                          if home in x.parents), None) or ("~/Downloads" if re.search(r"downloads", command, re.I) else
+                          str(root).replace(str(home), "~", 1))
+            return ("refused: this moves many of the user's files at once with the shell — no proposal, no undo. Nothing "
+                    "was moved, and a plan you write in your answer is not a proposal. Do it with your tool instead: "
+                    f"ranger_dossier(dossier=\"{where}\", action=\"proposer\", plan={{\"Thème\": [\"*.pdf\", \"*facture*\"], …}}) "
+                    "(name patterns or numbers from action=voir), show its proposal to the user, then END your answer and "
+                    "wait: their yes comes in their next message, and only then action=appliquer.")
         if outside and not self.approve("⚠ Déplacer tes fichiers hors du dossier de travail", f"$ {command}", kind="sensitive"):
             return "denied by the user (moving their files outside the working folder)"
         return None
@@ -2860,7 +2882,7 @@ class Agent:
                 return f"blocked: the user's settings forbid commands containing {pattern!r}"
         return None
 
-    APP_BUNDLE_RE = re.compile(r"\b(mkdir|cp|ditto|mv|tee|chmod|touch|cat\s*>|echo\b[^|;&]*>)[^|;&]*\.app(/Contents)?\b|>\s*\S*\.app/", re.I)
+    APP_BUNDLE_RE = re.compile(r"\b(mkdir|cp|ditto|mv|tee|chmod|touch|cat\s*>|echo\b[^|;&\n]*>)[^|;&\n]*\w\.app(/Contents)?\b|>\s*\S*\.app/", re.I)
 
     def _check_env(self, command):
         """Keep dependencies out of the system Python: require a project virtual environment."""
@@ -5262,6 +5284,14 @@ class Agent:
             self.cancel.set()
         with self._inbox_lock:
             self._inbox.append(text)
+            self._heard_at = getattr(self, "_heard_at", []) + [(time.time(), text)]  # when: a yes to what was shown before
+
+    YES_RE = re.compile(r"^\W*(oui|ouais|ok|okay|d'?accord|vas[- ]y|go|valid|c'?est bon|applique|parfait|yes)\b", re.I)
+
+    def user_said_yes_since(self, t):
+        """The user typed a yes (« oui », « ok vas-y ») while this answer was going on, after the moment t."""
+        return any(when > t and self.YES_RE.search(x or "") and not re.search(r"\b(non|pas|attends?|stop)\b", x or "", re.I)
+                   for when, x in getattr(self, "_heard_at", []))
 
     def withdraw(self, text):
         """A waiting message taken back by the user before it was read: True if it was still waiting."""
