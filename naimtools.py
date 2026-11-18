@@ -2812,6 +2812,8 @@ class Agent:
         return ("refused: this command would change Naim itself (its program, settings or model). Never do that unless "
                 "the user explicitly asks to modify Naim; continue the task without it.")
 
+    DELETE_RE = re.compile(r"(?:^|[;&|(\s])(?:rm|unlink|srm|rmdir)\s|shutil\.rmtree\s*\(|os\.(?:remove|unlink|rmdir)\s*\(|"
+                           r"\.unlink\s*\(|\bempty\s+(?:the\s+)?trash\b", re.I)
     MOVE_RE = re.compile(r"(?:^|[;&|(\s])(?:mv|rename)\s|shutil\.move\s*\(|os\.(?:rename|replace)\s*\(|\.rename\s*\(")
 
     def _command_paths(self, command):
@@ -2836,11 +2838,23 @@ class Agent:
         """Moving the user's own files with the shell: nothing journaled, nothing to undo. Into Naim's own folders: never.
         Many at once (a pattern, a loop) outside the working folder: through ranger_dossier (a proposal, one yes,
         undoable). One file outside the working folder: the user's yes, even when everything is allowed. None = allowed."""
-        if not self.MOVE_RE.search(command or ""):
+        deleting = bool(self.DELETE_RE.search(command or ""))
+        if not deleting and not self.MOVE_RE.search(command or ""):
             return None
         home, naim_docs = Path.home().resolve(), JOINTS.parent.parent.resolve()
         mine = naim_docs / "Fichiers"
         paths = self._command_paths(command)
+        if deleting:
+            under_ = lambda x, top: (str(x).lower() + "/").startswith(str(top).lower() + "/")  # noqa: E731
+            root_ = self.root.resolve()
+            gone = [x for x in paths if home in x.parents and not under_(x, root_) and not under_(x, mine)]
+            trash = re.search(r"empty\s+(the\s+)?trash|\.Trash\b", command, re.I)
+            if (gone or trash) and not self.approve(
+                    "⚠ Supprimer définitivement" + (" : vider la Corbeille" if trash else ""),
+                    f"$ {command}\n\nRien ne pourra être récupéré ensuite (pas de Corbeille).", kind="sensitive"):
+                return "denied by the user (deleting for good)"
+            if not self.MOVE_RE.search(command):
+                return None
 
         def resolved(x):
             try:

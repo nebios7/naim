@@ -1709,7 +1709,7 @@ class ChatActsUnlessLesson(unittest.TestCase):
 
     def test_the_server_uses_it(self):
         src = (ROOT / "server.py").read_text()
-        self.assertIn("if lesson and name not in ANSWER_TOOLS", src)
+        self.assertIn("if lesson and name in LESSON_NO_FILES", src)  # a question keeps its tools, files only refused
 
     def test_a_follow_up_on_a_file_keeps_the_tools(self):
         import server
@@ -4887,3 +4887,44 @@ class FrenchFolderNamesAndAYesTypedDuringTheWork(unittest.TestCase):
             a.interject("oui")
             self.assertIn("ok: 1", a.ranger_dossier(str(d), "appliquer"))         # the « oui » typed in « guider Naim »
             self.assertTrue((d / "Factures" / "facture.pdf").exists())
+
+
+class ToolsAlwaysTheUserDecidesWhatIsRisky(unittest.TestCase):
+    """Naim keeps its tools for a question too (only making files is refused there); « je ne peux pas » said without
+    trying a tool is tried again with them; deleting for good outside the working folder (the Trash emptied) always
+    asks the user, even with everything allowed."""
+
+    def test_cannot_without_trying_is_seen(self):
+        import server
+        for said in ("Je ne peux pas vider la corbeille de Mac pour toi.", "Désolé, je n'ai pas accès à ton Mac.",
+                     "En tant qu'IA, je ne suis pas en mesure de le faire."):
+            self.assertTrue(server.cant_without_trying(said), said)
+        for said in ("Voici comment vider la corbeille : clic droit sur l'icône, puis Vider.",
+                     "La corbeille est vide, il n'y a rien à supprimer."):
+            self.assertFalse(server.cant_without_trying(said), said)
+
+    def test_both_ways_try_again_with_the_tools(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('if said.strip() and not stop.is_set() and cant_without_trying(said) and not body.get("_verify"):', src)
+        self.assertIn('if not used_tools and not stop.is_set() and not body.get("_relaunched") and cant_without_trying(content):', src)
+
+    def test_a_question_keeps_its_tools(self):
+        import server
+        self.assertNotIn("run_command", server.LESSON_NO_FILES)
+        self.assertIn("write_file", server.LESSON_NO_FILES)
+
+    def test_deleting_for_good_asks_every_time(self):
+        asked = []
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None,
+                            approver=lambda *x: asked.append(x[0]) or False)
+        g = a._guard_user_moves
+        self.assertIn("denied", g("osascript -e 'tell application \"Finder\" to empty trash'"))
+        self.assertIn("denied", g("rm -rf ~/.Trash/*"))
+        self.assertIn("denied", g("rm ~/Downloads/vieux.pdf"))
+        self.assertEqual(len(asked), 3)
+        self.assertTrue(all("Supprimer définitivement" in t for t in asked))
+        self.assertIn("vider la Corbeille", asked[0])
+        root = a.root
+        self.assertIsNone(g(f"rm -rf {root}/build"))                   # the working folder: its own work
+        self.assertIsNone(g("rm /tmp/naim-essai.txt"))
+        self.assertEqual(len(asked), 3)

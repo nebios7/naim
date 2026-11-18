@@ -95,6 +95,10 @@ TRIVIAL_RE = re.compile(r"\W*((salut|bonjour|bonsoir|coucou|hello|hey|hi|yo|re)\
 # tools kept for a plain question or a lesson in Chat: look things up, never change files
 # « écris-moi un code python », « affiche le script », « le programme » : the code itself is what is asked
 CODE_ASK_RE = re.compile(r"\b(?:code|script|programme|fonction|algo(?:rithme)?|python|javascript|html|sql|bash)\b", re.I)
+# a question or a lesson keeps every tool (Naim decides what it needs: compute, look on the Mac, act when asked);
+# only making or changing files is refused there — the answer goes in the conversation
+LESSON_NO_FILES = {"write_file", "edit_file", "multi_edit", "delete_file", "move_file", "convert_document", "creer_fichier",
+                   "copie_travail"}
 ANSWER_TOOLS = {"confier_tache", "chercher_conversations", "chercher_sur_mac", "read_file", "list_files", "find_files", "search", "find_symbol", "find_references", "web_search", "web_fetch",
                 "browser", "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
@@ -362,6 +366,24 @@ def thin_report(content, changed):
     names = {Path(f["path"]).name.lower() for f in changed}
     named = sum(1 for n in names if n in text.lower())
     return len(text) < 280 or (named == 0 and len(text) < 600)
+
+
+# « Je ne peux pas vider la corbeille », « je n'ai pas accès à… »: an inability said without having tried a single tool.
+# Naim has a shell, the files and the Mac's applications: it tries; what is risky asks the user at the moment it runs
+CANNOT_RE = re.compile(r"\bje ne (?:peux|pourrai|pourrais|suis pas (?:en mesure|capable)|sais pas (?:comment )?)\b(?:\s+pas)?|"
+                       r"\bje n'?ai pas (?:acc[èe]s|la possibilit[ée]|les moyens|la capacit[ée]|les droits|d'acc[èe]s)|"
+                       r"\bimpossible pour moi\b|\bje ne dispose pas\b|\bpas dans mes (?:capacit[ée]s|possibilit[ée]s)\b|"
+                       r"\ben tant qu'(?:ia|assistant|mod[èe]le)\b|\bje n'?ai pas (?:la )?permission\b", re.I)
+TRY_NOTE = ("[Tu as répondu que tu ne peux pas, sans avoir essayé un seul outil. Tu as des outils sur ce Mac : run_command "
+            "(le shell, osascript pour piloter le Finder et les applications), les fichiers, le web… Essaie vraiment avec "
+            "eux, maintenant. Si l'action est irréversible ou sensible, ne t'en prive pas : l'autorisation est demandée à "
+            "l'utilisateur au moment où elle s'exécute. Ne dis que c'est impossible que si un outil a échoué, avec son erreur.]")
+
+
+def cant_without_trying(text):
+    """A short reply that says Naim cannot do it (and no tool was tried)."""
+    t = (text or "").strip()
+    return bool(t) and len(t) < 700 and bool(CANNOT_RE.search(t[:400]))
 
 
 def ends_announcing(text):
@@ -2301,6 +2323,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.chat_agentic({**body, "_verify": True}, first_messages[:-1] + [dict(first_messages[-1], content=str(
                 first_messages[-1].get("content") or "") + "\n\n[Fais-le maintenant, dans cette réponse, avec tes outils s'il "
                 "le faut, puis donne le résultat. N'annonce pas ce que tu vas faire sans le faire.]")], first_options, stop)
+        if said.strip() and not stop.is_set() and cant_without_trying(said) and not body.get("_verify"):
+            # « je ne peux pas » from the way that has no tools: it tries for real, with them, in the same reply
+            self.event({"type": "retract", "chars": len(said)})
+            self.event({"type": "status", "text": "Naim essaie avec ses outils…"})
+            return self.chat_agentic({**body, "_verify": True}, first_messages[:-1] + [dict(first_messages[-1], content=str(
+                first_messages[-1].get("content") or "") + "\n\n" + TRY_NOTE)], first_options, stop)
         if not said.strip() and not stop.is_set():  # never an empty bubble: say so, instead of nothing
             self.event({"type": "token", "text": "Je n'ai rien réussi à produire cette fois. Réécris ta demande, ou dis « continue »."})
         self.event({"type": "done"})
@@ -3150,7 +3178,7 @@ class Handler(BaseHTTPRequestHandler):
                         "refused: the user asked for the answer HERE, in the conversation — no file. Write the full content "
                         "in your reply instead (code in a Markdown block).")})
                     continue
-                if lesson and name not in ANSWER_TOOLS and not name.startswith("mcp__"):
+                if lesson and name in LESSON_NO_FILES:
                     refusals += 1
                     # a question or a lesson: the answer goes in the conversation (the tool list stays the same so that
                     # llama.cpp keeps what it already read; only the use is refused). MCP tools always pass: they are
@@ -3278,6 +3306,14 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "user", "content": "Voici l'image du fichier." if looked else "Voici la capture d'écran.",
                                  "images": imgs})
             used_tools = True
+        if not used_tools and not stop.is_set() and not body.get("_relaunched") and cant_without_trying(content):
+            # « je ne peux pas » with its tools at hand and none tried: once more, told to try them for real
+            self.event({"type": "retract", "chars": len(content)})
+            self.event({"type": "status", "text": "Naim essaie avec ses outils…"})
+            messages.append({"role": "assistant", "content": content})
+            messages.append({"role": "user", "content": TRY_NOTE})
+            return self._chat_steps({**body, "_relaunched": True, "_verify": True}, messages, options, stop, False, helper,
+                                    think, repeating, chatfiles, run_id)
         if used_tools and not stop.is_set() and not content.strip() and not body.get("_relaunched"):
             # it acted but said nothing: once more, WITH its tools, to go on with the task or say what it found
             messages.append({"role": "user", "content": "Continue : poursuis la tâche avec tes outils s'il reste quelque chose "
