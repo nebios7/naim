@@ -4828,3 +4828,15 @@ class UserFilesMovedOnlyWithAWay(unittest.TestCase):
         self.assertIsNone(a._guard_user_moves("cp ~/Downloads/a.pdf ./a.pdf"))
         self.assertIsNone(a._guard_user_moves(f"mv {root}/rapport.pdf ~/Documents/Naim/Fichiers/rapport.pdf"))
         self.assertEqual(asked, [])
+
+
+class AttachPickerFitsWhenZoomed(unittest.TestCase):
+    """At 130 % or 200 % the window stays inside the screen (its height from the zoomed size, not vh) and its list
+    scrolls with a visible bar."""
+
+    def test_height_from_the_zoomed_window_and_a_scrolling_list(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn('de.style.setProperty("--zh", innerHeight / z + "px")', html)
+        self.assertIn("max-height: calc(var(--zh, 100vh) * .88)", html)
+        self.assertIn(".aplist { overflow-y: scroll;", html)
+        self.assertIn(".aplist::-webkit-scrollbar { width: 12px; }", html)
