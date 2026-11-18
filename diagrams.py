@@ -130,6 +130,82 @@ def font_file(name):
     return f
 
 
+# the libraries a live visual may use (dynamic charts, real maps), downloaded once from npm then read from the Mac
+CHARTS_DIR = VENDOR / "graphes"
+CHART_LIBS = {  # served name -> (npm archive, file in the archive)
+    "echarts.js": ("https://registry.npmjs.org/echarts/-/echarts-5.6.0.tgz", "package/dist/echarts.min.js"),
+    "leaflet.js": ("https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz", "package/dist/leaflet.js"),
+    "leaflet.css": ("https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz", "package/dist/leaflet.css"),
+}
+LEAFLET_ICONS = {"iconUrl": "marker-icon.png", "iconRetinaUrl": "marker-icon-2x.png", "shadowUrl": "marker-shadow.png"}
+
+
+def chart_lib(name):
+    """ECharts (charts that move: hover values, zoom, legend, animation) or Leaflet (maps of the world) for a visual:
+    a visual's frame can reach nothing, so the conversation reads the file here and writes it into the frame. Leaflet's
+    marker pictures are carried inside its script (a frame cannot load them from a path)."""
+    if name not in CHART_LIBS:
+        raise DiagramError("bibliothèque inconnue")
+    f = CHARTS_DIR / name
+    if f.is_file():
+        return f
+    import base64
+    import io
+    import tarfile
+    url, member = CHART_LIBS[name]
+    try:
+        with urllib.request.urlopen(url, timeout=90) as r:
+            data = r.read(60_000_000)
+    except OSError as e:
+        raise DiagramError(f"téléchargement impossible ({e}) : connexion internet nécessaire la première fois")
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+        try:
+            body = tar.extractfile(member).read()
+        except (KeyError, AttributeError):
+            raise DiagramError("archive incomplète")
+        if name == "leaflet.js":
+            icons = {k: "data:image/png;base64," + base64.b64encode(tar.extractfile(f"package/dist/images/{v}").read()).decode()
+                     for k, v in LEAFLET_ICONS.items()}
+            body += ("\nL.Icon.Default.mergeOptions(" + json.dumps(icons) + ");\n").encode()
+    CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".part")
+    tmp.write_bytes(body)
+    tmp.replace(f)
+    return f
+
+
+TILES_DIR = VENDOR / "tuiles"
+TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+TILE_RE = re.compile(r"(\d{1,2})/(\d{1,7})/(\d{1,7})\.png")
+
+
+def map_tile(name):
+    """A square of a map for a visual (« 12/2074/1409.png »), read from OpenStreetMap through Naim then kept on the Mac:
+    a visual's frame has no address of its own, and a map seen once opens again without the network."""
+    m = TILE_RE.fullmatch(name or "")
+    if not m:
+        raise DiagramError("tuile inconnue")
+    z, x, y = map(int, m.groups())
+    if z > 19 or x >= 2 ** z or y >= 2 ** z:
+        raise DiagramError("tuile hors de la carte")
+    f = TILES_DIR / str(z) / str(x) / f"{y}.png"
+    if f.is_file() and f.stat().st_size > 0:
+        return f
+    req = urllib.request.Request(TILE_URL.format(z=z, x=x, y=y), headers={"User-Agent": "Naim/1.0 (assistant local ; cartes dans la conversation)"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = r.read(2_000_000)
+    except OSError as e:
+        raise DiagramError(f"fond de carte indisponible ({e})")
+    if not data.startswith(b"\x89PNG"):
+        raise DiagramError("fond de carte invalide")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".part")
+    tmp.write_bytes(data)
+    tmp.replace(f)
+    return f
+
+
 def _clean(code):
     code = str(code or "").strip()
     if code.startswith("```"):  # a fenced block pasted as is

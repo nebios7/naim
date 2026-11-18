@@ -6,7 +6,8 @@
 
 Images  : png jpg heic webp gif tiff bmp  <->  entre elles ; -> pdf ; pdf -> png/jpg (une image par page)
 Docs    : md docx doc rtf odt html txt epub  <->  entre eux (pandoc, textutil) ; -> pdf au style pdf-pro ;
-          pdf -> txt / md / docx (son texte) ; pptx / xlsx -> pdf (pdf-pro)
+          pdf -> txt / md / docx (son texte) ; Word / PowerPoint / Excel -> pdf tel quel (LibreOffice ;
+          --style pro pour le style pdf-pro)
 Tableurs: csv xlsx json  <->  entre eux
 Audio / vidéo : mp4 mov mkv avi webm  <->  ; -> mp3 m4a wav (le son) ; -> gif (une animation) ; mp3 wav m4a flac ogg <->
 La sortie n'écrase jamais la source ; à la fin, la taille (et les pages) du résultat.
@@ -101,8 +102,38 @@ def pdf_text(src):
     return re.sub(r"(?m)^--- Page \d+ ---\s*\n?", "\n", text).strip() + "\n"  # Naim's page marks are not the document's
 
 
+OFFICE = {"docx", "doc", "odt", "rtf", "pptx", "ppt", "odp", "xlsx", "xls", "ods"}
+
+
+def soffice():
+    return shutil.which("soffice") or next((p for p in ("/opt/homebrew/bin/soffice", "/Applications/LibreOffice.app/Contents/MacOS/soffice") if Path(p).exists()), None)
+
+
+def office_pdf(src, dst):
+    """An Office file as a PDF exactly as it looks (pages, fonts, slides, sheets with their formulas computed), by
+    LibreOffice on its own profile (works while LibreOffice is open). False when LibreOffice is missing or fails."""
+    import tempfile
+    exe = soffice()
+    if not exe:
+        return False
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            subprocess.run([exe, f"-env:UserInstallation=file://{tmp}/profil", "--headless", "--convert-to", "pdf",
+                            "--outdir", tmp, str(src)], capture_output=True, timeout=300)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        out = Path(tmp) / (src.stem + ".pdf")
+        if not out.is_file() or out.stat().st_size == 0:
+            return False
+        shutil.move(str(out), dst)
+    return True
+
+
 def document(src, dst, a, b):
-    if b == "pdf":  # always the pro style
+    # an Office file keeps its own look (LibreOffice); « --style pro », or a text (md, html, txt): the pdf-pro style
+    if b == "pdf" and a in OFFICE and opt("--style") != "pro" and office_pdf(src, dst):
+        return
+    if b == "pdf":
         if not PDFPRO.exists():
             sys.exit("erreur : pdf-pro manque (Personnaliser › Plugins).")
         args = [sys.executable, str(PDFPRO), "render", str(src), str(dst)] + ([opt("--couleur")] if opt("--couleur") else [])
@@ -193,7 +224,7 @@ def main():
             image(src, dst, a, b)
         elif a in IMG and b == "pdf":
             images_to_pdf([src], dst)
-        elif (a in DOC and (b in DOC or b == "pdf")) or (a == "pdf" and b in DOC) or (a in ("pptx", "xlsx", "csv") and b == "pdf"):
+        elif (a in DOC and (b in DOC or b == "pdf")) or (a == "pdf" and b in DOC) or (a in OFFICE | {"csv"} and b == "pdf"):
             document(src, dst, a, b)
         elif a in TAB and b in TAB:
             table(src, dst, a, b)

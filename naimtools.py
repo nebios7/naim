@@ -222,10 +222,13 @@ SHARE_TOOL = {"type": "function", "function": {"name": "partager_page", "descrip
 MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", "description": (
     "Find the user's own files anywhere on the Mac (Bureau, Documents, Téléchargements…), like the Finder: by words in "
     "the file NAME and in the CONTENT of documents, programs' code left out, newest first. Use it whenever the user "
-    "asks where a file of theirs is (« mon CV »), before saying it does not exist."),
+    "asks where a file of theirs is (« mon CV »), before saying it does not exist. Scanned papers (letters, "
+    "courriers, factures scannées) are read too. Give `apres`/`avant` when the user names a period."),
     "parameters": {"type": "object", "properties": {
         "requete": {"type": "string", "description": "the words of the file, e.g. « convention de stage », « facture EDF 2025 »"},
-        "type": {"type": "string", "description": "optional: pdf, word, image, tableur, presentation, texte"}},
+        "type": {"type": "string", "description": "optional: pdf, word, image, tableur, presentation, texte"},
+        "apres": {"type": "string", "description": "optional: only files dated from this day, e.g. « 14/08/2026 »"},
+        "avant": {"type": "string", "description": "optional: only files dated up to this day, e.g. « 31/12/2026 »"}},
         "required": ["requete"]}}}
 
 CONVERSATIONS_TOOL = {"type": "function", "function": {"name": "chercher_conversations", "description": (
@@ -393,6 +396,56 @@ PORT_RE = re.compile(r"\b(?:port|listening on|écoute sur)\s*[:=]?\s*(\d{4,5})\b
 URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(?::\d+)?[^\s'\"<>)\x1b]*")  # never the colour code after it
 
 
+# fast mode (« Mode rapide »): only these tools are described to the engine; every other one stays reachable through
+# the single `outil` tool. The list the engine reads never changes, so what it has read is kept from one message to
+# the next, and it is a fraction of the full descriptions (most of what Naim waits for before its first word).
+FAST_CORE = ("list_files", "read_file", "write_file", "edit_file", "search", "run_command", "find_files",
+             "web_search", "web_fetch", "ask_user")
+
+
+def outil_tool(extra):
+    """The gateway to the tools left out of the fast list: their names and what each does, in one short line."""
+    def gist(t):
+        d = re.sub(r"\s+", " ", str(t["function"].get("description") or "")).strip()
+        d = re.split(r"(?<=[.:;!?])\s|\s\(", d, maxsplit=1)[0].rstrip(".:;")
+        return d[:70].rstrip() + ("…" if len(d) > 70 else "")
+    names = sorted(t["function"]["name"] for t in extra)
+    by = {t["function"]["name"]: t for t in extra}
+    return {"type": "function", "function": {
+        "name": "outil",
+        "description": ("Your other tools, used through this one. Call it with name only to read how to use that tool, "
+                        "then with name and arguments to use it. Tools: " + "; ".join(f"{n} ({gist(by[n])})" for n in names)),
+        "parameters": {"type": "object", "properties": {
+            "name": {"type": "string", "enum": names},
+            "arguments": {"type": "object", "description": "the tool's own arguments"}},
+            "required": ["name"]}}}
+
+
+def unwrap_outil(calls):
+    """A call through `outil` becomes the call of the tool it names: everything after (permissions, hooks, display,
+    checks) sees the real tool."""
+    for c in calls or []:
+        f = c.get("function") or {}
+        if f.get("name") != "outil":
+            continue
+        a = f.get("arguments") or {}
+        if isinstance(a, str):
+            try:
+                a = json.loads(a)
+            except ValueError:
+                a = {}
+        inner = a.get("arguments") if isinstance(a, dict) else None
+        if isinstance(inner, str):
+            try:
+                inner = json.loads(inner)
+            except ValueError:
+                inner = {}
+        if isinstance(a, dict) and isinstance(a.get("name"), str) and a["name"].strip():
+            f["name"] = a["name"].strip()
+            f["arguments"] = inner if isinstance(inner, dict) else {}
+    return calls
+
+
 RAW_CALL_RE = re.compile(r"<tool_call>\s*<function=([\w.-]+)>(.*?)(?:</function>\s*(?:</tool_call>|$)|$)", re.S)
 # the other way models write a call as text: <tool_call>{"name": …, "arguments": {…}}</tool_call>
 RAW_JSON_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*(?:</tool_call>|$)", re.S)
@@ -425,7 +478,7 @@ def raw_tool_calls(text):
                     except ValueError:
                         a = {}
                 calls.append({"function": {"name": c["name"], "arguments": a if isinstance(a, dict) else {}}})
-    return calls
+    return unwrap_outil(calls)
 
 
 def repeating(text):
@@ -541,6 +594,21 @@ class Process:
             return ANSI_RE.sub("", "".join(self.lines[-n:]))  # background programs: no terminal colour codes either
 
 
+# Naim's own Python for its commands: the document libraries (Excel, Word, PowerPoint, charts, data, images, PDF)
+# installed once in « python-outils », first in the PATH of every command (python3 and pip then work without
+# touching the Mac's Python, and Naim's own server keeps its environment)
+TOOLS_PY = ext.DATA / "python-outils" / "bin"
+
+
+def cmd_env(**extra):
+    env = {**os.environ, **extra}
+    if (TOOLS_PY / "python3").exists():
+        env["PATH"] = f"{TOOLS_PY}:{env.get('PATH', '')}"
+        env["VIRTUAL_ENV"] = str(TOOLS_PY.parent)
+        env.pop("PYTHONHOME", None)
+    return env
+
+
 class ProcessManager:
     """Background processes shared by the agent, the terminal and the UI (kept until stopped or exit)."""
 
@@ -554,7 +622,7 @@ class ProcessManager:
         self.prune()
         proc = subprocess.Popen(command, shell=True, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 stdin=subprocess.DEVNULL, text=True, bufsize=1, start_new_session=True,
-                                env={**os.environ, "PYTHONUNBUFFERED": "1", "FORCE_COLOR": "0"})
+                                env=cmd_env(PYTHONUNBUFFERED="1", FORCE_COLOR="0"))
         with self.lock:
             self.counter += 1
             pid_id = f"p{self.counter}"
@@ -665,6 +733,24 @@ SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".build", "
 def ollama_chat(model, messages, tools=None, think=False, stream=False, options=None):
     """Chat with a model. Naim can run on llama.cpp (options["backend"] == "llamacpp": fast prompt cache + vision)
     or on Ollama; every other model runs on Ollama. Returns the message dict, or yields chunks when stream=True."""
+    if any((t.get("function") or {}).get("name") == "outil" for t in tools or []):
+        out = _ollama_chat_raw(model, messages, tools, think, stream, options)
+        if not stream:
+            unwrap_outil((out or {}).get("tool_calls"))
+            return out
+
+        def unwrapped():
+            try:
+                for chunk in out:
+                    unwrap_outil((chunk.get("message") or {}).get("tool_calls"))
+                    yield chunk
+            finally:
+                getattr(out, "close", lambda: None)()
+        return unwrapped()
+    return _ollama_chat_raw(model, messages, tools, think, stream, options)
+
+
+def _ollama_chat_raw(model, messages, tools=None, think=False, stream=False, options=None):
     options = dict(options or {})
     backend = options.pop("backend", "ollama")
     if backend == "mlx" and not any(m.get("images") for m in messages):
@@ -825,13 +911,10 @@ class Agent:
         self.features = {"web": True, "memory": True, "skills": True, "mcp": True, "subagents": True, "computer": True,
                          "simulator": True, "browser": True, "email": bool(email), **(features or {})}
         self.plan, self.subagent, self.auto_mcp = plan, subagent, auto_mcp
-        # fast mode (« Mode rapide »): the basic tools only. The full Agent gives the engine ~16,000 tokens of tools and
-        # instructions to read (about 2.5 minutes each time it has lost them); this one about a third of that. Measured
+        # fast mode (« Mode rapide »): every tool, but most of them one line behind `outil`. The full Agent gives the
+        # engine ~16,000 tokens of tools and instructions to read (about 2.5 minutes each time it has lost them). Measured
         # on an M4: what is read first is what makes Naim wait, far more than what it then writes.
         self.fast = bool(fast) and not subagent
-        if self.fast:
-            self.features.update(memory=False, skills=False, mcp=False, subagents=False, computer=False, simulator=False,
-                                 browser=False, email=False)
         self.stop_temp_processes, self.started = stop_temp_processes, []
         self.keep_final_app = keep_final_app
         self.rules = self._parse_rules(permissions)
@@ -869,17 +952,6 @@ class Agent:
         self.messages = [{"role": "system", "content": self._system_prompt()}] + list(history or [])
 
     def _build_tools(self):
-        if self.fast:  # files, commands, search, web: nothing specialised, nothing loaded later (the list never changes)
-            grouped = {n for names, _d, _r in TOOL_GROUPS.values() for n in names}
-            tools = [t for t in TOOLS if t["function"]["name"] not in grouped] + [TODO_TOOL]
-            if self.features["web"]:
-                tools += WEB_TOOLS
-            if self.asker and not self.scheduled:
-                tools.append(ASK_TOOL)
-            self._mcp_on_demand, self._mcp_deferred, self._tool_groups = [], [], {}
-            if self.plan:
-                tools = [t for t in tools if t["function"]["name"] in READ_ONLY]
-            return tools, {}
         tools = list(TOOLS) + [TODO_TOOL]
         if self.features["web"]:
             tools += WEB_TOOLS
@@ -932,6 +1004,14 @@ class Agent:
                 self.emit({"type": "note", "text": f"MCP indisponible : {e}"})
         if self.plan:
             tools = [t for t in tools if t["function"]["name"] in READ_ONLY]
+        elif self.fast:
+            # fast mode (« Mode rapide »): every tool stays usable, but only a few are described in full; the others
+            # are one line each behind `outil`. The list never changes, so what the engine read stays read.
+            self._tool_groups = {}
+            core = [t for t in tools if t["function"]["name"] in FAST_CORE]
+            extra = [t for t in tools if t["function"]["name"] not in FAST_CORE]
+            self._fast_extra, self._fast_shown = {t["function"]["name"]: t for t in extra}, set()
+            tools = core + ([outil_tool(extra)] if extra else [])
         elif self.options.get("backend") in ("llamacpp", "mlx"):
             # the local engine keeps what it already read only if the tool list never changes (the tools come first in
             # what it reads): all of them, always the same, instead of groups loaded according to the request words
@@ -1013,10 +1093,10 @@ class Agent:
         parts = [base]
         parts.append(WRITING_STYLE)
         if getattr(self, "fast", False):
-            parts.append("Fast mode is ON: you only have the basic tools (files, commands, search"
-                         + (", web" if self.features["web"] else "") + "). If the task needs e-mail, the Mac's screen, a "
-                         "browser, a PDF or Word document, a diagram, a skill, an MCP server or sub-agents, do not try "
-                         "another way: tell the user in one sentence to turn « Mode rapide » off for this task.")
+            parts.append("Fast mode is ON: only your most common tools are described in full. Every other tool (e-mail, "
+                         "documents, diagrams, the browser, the Mac's screen, skills, sub-agents, look_at, update_todos…) "
+                         "is used through the tool outil: its description lists them; call it with the name alone to read "
+                         "how to use one, then with name and arguments.")
         try:
             import naim_check
             if les := naim_check.lessons():  # rules Naim wrote after its own failed checks
@@ -1030,7 +1110,7 @@ class Agent:
             tail.append(f"Project instructions from {name} (follow them):\n{text}")
         if self.features["memory"] and (mem := ext.memory_prompt()):
             tail.append(mem + "\nUse `remember` when the user tells you something durable about themselves or their projects.")
-        if self.features["skills"]:
+        if self.features["skills"] and not getattr(self, "fast", False):
             skills = [s for s in ext.list_skills(self.root, self.disabled_skills) if s["enabled"]]
             if skills:
                 # every skill keeps a short description, so Naim picks one by what the request MEANS when no keyword
@@ -1736,12 +1816,138 @@ class Agent:
     MAC_SEARCH_JUNK = re.compile(r"/(?:Library|\.[^/]+|node_modules|site-packages|dist-packages|__pycache__|[^/]*venv[^/]*|"
                                  r"[^/]+\.app|[^/]+\.framework|DerivedData|Caches?|build|dist|_skbuild|\.Trash)/", re.I)
 
-    def chercher_sur_mac(self, requete, type=None):
-        """The user's own files anywhere in their home folder: name and content (Spotlight), documents first."""
+    MAC_MONTHS = {m: i + 1 for i, ms in enumerate(("janv jan", "fevr fev feb", "mars mar", "avr apr", "mai may", "juin jun",
+                  "juil jul", "aout aug", "sept sep", "oct", "nov", "dec")) for m in ms.split()}
+    SCAN_ROOTS = ("Desktop", "Documents", "Downloads", "Bureau", "Téléchargements")
+    SCAN_INDEX = ext.DATA / "index-scans.json"
+
+    @classmethod
+    def _search_day(cls, text, end=False):
+        """« 14/08/2026 », « 2026-08-14 », « 14 août 2026 », « août 2026 », « 2026 » -> timestamp (start, or end of the
+        period when `end`), None when it is not a date."""
+        import datetime
+        import unicodedata
+        t = unicodedata.normalize("NFD", str(text or "")).encode("ascii", "ignore").decode().lower().strip()
+        if not t:
+            return None
+        d = m = y = None
+        if g := re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", t):
+            y, m, d = map(int, g.groups())
+        elif g := re.fullmatch(r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})", t):
+            d, m, y = map(int, g.groups())
+        elif g := re.fullmatch(r"(?:(\d{1,2})(?:er)?\s+)?([a-z]+)\.?\s+(\d{4})", t):
+            mon = next((v for k, v in cls.MAC_MONTHS.items() if g.group(2).startswith(k)), None)
+            if not mon:
+                return None
+            d, m, y = (int(g.group(1)) if g.group(1) else None), mon, int(g.group(3))
+        elif g := re.fullmatch(r"(\d{1,2})[/.-](\d{4})", t):
+            m, y = map(int, g.groups())
+        elif re.fullmatch(r"\d{4}", t):
+            y = int(t)
+        else:
+            return None
+        y += 2000 if y < 100 else 0
+        try:
+            if end:
+                if m is None:
+                    last = datetime.datetime(y + 1, 1, 1)
+                elif d is None:
+                    last = datetime.datetime(y + (m == 12), m % 12 + 1, 1)
+                else:
+                    last = datetime.datetime(y, m, d) + datetime.timedelta(days=1)
+                return last.timestamp() - 1
+            return datetime.datetime(y, m or 1, d or 1).timestamp()
+        except ValueError:
+            return None
+
+    def _scan_files(self, since, until, limit=400):
+        """The user's PDFs in their usual folders (scans included) within the period, newest first."""
+        home, out = Path.home(), []
+        for root in self.SCAN_ROOTS:
+            base = home / root
+            if not base.is_dir():
+                continue
+            for dirpath, dirs, files in os.walk(base):
+                rel = dirpath[len(str(home)):] + "/"
+                if self.MAC_SEARCH_JUNK.search(rel) or rel.count("/") > 9:
+                    dirs[:] = []
+                    continue
+                for n in files:
+                    if not n.lower().endswith(".pdf"):
+                        continue
+                    f = Path(dirpath) / n
+                    try:
+                        st = f.stat()
+                    except OSError:
+                        continue
+                    if st.st_size > 40 * 1048576 or not since <= st.st_mtime <= until:
+                        continue
+                    out.append((st.st_mtime, f, st))
+        out.sort(key=lambda x: -x[0])
+        return out[:limit]
+
+    def _scan_text(self, f):
+        """Text of a PDF's first pages, scanned pages read with the Mac's OCR (naim-input pdf)."""
+        r = subprocess.run([cu.helper(), "pdf", str(f), "3"], capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            return ""
+        return "\n".join(json.loads(r.stdout or "{}").get("text") or [])
+
+    def _scan_search(self, words, since, until, budget=75):
+        """Look for the words in the TEXT of the user's PDFs, scans read by OCR (Spotlight does not see the words of a
+        scanned page). Texts are kept in an index so that each paper is read only once.
+        -> ([(score, path, stat)], number of papers still to read)"""
+        import unicodedata
+        from concurrent.futures import ThreadPoolExecutor
+        plain = lambda s: unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode().lower()  # noqa: E731
+        try:
+            index = json.loads(self.SCAN_INDEX.read_text())
+        except (OSError, ValueError):
+            index = {}
+        files = self._scan_files(since, until)
+        key = lambda f, st: f"{st.st_mtime:.0f}:{st.st_size}"  # noqa: E731
+        todo = [(f, st) for _, f, st in files if (index.get(str(f)) or {}).get("k") != key(f, st)]
+        start, left = time.time(), 0
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [(f, st, pool.submit(self._scan_text, f)) for f, st in todo]
+            for f, st, fut in futures:
+                if time.time() - start > budget:
+                    fut.cancel()
+                    left += 1
+                    continue
+                try:
+                    text = fut.result(timeout=max(1, budget - (time.time() - start)) + 30)
+                except Exception:  # noqa: BLE001  (unreadable PDF, timeout)
+                    text = ""
+                index[str(f)] = {"k": key(f, st), "t": plain(text)[:6000]}
+        try:
+            self.SCAN_INDEX.parent.mkdir(parents=True, exist_ok=True)
+            self.SCAN_INDEX.write_text(json.dumps(index, ensure_ascii=False))
+        except OSError:
+            pass
+        want = [plain(w) for w in words if len(w) >= 3] or [plain(w) for w in words]
+        need = max(1, (len(want) + 1) // 2)  # most of the words: « réponse police nationale » finds the letter without « réponse »
+        hits = []
+        for _, f, st in files:
+            text = (index.get(str(f)) or {}).get("t") or ""
+            score = sum(1 for w in want if w in text)
+            if score >= need:
+                hits.append((score, f, st))
+        hits.sort(key=lambda h: (-h[0], -h[2].st_mtime))
+        return hits, left
+
+    def chercher_sur_mac(self, requete, type=None, apres=None, avant=None):
+        """The user's own files anywhere in their home folder: name and content (Spotlight), documents first,
+        scanned papers read by OCR, optionally within a period."""
         import unicodedata
         words = [w for w in re.findall(r"[\w'-]+", str(requete or "").lower()) if len(w) > 1 and w not in self.MAC_SEARCH_STOP]
         if not words:
             return "error: give the words of the file (e.g. « convention de stage »)"
+        since = self._search_day(apres) if apres else None
+        until = self._search_day(avant, end=True) if avant else None
+        if (apres and since is None) or (avant and until is None):
+            return "error: give the dates as « 14/08/2026 » (or « août 2026 », « 2026 »)"
+        since, until = since or 0, until or time.time() + 86400
         plain = lambda s: unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode().lower()  # noqa: E731
         exts = self.MAC_SEARCH_TYPES.get(plain(type or "").strip())
         doc_exts = set().union(*self.MAC_SEARCH_TYPES.values())
@@ -1774,20 +1980,39 @@ class Agent:
                 st = f.stat()
             except OSError:
                 continue
+            if not since <= st.st_mtime <= until:
+                continue
+            if rank == 1 and ext not in doc_exts - {".csv", ".txt", ".md"}:
+                continue  # words inside data, code, notes dumps: not the user's paper
             # the words found in its name, the long (precise) ones weighing more: « Convention.pdf » before « Lettre_Stage »
             in_name = sum(len(w) for w in words if plain(w) in plain(f.name))
             hits.append(((rank == 0 and 0 or 1, -in_name, rank, 0 if ext in doc_exts else 1, -st.st_mtime), f, st, rank))
+        # scanned papers: Spotlight does not see their words. Read them (OCR, kept in an index: read once).
+        left = 0
+        if not exts or exts == self.MAC_SEARCH_TYPES["pdf"]:
+            seen = {h[1] for h in hits}
+            if since == 0:  # no period given: the papers of the last two years
+                since_scan = time.time() - 730 * 86400
+            else:
+                since_scan = since
+            scans, left = self._scan_search(words, since_scan, until)
+            for score, f, st in scans:
+                if f not in seen:
+                    hits.append(((1, -10000 - score, 3, 0, -st.st_mtime), f, st, 3))  # after the names, before the rest
         if not hits:
-            return (f"(rien trouvé sur le Mac pour « {requete} » : ni dans les noms ni dans le contenu des documents. "
-                    "Essaie d'autres mots, ou demande à l'utilisateur comment le fichier s'appelle.)")
+            return (f"(rien trouvé sur le Mac pour « {requete} » : ni dans les noms ni dans le contenu des documents"
+                    + (", ni dans les papiers scannés" if not exts or "pdf" in str(type) else "") + ". "
+                    + (f"{left} papier(s) scanné(s) n'ont pas encore été lus : relance la même recherche pour les lire. " if left else "")
+                    + "Essaie d'autres mots, ou demande à l'utilisateur comment le fichier s'appelle.)")
         hits.sort(key=lambda h: h[0])
         size = lambda n: f"{n / 1048576:.1f} Mo" if n >= 1048576 else f"{max(1, n // 1024)} Ko"  # noqa: E731
-        why = {0: "nom", 1: "contenu", 2: "nom (en partie)"}
+        why = {0: "nom", 1: "contenu", 2: "nom (en partie)", 3: "texte du scan"}
         out = [f"{str(f).replace(str(Path.home()), '~', 1)} · {size(st.st_size)} · {time.strftime('%d/%m/%Y', time.localtime(st.st_mtime))} · {why[r]}"
                for _, f, st, r in hits[:25]]
-        more = f"\n… et {len(hits) - 25} autres" if len(hits) > 25 else ""
+        more = (f"\n… et {len(hits) - 25} autres" if len(hits) > 25 else "") + (
+            f"\n({left} papier(s) scanné(s) pas encore lus : relance la même recherche s'il manque le bon.)" if left else "")
         return (f"{len(hits)} fichier(s) pour « {requete} » (le plus pertinent d'abord ; « nom » = les mots sont dans le nom, "
-                "« contenu » = dans le texte du document). Montre-les à l'utilisateur avec leur chemin ; s'il y en a plusieurs, "
+                "« contenu » = dans le texte du document, « texte du scan » = lu sur un papier scanné). Montre-les à l'utilisateur avec leur chemin ; s'il y en a plusieurs, "
                 "demande lequel avant d'agir dessus.\n" + "\n".join(out) + more)
 
     def multi_edit(self, path, edits):
@@ -2354,7 +2579,7 @@ class Agent:
         timeout = max(5, min(int(timeout or self.command_timeout), 1800))
         proc = subprocess.Popen(command, shell=True, cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 stdin=subprocess.PIPE if stdin else subprocess.DEVNULL, text=True, bufsize=1,
-                                start_new_session=True, env={**os.environ, "PYTHONUNBUFFERED": "1"})
+                                start_new_session=True, env=cmd_env(PYTHONUNBUFFERED="1"))
         if stdin:
             def feed():
                 try:
@@ -4008,6 +4233,18 @@ class Agent:
                 "fois, le Mac peut demander d'autoriser les connexions entrantes. Pour l'arrêter : partager_page arreter avec ce lien.")
 
     def call_tool(self, name, args):
+        if name == "outil":  # a gateway call that reached here as such (written as text…): the tool it names
+            name, args = (lambda f: (f["name"], f["arguments"]))(unwrap_outil([{"function": {"name": name, "arguments": args}}])[0]["function"])
+            if name == "outil":
+                return "error: outil needs name (one of the tools listed in its description)."
+        extra = getattr(self, "_fast_extra", None) or {}
+        if name in extra and not args and name not in self._fast_shown:
+            # « outil » with a name only: how to use that tool, then the real call
+            self._fast_shown.add(name)
+            f = extra[name]["function"]
+            return (f"how to use {name}: {f.get('description', '')}\nparameters: "
+                    + json.dumps(f.get("parameters") or {}, ensure_ascii=False)
+                    + f"\nNow call outil with name={name!r} and these arguments.")
         fn = {"list_files": self.list_files, "read_file": self.read_file, "write_file": self.write_file,
               "edit_file": self.edit_file, "search": self.search, "run_command": self.run_command,
               "find_files": self.find_files, "multi_edit": self.multi_edit, "move_file": self.move_file,
@@ -4212,10 +4449,13 @@ class Agent:
             return 'refused: the user asked for the answer HERE, in the conversation — no file. Write the full content in your reply instead (long is fine: part after part, with titles), not in a file.'
         if name in self.mcp_lookup:
             return self.call_mcp(name, args)
-        allowed = {t["function"]["name"] for t in self.tools}
+        allowed = {t["function"]["name"] for t in self.tools} | set(getattr(self, "_fast_extra", None) or ())  # + behind « outil »
         if self.plan and name not in allowed:
-            return ("not allowed: PLAN MODE is read-only, nothing may be modified or executed yet. Stop calling tools "
-                    "that change things and write your numbered implementation plan now as your final answer.")
+            # the next step is the plan itself, written without tools: no second try, no « c'est fait » that is false
+            self._plan_blocked = True
+            return ("not allowed: PLAN MODE is read-only, nothing may be modified or executed yet. This action was NOT "
+                    "done: never say it was. Write your numbered implementation plan now as your final answer (what you "
+                    "would do, step by step); the user approves it before anything is done.")
         if fn is None or name not in allowed:
             return f"error: unknown or unavailable tool {name}"
         if isinstance(args, dict) and "_unreadable" in args:
@@ -4829,7 +5069,7 @@ class Agent:
             if self._step >= budget:
                 if self._step - self._last_progress < self.STALL_STEPS and budget < 1000:
                     budget = min(1000, budget + 50)
-                    self.emit({"type": "note", "text": f"Naim avance encore : il continue ({self._step} étapes)."})
+                    self.emit({"type": "status", "text": f"Naim continue ({self._step} étapes)"})  # its progress, not its words
                 else:
                     break
             if self._step - self._last_progress >= self.STALL_STEPS:
@@ -4855,8 +5095,12 @@ class Agent:
             if think and not self.think:
                 step_opts = dict(step_opts, think_budget=self.THINK_BUDGET)
                 self.emit({"type": "status", "text": "Naim planifie..." if self._step == 1 else "Naim analyse l'échec..."})
+            plan_now = self.plan and getattr(self, "_plan_blocked", False)
+            self._plan_blocked = False
+            if plan_now:
+                self.emit({"type": "status", "text": "Naim écrit son plan..."})
             try:
-                msg = chat_watched(self.model, self.messages, tools=self.tools, think=think, options=step_opts,
+                msg = chat_watched(self.model, self.messages, tools=None if plan_now else self.tools, think=think, options=step_opts,
                                    cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w), "w": w}), on_size=self._measured)
             except Exception as e:  # noqa: BLE001
                 if type(e).__name__ != "ContextFull":
@@ -4876,7 +5120,7 @@ class Agent:
                 if msg.get("thinking"):
                     self.emit({"type": "thinking", "text": msg["thinking"].strip()})
                 self.emit({"type": "status", "text": "Naim reprend (réflexion interrompue)…"})
-                msg = chat_watched(self.model, self.messages, tools=self.tools, think=False, options=self.options,
+                msg = chat_watched(self.model, self.messages, tools=None if plan_now else self.tools, think=False, options=self.options,
                                    cancel=self.cancel, on_writing=lambda w: self.emit({"type": "status", "text": writing_text(w), "w": w}), on_size=self._measured)
             self.messages.append(msg)
             if msg.get("thinking") and think:

@@ -341,6 +341,13 @@ Dans l'application, tape `/` dans la barre de saisie : `/plan`, `/init`, `/test`
 `/remember`, `/undo`, `/web`, `/compact`, `/planifier`… (la liste complète et les raccourcis clavier :
 [web/aide.md](web/aide.md#2-commandes)).
 
+## Contributeurs
+
+- **ABDESSEMED Mohamed** — créateur et auteur de Naim.
+- **Naim** — participe à construire son propre code source : il signale ses erreurs, écrit ses leçons après ses
+  vérifications ratées, retravaille ses consignes en « rêvant », et ses tâches réussies servent à entraîner sa
+  version suivante.
+
 ## Licence
 
 Apache 2.0 — voir [LICENSE](LICENSE). © 2026 ABDESSEMED Mohamed.

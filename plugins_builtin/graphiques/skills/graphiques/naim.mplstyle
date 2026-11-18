@@ -1,0 +1,32 @@
+# Naim's charts: sober, readable, the orange first (matplotlib / seaborn)
+axes.prop_cycle: cycler('color', ['d97757', '5b8def', '3fb68b', 'e0b341', 'a77bd9', 'e06c75', '4fb6c9', '8a8f98'])
+font.family: sans-serif
+font.sans-serif: Helvetica Neue, Helvetica, Arial, DejaVu Sans
+font.size: 11
+axes.titlesize: 14
+axes.titleweight: bold
+axes.titlelocation: left
+axes.titlepad: 12
+axes.labelsize: 11
+axes.labelcolor: 555555
+axes.edgecolor: cccccc
+axes.linewidth: 0.8
+axes.spines.top: False
+axes.spines.right: False
+axes.grid: True
+axes.grid.axis: y
+axes.axisbelow: True
+grid.color: e6e6e6
+grid.linewidth: 0.8
+xtick.color: 555555
+ytick.color: 555555
+xtick.major.size: 0
+ytick.major.size: 0
+legend.frameon: False
+lines.linewidth: 2.2
+lines.markersize: 6
+figure.figsize: 8, 4.5
+figure.dpi: 110
+savefig.dpi: 200
+savefig.bbox: tight
+savefig.facecolor: white

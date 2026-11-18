@@ -16,7 +16,8 @@ Le format vient de l'extension de la sortie. Pas de script à écrire, pas de co
 | Plusieurs images | un PDF (album, dans l'ordre donné) | `p1.jpg p2.jpg p3.jpg album.pdf` |
 | PDF | images (une par page), texte, Markdown, Word | `doc.pdf pages.png` (pages-1.png, pages-2.png…) · `doc.pdf doc.docx` |
 | Word, Markdown, HTML, RTF, ODT, texte, EPUB | un autre de ces formats | `cv.docx cv.md` (les images vont dans cv-images/) |
-| Tout document, PowerPoint, Excel, CSV | PDF au style pdf-pro | `rapport.docx rapport.pdf` · `--couleur gris` |
+| Word, PowerPoint, Excel (docx, pptx, xlsx, odt…) | PDF tel quel : mêmes pages, polices, diapositives, formules calculées (LibreOffice) — l'aperçu fidèle à regarder avec look_at | `rapport.docx rapport.pdf` · `--style pro` pour le style pdf-pro |
+| Markdown, HTML, texte, CSV | PDF au style pdf-pro | `notes.md notes.pdf` · `--couleur gris` |
 | CSV, Excel, JSON | un autre de ces formats | `notes.csv notes.xlsx` |
 | Vidéo (mp4, mov, mkv, avi, webm) | autre vidéo, son (mp3, m4a, wav), GIF animé | `film.mov film.mp4` · `clip.mp4 clip.gif --debut 0:05 --duree 4` |
 | Son (mp3, wav, m4a, flac, ogg) | un autre son | `memo.m4a memo.mp3` |

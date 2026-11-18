@@ -1,0 +1,10 @@
+{
+  "name": "tableur",
+  "version": "1.1",
+  "description": "Créer ou modifier un vrai fichier Excel (.xlsx) : tableaux avec formules qui se recalculent, mise en forme pro, graphiques, budgets, suivis, factures, plannings.",
+  "skills": "skills",
+  "triggers": {
+    "tableur": "\\b(excel|xlsx|tableur|feuille de calcul|classeur|spreadsheet)\\b|\\b(budget|suivi|planning|facture|devis|inventaire|tableau de bord)\\b[^.?!\\n]{0,40}\\b(excel|xlsx|tableur|tableau)\\b"
+  },
+  "priority": true
+}

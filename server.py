@@ -65,7 +65,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
-from naimtools import (answer_here, finals, ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
+from naimtools import (answer_here, cmd_env, finals, ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
 # chat mode: the web tools are offered only when the message asks for something the model cannot know
@@ -99,10 +99,11 @@ ANSWER_TOOLS = {"confier_tache", "chercher_conversations", "chercher_sur_mac", "
                 "browser", "use_mcp", "use_tools", "look_at", "remember", "use_skill", "aller_dans_dossier", "chercher_contact",
                 "mail_inbox", "planifier", "send_email", "http_request"}
 # actions on the Mac itself (printer, apps, settings, music…): Naim does them with its tools, asking when it is sensitive
-MAC_ACTION = (r"mode (sombre|clair|nuit)|th[èe]me (sombre|clair)|airpods|[ée]couteurs|casque (audio|bluetooth)|sortie (audio|son)|verrouill\w* (l'[ée]cran|le mac|mon mac)|([ée]tein[st]|red[ée]marre)\w* (le |mon )?(mac|ordi\w*)|espace (disque|libre)|stockage (du|de mon) mac|m[ée]moire (du|de mon) mac|adresse ip|test de (d[ée]bit|vitesse)|vitesse (de )?(la |ma )?connexion|presse-papiers?|ce que j'ai copi[ée]|app(lication)? raccourcis|lance (le |mon )?raccourci|fond d'[ée]cran|(mets|lance|r[èe]gle|programme)\w* (un |le )?minuteur|minuteur de \d|time machine|[ée]jecte\w*|dans le finder|(cherche|trouve)\w* [^.?!]{0,40}\b(sur|dans) (le |mon )?mac\b|onglets? (de |dans |ouverts? )?(safari|chrome)|safari|whatsapp|itin[ée]raire|comment aller [àa]|ne pas d[ée]ranger|mode concentration|r[ée]glages? syst[èe]me|pr[ée]f[ée]rences syst[èe]me|ajoute (un |ce |le )?contact|(modifi|chang|corrig|remplac|mets? [àa] jour|mettre [àa] jour)\w* [^.?!]{0,40}\bcontacts?\b|fais parler (le )?mac|garde (le mac|l'[ée]cran) allum[ée]|emp[êe]che la veille|"
+# (?<!\w): whole words only — « Louvre » is not « ouvre », « enjoue » is not « joue »
+MAC_ACTION = (r"(?<!\w)(?:mode (sombre|clair|nuit)|th[èe]me (sombre|clair)|airpods|[ée]couteurs|casque (audio|bluetooth)|sortie (audio|son)|verrouill\w* (l'[ée]cran|le mac|mon mac)|([ée]tein[st]|red[ée]marre)\w* (le |mon )?(mac|ordi\w*)|espace (disque|libre)|stockage (du|de mon) mac|m[ée]moire (du|de mon) mac|adresse ip|test de (d[ée]bit|vitesse)|vitesse (de )?(la |ma )?connexion|presse-papiers?|ce que j'ai copi[ée]|app(lication)? raccourcis|lance (le |mon )?raccourci|fond d'[ée]cran|(mets|lance|r[èe]gle|programme)\w* (un |le )?minuteur|minuteur de \d|time machine|[ée]jecte\w*|dans le finder|(cherche|trouve)\w* [^.?!]{0,40}\b(sur|dans) (le |mon )?mac\b|onglets? (de |dans |ouverts? )?(safari|chrome)|safari|whatsapp|itin[ée]raire|comment aller [àa]|ne pas d[ée]ranger|mode concentration|r[ée]glages? syst[èe]me|pr[ée]f[ée]rences syst[èe]me|ajoute (un |ce |le )?contact|(modifi|chang|corrig|remplac|mets? [àa] jour|mettre [àa] jour)\w* [^.?!]{0,40}\bcontacts?\b|fais parler (le )?mac|garde (le mac|l'[ée]cran) allum[ée]|emp[êe]che la veille|"
               r"appelle|appeler|passe un appel|t[ée]l[ée]phone (à|a)\b|\bsms\b|texto|imessage|envoie (un |le |ce )?message|"
               r"imprim|impression|imprimante|\bscanne|ouvre|ferme|quitte|r[eè]gle|active|d[ée]sactive|[ée]teins|allume|"
-              r"(augment|mont|baiss|diminu|coup|remet|met|r[èe]gl|monter|baisser)\w* (un peu |encore )?(le |la |du )?(son|volume|luminosit[ée])|\bson (du|de mon|de l'|sur le) (mac|ordi\w*)|\ben muet\b|\bmute\b|luminosit[ée]|monte le son|baisse le son|volume|luminosit|wi-?fi|bluetooth|mets? en veille|red[ée]marre|joue|musique")
+              r"(augment|mont|baiss|diminu|coup|remet|met|r[èe]gl|monter|baisser)\w* (un peu |encore )?(le |la |du )?(son|volume|luminosit[ée])|\bson (du|de mon|de l'|sur le) (mac|ordi\w*)|\ben muet\b|\bmute\b|luminosit[ée]|monte le son|baisse le son|volume|luminosit|wi-?fi|bluetooth|mets? en veille|red[ée]marre|joue|musique)")
 MAC_ACTION_RE = re.compile(MAC_ACTION, re.I)
 # « n'imprime pas », « ne lance pas encore », « attends mon signal »: the user does NOT want the action now
 NOT_NOW_RE = re.compile(r"\bn['’e]\s*(?:\w+\s+){0,2}?(?:pas|rien|plus|jamais)\b|\bpas encore\b|\battends?\b|\bstop\b|"
@@ -761,7 +762,7 @@ def agent_settings(body):
     out["features"] = {k: s.get(f"enable_{k}", True) is not False for k in ("web", "memory", "skills", "mcp", "subagents", "computer", "simulator")}
     out["disabled_skills"] = s.get("disabled_skills") or []
     out["auto_mcp"] = bool(s.get("auto_mcp"))
-    out["fast"] = bool(s.get("fastMode"))  # « Mode rapide »: the basic tools only, far less for the engine to read
+    out["fast"] = s.get("fastMode", True) is not False  # « Mode rapide » (default): most tools one line behind `outil`, far less to read
     out["auto_computer"] = bool(s.get("auto_computer"))
     out["power"] = bool(s.get("computer_power"))  # red switch: everything without asking except sensitive actions
     out["screen_images"] = bool(s.get("screen_images"))
@@ -1145,7 +1146,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"pages": int(n) if n.isdigit() and int(n) > 0 else None})
             except (ValueError, OSError, subprocess.SubprocessError):
                 self.send_json({"pages": None})
-        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js", "/vendor/highlight.min.js") or path.startswith(("/vendor/katex/", "/vendor/fonts/")):
+        elif path in ("/api/thumb", "/api/raw", "/vendor/mermaid.min.js", "/vendor/highlight.min.js") or path.startswith(("/vendor/katex/", "/vendor/fonts/", "/vendor/graphes/")):
             try:
                 if path == "/vendor/mermaid.min.js":
                     import diagrams
@@ -1156,6 +1157,14 @@ class Handler(BaseHTTPRequestHandler):
                 elif path.startswith("/vendor/fonts/"):  # the text font (Inter), downloaded once, then offline
                     import diagrams
                     f, ctype = diagrams.font_file(path[len("/vendor/fonts/"):]), "font/woff2"
+                elif path.startswith("/vendor/graphes/"):  # a visual's charts (ECharts) and maps (Leaflet), downloaded once
+                    import diagrams
+                    name = path[len("/vendor/graphes/"):]
+                    if name.startswith("tuiles/"):  # a square of a map, through Naim (kept on the Mac)
+                        f, ctype = diagrams.map_tile(name[len("tuiles/"):]), "image/png"
+                    else:
+                        f = diagrams.chart_lib(name)
+                        ctype = "text/css" if f.suffix == ".css" else "text/javascript"
                 elif path.startswith("/vendor/katex/"):  # formulas: KaTeX, downloaded once, then offline
                     import diagrams
                     f = diagrams.katex_file(path[len("/vendor/katex/"):])
@@ -3484,7 +3493,7 @@ def _terminal(self, body):
             return
         proc = subprocess.Popen(body.get("command", ""), shell=True, cwd=cwd, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True, bufsize=1,
-                                start_new_session=True, env={**os.environ, "TERM": "dumb", "CLICOLOR": "0"})
+                                start_new_session=True, env=cmd_env(TERM="dumb", CLICOLOR="0"))
 
         def watch():
             while proc.poll() is None:

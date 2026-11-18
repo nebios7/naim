@@ -544,7 +544,7 @@ footer { padding: 8px 20px 12px; }
 #input { width: 100%; border: 0; outline: 0; resize: none; background: none; max-height: 260px; padding: 6px 4px; display: block; }
 .ctools { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; }
 /* the composer: the text, then one quiet row (attach · voice · send); its settings sit under the box */
-.cin { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.cin { display: flex; align-items: center; gap: 4px; margin-top: 2px; min-height: 32px; }  /* the row keeps its height whichever button shows (voice: the box no longer jumps) */
 .cin .spacer { flex: 1; }
 footer > .ctools { max-width: min(var(--w), 100%); margin: 6px auto 0; padding: 0 6px; box-sizing: border-box; overflow: hidden; }
 footer { min-width: 0; } footer > .composer, #homeBelow { max-width: min(var(--w), 100%); box-sizing: border-box; }
@@ -2281,7 +2281,7 @@ body:has(#talkBtn.on) #talkGlow { opacity: 1; }
   :root:not([data-theme="dark"]) #talkGlow[data-s=speak] { --c1: 250 200 170; --c2: 235 150 110; }
 }
 @media (prefers-reduced-motion: reduce) { #talkGlow { --e: .35 !important; } }
-#talkBtn.on { color: var(--bg); background: var(--text); border-radius: 999px; }
+#talkBtn.on { color: var(--bg); background: var(--text); border-radius: 999px; width: 32px; height: 32px; flex: none; }
 /* Admin › Voix de Naim */
 .vl-row { border-top: 1px solid var(--line); padding: 10px 0; }
 .vl-row:first-child { border-top: 0; }
@@ -2690,7 +2690,7 @@ const DEFAULTS = {
   live_actions: true, chat_tools: true, keep_actions_open: false, naim_backend: "llamacpp", llama_gpu_layers: 99, llama_threads: 0, llama_batch: 512, llama_kv_type: "f16", llama_checkpoints: 16, llama_parallel: "1", max_subagents: 6,
   auto_verify: true, auto_skill: true, minimal_mode: true, auto_compact: true, command_timeout: 120, loop_limit: 4,
   permissions: "refuser write_file: *.env\nrefuser run_command: *rm -rf*\nautoriser read_file: *", hooks: "",
-  vision_model: "", stop_temp_processes: true, keep_final_app: true, planMode: false, fastMode: false, enable_web: true, enable_memory: true, enable_skills: true, enable_mcp: true, enable_subagents: true,
+  vision_model: "", stop_temp_processes: true, keep_final_app: true, planMode: false, fastMode: true, enable_web: true, enable_memory: true, enable_skills: true, enable_mcp: true, enable_subagents: true,
   enable_computer: true, enable_simulator: true, auto_computer: false, computer_power: false, screen_images: false, enable_email: true, email_allowed: "", enable_learning: true, enable_review: true, auto_train: false, auto_train_min: 150, auto_train_from: 1, auto_train_to: 6, auto_preview: true, onboarded: false, share_feedback: false, share_auto: false, memory_auto: true, memory_limit: 60, params_open: false, presets: {}, folders: [], accent: "sobre",
   auto_mcp: false, disabled_skills: [],
   auto_writes: false, auto_commands: false, max_steps: 30, blocked_commands: "rm -rf /\nsudo \nmkfs\n:(){ :|:& };:",
@@ -3927,7 +3927,12 @@ function codeBlock(lang, body, file = "", open = false) {
     // the frame's colour scheme is the page's: otherwise its background is painted opaque (a dark band in dark mode)
     const dark = document.documentElement.dataset.theme === "dark"
       || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
-    return `<div class="vis"><iframe class="visf" sandbox="allow-scripts" title="Visuel" style="color-scheme: ${dark ? "dark" : "light"}" srcdoc="${esc(visuelDoc(body))}"></iframe></div>`
+    // a chart or a map: its library is read once from Naim; until then the frame waits, then is drawn whole
+    const libs = visLibsOf(body), ready = visLibsReady(libs);
+    if (!ready) visLibsLoad(libs);
+    const wait = ready ? "" : ` data-vlibs="${libs.join(" ")}" data-vbody="${esc(body)}"`;
+    const doc = ready ? visuelDoc(body) : visuelDoc(`<div style="padding: 18px; color: var(--muted); font-size: 13px">Préparation du ${libs.includes("leaflet") ? "plan" : "graphique"}…</div>`);
+    return `<div class="vis"><iframe class="visf" sandbox="allow-scripts" title="Visuel" style="color-scheme: ${dark ? "dark" : "light"}"${wait} srcdoc="${esc(doc)}"></iframe></div>`
       + `<details class="mfigcode"><summary>Code du visuel</summary>${codeBlockRaw("html", body, file, open)}</details>`;
   }
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
@@ -3983,6 +3988,73 @@ function algoFrame(algo) {
     .replace(/<head[^>]*>/i, (m) => m + head);
   return `<iframe class="visf simf" sandbox="allow-scripts" title="Simulation" style="color-scheme: dark; height: 640px" srcdoc="${esc(doc)}"></iframe>`;
 }
+// the libraries a visual may use: ECharts (charts that move) and Leaflet (maps of the world). A visual's frame reaches
+// nothing, so their text is read once from Naim (downloaded once, then offline) and written into the frame
+const VISLIBS = {
+  echarts: { test: /\becharts\s*\.|\bnaimGraphe\s*\(/, files: ["echarts.js"] },
+  leaflet: { test: /\bL\s*\.\s*[a-zA-Z]+\s*\(|\bnaimCarte\s*\(/, files: ["leaflet.js", "leaflet.css"] },
+};
+const visLibText = {}, visLibAsked = {};
+const visLibsOf = (body) => Object.keys(VISLIBS).filter((k) => VISLIBS[k].test.test(body || ""));
+const visLibsReady = (libs) => libs.every((k) => VISLIBS[k].files.every((f) => f in visLibText));
+function visLibsLoad(libs) {
+  for (const k of libs) for (const f of VISLIBS[k].files) {
+    if (visLibAsked[f]) continue;
+    visLibAsked[f] = 1;
+    fetch("/vendor/graphes/" + f).then((r) => (r.ok ? r.text() : "")).catch(() => "").then((t) => { visLibText[f] = t; visLibsRefresh(); });
+  }
+}
+function visLibsRefresh() {
+  for (const f of document.querySelectorAll("iframe.visf[data-vlibs]")) {
+    if (!visLibsReady(f.dataset.vlibs.split(" "))) continue;
+    f.removeAttribute("data-vlibs"); f.srcdoc = visuelDoc(f.dataset.vbody); f.removeAttribute("data-vbody");
+  }
+}
+// the library and Naim's helpers: naimGraphe(el, option) = an ECharts chart in Naim's colours (follows light / dark,
+// resizes with the frame); naimCarte(el, [lat, lng], zoom) = a map with a sober background; naimPoint(carte, [lat, lng], texte)
+function visLibsHead(body) {
+  const libs = visLibsOf(body);
+  if (!libs.length) return "";
+  // dark or light from the page's real background (a theme can be dark whatever the Mac's setting)
+  const bg = getComputedStyle(document.body || document.documentElement).backgroundColor.match(/[\d.]+/g) || [255, 255, 255];
+  const dark = (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]) < 128;
+  const js = (t) => `<scr` + `ipt>${(t || "").replace(/<\/script/gi, "<\\/script")}<\/script>`;
+  let h = `<scr` + `ipt>window.NAIM_SOMBRE = ${dark}; const naimVar = (k) => getComputedStyle(document.documentElement).getPropertyValue("--" + k).trim();`
+    + ` const naimEl = (el) => (typeof el === "string" ? document.querySelector(el) : el);<\/script>`;
+  if (libs.includes("echarts")) h += js(visLibText["echarts.js"]) + js(`if (window.echarts) {
+  const t = naimVar("text"), m = naimVar("muted"), l = naimVar("line"), p = naimVar("panel");
+  const axis = { axisLine: { lineStyle: { color: l } }, axisTick: { show: false }, axisLabel: { color: m }, splitLine: { lineStyle: { color: l } }, nameTextStyle: { color: m } };
+  echarts.registerTheme("naim", {
+    color: ["#d97757", "#5b8def", "#3fb68b", "#e0b341", "#a77bd9", "#e06c75", "#4fb6c9", "#8a8f98"],
+    backgroundColor: "transparent", textStyle: { color: t, fontFamily: getComputedStyle(document.body || document.documentElement).fontFamily },
+    title: { textStyle: { color: t, fontSize: 15, fontWeight: 600 }, subtextStyle: { color: m } }, legend: { textStyle: { color: m } },
+    tooltip: { backgroundColor: p, borderColor: l, textStyle: { color: t } },
+    categoryAxis: { ...axis, splitLine: { show: false } }, valueAxis: { ...axis, axisLine: { show: false } }, timeAxis: axis, logAxis: axis,
+    line: { symbolSize: 6, lineStyle: { width: 2.5 } }, bar: { itemStyle: { borderRadius: [4, 4, 0, 0] } } });
+  window.naimGraphe = (el, option) => {
+    el = naimEl(el); if (el.clientHeight < 40) el.style.height = "320px";
+    const c = echarts.init(el, "naim", { renderer: "svg" }); c.setOption(option || {});
+    new ResizeObserver(() => c.resize()).observe(el); return c;
+  };
+}`);
+  // the map's squares come through Naim (kept on the Mac); in dark mode they are turned dark, softly, like Naim
+  if (libs.includes("leaflet")) h += `<style>${visLibText["leaflet.css"] || ""} .leaflet-container { font: inherit; border-radius: 12px; background: var(--panel); }`
+    + ` .leaflet-tile-pane img.leaflet-tile { filter: ${dark ? "invert(1) hue-rotate(180deg) brightness(.9) contrast(.85) saturate(.6)" : "saturate(.65) brightness(1.02)"}; }</style>`
+    + `<scr` + `ipt>window.NAIM_TUILES = ${JSON.stringify(location.origin + "/vendor/graphes/tuiles")};<\/script>` + js(visLibText["leaflet.js"]) + js(`if (window.L) {
+  window.naimCarte = (el, centre, zoom, opts) => {
+    el = naimEl(el); if (el.clientHeight < 40) el.style.height = "340px";
+    const c = L.map(el, { scrollWheelZoom: false, ...(opts || {}) }).setView(centre || [46.6, 2.4], zoom ?? 5);
+    c.attributionControl.setPrefix(false);
+    L.tileLayer(NAIM_TUILES + "/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(c);
+    new ResizeObserver(() => c.invalidateSize()).observe(el); return c;
+  };
+  window.naimPoint = (carte, ll, texte, couleur) => {
+    const p = L.circleMarker(ll, { radius: 7, color: "#fff", weight: 2, fillColor: couleur || "#d97757", fillOpacity: 1 }).addTo(carte);
+    if (texte) p.bindTooltip(String(texte)); return p;
+  };
+}`);
+  return h;
+}
 function visuelDoc(body) {
   const cs = getComputedStyle(document.documentElement);
   const v = ["bg", "panel", "side", "hover", "text", "muted", "line", "accent", "code", "brand", "ok", "warn", "danger"]
@@ -3990,10 +4062,10 @@ function visuelDoc(body) {
   const dark = document.documentElement.dataset.theme === "dark"
     || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
   const whole = /<html[\s>]/i.test(body);
-  const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:">`
+  const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https: ${location.origin}; font-src data:">`
     + `<style>:root { ${v} color-scheme: ${dark ? "dark" : "light"}; } html, body { margin: 0; background: transparent; color: var(--text);`
     + ` font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; } body { padding: 4px; } * { box-sizing: border-box; }</style>`
-    + visHeight();
+    + visHeight() + visLibsHead(body);
   body = body.replace(/<meta[^>]+name=["']?viewport[^>]*>/gi, "");  // the same zoom in a visual written as a whole page
   return whole ? body.replace(/<head[^>]*>/i, (m) => m + head).replace(/^(?![\s\S]*<head)/, head) : `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
 }
@@ -4990,7 +5062,7 @@ const COMMANDS = {
   memory: () => { setView("settings"); showSettingsTab("memory"); },
   undo: () => undoLast(),
   plan: () => { S.planMode = !S.planMode; saveSettings(); applySettings(); toast(S.planMode ? "Plan d'abord : activé" : "Plan d'abord : désactivé"); },
-  rapide: () => { S.fastMode = !S.fastMode; saveSettings(); applySettings(); toast(S.fastMode ? "Mode rapide : activé (outils de base seulement)" : "Mode rapide : désactivé"); },
+  rapide: () => { S.fastMode = !S.fastMode; saveSettings(); applySettings(); toast(S.fastMode ? "Mode rapide : activé" : "Mode rapide : désactivé (tous les outils décrits en entier)"); },
   permmode: () => { const order = PERM_MODES.map((m) => m.id); setPermMode(order[(order.indexOf(permMode()) + 1) % order.length]); },
   processes: () => { setView("chat"); $("#panel").classList.contains("show") && !$("#pProcs").hidden ? closePanel() : showPanel("procs"); },
   files: () => { setView("chat"); if (S.mode !== "agent") setMode("agent"); $("#panel").classList.contains("show") && !$("#pFiles").hidden ? closePanel() : showPanel("files"); },
@@ -5414,9 +5486,14 @@ window.naimDictation = (text, final, error) => {
     // tu parles tonton… »), and such words, taken for you, were sent as your message. Once it is silent, it listens to you.
     const hit = said.split(/\s+/).slice(-8).join(" ").match(TALK_STOP_ANY);
     if (hit && !(voice.said || "").toLowerCase().includes(hit[0].toLowerCase())) { talkHush(); return; }  // « stop », « attends »: it stops at once (not its own « attends »)
-    return;
+    // the Mac removes Naim's voice from the microphone (echo cancellation, in the app): what is heard now is you. A real
+    // sentence (3 words or more, not its own words) cuts its voice — you take the floor as with a person —, and what you
+    // say is kept: it is sent after your silence, as usual
+    if (window.naimDictationEcho && said.split(/\s+/).length >= 3 && !talkEcho(said, true)) {
+      talk.bargeIn = true; voiceStop();
+    } else return;
   }
-  if (talk.on && text.trim()) { clearTimeout(talk.timer); talk.timer = setTimeout(talkSend, TALK_SILENCE); if (text.length !== talk.heardLen) { talk.heardLen = text.length; glowHeard(); } }
+  if (talk.on && text.trim()) { clearTimeout(talk.timer); talk.timer = setTimeout(talkSend, talkPause(text)); if (text.length !== talk.heardLen) { talk.heardLen = text.length; glowHeard(); } }
   const inp = $("#input");
   inp.value = dictation.base + (dictation.base && text ? " " : "") + text;
   inp.dispatchEvent(new Event("input"));
@@ -5437,6 +5514,16 @@ function startDictation() {
 }
 // ---- conversation mode: listen → (silence) → send → Naim answers aloud → listen again
 const talk = { on: false, timer: null }, TALK_SILENCE = 1500;
+// how long a silence ends what you say: a sentence that stops on « et », « mais », « euh », « parce que »… is not finished
+// (you look for the next word: it waits longer); a short answer (« oui », « stop », « vas-y ») or a question goes at once
+const TALK_UNFINISHED = /\b(?:euh+|heu+|hum+|bah|ben|et|ou|mais|donc|alors|puis|ensuite|parce que|parce qu'|car|que|qu'|qui|dont|où|si|quand|comme|pour|avec|sans|sur|sous|dans|chez|vers|par|de|du|des|d'|le|la|les|l'|un|une|mon|ma|mes|ton|ta|tes|son|sa|ses|ce|cet|cette|ces|leur|à|au|aux|en fait|genre|c'est|je|tu|il|elle|on|nous|vous|ils|elles|j'|est-ce que|plus|moins|très|aussi)\s*$/i;
+function talkPause(text) {
+  const t = String(text || "").trim(), words = t.split(/\s+/).filter(Boolean).length;
+  if (TALK_UNFINISHED.test(t)) return 2600;          // in the middle of a sentence: it lets you find the end
+  if (/[?!.]$/.test(t)) return 1000;                  // the Mac put the end mark: the sentence is finished
+  if (words <= 3) return 1000;                        // « oui », « stop », « continue », « vas-y fais-le »
+  return TALK_SILENCE;
+}
 function talkStateUpdate() {  // who has the floor, shown by the wave button itself (no extra banner)
   const b = $("#talkBtn"); if (!b) return;
   if (!talk.on) { delete b.dataset.s; return; }
@@ -5594,10 +5681,45 @@ const voice = { queue: [], fed: 0, done: true, audio: null, btn: null, token: 0,
 // one audio element, unlocked by a click (WebKit lets a page play sound only after a gesture), reused for every sentence
 function voicePlayer() { if (!voice.player) { voice.player = new Audio(); voice.player.preload = "auto"; } return voice.player; }
 function voiceUnlock() { const p = voicePlayer(); p.muted = true; p.play().catch(() => {}).finally(() => { p.pause(); p.muted = false; }); }
-function voiceSentences(text) {  // code is shown, not read (an unfinished code block too); then sentence by sentence
-  let t = String(text || "");
-  if ((t.match(/```/g) || []).length % 2) t = t.slice(0, t.lastIndexOf("```"));
-  t = t.replace(/```[\s\S]*?```/g, " ").replace(/\n{2,}/g, ". ");
+// what is SAID of an answer: what a person would say aloud, not what is shown. Code, tables, schemas and long formulas
+// stay on the screen — said once, in a short sentence (« Je t'ai mis le code dans la conversation. ») —, links give their
+// words only, a path its file name, simple maths is read in French. The same text is kept to recognise Naim's own voice.
+const SAY_SHOWN = { code: "Je t'ai mis le code dans la conversation.", schema: "Le schéma est affiché dans la conversation.",
+                    table: "Le tableau est dans la conversation.", formula: "La formule est affichée à l'écran." };
+function voiceMath(m) {  // « x^2 + \frac{a}{b} » → « x au carré plus a sur b »
+  let t = String(m);
+  for (let k = 0; k < 3; k++) t = t.replace(/\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, " $1 sur $2 ").replace(/\\sqrt\{([^{}]*)\}/g, " racine de $1 ");
+  t = t.replace(/\^\{?2\}?/g, " au carré ").replace(/\^\{?3\}?/g, " au cube ").replace(/\^\{([^{}]*)\}|\^(\w)/g, " puissance $1$2 ")
+    .replace(/_\{([^{}]*)\}|_(\w)/g, " $1$2 ").replace(/\\(times|cdot)/g, " fois ").replace(/\\(le|leq)\b/g, " inférieur ou égal à ")
+    .replace(/\\(ge|geq)\b/g, " supérieur ou égal à ").replace(/\\(neq|ne)\b/g, " différent de ").replace(/\\approx/g, " environ ")
+    .replace(/\\pi/g, " pi ").replace(/\\infty/g, " l'infini ").replace(/\\(left|right|,|;|!|quad)/g, " ").replace(/\\[a-zA-Z]+/g, " ")
+    .replace(/[{}]/g, " ").replace(/\s*=\s*/g, " égale ").replace(/(\S)\s*\+\s*/g, "$1 plus ").replace(/(\S)\s*[-−]\s*(?=\S)/g, "$1 moins ")
+    .replace(/(\S)\s*\/\s*/g, "$1 sur ").replace(/\s*[×·*]\s*/g, " fois ");
+  return t.replace(/\s+/g, " ").trim();
+}
+function voiceSpoken(text) {
+  let t = String(text || ""), said = new Set();
+  const once = (kind) => { if (said.has(kind)) return " "; said.add(kind); return `\n\n${SAY_SHOWN[kind]}\n\n`; };
+  const fence = (lang) => /^(graphe|mermaid|svg|diagram|schema|plot|dot)/i.test(lang || "") ? "schema" : "code";
+  // a code block being written (not closed yet): said as soon as it opens, never read
+  t = t.replace(/```([\w+-]*)[^\n]*\n?[\s\S]*?(?:```|$)/g, (m, lang) => once(fence(lang)));
+  t = t.replace(/(?:^[ \t]*\|.*\|?[ \t]*$\n?){2,}/gm, () => once("table"));            // a Markdown table
+  t = t.replace(/\$\$[\s\S]*?(?:\$\$|$)|\\\[[\s\S]*?(?:\\\]|$)/g, (m) => m.length > 60 ? once("formula") : `\n\n${voiceMath(m.replace(/^\$\$|\$\$$|^\\\[|\\\]$/g, ""))}.\n\n`);
+  t = t.replace(/\$([^$\n]{1,80})\$|\\\((.{1,80}?)\\\)/g, (m, a, b) => " " + voiceMath(a || b) + " ");
+  t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");   // an image: shown; a link: its words
+  t = t.replace(/<https?:[^>\s]+>|https?:\/\/[^\s)>\]]+/g, " ");                        // a bare address is not read
+  t = t.replace(/`([^`\n]+)`/g, (m, c) => {                                              // inline code
+    const path = c.match(/^(?:~|\.{0,2}\/)?(?:[^\s/]+\/)+([^\s/]+)$/);
+    if (path) return path[1];                                                           // a path: its file name
+    return c.length <= 32 && !/[(){};=<>]/.test(c) ? c : " ";                           // a name is said, code is not
+  });
+  t = t.replace(/(?:^|\s)(?:~|\/Users)\/(?:[^\s/]+\/)+([^\s/]+\.\w{1,5})\b/g, " $1");   // a bare path: its file name
+  t = t.replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, "\n").replace(/^#{1,6}[ \t]*(.+)$/gm, "\n$1.\n");  // list marks, titles
+  return t.replace(/(\d)\.(\d)/g, "$1,$2")                    // 3.14 read « 3 virgule 14 », and not cut as two sentences
+    .replace(/([\wÀ-ÿ-])\.([a-z0-9]{1,5})(?![\wÀ-ÿ])/g, "$1 point $2");  // « stats.py » said « stats point py », one sentence
+}
+function voiceSentences(text) {  // sentence by sentence, from what is said (see voiceSpoken)
+  const t = voiceSpoken(text).replace(/\n{2,}/g, ". ").replace(/([.!?…:])(\s*\.)+/g, "$1");
   return (t.match(/[^.!?…\n]+[.!?…]*/g) || []).map((x) => x.trim()).filter((x) => x.replace(/[\W_]/g, "").length > 1);
 }
 async function voiceClip(sentence) {
@@ -6398,6 +6520,7 @@ function addBot(m, idx) {
       if (s.type === "event" && s.at != null) { v.noteAt(s.text, s.at); return; }
       if (s.type === "event") { v.event(s.icon, s.text); return; }
       if (s.type === "subagent") { v.subagent(s); return; }
+      if (s.type === "think") return;
       if (s.type === "vision") { v.vision(s); return; }
       if (s.type === "tool") { v.addStep(s.name, s.args, s.sub); if (s.output) v.output(s.output); if (s.result) v.stepResult(s.name, s.result); if (s.image) v.shot(s.image); }
       else if (s.type === "note") v.note(s.text);
@@ -6766,8 +6889,8 @@ async function stream(reply, v, message, hist, extra = {}) {
             }
             renderText(); break; }
           case "retract": if (ev.chars > 0) { reply.content = reply.content.slice(0, Math.max(0, reply.content.length - ev.chars)); renderText(); } break;  // an old answer copied again: taken back
-          case "thinking_token": reply.thinking += ev.text; v.setThinking(reply.thinking); break;
-          case "thinking": reply.thinking += (reply.thinking ? "\n\n" : "") + ev.text; v.setThinking(reply.thinking); break;
+          case "thinking_token": if (ev.sub) break; reply.thinking += ev.text; v.setThinking(reply.thinking); break;
+          case "thinking": if (ev.sub) break; reply.thinking += (reply.thinking ? "\n\n" : "") + ev.text; v.setThinking(reply.thinking); break;
           case "status": if (!ev.sub) { v.typing(ev.text); quillProgress(ev.w); } break;
           case "run": reply.run_id = ev.run_id; break;
           case "checkpoint": reply.checkpoint = ev.run_id; break;
@@ -6786,7 +6909,8 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "subagent": { const now = Date.now(); const prev = reply.steps.find((x) => x.type === "subagent" && x.name === ev.name);
             if (prev) { prev.status = ev.status; if (ev.status === "done") prev.t1 = now; } else reply.steps.push({ type: "subagent", name: ev.name, status: ev.status, task: ev.task, t0: now });
             v.subagent({ ...ev, t0: prev?.t0 || now, t1: ev.status === "done" ? now : undefined }); break; }
-          case "todos": reply.todos = ev.todos; v.todos(ev.todos); if (!ev.sub) v.typing(currentTodo(ev.todos)); break;
+          case "todos": if (ev.sub) break;  // a sub-agent's own list: Naim's tasks stay the ones shown
+            reply.todos = ev.todos; v.todos(ev.todos); v.typing(currentTodo(ev.todos)); break;
           case "tool": {
             const a = ev.args || {};
             if (ev.name === "update_todos") { lastTool = null; break; }
@@ -7134,6 +7258,12 @@ const LDOTS = '<span class="bgdots" aria-hidden="true"><canvas></canvas></span>'
 function liveKind(label, tool) {
   const l = label.replace(/^Naim /, "");
   if (/^attend\b/i.test(l)) return "wait";
+  if (/^(calcule|résout|compte)\b/i.test(l)) return "calc";
+  if (/\bsous-agents?\b|^(délègue|confie|répartit)\b/i.test(l)) return "team";
+  if (/^regarde (l'écran|le simulateur|l'image|la page|l'aperçu)|^(observe|examine)\b/i.test(l)) return "look";
+  if (/^envoie\b|\be-?mail\b|\bsms\b/i.test(l)) return "mail";
+  if (/^(installe|télécharge|récupère des skills)\b/i.test(l)) return "install";
+  if (/^(mémorise|retient|note)\b/i.test(l)) return "mem";
   if (/^(planifie|répartit)\b|\bplan\b/i.test(l)) return "plan";
   if (/\b(sur le web|une page web|navigateur)\b|https?:\/\//i.test(l)) return "web";
   if (/^(résume|allège)\b/i.test(l)) return "sum";
@@ -7145,9 +7275,10 @@ function liveKind(label, tool) {
   return tool || "think";
 }
 // the step of a tool, when its label does not say it (a command's own description: « Compte les lignes… »)
-const TOOL_KIND = { run_command: "run", start_process: "run", update_todos: "plan", planifier: "plan", delegate: "plan",
+const TOOL_KIND = { run_command: "run", start_process: "run", update_todos: "plan", planifier: "plan", delegate: "team",
+  look_at: "look", computer: "look", send_email: "mail", install_mcp: "install", install_plugin: "install", install_skill: "install", remember: "mem",
   web_search: "web", web_fetch: "web", browser: "web", search: "search", find_files: "search", find_symbol: "search",
-  list_files: "read", read_file: "read", look_at: "check", ask_user: "wait", write_file: "write", edit_file: "write", multi_edit: "write" };
+  list_files: "read", read_file: "read", ask_user: "wait", write_file: "write", edit_file: "write", multi_edit: "write" };
 // the quill follows what Naim really writes: each progress of the tool call being written (about once a second:
 // how many characters so far) sets its pace. Many characters a second: quick strokes; few: slow ones; nothing new
 // for a while: it rests. A file: long strokes moving along the line, back at its start like a new line; a command:
@@ -7314,6 +7445,24 @@ const naimDots = (() => {
     sum: (t) => { const u = wrap(t, 1.6), m = u < .4 ? ease(u / .4) : u < .6 ? 1 : 1 - ease((u - .6) / .4); return CORNERS.map(([x, y]) => [x + (.5 - x) * m, y + (.5 - y) * m, 1 + .3 * m]); },
     // reads: three dots in a wave, like eyes along a line (the fourth melts into the middle one)
     read: (t) => [0, 1, 2].map((i) => [i / 2, .5 - .32 * Math.max(0, Math.sin(wrap(t, .9) * 6.2832 - i * .9)), 1]).concat([[.5, .5, 0]]),
+    // calculates: a « + » whose arms pulse, then the dots settle into « = » (the result)
+    calc: (t) => { const u = wrap(t, 1.8), PLUS = [[.5, .1], [.9, .5], [.5, .9], [.1, .5]], EQ = [[.2, .32], [.8, .32], [.8, .68], [.2, .68]];
+      const m = u < .45 ? 0 : u < .6 ? ease((u - .45) / .15) : u < .9 ? 1 : 1 - ease((u - .9) / .1), p = u < .45 ? .12 * bump(u / .225 % 1) : 0;
+      return PLUS.map(([x, y], i) => { const px = x + (.5 - x) * p, py = y + (.5 - y) * p; return [px + (EQ[i][0] - px) * m, py + (EQ[i][1] - py) * m]; }); },
+    // shares out the work (sub-agents): one dot in the middle sends the three others out, they come back with it done
+    team: (t) => { const u = wrap(t, 2.0), out = u < .35 ? ease(u / .35) : u < .7 ? 1 : 1 - ease((u - .7) / .3);
+      return [[.5, .5, 1.15]].concat([0, 1, 2].map((i) => { const a = -Math.PI / 2 + i * 2.0944 + u * .6; return [.5 + .5 * out * Math.cos(a), .5 + .5 * out * Math.sin(a), .55 + .45 * out]; })); },
+    // looks (a page, the screen, an image): two eyes that look left and right and blink now and then
+    look: (t) => { const u = wrap(t, 2.6), dx = .14 * Math.sin(u * 6.2832), blink = u > .82 && u < .9 ? bump((u - .82) / .08) : 0;
+      return [[.22 + dx, .5, 1 - .7 * blink], [.78 + dx, .5, 1 - .7 * blink], [.22 + dx, .5, 0], [.78 + dx, .5, 0]]; },
+    // sends (an e-mail, a message): the four make an envelope, it leaves to the right, a new one comes in
+    mail: (t) => { const u = wrap(t, 1.7), go = u < .62 ? 0 : ease(Math.min(1, (u - .62) / .3)), ENV = [[0, .15], [1, .15], [1, .85], [0, .85]];
+      return ENV.map(([x, y]) => { const x2 = x + 1.4 * go - (u < .12 ? 1.2 * (1 - ease(u / .12)) : 0); return [x2, y - (go > 0 ? .2 * bump(go) : 0), Math.max(0, Math.min(1, 1.3 - Math.abs(x2 - .5) * 1.1))]; }); },
+    // installs, downloads: the dots fall one after the other and pile up at the bottom
+    install: (t) => { const u = wrap(t, 2.2) * 5; return [0, 1, 2, 3].map((i) => { const k = Math.max(0, Math.min(1, u - i)), y = -.2 + 1.2 * k * k;
+      return [i / 3, Math.min(1, y), u > 4.6 ? 1 - (u - 4.6) / .4 : k > 0 ? 1 : 0]; }); },
+    // remembers: the dots stack up one on the other, like a note put away
+    mem: (t) => { const u = wrap(t, 2.0) * 4; return [0, 1, 2, 3].map((i) => { const k = ease(Math.max(0, Math.min(1, u - i))); return [.5 + (i % 2 ? .18 : -.18) * (1 - k), 1 - i / 3 * k, k > 0 ? .7 + .3 * k : 0]; }); },
     // waits for the user: the square breathes, slowly
     wait: (t) => { const b = (1 - Math.cos(wrap(t, 2.8) * 6.2832)) / 2; return CORNERS.map(([x, y]) => [x + (.5 - x) * .14 * b, y + (.5 - y) * .14 * b, .8 + .2 * b]); },
   };
@@ -7417,7 +7566,10 @@ setInterval(() => {
   });
 }, 1000);
 function autoGrow() {  // empty: one line (a long placeholder must not make the box tall)
-  const i = $("#input"); i.style.height = "auto"; if (i.value) i.style.height = Math.min(i.scrollHeight, 260) + "px";
+  // one line keeps its natural height: a fixed height rounded to the pixel made the box (and its text) move by a fraction
+  // of a pixel at each word dictated — the input « trembled » in a voice conversation
+  const i = $("#input"); i.style.height = "auto";
+  if (i.value && i.scrollHeight > i.clientHeight + 1) i.style.height = Math.min(i.scrollHeight, 260) + "px";
 }
 $("#input").addEventListener("input", () => { autoGrow(); updateCtx(); });
 $("#input").addEventListener("keydown", (e) => {
@@ -8391,7 +8543,7 @@ const TABS = {
       ${row("Autoriser automatiquement les commandes", "⚠ Naim pourra exécuter des commandes sans te demander.", sw("auto_commands"))}
       ${row("Tout autoriser", "Équivalent de la case « Tout autoriser » en haut.", sw("autoYes"))}
       ${row("Plan d'abord par défaut", "L'agent propose un plan et attend « Exécuter ».", sw("planMode"))}
-      ${row("Mode rapide", "Les outils de base seulement (fichiers, commandes, recherche, web) : Naim a trois fois moins à lire et démarre plus vite. Sans e-mail, écran, navigateur, documents, skills, serveurs MCP ni sous-agents.", sw("fastMode"))}
+      ${row("Mode rapide", "Naim garde tous ses outils et ses skills, mais seuls les plus courants sont décrits en entier : il a trois fois moins à lire et répond beaucoup plus vite, dans le Chat comme dans l'Agent. Décoche-le pour un très gros projet (application complète, plusieurs sous-agents).", sw("fastMode"))}
       ${row("Recherche web", "Outils web_search et web_fetch.", sw("enable_web"))}
       ${row("Sous-agents", "Naim peut répartir une grosse tâche entre plusieurs sous-agents.", sw("enable_subagents"))}
       ${row("Vérifier qu'il n'invente rien", "Quand Naim produit un document à partir des tiens (CV, lettre, rapport), il compare les deux et retire ce qui n'y figure pas. Ajoute un peu de temps.", sw("enable_review"))}
@@ -10322,7 +10474,7 @@ function renderParams() {
     <div class="psec"><b>Contexte</b>
       <select data-ps="num_ctx">${ctxs.map((c) => `<option value="${c}" ${+S.num_ctx === c ? "selected" : ""}>${c / 1024}k tokens</option>`).join("")}</select>
       <small class="muted" style="display:block;margin-top:6px">Avec llama.cpp, Naim utilise 32k. Plus grand = plus de mémoire, plus lent.</small></div>
-    <div class="psec"><b>Mode</b>${tog("think", "Raisonnement")}${tog("planMode", "Plan d'abord (agent)")}${tog("fastMode", "Mode rapide (agent)")}${tog("autoYes", "Tout autoriser")}</div>
+    <div class="psec"><b>Mode</b>${tog("think", "Raisonnement")}${tog("planMode", "Plan d'abord (agent)")}${tog("fastMode", "Mode rapide")}${tog("autoYes", "Tout autoriser")}</div>
     <div class="psec"><b>Outils de l'agent</b>
       ${tog("enable_web", "Recherche web")}${tog("enable_memory", "Mémoire")}${tog("enable_skills", "Skills")}${tog("enable_mcp", "Serveurs MCP")}
       ${tog("enable_subagents", "Sous-agents")}${tog("enable_computer", "Contrôle de l'écran")}${tog("enable_simulator", "Simulateur iOS")}${tog("enable_email", "Emails")}</div>

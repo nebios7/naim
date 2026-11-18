@@ -1,0 +1,10 @@
+{
+  "name": "graphiques",
+  "version": "1.0",
+  "description": "Des graphiques, cartes et réseaux en vrais fichiers : PNG / PDF nets pour un rapport ou une diapo, page HTML interactive, carte géographique, graphe de relations ; les tableaux d'un PDF vers Excel.",
+  "skills": "skills",
+  "triggers": {
+    "graphiques": "\\b(graphiques?|courbes?|histogrammes?|camemberts?|diagrammes? (en barres|circulaires?)|nuage de points|carte de chaleur|heatmap)\\b[^.?!\\n]{0,60}\\b(png|pdf|image|fichier|html|rapport|diapo\\w*|pr[ée]sentation|exporte?r?|enregistr\\w*|matplotlib|plotly|seaborn)\\b|\\b(folium|networkx|plotly|seaborn|matplotlib|pdfplumber)\\b|\\bcarte\\b[^.?!\\n]{0,40}\\b(html|fichier|png)\\b|\\b(r[ée]seau|graphe) (de relations|social|des liens)\\b|\\btableaux? (d'un|du|de ce|des?) pdf\\b"
+  },
+  "priority": true
+}

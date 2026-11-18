@@ -515,11 +515,43 @@ def to_html(sd):
             + "".join(parts) + "</div></body></html>")
 
 
+def real_pictures(out, d, count):
+    """The pictures of the real .pptx, drawn by LibreOffice then cut into pages by poppler: what the file shows, text
+    that overflows included. [] when either is missing (then the slides are redrawn from the plan)."""
+    import shutil
+    import tempfile
+    exe = shutil.which("soffice") or next((p for p in ("/opt/homebrew/bin/soffice", "/Applications/LibreOffice.app/Contents/MacOS/soffice") if Path(p).exists()), None)
+    ppm = shutil.which("pdftoppm") or next((p for p in ("/opt/homebrew/bin/pdftoppm",) if Path(p).exists()), None)
+    if not exe or not ppm or not Path(out).exists():
+        return []
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            subprocess.run([exe, f"-env:UserInstallation=file://{tmp}/profil", "--headless", "--convert-to", "pdf", "--outdir", tmp, str(out)],
+                           capture_output=True, timeout=300)
+            pdf = Path(tmp) / (Path(out).stem + ".pdf")
+            if not pdf.exists():
+                return []
+            subprocess.run([ppm, "-png", "-r", "96", str(pdf), f"{tmp}/p"], capture_output=True, timeout=300)
+        except (OSError, subprocess.SubprocessError):
+            return []
+        pages = sorted(Path(tmp).glob("p-*.png"), key=lambda f: int(f.stem.rsplit("-", 1)[1]))
+        if len(pages) != count:
+            return []
+        made = []
+        for i, f in enumerate(pages, 1):
+            png = d / f"diapo-{i}.png"
+            shutil.move(str(f), png)
+            made.append(str(png))
+        return made
+
+
 def pictures(slides, out):
     d = Path(out).with_suffix("")
     d = d.parent / (d.name + "-apercu")
     d.mkdir(exist_ok=True)
-    made = []
+    made = real_pictures(out, d, len(slides))
+    if made:
+        return made
     if not NAIM_PDF.exists():
         return made
     for i, sd in enumerate(slides, 1):

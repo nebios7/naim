@@ -1,6 +1,6 @@
 {
   "name": "convertisseurs",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Convertir un fichier d'un format à un autre en une commande : images (HEIC, JPG, PNG, WebP…), documents (Word, Markdown, HTML, RTF, PDF), tableurs (CSV, Excel, JSON), audio et vidéo (MP4, MOV, MP3, WAV, GIF).",
   "skills": "skills",
   "triggers": {

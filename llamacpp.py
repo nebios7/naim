@@ -258,6 +258,11 @@ class Server:
                 # one memory shared by the slots instead of equal fixed parts: the Agent can use all of it for a long
                 # task while the Chat is idle (otherwise each slot is capped at the total divided by the slots)
                 cmd += ["--kv-unified"]
+                if engine_has(exe, "--no-clear-idle"):
+                    # by default a slot that starts working empties the idle ones, and a request sent to its own
+                    # slot does not take back what was put aside: the Chat re-read its 13,000 tokens of
+                    # instructions (~3 min) after a quick « salut » answered in the other slot. Each slot keeps its own.
+                    cmd += ["--no-clear-idle"]
             # flash attention: measured on an M4 with Naim's Agent prompt, a new conversation reads its instructions
             # 1.7× faster (85 s instead of 144 s) and writes 1.5× faster (8.8 instead of 5.9 tokens/s), same memory
             cmd += ["-fa", "on"]
@@ -485,6 +490,42 @@ SLOTS_DIR = HOME / "cache" / "slots"
 WARM_LOG = []  # « restored » / « saved » for each start-up reading (shown in the status)
 
 
+_HAS = {}
+
+
+def engine_has(exe, flag):
+    """True when this llama-server knows that option (an older engine refuses to start with an unknown one)."""
+    try:
+        key = (str(exe), Path(exe).stat().st_mtime, flag)
+    except OSError:
+        return False
+    if key not in _HAS:
+        try:
+            out = subprocess.run([str(exe), "--help"], capture_output=True, text=True, timeout=20)
+            _HAS[key] = flag in (out.stdout + out.stderr)
+        except (OSError, subprocess.SubprocessError):
+            _HAS[key] = False
+    return _HAS[key]
+
+
+def free_other_slots(keep):
+    """The shared memory is full: the idle slots other than this one let go of what they read (once, then retried)."""
+    freed = False
+    try:
+        with urllib.request.urlopen(URL + "/slots", timeout=10) as r:
+            slots = json.load(r)
+    except Exception:  # noqa: BLE001 — no list of slots: nothing to free
+        return False
+    for sl in slots:
+        if sl.get("id") != keep and not sl.get("is_processing"):
+            try:
+                _post(f"/slots/{sl['id']}?action=erase", {}, timeout=30)
+                freed = True
+            except Exception:  # noqa: BLE001
+                pass
+    return freed
+
+
 def _post(path, body, timeout=1800):
     req = urllib.request.Request(URL + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -571,6 +612,9 @@ def chat(messages, tools=None, think=False, stream=False, options=None, url=None
                 body = e.read().decode("utf-8", "replace")
             except OSError:
                 body = ""
+            if attempt == 1 and not url and "id_slot" in payload and (e.code >= 500 or "context" in body) \
+                    and free_other_slots(payload["id_slot"]):
+                continue  # the slots kept what they read and the shared memory filled up: the idle ones let go, once
             if "exceeds the available context" in body or "context size" in body:
                 raise ContextFull(body[:300]) from e
             note_error(f"HTTP {e.code}", body or str(e))

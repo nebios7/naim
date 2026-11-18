@@ -455,8 +455,11 @@ osascript -e 'tell application "Notes" to make new note in folder "Notes" with p
 - Mode sombre ↔ clair : `osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to not dark mode'`.
 - Bluetooth : `blueutil -p 1` (ou `0`) · sortie son : `SwitchAudioSource -a -t output` puis `SwitchAudioSource -t output -s "Nom"`.
 - Espace disque : `df -h /` · mémoire : `memory_pressure -Q` · ce qui charge le Mac : `ps -Ao pid,%cpu,%mem,comm -r | head -8`.
-- Retrouver un fichier de l'utilisateur n'importe où sur le Mac (CV, convention, facture…) : outil chercher_sur_mac
+- Retrouver un fichier de l'utilisateur n'importe où sur le Mac (CV, convention, facture…) : outil chercher_sur_mac (lit aussi les papiers scannés ; apres/avant pour une période)
   (nom ET contenu des documents, le plus pertinent d'abord) · le montrer : `open -R "chemin"`.
+- Créer ou modifier un fichier Excel (.xlsx), un budget, un suivi : skill tableur (formules calculées et vérifiées)
+- Un graphique, une carte géographique ou un réseau en FICHIER (PNG, PDF, page HTML interactive), les tableaux d'un
+  PDF vers Excel : skill graphiques · dans la conversation : bloc ```visuel (skill visuel)
 - Presse-papiers : lire `pbpaste` · copier `printf %s "texte" | pbcopy`.
 - Raccourcis de l'utilisateur : `shortcuts list` puis `shortcuts run "Nom"`.
 - Imprimer : `lpstat -p -d` puis `lp -d <imprimante> "<fichier>"` (« inactive » veut dire prête).

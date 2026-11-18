@@ -80,6 +80,23 @@ class EngineGrowsOnly(unittest.TestCase):
     engine under a running answer — « Connection refused », 6 restarts in 2 minutes). Only a bigger one restarts it."""
 
     def test_no_shrink(self):
+        # what is tested is the size logic: a training running on this Mac (its lock) must not decide the result
+        import types
+        saved = {k: sys.modules.get(k) for k in ("autotrain", "voicetrain")}
+        free = types.SimpleNamespace(training_lock=lambda: None)
+        sys.modules.update(autotrain=free, voicetrain=free)
+        blocked, llamacpp.BLOCKED = llamacpp.BLOCKED, None
+        try:
+            self._no_shrink()
+        finally:
+            llamacpp.BLOCKED = blocked
+            for k, v in saved.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+
+    def _no_shrink(self):
         s = llamacpp.Server(port=1)
         s.proc = type("Running", (), {"poll": lambda self: None})()  # an engine that runs
         s.ctx, s.cfg = 32768, dict(llamacpp.CONFIG)
@@ -3446,7 +3463,8 @@ class MathFigureIsAGraphe(unittest.TestCase):
     def test_visuel_skill_sends_maths_to_graphe(self):
         s = (ROOT / "plugins_builtin/visuel/skills/visuel/SKILL.md").read_text()
         self.assertIn("Un graphe de maths : pas ce bloc", s)
-        self.assertIn('"version": "1.2"', (ROOT / "plugins_builtin/visuel/plugin.json").read_text())
+        v = json.loads((ROOT / "plugins_builtin/visuel/plugin.json").read_text())["version"]
+        self.assertGreaterEqual(tuple(int(x) for x in v.split(".")), (1, 2))  # shipped as a new version (1.2 or later)
 
 
 class OkToAnOfferIsWork(unittest.TestCase):
@@ -3487,6 +3505,61 @@ class SubAgentsKeepTheRules(unittest.TestCase):
                 naimtools.Agent.run = real
         self.assertIn("fait", out)
         self.assertEqual(seen, {"extra": "Réponds en français.", "steps": 25, "sub": True})
+
+
+class VoiceSaysWhatAPersonWould(unittest.TestCase):
+    """The voice conversation: code, tables and schemas are shown and said in one short sentence, a file name is said
+    whole, a sentence ending on « et »/« euh » waits for its end, and with the Mac's echo cancellation a real sentence
+    cuts Naim's voice (its own words never do)."""
+
+    JS = r"""
+    const fs = require("fs"); const s = fs.readFileSync(process.argv[1], "utf8");
+    const part = (a, b) => s.slice(s.indexOf(a), s.indexOf(b));
+    eval(part("const SAY_SHOWN", "async function voiceClip"));
+    eval(part("const TALK_UNFINISHED", "function talkStateUpdate"));
+    const TALK_SILENCE = 1500;
+    console.log(JSON.stringify({
+      code: voiceSentences("Voici :\n```python\nprint(1)\n```\nPuis :\n```js\nlet a\n```\nFini."),
+      open: voiceSentences("Je dessine :\n```graphe\nf(x)=x^2\n"),
+      table: voiceSentences("| a | b |\n|---|---|\n| 1 | 2 |\n\nVoilà."),
+      file: voiceSentences("Le fichier `/Users/moi/projet/stats.py` est prêt, voir https://exemple.com/x."),
+      math: voiceSentences("L'aire vaut $\\pi r^2$."),
+      pauses: ["oui", "fais le graphe et", "je voudrais euh", "je voudrais un tableau des résultats"].map(talkPause),
+    }));
+    """
+
+    def test_spoken_text_and_pauses(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node absent")
+        r = subprocess.run(["node", "-e", self.JS, str(ROOT / "web/index.html")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = json.loads(r.stdout)
+        self.assertEqual(out["code"], ["Voici : Je t'ai mis le code dans la conversation.", "Puis :", "Fini."])
+        self.assertEqual(out["open"], ["Je dessine : Le schéma est affiché dans la conversation."])
+        self.assertEqual(out["table"], ["Le tableau est dans la conversation.", "Voilà."])
+        self.assertEqual(out["file"], ["Le fichier stats point py est prêt, voir"])
+        self.assertIn("pi r au carré", out["math"][0])
+        self.assertEqual(out["pauses"], [1000, 2600, 2600, 1500])
+
+    def test_barge_in_only_with_echo_cancellation(self):
+        page = (ROOT / "web/index.html").read_text()
+        self.assertIn("window.naimDictationEcho && said.split(/\\s+/).length >= 3 && !talkEcho(said, true)", page)
+        swift = (ROOT / "NaimDictation.swift").read_text()
+        self.assertIn("setVoiceProcessingEnabled(true)", swift)
+        self.assertIn("window.naimDictationEcho", swift)
+        self.assertIn("duckingLevel: .min", swift)  # its own voice is not lowered
+
+
+class VoiceComposerStaysStill(unittest.TestCase):
+    """In a voice conversation the input box does not move: its button row keeps one height whichever button shows, and
+    one line of text keeps the natural height (a height rounded to the pixel made the text shake at each word)."""
+
+    def test_row_height_and_one_line_height_are_fixed(self):
+        page = (ROOT / "web/index.html").read_text()
+        self.assertRegex(page, r"\.cin \{[^}]*min-height: 32px")
+        self.assertRegex(page, r"#talkBtn\.on \{[^}]*width: 32px; height: 32px")
+        self.assertIn("i.scrollHeight > i.clientHeight + 1", page)
 
 
 class PdfFiguresAndCodeChecked(unittest.TestCase):
@@ -4015,12 +4088,15 @@ class FastMode(unittest.TestCase):
         size = lambda a: len(json.dumps(a.tools, ensure_ascii=False)) + len(a.messages[0]["content"])
         self.assertLess(size(fast), size(full) * 0.6)
 
-    def test_fast_mode_says_so_and_turns_the_heavy_features_off(self):
+    def test_fast_mode_says_so_and_keeps_every_feature_behind_outil(self):
         fast = self._agent(fast=True)
         self.assertIn("Fast mode is ON", fast.messages[0]["content"])
-        self.assertNotIn("Available skills", fast.messages[0]["content"])
-        for k in ("skills", "mcp", "subagents", "computer", "simulator", "browser", "email", "memory"):
-            self.assertFalse(fast.features[k], k)
+        self.assertNotIn("Available skills", fast.messages[0]["content"])  # skills load by themselves or through outil
+        for k in ("skills", "subagents", "computer", "browser", "memory"):
+            self.assertTrue(fast.features[k], k)
+        behind = next(t for t in fast.tools if t["function"]["name"] == "outil")["function"]["parameters"]["properties"]["name"]["enum"]
+        for heavy in ("use_skill", "make_diagram", "convert_document", "browser", "computer", "delegate", "look_at"):
+            self.assertIn(heavy, behind)
         self.assertNotIn("Fast mode is ON", self._agent().messages[0]["content"])
 
     def test_fast_mode_never_applies_to_a_sub_agent_and_respects_plan(self):
@@ -4031,7 +4107,9 @@ class FastMode(unittest.TestCase):
     def test_the_setting_reaches_the_agent(self):
         import server
         self.assertTrue(server.agent_settings({"settings": {"fastMode": True}})["fast"])
-        self.assertFalse(server.agent_settings({"settings": {}})["fast"])
+        self.assertTrue(server.agent_settings({"settings": {}})["fast"])  # on by default
+        self.assertFalse(server.agent_settings({"settings": {"fastMode": False}})["fast"])
+        self.assertIn("fastMode: true", (ROOT / "web/index.html").read_text())
 
 
 class EngineBeforeSlot(unittest.TestCase):
@@ -4045,3 +4123,413 @@ class EngineBeforeSlot(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 llamacpp.chat([{"role": "system", "content": "x"}, {"role": "user", "content": "y"}], options={"slot": llamacpp.SLOT_AGENT})
         self.assertEqual(order[:2], ["ensure", "payload"])
+
+
+class MacSearchReadsScans(unittest.TestCase):
+    """chercher_sur_mac finds a scanned paper (no text for Spotlight) by the words written on it, within a period,
+    and reads each paper only once (index)."""
+
+    def test_scan_found_by_its_words_and_dates(self):
+        import naimtools as nt
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as proj:
+            old_home, old_index = os.environ.get("HOME"), nt.Agent.SCAN_INDEX
+            os.environ["HOME"] = home
+            nt.Agent.SCAN_INDEX = Path(home) / "index-scans.json"
+            try:
+                d = Path(home) / "Desktop" / "papiers"
+                d.mkdir(parents=True)
+                letter, old_one, other = d / "20260820_0131.pdf", d / "20260601_0090.pdf", d / "20260901_0140.pdf"
+                for f in (letter, old_one, other):
+                    f.write_bytes(b"%PDF-1.4 scan")
+                aug, jun = time.mktime((2026, 8, 20, 10, 0, 0, 0, 0, -1)), time.mktime((2026, 6, 1, 10, 0, 0, 0, 0, -1))
+                os.utime(letter, (aug, aug)); os.utime(other, (aug, aug)); os.utime(old_one, (jun, jun))
+                texts = {letter.name: "MINISTÈRE DE L'INTÉRIEUR POLICE NATIONALE Direction générale de la police nationale",
+                         old_one.name: "Direction générale de la police nationale (ancien courrier)",
+                         other.name: "Refus de la demande d'inscription en soins infirmiers"}
+                reads = []
+                a = nt.Agent(proj, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+                a._scan_text = lambda f: reads.append(f.name) or texts[f.name]
+                out = a.chercher_sur_mac("réponse de la police nationale", apres="14/08/2026")
+                self.assertIn("20260820_0131.pdf", out)
+                self.assertIn("texte du scan", out)
+                self.assertNotIn("20260601_0090.pdf", out)  # before the period
+                self.assertNotIn("20260901_0140.pdf", out)  # other words
+                self.assertEqual(sorted(reads), sorted([letter.name, other.name]))
+                reads.clear()
+                a.chercher_sur_mac("police nationale", apres="août 2026")
+                self.assertEqual(reads, [])  # already read: taken from the index
+                self.assertIn("error", a.chercher_sur_mac("police", apres="bientôt"))
+            finally:
+                os.environ["HOME"] = old_home or ""
+                nt.Agent.SCAN_INDEX = old_index
+
+    def test_dates_understood(self):
+        import naimtools as nt
+        day = nt.Agent._search_day
+        self.assertEqual(day("14/08/2026"), day("2026-08-14"))
+        self.assertEqual(day("14 août 2026"), day("14/08/2026"))
+        self.assertLess(day("août 2026"), day("14/08/2026"))
+        self.assertGreater(day("août 2026", end=True), day("31/08/2026"))
+        self.assertIsNone(day("demain"))
+
+
+class ReflectionPlacedAndChatDances(unittest.TestCase):
+    """The reflection stays one quiet block (no line between each step), a sub-agent's own list does not replace
+    Naim's tasks, and the Chat's dots dance at random (seeded by the request) in colours that are never the
+    Agent's orange."""
+
+    HTML = (ROOT / "web" / "index.html").read_text()
+
+    def test_reflection_one_quiet_block(self):
+        h = self.HTML
+        self.assertIn('case "thinking_token": if (ev.sub) break; reply.thinking += ev.text; v.setThinking(reply.thinking); break;', h)
+        self.assertNotIn("thinkEnd", h)                      # no « Réflexion » line between each step (the user's choice)
+        self.assertIn('case "todos": if (ev.sub) break;', h)   # a sub-agent's list stays its own
+
+    def test_task_dances_same_dots(self):
+        """The dots stay Naim's (one colour, as before) and get more dances, each tied to the work being done."""
+        h = self.HTML
+        self.assertNotIn("naimDance", h)
+        self.assertNotIn("m-chat", h)
+        a, b = h.index("const naimDots = (() => {"), h.index("  let running = false;", h.index("const naimDots = (() => {"))
+        js = ("const matchMedia = () => ({ matches: false }); const getComputedStyle = () => ({ getPropertyValue: () => '' });\n"
+              + h[a:b].replace("const naimDots = (() => {", "", 1)
+              + "\nconst out = {}; for (const k of ['calc','team','look','mail','install','mem']) { out[k] = [0.1, 0.7, 1.3, 2.9, 7.4].map((t) => DANCES[k](t)); }"
+              " console.log(JSON.stringify(out));")
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for k, frames in json.loads(r.stdout).items():
+            for pts in frames:
+                self.assertEqual(len(pts), 4, k)
+                self.assertTrue(all(isinstance(v, (int, float)) for p in pts for v in p), k)
+        for kind, tool in (("team", "delegate"), ("look", "look_at"), ("mail", "send_email"), ("install", "install_mcp"), ("mem", "remember")):
+            self.assertIn(f'{tool}: "{kind}"', h)
+        self.assertIn('return "calc";', h)
+
+
+class ToolsPythonAndSpreadsheets(unittest.TestCase):
+    """Naim's commands find the document libraries (its own « python-outils » first in their PATH), and the tableur
+    skill's checker points out what makes a bad workbook."""
+
+    def test_commands_use_tools_python(self):
+        import naimtools as nt
+        with tempfile.TemporaryDirectory() as d:
+            old = nt.TOOLS_PY
+            try:
+                nt.TOOLS_PY = Path(d) / "python-outils" / "bin"
+                self.assertNotIn(str(nt.TOOLS_PY), nt.cmd_env().get("PATH", ""))  # not installed: the PATH as it was
+                nt.TOOLS_PY.mkdir(parents=True)
+                (nt.TOOLS_PY / "python3").write_text("")
+                env = nt.cmd_env(PYTHONUNBUFFERED="1")
+                self.assertTrue(env["PATH"].startswith(str(nt.TOOLS_PY) + ":"))
+                self.assertEqual(env["PYTHONUNBUFFERED"], "1")
+            finally:
+                nt.TOOLS_PY = old
+        src = (ROOT / "naimtools.py").read_text()
+        self.assertEqual(src.count("env=cmd_env("), 2)
+        self.assertIn("env=cmd_env(", (ROOT / "server.py").read_text())
+
+    def test_tableur_checker(self):
+        py = Path.home() / "Library/Application Support/Naim/python-outils/bin/python3"
+        if not py.exists():
+            self.skipTest("python-outils absent")
+        m = json.loads((ROOT / "plugins_builtin/tableur/plugin.json").read_text())
+        self.assertEqual(m["name"], "tableur")
+        import re as _re
+        self.assertTrue(_re.search(m["triggers"]["tableur"], "fais-moi un budget sur excel", _re.I))
+        chk = ROOT / "plugins_builtin/tableur/skills/tableur/verifier.py"
+        with tempfile.TemporaryDirectory() as d:
+            make = ("from openpyxl import Workbook\nfrom openpyxl.styles import Font\nimport sys\n"
+                    "wb = Workbook(); ws = wb.active; ws.title = 'Données'\n"
+                    "ws.append(['Mois', 'Recettes']); ws.append(['Janvier', 1000]); ws.append(['Total', sys.argv[2]])\n"
+                    "if sys.argv[3] == 'style':\n    [setattr(c, 'font', Font(bold=True)) for c in ws[1]]\n"
+                    "wb.save(sys.argv[1])\n")
+            (Path(d) / "make.py").write_text(make)
+            subprocess.run([str(py), "make.py", "bad.xlsx", "=Absente!A1*1.2", "plain"], cwd=d, check=True)
+            subprocess.run([str(py), "make.py", "good.xlsx", "=SUM(B2:B2)", "style"], cwd=d, check=True)
+            bad = subprocess.run([str(py), str(chk), "bad.xlsx"], cwd=d, capture_output=True, text=True).stdout
+            good = subprocess.run([str(py), str(chk), "good.xlsx"], cwd=d, capture_output=True, text=True).stdout
+        self.assertIn("PROBLÈMES À CORRIGER", bad)
+        self.assertIn("Absente", bad)
+        self.assertIn("en dur", bad)
+        self.assertIn("en-tête sans style", bad)
+        self.assertIn("Aucun problème", good)
+
+
+class ChartsMapsAndOffice(unittest.TestCase):
+    """What Naim gained next to the document libraries: dynamic charts and real maps in a live visual (ECharts and
+    Leaflet read once, map squares through Naim and kept), Office files computed and drawn by LibreOffice (checker,
+    converter, slide pictures), and the graphiques skill for charts, maps and networks as files."""
+    PY = Path.home() / "Library/Application Support/Naim/python-outils/bin/python3"
+
+    def _soffice(self):
+        import shutil
+        if not (shutil.which("soffice") or Path("/Applications/LibreOffice.app").exists()):
+            self.skipTest("LibreOffice absent")
+
+    def test_chart_libs_downloaded_once(self):
+        import io
+        import tarfile
+        import diagrams
+        tgz = io.BytesIO()
+        with tarfile.open(fileobj=tgz, mode="w:gz") as tar:
+            for name, data in (("package/dist/leaflet.js", b"var L={};"), ("package/dist/leaflet.css", b".leaflet{}"),
+                               ("package/dist/images/marker-icon.png", b"P1"), ("package/dist/images/marker-icon-2x.png", b"P2"),
+                               ("package/dist/images/marker-shadow.png", b"P3")):
+                info = tarfile.TarInfo(name); info.size = len(data); tar.addfile(info, io.BytesIO(data))
+        calls = []
+
+        class Resp(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        with tempfile.TemporaryDirectory() as d:
+            old, old_open = diagrams.CHARTS_DIR, diagrams.urllib.request.urlopen
+            try:
+                diagrams.CHARTS_DIR = Path(d)
+                diagrams.urllib.request.urlopen = lambda url, timeout=0: (calls.append(url), Resp(tgz.getvalue()))[1]
+                js = diagrams.chart_lib("leaflet.js").read_text()
+                self.assertIn("var L={};", js)
+                self.assertIn("L.Icon.Default.mergeOptions(", js)  # the marker pictures travel inside the script
+                self.assertIn("data:image/png;base64,", js)
+                diagrams.chart_lib("leaflet.js")
+                self.assertEqual(len(calls), 1)  # then read from the Mac
+                with self.assertRaises(diagrams.DiagramError):
+                    diagrams.chart_lib("../../secret")
+            finally:
+                diagrams.CHARTS_DIR, diagrams.urllib.request.urlopen = old, old_open
+
+    def test_map_tiles_checked_and_kept(self):
+        import diagrams
+        with tempfile.TemporaryDirectory() as d:
+            old, old_open = diagrams.TILES_DIR, diagrams.urllib.request.urlopen
+            try:
+                diagrams.TILES_DIR = Path(d)
+                diagrams.urllib.request.urlopen = lambda *a, **k: (_ for _ in ()).throw(AssertionError("pas de réseau"))
+                for bad in ("../x.png", "20/1/1.png", "3/8/0.png", "12/2074/1409.jpg"):
+                    with self.assertRaises(diagrams.DiagramError):
+                        diagrams.map_tile(bad)
+                kept = Path(d) / "12" / "2074" / "1409.png"
+                kept.parent.mkdir(parents=True); kept.write_bytes(b"\x89PNG kept")
+                self.assertEqual(diagrams.map_tile("12/2074/1409.png"), kept)  # seen once: no network
+            finally:
+                diagrams.TILES_DIR, diagrams.urllib.request.urlopen = old, old_open
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('"/vendor/graphes/"', src)
+        self.assertIn("diagrams.map_tile(", src)
+
+    def test_visual_gets_charts_and_maps(self):
+        html = (ROOT / "web/index.html").read_text()
+        i = html.index("const VISLIBS = {")
+        j = html.index("const visLibText", i)
+        out = subprocess.run(["node", "-e", html[i:j] + """
+const of = (b) => Object.keys(VISLIBS).filter((k) => VISLIBS[k].test.test(b));
+console.log(JSON.stringify([of("naimGraphe('#g', {})"), of("const c = naimCarte('#m', [1, 2], 5)"), of("<div>12:00</div>"),
+  of("L.map(el)"), of("echarts.init(el)")]));"""], capture_output=True, text=True)
+        if out.returncode and "node" in out.stderr and "not found" in out.stderr:
+            self.skipTest("node absent")
+        self.assertEqual(json.loads(out.stdout), [["echarts"], ["leaflet"], [], ["leaflet"], ["echarts"]])
+        self.assertIn("window.naimGraphe = ", html)
+        self.assertIn("window.naimCarte = ", html)
+        self.assertIn("window.naimPoint = ", html)
+        self.assertIn('"#d97757", "#5b8def"', html)  # the orange first, whatever Naim's accent
+        self.assertIn("NAIM_TUILES", html)  # map squares through Naim (a frame has no address of its own)
+        self.assertNotIn("cartocdn", html)
+        self.assertIn("img-src data: https: ${location.origin}", html)
+        skill = (ROOT / "plugins_builtin/visuel/skills/visuel/SKILL.md").read_text()
+        self.assertIn("naimGraphe(", skill)
+        self.assertIn("naimCarte(", skill)
+        import re as _re
+        trig = json.loads((ROOT / "plugins_builtin/visuel/plugin.json").read_text())["triggers"]["visuel"]
+        self.assertTrue(_re.search(trig, "montre-moi ces villes sur une carte", _re.I))
+        self.assertTrue(_re.search(trig, "fais un graphique interactif de mes notes", _re.I))
+        self.assertFalse(_re.search(trig, "fais-moi une carte de visite", _re.I))
+
+    def test_checker_computes_formulas(self):
+        self._soffice()
+        if not self.PY.exists():
+            self.skipTest("python-outils absent")
+        chk = ROOT / "plugins_builtin/tableur/skills/tableur/verifier.py"
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "make.py").write_text(
+                "from openpyxl import Workbook\nfrom openpyxl.styles import Font\nwb = Workbook(); ws = wb.active; ws.title = 'Feuil2'\n"
+                "ws.append(['Prix', 'Quantité', 'Moyenne']); ws.append([10, 0, '=A2/B2']); ws.append([5, 2, '=SUM(A2:A3)'])\n"
+                "[setattr(c, 'font', Font(bold=True)) for c in ws[1]]\nfor col in 'ABC': ws.column_dimensions[col].width = 14\n"
+                "wb.save('c.xlsx')\n")
+            subprocess.run([str(self.PY), "make.py"], cwd=d, check=True)
+            out = subprocess.run([str(self.PY), str(chk), "c.xlsx"], cwd=d, capture_output=True, text=True, timeout=300).stdout
+        self.assertIn("calculées par LibreOffice", out)
+        self.assertIn("→ 15", out)  # the result of =SUM(A2:A3)
+        self.assertIn("Feuil2!C2 : « =A2/B2 » donne #DIV/0!", out)
+        self.assertNotIn("Feuil2!C3", out.split("PROBLÈMES")[-1])
+
+    def test_office_files_drawn_as_they_are(self):
+        self._soffice()
+        if not self.PY.exists():
+            self.skipTest("python-outils absent")
+        conv = ROOT / "plugins_builtin/convertisseurs/skills/convertisseurs/convertir.py"
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run([str(self.PY), "-c", "from openpyxl import Workbook\nwb = Workbook(); ws = wb.active\n"
+                            "ws.append(['Total', '=6*7']); wb.save('t.xlsx')"], cwd=d, check=True)
+            r = subprocess.run([str(self.PY), str(conv), "t.xlsx", "t.pdf"], cwd=d, capture_output=True, text=True, timeout=300)
+            self.assertIn("ok :", r.stdout, r.stderr)
+            txt = subprocess.run(["/opt/homebrew/bin/pdftotext", "t.pdf", "-"], cwd=d, capture_output=True, text=True).stdout \
+                if Path("/opt/homebrew/bin/pdftotext").exists() else "42"
+        self.assertIn("42", txt)  # LibreOffice computed the formula in the PDF
+        src = conv.read_text()
+        self.assertIn('opt("--style") != "pro"', src)
+        self.assertIn("UserInstallation", src)  # its own profile: works while LibreOffice is open
+        diapo = (ROOT / "plugins_builtin/diaporama/skills/presentation-pro/diapo.py").read_text()
+        self.assertIn("made = real_pictures(out, d, len(slides))", diapo)
+
+    def test_graphiques_skill(self):
+        m = json.loads((ROOT / "plugins_builtin/graphiques/plugin.json").read_text())
+        self.assertEqual(m["name"], "graphiques")
+        import re as _re
+        t = m["triggers"]["graphiques"]
+        for q in ("fais un graphique en png de mes ventes", "sors les tableaux de ce pdf vers excel", "trace un histogramme pour mon rapport"):
+            self.assertTrue(_re.search(t, q, _re.I), q)
+        self.assertFalse(_re.search(t, "explique-moi la photosynthèse", _re.I))
+        d = ROOT / "plugins_builtin/graphiques/skills/graphiques"
+        md = (d / "SKILL.md").read_text()
+        self.assertIn("naim.mplstyle", md)
+        self.assertNotIn("CartoDB", md)  # those squares now need a key
+        lib = (ROOT / "skills_library.py").read_text()
+        k = lib.index("chercher_sur_mac (lit aussi")
+        self.assertTrue(lib[k:].split("\n", 2)[1].lstrip().startswith("(nom ET contenu"))  # its line kept whole
+        self.assertIn("skill graphiques", lib)
+        if not self.PY.exists():
+            self.skipTest("python-outils absent")
+        r = subprocess.run([str(self.PY), "-c", "import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt, sys;"
+                            " plt.style.use(sys.argv[1]); print(plt.rcParams['axes.prop_cycle'].by_key()['color'][0])", str(d / "naim.mplstyle")],
+                           capture_output=True, text=True)
+        self.assertEqual(r.stdout.strip().lower(), "#d97757", r.stderr)
+
+
+class FastModeKeepsItsMemory(unittest.TestCase):
+    """« Mode rapide »: a few tools described in full and the others behind one `outil` tool, always the same list
+    (what the engine read stays read); and the engine's slots keep what they read when another one works."""
+
+    def _agent(self, **kw):
+        from naimtools import Agent
+        return Agent(tempfile.mkdtemp(), "naim", fast=True, emit=lambda e: None, asker=lambda *a, **k: None,
+                     options={"backend": "llamacpp"}, **kw)
+
+    def test_fast_list_is_small_and_never_changes(self):
+        import naimtools as nt
+        a, b = self._agent(), self._agent()
+        names = [t["function"]["name"] for t in a.tools]
+        self.assertIn("outil", names)
+        self.assertTrue(set(names) - {"outil"} <= set(nt.FAST_CORE))
+        b._preload_tool_groups("envoie un mail avec le pdf et fais un schéma")
+        self.assertEqual(json.dumps(a.tools), json.dumps(b.tools))
+        full = nt.Agent(tempfile.mkdtemp(), "naim", emit=lambda e: None, options={"backend": "llamacpp"})
+        self.assertLess(len(json.dumps(a.tools)), len(json.dumps(full.tools)) / 3)
+        outil = next(t for t in a.tools if t["function"]["name"] == "outil")["function"]
+        self.assertIn("look_at", outil["parameters"]["properties"]["name"]["enum"])
+
+    def test_outil_call_becomes_the_real_tool(self):
+        import naimtools as nt
+        c = nt.unwrap_outil([{"function": {"name": "outil", "arguments": json.dumps(
+            {"name": "move_file", "arguments": json.dumps({"src": "a", "dst": "b"})})}}])
+        self.assertEqual(c[0]["function"], {"name": "move_file", "arguments": {"src": "a", "dst": "b"}})
+        raw = nt.raw_tool_calls("<tool_call><function=outil><parameter=name>look_at</parameter></function></tool_call>")
+        self.assertEqual(raw[0]["function"]["name"], "look_at")
+
+    def test_name_alone_explains_then_runs(self):
+        a = self._agent()
+        first = a.call_tool("outil", {"name": "list_processes"})
+        self.assertTrue(first.startswith("how to use list_processes"))
+        self.assertNotIn("unknown or unavailable", a.call_tool("list_processes", {}))
+        self.assertIn("unknown or unavailable", a.call_tool("outil_qui_n_existe_pas", {"x": 1}))
+
+    def test_streamed_calls_are_unwrapped(self):
+        import naimtools as nt
+        old = nt._ollama_chat_raw
+        try:
+            nt._ollama_chat_raw = lambda *a, **k: iter([{"message": {"tool_calls": [{"function": {
+                "name": "outil", "arguments": {"name": "look_at", "arguments": {"path": "x.pdf"}}}}]}, "done": False}])
+            got = list(nt.ollama_chat("naim", [], tools=[nt.outil_tool([])], stream=True))
+        finally:
+            nt._ollama_chat_raw = old
+        self.assertEqual(got[0]["message"]["tool_calls"][0]["function"], {"name": "look_at", "arguments": {"path": "x.pdf"}})
+
+    def test_engine_keeps_idle_slots_when_it_can(self):
+        with tempfile.TemporaryDirectory() as d:
+            new, old = Path(d) / "new", Path(d) / "old"
+            new.write_text("#!/bin/sh\necho '--clear-idle, --no-clear-idle   save and clear idle slots'\n")
+            old.write_text("#!/bin/sh\necho '--kv-unified'\n")
+            for f in (new, old):
+                f.chmod(0o755)
+            self.assertTrue(llamacpp.engine_has(new, "--no-clear-idle"))
+            self.assertFalse(llamacpp.engine_has(old, "--no-clear-idle"))
+        src = (ROOT / "llamacpp.py").read_text()
+        self.assertIn('cmd += ["--no-clear-idle"]', src)
+        self.assertIn("free_other_slots(payload[\"id_slot\"])", src)
+
+
+class FastModeStillUsesSkills(unittest.TestCase):
+    """In fast mode the Chat still joins a matching skill's method (a map gets the visuel skill and its naimCarte)."""
+
+    def test_map_request_gets_the_visuel_method_in_fast_mode(self):
+        import threading
+        import server
+        caught = []
+
+        class Stop(Exception):
+            pass
+
+        def fake(model, messages, tools=None, **k):
+            caught.append((messages, tools))
+            raise Stop()
+        old = server.ollama_chat
+        server.ollama_chat = fake
+        try:
+            h = server.Handler.__new__(server.Handler)
+            h.event = lambda ev: None
+            body = {"message": "montre-moi sur une carte la tour Eiffel, le Louvre et Notre-Dame", "mode": "chat",
+                    "model": "naim", "history": [], "project": tempfile.mkdtemp(),
+                    "settings": {"fastMode": os.environ.get("FASTT", "1") == "1", "naim_backend": "llamacpp", "memory_auto": False}}
+            try:
+                h.run_chat(body, threading.Event())
+            except Stop:
+                pass
+        finally:
+            server.ollama_chat = old
+        self.assertTrue(caught)
+        text = json.dumps(caught[-1][0], ensure_ascii=False)
+        self.assertIn("naimCarte", text)
+        self.assertIn("outil", [t["function"]["name"] for t in caught[-1][1] or []])
+
+    def test_mac_actions_are_whole_words(self):
+        import server
+        self.assertFalse(server.MAC_ACTION_RE.search("le Louvre et Notre-Dame"))
+        self.assertTrue(server.MAC_ACTION_RE.search("ouvre Safari"))
+        self.assertTrue(server.MAC_ACTION_RE.search("baisse le son"))
+
+
+class PlanModeRefusalGivesThePlan(unittest.TestCase):
+    """« Plan d'abord »: an action refused as read-only is not tried again nor claimed done — the next step is the plan,
+    written without tools (it said « Le dossier est créé » after a refused mkdir, then went round in circles)."""
+
+    def test_refused_action_then_plan_without_tools(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            a = naimtools.Agent(d, "naim", plan=True, auto_yes=True, emit=lambda e: None, approver=lambda *x: True)
+            seen = []
+
+            def fake(model, messages, tools=None, **kw):
+                seen.append(tools)
+                if tools:
+                    return {"role": "assistant", "content": "", "tool_calls": [{"function": {
+                        "name": "run_command", "arguments": {"command": "mkdir -p carte"}}}]}
+                return {"role": "assistant", "content": "Plan :\n1. Créer la carte.\n2. La vérifier."}
+
+            with mock.patch.object(naimtools, "chat_watched", fake):
+                out = a.run("montre-moi une carte de Paris")
+            self.assertGreaterEqual(len(seen), 2)
+            self.assertIsNone(seen[1])  # the step after the refusal: no tools, only the plan
+            self.assertIn("Plan", out)
+            self.assertFalse((Path(d) / "carte").exists())
+            refusal = next(m["content"] for m in a.messages if m.get("role") == "tool")
+            self.assertIn("NOT done", refusal)

@@ -1,6 +1,6 @@
 {
   "name": "diaporama",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Des présentations PowerPoint professionnelles : thème choisi pour le sujet, diapositives variées (grands chiffres, étapes, comparaison, graphiques natifs, tableau), notes d'orateur, aperçu vérifié de chaque diapositive ; lire et modifier un PowerPoint existant sans le refaire.",
   "skills": "skills",
   "triggers": {
