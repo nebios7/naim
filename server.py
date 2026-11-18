@@ -2604,7 +2604,7 @@ class Handler(BaseHTTPRequestHandler):
                                     + (" — il a été choisi d'après les mots du dernier message : s'il ne correspond pas au sujet de cette "
                                        "conversation (l'appareil, le projet ou le document dont parlent les messages précédents), ignore-le "
                                        "et charge le bon avec use_skill" if any(m.get("role") == "user" for m in (body.get("history") or [])) else "")
-                                    + f"]\n{skill_body.strip()}"
+                                    + f"]\n{skill_body.strip()}{helper.gateway_note(skill_body)}"
                                     + (f"\n(Fichiers de cette skill, dans {Path(sk['path']).parent} : {', '.join(sk['files'][:12])})"
                                        if sk.get("files") else ""))
                 import libs

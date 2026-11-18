@@ -3372,6 +3372,21 @@ class TidyFolderByTheme(unittest.TestCase):
         self.assertIn("proposer", skill)
         self.assertIn("Ne supprime jamais rien", skill)
 
+    def test_fast_mode_says_how_to_call_the_tools_a_skill_names(self):
+        # the skill's « ranger_dossier(dossier, action="voir") » was run as a shell command (command not found), then as
+        # « python3 -m naim.ranger_dossier »: the skill now says it is a tool behind outil, and run_command sends it back
+        with tempfile.TemporaryDirectory() as root:
+            a = naimtools.Agent(root, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True, fast=True)
+            self.assertIn("ranger_dossier", a._fast_extra)
+            skill = a.use_skill("ranger-fichiers")
+            self.assertIn('outil(name="ranger_dossier"', skill)
+            for cmd in ("ranger_dossier ~/Downloads action=voir", "python3 -m naim.ranger_dossier ~/Downloads"):
+                r = a.run_command(cmd)
+                self.assertIn("one of YOUR tools", r, cmd)
+                self.assertIn('outil(name="ranger_dossier"', r)
+            self.assertNotIn("YOUR tools", a.run_command("echo bonjour"))
+            self.assertEqual(a.gateway_note("rien à voir"), "")
+
     def test_home_and_system_are_refused(self):
         with tempfile.TemporaryDirectory(dir=Path.home(), prefix=".naim-test-") as root:
             a = self._agent(root, "r1")

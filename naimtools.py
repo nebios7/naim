@@ -2761,6 +2761,13 @@ class Agent:
                            r"python3?\s+-m\s+http\.server|npx\s+(serve|vite|http-server|live-server)\b|jekyll\s+serve|hugo\s+server)")
 
     def run_command(self, command, stdin=None, timeout=120, description=None):  # description: the step title shown
+        first = (re.match(r"\s*(?:python3?\s+-m\s+)?([\w.]+)", str(command or "")) or [None, ""])[1].split(".")[-1]
+        mine = {t["function"]["name"] for t in self.tools if "function" in t} | set(getattr(self, "_fast_extra", None) or ())
+        if first in mine - {"run_command", "open"} and not shutil.which(first):
+            how = (f'outil(name="{first}", arguments={{…}})' if first in (getattr(self, "_fast_extra", None) or {})
+                   else f"{first}(…) directly")
+            return (f"error: {first} is one of YOUR tools, not a shell command or a Python module. Call it as a tool: {how}, "
+                    "with the same arguments as JSON. Nothing was run.")
         if err := self._check_blocked(command) or self._check_env(command) or self._guard_own_command(command):
             return err
         if not stdin and self.SERVER_RE.search(command.strip()) and "&" not in command.replace("&&", ""):
@@ -3116,7 +3123,7 @@ class Agent:
         _, body = ext.parse_skill(Path(s["path"]))
         files = f"\n\nFiles in the skill folder ({Path(s['path']).parent}): " + ", ".join(s["files"]) if s["files"] else ""
         self.emit({"type": "skill", "name": s["name"]})
-        return f"{ext.skill_situation(s['name'], self.root, getattr(self, "_task_words", None))}# Skill {s['name']}\n{body}{files}"
+        return f"{ext.skill_situation(s['name'], self.root, getattr(self, "_task_words", None))}# Skill {s['name']}\n{body}{files}{self.gateway_note(body)}"
 
     def create_skill(self, name, description, instructions, scope="utilisateur"):
         preview = f"name: {ext.slugify(name)}\ndescription: {description}\n\n{instructions}"
@@ -4444,6 +4451,22 @@ class Agent:
         return (f"ok: lien privé : {url}\nIl marche sur les appareils du même Wi-Fi tant que Naim est ouvert. La première "
                 "fois, le Mac peut demander d'autoriser les connexions entrantes. Pour l'arrêter : partager_page arreter avec ce lien.")
 
+    def gateway_note(self, text):
+        """A skill that names tools kept behind « outil » (fast mode): how to call them, written out — otherwise its
+        « ranger_dossier(dossier, action="voir") » reads like a shell command (run_command: command not found)."""
+        extra = getattr(self, "_fast_extra", None) or {}
+        named = [n for n in extra if re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", str(text or ""))]
+        if not named:
+            return ""
+        count = lambda n: len(re.findall(rf"(?<![\w-]){re.escape(n)}(?![\w-])", str(text)))  # noqa: E731
+        named.sort(key=lambda n: -count(n))  # the method's own tool first (the most named), not one it mentions in passing
+        ex = named[0]
+        props = list(((extra[ex]["function"].get("parameters") or {}).get("properties") or {}))[:2]
+        sample = ", ".join(f'"{k}": …' for k in props)
+        return ("\n\n[Outils de cette méthode : " + ", ".join(named) + ". Ce sont TES outils, pas des commandes du terminal ni "
+                "des modules Python : appelle-les avec l'outil outil, par exemple outil(name=\"" + ex + "\", arguments={"
+                + sample + "}). Jamais avec run_command.]")
+
     def call_tool(self, name, args):
         if name == "outil":  # a gateway call that reached here as such (written as text…): the tool it names
             name, args = (lambda f: (f["name"], f["arguments"]))(unwrap_outil([{"function": {"name": name, "arguments": args}}])[0]["function"])
@@ -5245,7 +5268,7 @@ class Agent:
                                                                    self.root, self.disabled_skills)) or look)):
             _, body = ext.parse_skill(Path(sk["path"]))
             self.emit({"type": "skill", "name": sk["name"]})
-            task = f"{task}\n\n{ext.skill_situation(sk['name'], self.root, task + " " + str(getattr(self, "_task_words", "") or ""))}[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}"
+            task = f"{task}\n\n{ext.skill_situation(sk['name'], self.root, task + " " + str(getattr(self, "_task_words", "") or ""))}[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{body.strip()}{self.gateway_note(body)}"
             import libs
             if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
                 task += "\n\n" + lp
