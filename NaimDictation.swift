@@ -59,15 +59,67 @@ final class NaimDictation: NSObject, WKScriptMessageHandler {
         if recognizer.supportsOnDeviceRecognition { req.requiresOnDeviceRecognition = true }  // stays on this Mac
         request = req
         let input = audio.inputNode
+        // macOS echo cancellation (as in FaceTime): what Naim says through the speakers is removed from what the
+        // microphone hears, so you can talk over its voice. Its own voice is not lowered. Refused by the Mac: as before.
+        let echoFree = useEchoCancellation(input)
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
-            req.append(buffer)
+            req.append(NaimDictation.mono(buffer))
         }
         audio.prepare()
         do { try audio.start() } catch {
+            if echoFree, (try? input.setVoiceProcessingEnabled(false)) != nil {  // the Mac will not start with it: without
+                input.removeTap(onBus: 0)
+                input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in req.append(buffer) }
+                audio.prepare()
+                if (try? audio.start()) != nil { tellEcho(false); listen(recognizer, req); return }
+            }
             send("", final: true, error: "Le micro ne démarre pas : \(error.localizedDescription)")
             return
         }
+        tellEcho(echoFree)
+        listen(recognizer, req)
+    }
+
+    private func useEchoCancellation(_ input: AVAudioInputNode) -> Bool {
+        if input.isVoiceProcessingEnabled { return true }
+        do {
+            _ = audio.mainMixerNode  // voice processing needs the engine's output side to exist
+            try input.setVoiceProcessingEnabled(true)
+            if #available(macOS 14.0, *) {
+                input.voiceProcessingOtherAudioDuckingConfiguration =
+                    AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // with echo cancellation the Mac may give several channels: the recognition gets the first one only (your voice)
+    static func mono(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        let f = buffer.format
+        guard f.channelCount > 1, f.commonFormat == .pcmFormatFloat32, let src = buffer.floatChannelData,
+              let one = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: f.sampleRate, channels: 1, interleaved: false),
+              let out = AVAudioPCMBuffer(pcmFormat: one, frameCapacity: buffer.frameLength), let dst = out.floatChannelData
+        else { return buffer }
+        out.frameLength = buffer.frameLength
+        if f.isInterleaved {
+            let n = Int(f.channelCount)
+            for i in 0..<Int(buffer.frameLength) { dst[0][i] = src[0][i * n] }
+        } else {
+            dst[0].update(from: src[0], count: Int(buffer.frameLength))
+        }
+        return out
+    }
+
+    private func tellEcho(_ on: Bool) {
+        DispatchQueue.main.async {
+            self.web?.evaluateJavaScript("window.naimDictationEcho = \(on ? "true" : "false")", completionHandler: nil)
+        }
+    }
+
+    private func listen(_ recognizer: SFSpeechRecognizer, _ req: SFSpeechAudioBufferRecognitionRequest) {
         session += 1
         let mine = session
         task = recognizer.recognitionTask(with: req) { result, error in
