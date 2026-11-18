@@ -3320,6 +3320,67 @@ class SvgCheck(unittest.TestCase):
         self.assertIn("ne se lit pas", svgcheck.check("<svg viewBox='0 0 10 10'><rect></svg>")[0])
 
 
+class TidyFolderByTheme(unittest.TestCase):
+    """ranger_dossier: see (numbered, a glimpse of each document), propose (nothing moved, shown to the user), apply only
+    in a LATER answer after their yes, undo. Never deletes, never overwrites, never moves a project or the home folder."""
+
+    def _agent(self, root, run):
+        a = naimtools.Agent(root, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True, run_id=run)
+        a.ORGANIZE_DIR = Path(root) / "journaux"
+        return a
+
+    def test_see_propose_apply_later_and_undo(self):
+        with tempfile.TemporaryDirectory(dir=Path.home(), prefix=".naim-test-") as root:
+            d = Path(root) / "Telechargements"
+            (d / "Factures").mkdir(parents=True)
+            (d / "Factures" / "edf.txt").write_text("ancienne")
+            (d / "edf.txt").write_text("Facture EDF janvier, montant 54 euros")
+            (d / "cours-maths.txt").write_text("Chapitre 3 : les fractions")
+            (d / "app").mkdir(); (d / "app" / "package.json").write_text("{}")
+            a = self._agent(root, "r1")
+            seen = a.ranger_dossier(str(d), "voir")
+            self.assertIn("Facture EDF janvier", seen)
+            self.assertIn("projet, laissé en place", seen)
+            num = lambda name: int(next(l for l in seen.splitlines() if f". {name} " in l).split(".")[0])
+            prop = a.ranger_dossier(str(d), "proposer", {"Factures": [num("edf.txt")], "Cours/Maths": [num("cours-maths.txt")],
+                                                         "Code": [num("app")]})
+            self.assertIn("rien n'a été déplacé", prop)
+            self.assertIn("projet, laissé en place", prop)
+            self.assertTrue((d / "edf.txt").exists())
+            self.assertIn("refused", a.ranger_dossier(str(d), "appliquer"))   # same answer: the user has not seen it
+            b = self._agent(root, "r2")                                       # the user's next message
+            self.assertIn("ok: 2", b.ranger_dossier(str(d), "appliquer"))
+            self.assertEqual((d / "Factures" / "edf.txt").read_text(), "ancienne")  # never overwritten
+            self.assertTrue((d / "Factures" / "edf (2).txt").exists())
+            self.assertTrue((d / "Cours" / "Maths" / "cours-maths.txt").exists())
+            self.assertTrue((d / "app" / "package.json").exists())
+            self.assertIn("error", b.ranger_dossier(str(d), "appliquer"))     # applied once
+            self.assertIn("ok: 2", b.ranger_dossier(str(d), "annuler"))
+            self.assertEqual((d / "edf.txt").read_text(), "Facture EDF janvier, montant 54 euros")
+            self.assertTrue((d / "cours-maths.txt").exists())
+            self.assertFalse((d / "Cours").exists())                          # created by the tidying, left empty
+            self.assertTrue((d / "Factures" / "edf.txt").exists())            # the user's own folder stays
+
+    def test_the_skill_is_picked_for_tidying_requests_only(self):
+        import extensions as ext
+        pick = lambda t: (ext.match_skill(t) or {}).get("name")
+        for t in ("range mes fichiers par thème", "organise mon dossier téléchargements", "mets de l'ordre dans mon bureau"):
+            self.assertEqual(pick(t), "ranger-fichiers", t)
+        for t in ("trie mes mails", "range ma chambre", "trie cette liste en python"):
+            self.assertNotEqual(pick(t), "ranger-fichiers", t)
+        skill = (ROOT / "plugins_builtin/essentiels/skills/ranger-fichiers/SKILL.md").read_text()
+        self.assertIn("proposer", skill)
+        self.assertIn("Ne supprime jamais rien", skill)
+
+    def test_home_and_system_are_refused(self):
+        with tempfile.TemporaryDirectory(dir=Path.home(), prefix=".naim-test-") as root:
+            a = self._agent(root, "r1")
+            for bad in ("~", "/", "~/Library", "/Applications"):
+                self.assertIn("refused", a.ranger_dossier(bad, "voir"), bad)
+            self.assertIn("ranger_dossier", [t["function"]["name"] for t in a.tools if "function" in t]
+                          + list(getattr(a, "_fast_extra", []) or []))
+
+
 class UserSkillOwnTriggers(unittest.TestCase):
     """A skill the user wrote can say its own words (« triggers: » in its SKILL.md): they pick it before the built-in
     skills (« publie le code sur GitHub » is the user's publishing method, not the generic gh skill)."""

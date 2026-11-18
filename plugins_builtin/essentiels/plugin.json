@@ -1,6 +1,6 @@
 {
   "name": "essentiels",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Code web sécurisé (vibesec) et trouver puis installer de nouvelles skills (find-skills), chargés tout seuls quand la demande en parle. Avec le pack « Design d'interfaces » de la bibliothèque (écran de bienvenue) : les règles d'Apple, les méthodes de design (critique, accessibilité, design system, textes d'interface, passation, recherche utilisateur, synthèse) et Replica (décortiquer une app pour la refaire), choisis par les mêmes mots.",
   "skills": "skills",
   "triggers": {
@@ -15,7 +15,8 @@
     "find-skills": "\\b(trouve|cherche|installe)\\w* (une |des |la |les )?skills?\\b|\\bskill (pour|qui)\\b|\\bil existe (une )?skill\\b",
     "vibesec": "\\b(s[ée]curit[ée]|s[ée]curis\\w*|faille\\w*|vuln[ée]rab\\w*|xss|csrf|injection sql|sql injection|owasp|audit de s[ée]curit[ée]|mots? de passe (hash|chiffr)\\w*|authentification s[ée]curis\\w*|pentest)\\b",
     "replica-recon": "\\b(d[ée]cortiqu\\w*|reverse|r[ée]tro[- ]?ing[ée]ni\\w*|clone[rz]?|refai\\w*|reconstrui\\w*|reproduis\\w*|refaire)\\b[^.?!]{0,50}\\b(app(li(cation)?)?s?|site|logiciel|saas|plateforme|produit)\\b(?!\\.\\w)(?![^.?!]{0,30}\\b(apk|ipa|binaire|ex[ée]cutable|\\.dll|\\.so)\\b)|\\b(ma (propre )?version de|mon clone de|un clone de)\\b",
-    "replica-diff": "\\b(mon clone|le clone)\\b[^.?!]{0,60}\\b(compar\\w*|ressembl\\w*|manque|parit[ée]|proche)\\b|\\b(compar\\w*)\\b[^.?!]{0,40}\\b(clone)\\b"
+    "replica-diff": "\\b(mon clone|le clone)\\b[^.?!]{0,60}\\b(compar\\w*|ressembl\\w*|manque|parit[ée]|proche)\\b|\\b(compar\\w*)\\b[^.?!]{0,40}\\b(clone)\\b",
+    "ranger-fichiers": "\\b(rang\\w*|organis\\w*|tri(e|er|es|ez)|class(e|er|es|ez)|mets? de l'ordre|mettre de l'ordre|fais du (m[ée]nage|tri)|nettoie\\w*|regroupe\\w*)\\b[^.?!]{0,50}\\b(fichiers?|dossiers?|documents?|t[ée]l[ée]chargements?|bureau|downloads|desktop|mon mac|papiers?|pdfs?)\\b(?![^.?!]{0,30}\\b(e-?mails?|mails?)\\b)"
   },
   "priority": true
 }

@@ -231,6 +231,22 @@ MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", 
         "avant": {"type": "string", "description": "optional: only files dated up to this day, e.g. « 31/12/2026 »"}},
         "required": ["requete"]}}}
 
+ORGANIZE_TOOL = {"type": "function", "function": {"name": "ranger_dossier", "description": (
+    "Tidy one of the user's folders by THEME (« range mon dossier Téléchargements », « organise mes fichiers par "
+    "thème »), in three steps, never all at once: action=voir lists what is in the folder, numbered, with a glimpse of "
+    "each document; action=proposer takes your plan {\"Thème\": [numbers], \"Thème/Sous-thème\": [numbers]} and "
+    "returns the proposal to SHOW the user — nothing is moved; action=appliquer moves exactly the proposal, only after "
+    "the user said yes in a later message; action=annuler puts everything back. Nothing is ever deleted, nothing is "
+    "overwritten, projects (code folders, Naim) are never moved. Use chercher_sur_mac first if the user names files, not "
+    "a folder."),
+    "parameters": {"type": "object", "properties": {
+        "dossier": {"type": "string", "description": "the folder to tidy, e.g. « ~/Downloads », « ~/Documents », « ~/Desktop »"},
+        "action": {"type": "string", "enum": ["voir", "proposer", "appliquer", "annuler"]},
+        "plan": {"type": "object", "description": "for proposer: {\"Factures\": [1, 4], \"Cours/Maths\": [2, 3]} — numbers from voir; "
+                 "theme names in French, short, like the user would name a folder; existing folders can be reused"},
+        "page": {"type": "integer", "description": "for voir: next page of a big folder (1, 2…)"}},
+        "required": ["dossier", "action"]}}}
+
 CONVERSATIONS_TOOL = {"type": "function", "function": {"name": "chercher_conversations", "description": (
     "Search the user's past conversations with you (« souviens-toi », « la dernière fois »…): requete → the matching "
     "conversations with an excerpt; conversation=id → that conversation's messages."),
@@ -971,6 +987,7 @@ class Agent:
             tools.append(SCHEDULE_TOOL)
             tools.append(CONVERSATIONS_TOOL)
             tools.append(MAC_SEARCH_TOOL)
+            tools.append(ORGANIZE_TOOL)
             if self.features["skills"]:
                 tools.append(SKILL_SEARCH_TOOL)
             if self.features.get("mcp", True):
@@ -2014,6 +2031,201 @@ class Agent:
         return (f"{len(hits)} fichier(s) pour « {requete} » (le plus pertinent d'abord ; « nom » = les mots sont dans le nom, "
                 "« contenu » = dans le texte du document, « texte du scan » = lu sur un papier scanné). Montre-les à l'utilisateur avec leur chemin ; s'il y en a plusieurs, "
                 "demande lequel avant d'agir dessus.\n" + "\n".join(out) + more)
+
+    # ---- tidying a folder by theme: see, propose (shown to the user), apply after their yes, undo. Never deletes.
+    ORGANIZE_DIR = Path(os.environ.get("NAIM_HOME", Path.home() / ".naim")) / "rangements"
+    PROJECT_MARKS = (".git", "package.json", "pyproject.toml", "setup.py", "Cargo.toml", "go.mod", "Package.swift",
+                     "Makefile", "venv", ".venv", "node_modules", "Podfile", "build.gradle", "pom.xml")
+    ORGANIZE_PAGE = 120
+
+    def _organize_root(self, dossier):
+        d = Path(os.path.expanduser(str(dossier or "").strip() or "~")).resolve()
+        home = Path.home().resolve()
+        if not d.is_dir():
+            return None, f"error: folder not found: {dossier}"
+        banned = [Path("/"), home, home / "Library", Path("/System"), Path("/Library"), Path("/Applications"),
+                  Path("/usr"), Path("/private"), Path("/Volumes")]
+        if d in banned or any(b in d.parents for b in banned[2:4] + banned[5:8]) or is_naim_itself(d) or home not in d.parents:
+            return None, (f"refused: {d} is not a folder to tidy (the home folder itself, the system, Library or Naim). "
+                          "Ask the user for one of their folders: Téléchargements, Documents, Bureau, or a folder inside.")
+        return d, None
+
+    def _organize_project(self, p):
+        if p.suffix.lower() in (".app", ".xcodeproj", ".photoslibrary", ".musiclibrary", ".fcpbundle", ".logicx"):
+            return True
+        try:
+            names = {x.name for x in p.iterdir()}
+        except OSError:
+            return True
+        return bool(names & set(self.PROJECT_MARKS)) or any(n.endswith(".xcodeproj") for n in names) or is_naim_itself(p)
+
+    def _organize_glimpse(self, p):
+        """A few words of a document (its first line), or a folder's first names: what it is about."""
+        try:
+            if p.is_dir():
+                kids = sorted(x.name for x in p.iterdir() if not x.name.startswith("."))
+                return "contient : " + ", ".join(kids[:5]) + (f"… ({len(kids)})" if len(kids) > 5 else "") if kids else "vide"
+            ext, text = p.suffix.lower(), ""
+            if ext in (".txt", ".md", ".csv", ".rtf") and p.stat().st_size < 2_000_000:
+                text = p.read_text(errors="replace")[:600]
+            elif ext == ".pdf" and shutil.which("pdftotext"):
+                text = subprocess.run(["pdftotext", "-l", "1", str(p), "-"], capture_output=True, text=True, timeout=6).stdout[:600]
+            elif ext in (".docx", ".doc", ".odt", ".pages", ".rtfd"):
+                text = subprocess.run(["textutil", "-convert", "txt", "-stdout", str(p)], capture_output=True, text=True, timeout=6).stdout[:600]
+            text = " ".join(text.split())[:110]
+            return f"« {text} »" if text else ""
+        except (OSError, subprocess.SubprocessError, UnicodeError):
+            return ""
+
+    def _organize_key(self, d):
+        import hashlib
+        return hashlib.sha1(str(d).encode()).hexdigest()[:12]
+
+    def ranger_dossier(self, dossier, action="voir", plan=None, page=None):
+        import json as _json
+        d, err = self._organize_root(dossier)
+        if err:
+            return err
+        self.ORGANIZE_DIR.mkdir(parents=True, exist_ok=True)
+        key = self._organize_key(d)
+        listing, proposal = self.ORGANIZE_DIR / f"liste-{key}.json", self.ORGANIZE_DIR / f"proposition-{key}.json"
+        home = str(Path.home())
+        short = lambda x: str(x).replace(home, "~", 1)  # noqa: E731
+        action = str(action or "voir").lower()
+        if action == "voir":
+            items = sorted((x for x in d.iterdir() if not x.name.startswith(".") and x.name not in ("Icon\r",)),
+                           key=lambda x: (not x.is_dir(), x.name.lower()))
+            names = [x.name for x in items]
+            listing.write_text(_json.dumps({"dossier": str(d), "items": names}, ensure_ascii=False))
+            n0 = max(0, (int(page or 1) - 1)) * self.ORGANIZE_PAGE
+            size = lambda n: f"{n / 1048576:.1f} Mo" if n >= 1048576 else f"{max(1, n // 1024)} Ko"  # noqa: E731
+            lines, glimpses = [], 0
+            for i, x in enumerate(items[n0:n0 + self.ORGANIZE_PAGE], n0 + 1):
+                try:
+                    st = x.stat()
+                except OSError:
+                    continue
+                if x.is_dir():
+                    tag = "projet, laissé en place" if self._organize_project(x) else "dossier"
+                else:
+                    tag = f"{x.suffix.lower().lstrip('.') or 'fichier'} · {size(st.st_size)}"
+                g = ""
+                if x.is_dir() and tag == "dossier" or (not x.is_dir() and glimpses < 80):
+                    g = self._organize_glimpse(x)
+                    glimpses += 0 if x.is_dir() else 1
+                lines.append(f"{i}. {x.name} — {tag} · {time.strftime('%m/%Y', time.localtime(st.st_mtime))}" + (f" · {g}" if g else ""))
+            more = len(items) - (n0 + self.ORGANIZE_PAGE)
+            return (f"{short(d)} : {len(items)} élément(s). Classe-les par THÈME (le sujet : factures, cours, travail, photos de "
+                    "vacances…, pas seulement le type de fichier), puis appelle ranger_dossier action=proposer avec "
+                    "plan={\"Thème\": [numéros]}. Laisse hors du plan ce qui est déjà bien rangé ou dont tu n'es pas sûr, "
+                    "et les « projet, laissé en place ».\n" + "\n".join(lines)
+                    + (f"\n… encore {more} : ranger_dossier action=voir page={int(page or 1) + 1}" if more > 0 else ""))
+        if action == "proposer":
+            if not listing.exists():
+                return "error: call ranger_dossier action=voir first (the numbers come from it)"
+            names = _json.loads(listing.read_text())["items"]
+            if not isinstance(plan, dict) or not plan:
+                return "error: give plan as {\"Thème\": [numbers]} using the numbers from voir"
+            moves, problems, used = [], [], set()
+            for theme, nums in plan.items():
+                t = "/".join(part.strip() for part in str(theme).replace("\\", "/").split("/") if part.strip())
+                if not t or ".." in t.split("/") or t.count("/") > 1 or re.search(r"[:*?\"<>|]", t) or len(t) > 80:
+                    problems.append(f"thème refusé « {theme} » (un nom simple, ou Thème/Sous-thème)")
+                    continue
+                for n in (nums if isinstance(nums, list) else [nums]):
+                    try:
+                        n = int(n)
+                        name = names[n - 1]
+                    except (ValueError, TypeError, IndexError):
+                        problems.append(f"numéro inconnu : {n}")
+                        continue
+                    src = d / name
+                    if n in used or not src.exists():
+                        continue
+                    if src.is_dir() and self._organize_project(src):
+                        problems.append(f"{name} : projet, laissé en place")
+                        continue
+                    if (d / t).resolve() == src.resolve() or src.resolve() in (d / t).resolve().parents:
+                        continue  # a theme folder is not moved into itself
+                    used.add(n)
+                    moves.append([name, t])
+            if not moves:
+                return "error: nothing to move in this plan" + ("\n- " + "\n- ".join(problems) if problems else "")
+            proposal.write_text(_json.dumps({"dossier": str(d), "moves": moves, "made_by": self.run_id,
+                                             "time": time.time()}, ensure_ascii=False))
+            by = {}
+            for name, t in moves:
+                by.setdefault(t, []).append(name)
+            text = "\n".join(f"{'(existe déjà) ' if (d / t).is_dir() else ''}{t}/ ({len(v)}) : " + ", ".join(v[:8])
+                             + (f"… et {len(v) - 8} autres" if len(v) > 8 else "") for t, v in sorted(by.items()))
+            left = len(names) - len(moves)
+            return (f"PROPOSITION (rien n'a été déplacé) pour {short(d)} : {len(moves)} élément(s) dans {len(by)} dossier(s) ; "
+                    f"{left} laissé(s) où ils sont.\n{text}"
+                    + ("\nRemarques :\n- " + "\n- ".join(problems[:10]) if problems else "")
+                    + "\n\nMontre cette proposition à l'utilisateur telle quelle, puis ARRÊTE-TOI et demande-lui s'il est "
+                      "d'accord ou ce qu'il veut changer. Ne l'applique pas dans cette réponse : ranger_dossier "
+                      "action=appliquer seulement après son « oui », dans son prochain message.")
+        if action == "appliquer":
+            if not proposal.exists():
+                return "error: no proposal for this folder: voir, then proposer, show it, and wait for the user's yes"
+            prop = _json.loads(proposal.read_text())
+            if prop.get("made_by") == self.run_id:
+                return ("refused: the proposal was made in this same answer — the user has not seen it yet. Show it to them "
+                        "and stop: apply it only after their yes, in their next message.")
+            if time.time() - prop.get("time", 0) > 86400:
+                return "refused: this proposal is more than a day old (the folder may have changed): voir and proposer again"
+            moves = prop["moves"]
+            summary = "\n".join(f"{n} → {t}/" for n, t in moves[:60]) + (f"\n… et {len(moves) - 60} autres" if len(moves) > 60 else "")
+            if not self.approve(f"Ranger {short(d)} : {len(moves)} élément(s) déplacés par thème (rien n'est supprimé)", summary):
+                return "denied by the user"
+            done, skipped, created = [], [], []
+            for name, t in moves:
+                src, dst_dir = d / name, d / t
+                if not src.exists():
+                    skipped.append(f"{name} (n'est plus là)")
+                    continue
+                for q in (dst_dir.parent, dst_dir) if "/" in t else (dst_dir,):
+                    if not q.exists():
+                        created.append(str(q))
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                dst, k = dst_dir / name, 2
+                while dst.exists():  # never overwrite: « facture (2).pdf »
+                    dst = dst_dir / f"{Path(name).stem} ({k}){Path(name).suffix}"
+                    k += 1
+                try:
+                    shutil.move(str(src), str(dst))
+                    done.append([str(src), str(dst)])
+                except OSError as e:
+                    skipped.append(f"{name} ({e})")
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            (self.ORGANIZE_DIR / f"journal-{key}-{stamp}.json").write_text(_json.dumps({"dossier": str(d), "moved": done, "created": created}, ensure_ascii=False))
+            proposal.unlink(missing_ok=True)  # applied: a second « appliquer » does nothing
+            return (f"ok: {len(done)} élément(s) rangés dans {short(d)} (rien supprimé). Pour tout remettre comme avant : "
+                    "ranger_dossier action=annuler." + ("\nNon déplacés :\n- " + "\n- ".join(skipped[:15]) if skipped else ""))
+        if action == "annuler":
+            journals = sorted(self.ORGANIZE_DIR.glob(f"journal-{key}-*.json"))
+            if not journals:
+                return f"error: no tidying of {short(d)} to undo"
+            j = journals[-1]
+            jd = _json.loads(j.read_text())
+            moved = jd["moved"]
+            if not self.approve(f"Annuler le rangement de {short(d)} : {len(moved)} élément(s) remis à leur place", ""):
+                return "denied by the user"
+            back, kept = 0, []
+            for src, dst in reversed(moved):
+                if Path(dst).exists() and not Path(src).exists():
+                    shutil.move(dst, src)
+                    back += 1
+                else:
+                    kept.append(Path(dst).name)
+            for t in sorted(jd.get("created", []), key=len, reverse=True):
+                try:
+                    Path(t).rmdir()  # only the theme folders this tidying created, and only if left empty
+                except OSError:
+                    pass
+            j.rename(j.with_name(j.name.replace("journal-", "annule-")))
+            return f"ok: {back} élément(s) remis à leur place." + (f" Laissés (déplacés ou remplacés depuis) : {', '.join(kept[:10])}" if kept else "")
+        return "error: action is voir, proposer, appliquer or annuler"
 
     def multi_edit(self, path, edits):
         p = self.resolve(path)
@@ -4261,7 +4473,7 @@ class Agent:
               "mail_junk": self.mail_junk, "mail_done": self.mail_done,
               "convert_document": self.convert_document, "make_diagram": self.make_diagram, "look_at": self.look_at, "browser": self.browser,
               "ask_user": self.ask_user, "planifier": self.planifier, "chercher_conversations": self.chercher_conversations,
-              "chercher_sur_mac": self.chercher_sur_mac, "chercher_skill": self.chercher_skill, "chercher_mcp": self.chercher_mcp,
+              "chercher_sur_mac": self.chercher_sur_mac, "ranger_dossier": self.ranger_dossier, "chercher_skill": self.chercher_skill, "chercher_mcp": self.chercher_mcp,
               "confier_tache": self.confier_tache, "lire_terminal": self.lire_terminal,
               "copie_travail": self.copie_travail, "partager_page": self.partager_page,
               "wait": self.wait}.get(name)
