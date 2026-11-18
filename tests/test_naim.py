@@ -4665,3 +4665,166 @@ class VoiceSpeedSetting(unittest.TestCase):
         self.assertIn('voice_speed: "0.95"', html)
         self.assertIn("speed: S.voice_speed", html)
         self.assertIn('b.get("speed")', (ROOT / "server.py").read_text())
+
+
+class AttachPickerWindow(unittest.TestCase):
+    """« Ajouter des fichiers ou des photos » opens a window: the files already attached (every conversation's,
+    photos kept inside a conversation included) and Naim's own, searched and previewed, chosen again."""
+
+    def setUp(self):
+        from unittest import mock
+        import base64
+        import chatfiles
+        import naimtools
+        import server
+        self.t = Path(tempfile.mkdtemp())
+        out = self.t / "Fichiers"
+        joints = out / "Joints"
+        convs = self.t / "conversations"
+        for d in (joints / "aaaaaaaaaaaa", joints / "bbbbbbbbbbbb", convs, out / "Projet"):
+            d.mkdir(parents=True)
+        (joints / "aaaaaaaaaaaa" / "CV final 2.5.docx").write_bytes(b"docx")
+        (joints / "aaaaaaaaaaaa" / "brouillon.txt").write_text("travail de Naim")  # Naim's work: not an attachment
+        (joints / "bbbbbbbbbbbb" / "gros.mov").write_bytes(b"x" * 10)
+        (joints / "bbbbbbbbbbbb" / ".joints").write_text("gros.mov\n")
+        (out / "rapport.pdf").write_bytes(b"%PDF")
+        (out / "Projet" / "page.html").write_text("<p>")
+        png = base64.b64encode(b"\x89PNGdata").decode()
+        conv = {"id": "aaaaaaaaaaaa", "title": "Mon CV", "messages": [
+            {"role": "user", "content": "voici", "time": 2000, "attachments": [
+                {"name": "CV final 2.5.docx", "size": 4, "kind": "doc",
+                 "content": f"[Document Word · fichier original : {joints}/aaaaaaaaaaaa/CV final 2.5.docx. Tes fichiers…]"},
+                {"kind": "image", "name": "photo.png", "size": 8, "mime": "image/png", "data": png, "content": ""},
+                {"name": "notes.md", "size": 5, "content": "# Note"}]},
+            {"role": "assistant", "content": "ok"}]}
+        (convs / "aaaaaaaaaaaa.json").write_text(json.dumps(conv))
+        self.joints, self.out = joints, out
+        self.patches = [mock.patch.object(naimtools, "JOINTS", joints), mock.patch.object(chatfiles, "OUT", out),
+                        mock.patch.object(server, "CONVS", convs)]
+        for p in self.patches:
+            p.start()
+        server._CONV_ATTACH.clear()
+
+    def tearDown(self):
+        import shutil
+        for p in self.patches:
+            p.stop()
+        shutil.rmtree(self.t, ignore_errors=True)
+
+    def test_lists_what_was_attached_and_what_naim_made(self):
+        import server
+        r = server.recent_files()
+        joints = {f["name"]: f for f in r["files"] if f["src"] == "joints"}
+        naim = {f["name"] for f in r["files"] if f["src"] == "naim"}
+        self.assertEqual(set(joints), {"CV final 2.5.docx", "photo.png", "notes.md", "gros.mov"})
+        self.assertEqual(joints["CV final 2.5.docx"]["title"], "Mon CV")  # the name with spaces and dots is found
+        self.assertEqual(joints["CV final 2.5.docx"]["path"], "aaaaaaaaaaaa/CV final 2.5.docx")
+        self.assertEqual(naim, {"rapport.pdf", "page.html"})  # never the Joints folder in « Créés par Naim »
+
+    def test_a_photo_kept_in_the_conversation_comes_back(self):
+        import server
+        f = next(x for x in server.recent_files()["files"] if x["name"] == "photo.png")
+        data, ctype = server.inline_attachment(f["inline"])
+        self.assertEqual((data, ctype), (b"\x89PNGdata", "image/png"))
+        self.assertEqual(server.inline_attachment(next(x["inline"] for x in server.recent_files()["files"]
+                                                        if x["name"] == "notes.md"))[0], b"# Note")
+        with self.assertRaises(ValueError):
+            server.inline_attachment("../x/0/0")
+
+    def test_a_big_file_is_cloned_into_the_new_conversation_only_from_naims_folders(self):
+        import server
+        r = server.reuse_file(str(self.joints), "bbbbbbbbbbbb/gros.mov", "cccccccccccc")
+        p = Path(r["path"])
+        self.assertEqual((p.parent.name, p.read_bytes()), ("cccccccccccc", b"x" * 10))
+        self.assertIn("gros.mov", (p.parent / ".joints").read_text())  # an original: Naim never overwrites it
+        self.assertTrue((self.joints / "bbbbbbbbbbbb" / "gros.mov").exists())  # the first one stays
+        with self.assertRaises(ValueError):
+            server.reuse_file(str(Path.home()), ".zshrc", "cccccccccccc")
+
+    def test_the_plus_menu_and_cmd_u_open_the_window(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn('label: "Ajouter des fichiers ou des photos", key: "⌘U", run: () => openAttachPicker()', html)
+        self.assertIn('e.key.toLowerCase() === "u") { e.preventDefault(); $("#apick").hidden ? openAttachPicker()', html)
+        for part in ('id="apick"', 'id="apPrev"', "async function attachAgain", "/api/recent-files/inline",
+                     "Importer depuis le Mac"):
+            self.assertIn(part, html)
+
+
+class TidyBigFolder(unittest.TestCase):
+    """A folder of hundreds of items: one overview (kinds, families of names, frequent words) and a plan made with
+    name patterns, instead of ten pages read again and again; the same look done again counts as a loop."""
+
+    def test_overview_then_plan_with_patterns(self):
+        with tempfile.TemporaryDirectory(dir=Path.home(), prefix=".naim-test-") as root:
+            d = Path(root) / "Telechargements"
+            d.mkdir()
+            for i in range(60):
+                (d / f"europredictor-ai-{i}.zip").write_text("z")
+            for i in range(50):
+                (d / f"facture-edf-{i}.pdf").write_text("p")
+            for i in range(20):
+                (d / f"Installeur{i}.dmg").write_text("d")
+            (d / "Dexter S04").mkdir()
+            a = naimtools.Agent(root, "naim", auto_yes=True, emit=lambda e: None, approver=lambda *x: True, run_id="r1")
+            a.ORGANIZE_DIR = Path(root) / "journaux"
+            seen = a.ranger_dossier(str(d), "voir")
+            self.assertIn("Vue d'ensemble", seen)
+            self.assertIn("« europredictor-ai* » 60", seen)
+            self.assertIn("Installeurs 20", seen)
+            self.assertLess(len(seen), 3000)
+            self.assertIn("page 2", a.ranger_dossier(str(d), "voir", page=2))   # the names one by one, if needed
+            prop = a.ranger_dossier(str(d), "proposer", {"Applications": ["*.dmg"], "Factures": ["*FACTURE*"],
+                                                         "Séries": ["*dexter*"], "Rien": ["*.mkv"]})
+            self.assertIn("71 élément(s) dans 3 dossier(s)", prop)
+            self.assertIn("rien ne correspond à « *.mkv »", prop)
+            self.assertTrue((d / "Installeur3.dmg").exists())                    # proposed, nothing moved
+
+    def test_a_read_only_command_or_look_done_again_is_a_loop(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        self.assertFalse(a._loop_check("run_command", {"command": "ls -la ~/Downloads"}, ""))
+        self.assertTrue(a._loop_check("run_command", {"command": "ls -la ~/Downloads"}, ""))
+        self.assertFalse(a._loop_check("ranger_dossier", {"action": "voir", "dossier": "~/x"}, ""))
+        self.assertTrue(a._loop_check("ranger_dossier", {"action": "voir", "dossier": "~/x"}, ""))
+        self.assertFalse(a._loop_check("run_command", {"command": "mkdir -p ~/x/a"}, ""))
+        self.assertFalse(a._loop_check("run_command", {"command": "mkdir -p ~/x/a"}, ""))   # a write: not a re-read
+
+    def test_bad_arguments_name_the_real_parameters(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        r = a.call_tool("ranger_dossier", {"dossier": "~/Downloads", "theme": "x"})
+        self.assertIn("Its parameters are only: dossier, action, plan, page", r)
+
+    def test_the_document_warning_needs_a_turn_that_made_a_document(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn('if (said && tried && d === $$("#thread .turn").pop()', html)
+
+
+class UserFilesMovedOnlyWithAWay(unittest.TestCase):
+    """The shell never moves the user's files into Naim's own folders, nor many at once outside the working folder
+    (that goes through ranger_dossier: proposal, yes, undo); one file outside the working folder: the user's yes."""
+
+    def _agent(self, root, asked):
+        return naimtools.Agent(root, "naim", auto_yes=True, emit=lambda e: None,
+                               approver=lambda *x: asked.append(x[0]) or False)
+
+    def test_the_commands_of_the_real_run_are_stopped(self):
+        asked = []
+        a = self._agent(tempfile.mkdtemp(), asked)
+        g = a._guard_user_moves
+        self.assertIn("Naim's own folder", g("mv ~/Downloads/Dexter ~/Documents/naim/Dexter"))
+        self.assertIn("Naim's own folder", g('python3 -c "import shutil; shutil.move(\'/Users/x/Downloads/a b.zip\', \'' + str(Path.home()) + '/Documents/naim/Candidature/\')"'))
+        self.assertIn("ranger_dossier", g('for f in ~/Downloads/*.pdf; do mv "$f" ~/Downloads/pdf/; done'))
+        self.assertIn("ranger_dossier", g("mv ~/Downloads/a.pdf ~/Downloads/x/ && mv ~/Downloads/b.pdf ~/Downloads/x/"))
+        self.assertEqual(asked, [])
+        self.assertIn("denied", g('mv "/Users/x/Downloads/[ Ox ] Dexter.S04" ~/Downloads/series/'.replace("/Users/x", str(Path.home()))))
+        self.assertEqual(len(asked), 1)                       # one file: asked, even with everything allowed
+
+    def test_naims_deliverables_folder_and_the_project_stay_free(self):
+        asked = []
+        root = tempfile.mkdtemp()
+        a = self._agent(root, asked)
+        self.assertIsNone(a._guard_user_moves(f"mv {root}/a.txt {root}/b.txt"))
+        self.assertIsNone(a._guard_user_moves(f'for f in {root}/*.log; do mv "$f" {root}/logs/; done'))
+        self.assertIsNone(a._guard_user_moves("ls -la ~/Downloads"))
+        self.assertIsNone(a._guard_user_moves("cp ~/Downloads/a.pdf ./a.pdf"))
+        self.assertIsNone(a._guard_user_moves(f"mv {root}/rapport.pdf ~/Documents/Naim/Fichiers/rapport.pdf"))
+        self.assertEqual(asked, [])

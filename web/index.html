@@ -804,6 +804,46 @@ body.vnarrow #panel.show { margin: 0; inset: 0 !important; width: auto !importan
 .pitem small { color: var(--muted); font-size: 12px; }
 .pitem.sel { background: var(--accent-soft); }
 .psec { font-size: 11.5px; color: var(--muted); padding: 8px 10px 4px; text-transform: uppercase; letter-spacing: .4px; }
+/* « Ajouter des fichiers ou des photos »: the files already attached (and Naim's), searched, previewed, chosen again */
+.apick { position: fixed; top: 9vh; left: 50%; transform: translateX(-50%); z-index: 31; display: flex; align-items: flex-start; gap: 18px; }
+.apick[hidden] { display: none; }
+.apbox { width: min(640px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; max-height: 80vh; }
+.aphead { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+.aphead svg { width: 17px; height: 17px; color: var(--muted); flex: none; }
+.aphead input { flex: 1; border: 0; background: none; outline: 0; font-size: 15.5px; color: var(--text); }
+.aphead .apx { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; display: flex; }
+.aphead .apx:hover { background: var(--hover, rgb(127 127 127 / .12)); color: var(--text); }
+.aptabs { display: flex; gap: 6px; padding: 0 12px 10px; border-bottom: 1px solid var(--line); }
+.aptabs button { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; background: none; color: var(--muted); padding: 5px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.aptabs button svg { width: 14px; height: 14px; }
+.aptabs button.on { background: var(--accent-soft); color: var(--text); border-color: var(--line); }
+.aptabs button:hover { color: var(--text); }
+.aplist { overflow-y: auto; padding: 4px 8px 8px; flex: 1; min-height: 120px; }
+.apsec { font-size: 12px; color: var(--muted); padding: 12px 8px 4px; }
+.aprow { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 9px; cursor: pointer; font-size: 14px; }
+.aprow.sel { background: var(--accent-soft); }
+.aprow .apck { width: 16px; height: 16px; border: 1.5px solid var(--muted); border-radius: 4px; flex: none; display: flex; align-items: center; justify-content: center; opacity: .75; }
+.aprow .apck svg { width: 12px; height: 12px; display: none; }
+.aprow.ck .apck { background: var(--accent, #c96442); border-color: var(--accent, #c96442); opacity: 1; color: #fff; }
+.aprow.ck .apck svg { display: block; }
+.aprow .apic { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.aprow .apn { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.aprow .apd { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.aprow .apk { color: var(--muted); font-size: 12.5px; width: 92px; text-align: right; white-space: nowrap; }
+.apfoot { display: flex; align-items: center; gap: 16px; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.apfoot kbd { border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; font: inherit; margin-left: 4px; }
+.apfoot .apgo { margin-left: auto; border: 0; background: var(--accent, #c96442); color: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.apfoot .apgo[hidden] { display: none; }
+.apprev { width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 10px; margin-top: 120px; }
+.apprev[hidden] { display: none; }
+.apprev .apimg { height: 190px; border-radius: 9px; background: var(--bg); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.apprev .apimg img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.apprev .apimg pre { margin: 0; padding: 10px; font-size: 10.5px; line-height: 1.35; white-space: pre-wrap; overflow: hidden; height: 100%; width: 100%; box-sizing: border-box; color: var(--text); background: #fff1; }
+.apprev .apimg .apbig { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.apprev .apimg .apbig svg { width: 40px; height: 40px; }
+.apprev .apt { font-size: 14px; margin: 9px 2px 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.apprev .aps { font-size: 12px; color: var(--muted); margin: 0 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 1020px) { .apprev { display: none !important; } }
 /* ---------------- v5: slash menu, images, git, sub-agents, reply actions, editors */
 .composer { position: relative; }
 /* « ultrathink » typed: a small badge says this one message is thought through (its word in a moving gradient) */
@@ -2652,6 +2692,15 @@ body.voicefirst:not(.busyrun) #talkBtn:not([hidden]):not(.on):hover .tw i { anim
 
 <div class="overlay" id="overlay"></div>
 <div class="palette" id="palette" hidden><input id="pInput" placeholder="Tape une commande ou cherche une conversation…" spellcheck="false"><div class="plist" id="pList"></div></div>
+<div class="apick" id="apick" hidden role="dialog" aria-label="Ajouter des fichiers ou des photos">
+  <div class="apbox">
+    <div class="aphead"><span id="apSearchIc"></span><input id="apInput" placeholder="Rechercher dans tes fichiers joints" spellcheck="false" autocomplete="off"><button class="apx" id="apClose" title="Fermer (Échap)"></button></div>
+    <div class="aptabs" id="apTabs"></div>
+    <div class="aplist" id="apList"></div>
+    <div class="apfoot"><span>Naviguer<kbd>↑</kbd><kbd>↓</kbd></span><span>Cocher<kbd>espace</kbd></span><span>Joindre<kbd>↵</kbd></span><span>Source<kbd>←</kbd><kbd>→</kbd></span><button class="apgo" id="apGo" hidden></button></div>
+  </div>
+  <div class="apprev" id="apPrev" hidden></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -6403,7 +6452,11 @@ function addBot(m, idx) {
           || String(r.content || "").match(/\b(cré[ée]|généré|fait)\b[^.\n]{0,30}\b(le |un |du )?(pdf|docx|fichier word|excel|pptx)\b/i);
         const kind = said && (said[1] || said[3] || "").toLowerCase();
         const ext = /pdf/.test(kind) ? /^pdf$/ : /docx|word/.test(kind) ? /^docx?$/ : /excel|xlsx/.test(kind) ? /^xlsx?$/ : /pptx|powerpoint/.test(kind) ? /^pptx$/ : /^(pdf|docx|xlsx|pptx)$/;
-        if (said && d === $$("#thread .turn").pop() && !(r.deliverables?.files || []).some((f) => ext.test(String(f.ext || "").toLowerCase()))) {
+        // only a turn that tried to MAKE a document (written, converted, built by a script): moving files into a « pdf »
+        // folder, or listing them, is not a promised document
+        const tried = (r.steps || []).some((st) => st.type === "tool" && (/write|convert|document|pdf|docx|xlsx|pptx|office/i.test(st.name)
+          || st.name === "run_command" && /\b(python3?|soffice|libreoffice|pandoc|weasyprint|textutil|cupsfilter|wkhtmltopdf|node)\b/.test(st.args?.command || "")));
+        if (said && tried && d === $$("#thread .turn").pop() && !(r.deliverables?.files || []).some((f) => ext.test(String(f.ext || "").toLowerCase()))) {
           const w = document.createElement("div"); w.className = "cutoff";
           w.innerHTML = `${svgI("warn")}<span>Naim dit avoir fait ${/pdf/.test(kind) ? "le PDF" : "le document"}, mais aucun fichier de ce type n'a été créé pendant ce travail.</span><button class="btn">Le faire maintenant</button>`;
           $("button", w).onclick = () => { w.remove(); send(`Le ${/pdf/.test(kind) ? "PDF" : "document"} n'a pas été créé (ta dernière commande a échoué). Fais-le maintenant, vérifie qu'il existe, puis donne-moi son chemin.`); };
@@ -7807,7 +7860,7 @@ async function addFiles(files) {
       continue;
     }
     if (DOC_RE.test(f.name)) {
-      if (f.size > 40 * 1024 * 1024) { await uploadBig(f); continue; }
+      if (f.size > 40 * 1024 * 1024 && !f.inline) { await uploadBig(f); continue; }
       const chip = { name: f.name, size: f.size, kind: "doc", loading: true, content: "" };
       pending.push(chip); renderPending();
       try {
@@ -7850,11 +7903,11 @@ function renderPending() {
 // « + » as in a pro assistant: files or photos, a folder, the « / » commands, the connectors (MCP) and the plugins
 $("#attach").onclick = (e) => { e.stopPropagation(); plusMenu(e.currentTarget); };  // the click must not close it at once
 document.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "u") { e.preventDefault(); $("#fileInput").click(); }
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "u") { e.preventDefault(); $("#apick").hidden ? openAttachPicker() : closeAttachPicker(); }
 });
 function plusMenu(anchor) {
   showMenu(anchor, [
-    { icon: "📎", label: "Ajouter des fichiers ou des photos", key: "⌘U", run: () => $("#fileInput").click() },
+    { icon: "📎", label: "Ajouter des fichiers ou des photos", key: "⌘U", run: () => openAttachPicker() },
     { icon: "📁", label: "Ajouter un dossier", run: async () => {
       const r = await api("/api/pick-folder").catch(() => ({}));
       if (r.path) { S.project = r.path; saveSettings(); applySettings(); toast(`Dossier de travail : ${r.path.split("/").pop()}`); }
@@ -7887,11 +7940,153 @@ async function pluginsMenu(anchor) {
   ]);
 }
 $("#fileInput").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+// ---- « Ajouter des fichiers ou des photos »: one window for the files already attached (any conversation), the ones
+// Naim made, and a new one from the Mac. Searched, grouped by date, previewed; chosen again as if dropped here.
+const apKey = (f) => `${f.src}:${f.inline || f.path}`;
+const AP = { src: "joints", data: null, rows: [], sel: 0, checked: new Set(), prevKey: "" };
+const apKind = (n) => {
+  const e = (String(n).split(".").pop() || "").toLowerCase();
+  if (/^(png|jpe?g|gif|webp|heic|tiff?|bmp|svg)$/.test(e)) return ["Image", "image"];
+  if (e === "pdf") return ["PDF", "file"];
+  if (/^(docx?|odt|rtf|pages)$/.test(e)) return ["Document", "docs"];
+  if (/^(xlsx?|xlsm|csv|numbers|ods)$/.test(e)) return ["Tableur", "chart"];
+  if (/^(pptx?|key|odp)$/.test(e)) return ["Présentation", "layers"];
+  if (/^(mp3|wav|m4a|aac|flac|ogg)$/.test(e)) return ["Audio", "wave"];
+  if (/^(mp4|mov|m4v|webm|avi)$/.test(e)) return ["Vidéo", "play"];
+  if (/^(zip|tar|gz|tgz|7z|rar)$/.test(e)) return ["Archive", "folder"];
+  if (/^(txt|md|markdown|log)$/.test(e)) return ["Texte", "file"];
+  if (/^(py|js|ts|tsx|jsx|html?|css|json|ya?ml|sh|swift|java|c|cpp|h|go|rs|rb|php|sql|xml|toml)$/.test(e)) return ["Code", "code"];
+  return ["Fichier", "file"];
+};
+function apWhen(t) {
+  const d = new Date(t), now = new Date(), day = 864e5, start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const sec = t >= start ? "Aujourd’hui" : t >= start - day ? "Hier" : t >= start - 6 * day ? "Cette semaine"
+    : d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() ? "Plus tôt ce mois-ci"
+    : d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }).replace(/^./, (c) => c.toUpperCase());
+  const label = t >= start ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  return [sec, label];
+}
+async function openAttachPicker() {
+  setView("chat");
+  AP.checked.clear(); AP.sel = 0; AP.prevKey = "";
+  $("#overlay").classList.add("show"); $("#apick").hidden = false;
+  $("#apSearchIc").innerHTML = svgI("search"); $("#apClose").innerHTML = svgI("x");
+  $("#apInput").value = ""; $("#apInput").focus();
+  AP.data = null; renderAttachPicker();
+  try { AP.data = await api("/api/recent-files"); } catch (e) { AP.data = { files: [], roots: {}, error: e.message }; }
+  if (!$("#apick").hidden) renderAttachPicker();
+}
+function closeAttachPicker() { $("#apick").hidden = true; $("#overlay").classList.remove("show"); $("#apPrev").hidden = true; }
+function renderAttachPicker() {
+  const files = AP.data?.files || [], q = $("#apInput").value.trim().toLowerCase();
+  const count = (src) => files.filter((f) => f.src === src).length;
+  $("#apTabs").innerHTML = [["joints", "clip", "Déjà joints"], ["naim", "spark", "Créés par Naim"]]
+    .map(([k, ic, l]) => `<button data-src="${k}" class="${AP.src === k ? "on" : ""}">${svgI(ic)}${l}${AP.data ? ` <small>${count(k)}</small>` : ""}</button>`).join("")
+    + `<button data-src="import">${svgI("upload")}Importer</button>`;
+  $$("#apTabs button").forEach((b) => (b.onclick = () => { if (b.dataset.src === "import") return apImport(); AP.src = b.dataset.src; AP.sel = 0; renderAttachPicker(); $("#apInput").focus(); }));
+  const list = files.filter((f) => f.src === AP.src && (!q || `${f.name} ${f.title} ${apKind(f.name)[0]}`.toLowerCase().includes(q)));
+  AP.rows = [{ action: true }, ...list];
+  if (AP.sel >= AP.rows.length) AP.sel = AP.rows.length - 1;
+  let html = `<div class="apsec">Actions</div><div class="aprow${AP.sel === 0 ? " sel" : ""}" data-i="0"><span class="apic">${svgI("upload")}</span><span class="apn">Importer depuis le Mac</span><span class="apd">photos, PDF, documents…</span></div>`, sec = "";
+  list.forEach((f, k) => {
+    const i = k + 1, [s, when] = apWhen(f.time), [kind, ic] = apKind(f.name), key = apKey(f);
+    if (s !== sec) { html += `<div class="apsec">${esc(s)}</div>`; sec = s; }
+    html += `<div class="aprow${AP.sel === i ? " sel" : ""}${AP.checked.has(key) ? " ck" : ""}" data-i="${i}" title="${esc(f.name)} · ${fmtSize(f.size)}">`
+      + `<span class="apck" data-ck="${i}">${svgI("check")}</span><span class="apic">${svgI(ic)}</span>`
+      + `<span class="apn">${esc(f.name)}</span><span class="apd">· ${esc(when)}</span><span class="apk">${kind}</span></div>`;
+  });
+  if (!AP.data) html += '<div class="ph">Chargement…</div>';
+  else if (!list.length) html += `<div class="ph">${q ? "Aucun fichier ne correspond." : AP.src === "joints" ? "Aucun fichier joint pour l’instant : importe-en un depuis le Mac." : "Naim n’a encore créé aucun fichier."}</div>`;
+  $("#apList").innerHTML = html;
+  $$("#apList .aprow").forEach((el) => {
+    const i = +el.dataset.i;
+    el.onmousemove = () => { if (AP.sel !== i) apSelect(i, false); };
+    el.onclick = (e) => { if (e.target.closest("[data-ck]")) { apToggle(i); return; } AP.sel = i; apChoose(); };
+  });
+  const n = AP.checked.size;
+  $("#apGo").hidden = !n; $("#apGo").textContent = `Joindre ${n} fichier${n > 1 ? "s" : ""}`;
+  apPreview();
+}
+function apSelect(i, scroll = true) {
+  AP.sel = Math.max(0, Math.min(AP.rows.length - 1, i));
+  $$("#apList .aprow").forEach((el) => el.classList.toggle("sel", +el.dataset.i === AP.sel));
+  if (scroll) $(`#apList .aprow[data-i="${AP.sel}"]`)?.scrollIntoView({ block: "nearest" });
+  apPreview();
+}
+function apToggle(i) {
+  const f = AP.rows[i]; if (!f || f.action) return;
+  const key = apKey(f);
+  AP.checked.has(key) ? AP.checked.delete(key) : AP.checked.add(key);
+  AP.sel = i; renderAttachPicker();
+}
+function apPreview() {
+  const f = AP.rows[AP.sel], box = $("#apPrev");
+  if (!f || f.action) { box.hidden = true; AP.prevKey = ""; return; }
+  const key = apKey(f);
+  box.hidden = false;
+  if (AP.prevKey === key) return;
+  AP.prevKey = key;
+  const root = AP.data.roots[f.src], q = `root=${encodeURIComponent(root)}&path=${encodeURIComponent(f.path || "")}`, inl = f.inline && `/api/recent-files/inline?ref=${encodeURIComponent(f.inline)}`;
+  const ext = (f.name.split(".").pop() || "").toLowerCase(), [kind, ic] = apKind(f.name);
+  const big = `<div class="apbig">${svgI(ic)}<span>${esc(ext.toUpperCase() || kind)} · ${fmtSize(f.size)}</span></div>`;
+  const where = f.src === "joints" ? (f.title ? `Joint dans « ${titleText(f.title)} »` : "Fichier joint") : "Créé par Naim";
+  box.innerHTML = `<div class="apimg">${big}</div><div class="apt">${esc(f.name)}</div><div class="aps">${esc(where)} · ${fmtSize(f.size)}</div>`;
+  const pic = box.querySelector(".apimg");
+  if (inl && kind === "Image" || /^(png|jpe?g|gif|webp|heic|tiff?|bmp|svg|pdf|docx?|pptx?|xlsx?|key|pages|numbers|rtf|odt)$/.test(ext) && !inl) {
+    const img = new Image(); img.alt = "";
+    img.onload = () => { if (AP.prevKey === key) { pic.innerHTML = ""; pic.appendChild(img); } };
+    img.src = inl || `/api/thumb?${q}&w=560`;
+  } else if (inl) {
+    fetch(inl).then((r) => r.text()).then((t) => { if (AP.prevKey === key) pic.innerHTML = `<pre>${esc(t.slice(0, 900))}</pre>`; }).catch(() => {});
+  } else if (f.size < 400000 && /^(Texte|Code)$/.test(kind) || /^(csv|tsv)$/.test(ext)) {
+    api(`/api/file?${q}`).then((r) => { if (AP.prevKey === key && r.content != null) pic.innerHTML = `<pre>${esc(r.content.slice(0, 900))}</pre>`; }).catch(() => {});
+  }
+}
+function apImport() { closeAttachPicker(); $("#fileInput").click(); }
+async function apChoose() {
+  const picked = AP.checked.size ? AP.rows.filter((f) => !f.action && AP.checked.has(apKey(f))) : [AP.rows[AP.sel]].filter(Boolean);
+  if (!picked.length) return;
+  if (picked[0].action) return apImport();
+  const roots = AP.data.roots;
+  closeAttachPicker();
+  for (const f of picked) await attachAgain(f, roots[f.src]);
+}
+// a file chosen again: read from Naim's folder and given to addFiles as if dropped (same chips, same handling);
+// a very big one is not carried through the page: the server clones it into this conversation's folder
+async function attachAgain(f, root) {
+  try {
+    if (f.size > 40 * 1024 * 1024) {
+      const r = await api("/api/recent-files/reuse", { method: "POST", body: { root, path: f.path, conv: convIdForFiles() } });
+      if (r.error) throw new Error(r.error);
+      pending.push({ name: f.name, size: f.size, kind: "big", path: r.path,
+        content: `[Fichier joint volumineux (${fmtSize(f.size)}), enregistré ici : ${r.path}. Il n'est pas collé dans ce message : lis-le avec tes outils, par morceaux (read_file, ou run_command avec grep -n, sed -n, tail, wc -l, ou un script Python). ${workNote(r.folder)}]` });
+      renderPending(); updateCtx(); return;
+    }
+    const res = await fetch(f.inline ? `/api/recent-files/inline?ref=${encodeURIComponent(f.inline)}` : `/api/raw?root=${encodeURIComponent(root)}&path=${encodeURIComponent(f.path)}`);
+    if (!res.ok) throw new Error("fichier introuvable");
+    const blob = await res.blob();
+    const type = blob.type && blob.type !== "application/octet-stream" ? blob.type.split(";")[0] : "";
+    await addFiles([new File([blob], f.name, { type, lastModified: f.time })]);
+  } catch (e) { toast(`${f.name} : ${e.message}`); }
+}
+$("#apInput").addEventListener("input", () => { AP.sel = AP.rows.length > 1 ? 1 : 0; renderAttachPicker(); if ($("#apInput").value.trim() && AP.rows.length > 1) apSelect(1); });
+$("#apInput").addEventListener("keydown", (e) => {
+  const empty = !$("#apInput").value;
+  if (e.key === "ArrowDown") { e.preventDefault(); apSelect(AP.sel + 1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); apSelect(AP.sel - 1); }
+  else if (e.key === "Enter") { e.preventDefault(); apChoose(); }
+  else if (e.key === " " && (empty || e.altKey) && AP.sel > 0) { e.preventDefault(); apToggle(AP.sel); }
+  else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && empty) { e.preventDefault(); AP.src = AP.src === "joints" ? "naim" : "joints"; AP.sel = 0; renderAttachPicker(); }
+  else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeAttachPicker(); }
+});
+$("#apClose").onclick = closeAttachPicker;
+$("#apGo").onclick = apChoose;
+
 let dragDepth = 0;
 document.addEventListener("dragenter", (e) => { if (e.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });
 document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
 document.addEventListener("dragover", (e) => e.preventDefault());
-document.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging"); if (e.dataTransfer?.files.length) { setView("chat"); addFiles(e.dataTransfer.files); } });
+document.addEventListener("drop", (e) => { e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging"); if (e.dataTransfer?.files.length) { if (!$("#apick").hidden) closeAttachPicker(); setView("chat"); addFiles(e.dataTransfer.files); } });
 $("#input").addEventListener("paste", (e) => {
   if (e.clipboardData?.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); return; }
   const html = e.clipboardData?.getData("text/html"), plain = e.clipboardData?.getData("text/plain") || "";
@@ -10053,7 +10248,7 @@ $("#pInput").addEventListener("keydown", (e) => {
   else if (e.key === "Enter" && pItems[pSel]) { e.preventDefault(); closePalette(); pItems[pSel].run(); }
   else if (e.key === "Escape") closePalette();
 });
-$("#overlay").onclick = closePalette;
+$("#overlay").onclick = () => { closePalette(); if (!$("#apick").hidden) closeAttachPicker(); };
 
 // ======================================================================= keyboard shortcuts
 $("#search").oninput = () => { renderList(); clearTimeout(searchTimer); searchTimer = setTimeout(searchContents, 300); };
@@ -10076,7 +10271,7 @@ document.addEventListener("keydown", (e) => {
   else if (mod && e.shiftKey && k === "c") { e.preventDefault(); naimCmd("copyLast"); }
   else if (mod && e.shiftKey && k === "a") { e.preventDefault(); setMode(S.mode === "chat" ? "agent" : "chat"); toast(S.mode === "agent" ? "Mode Agent" : "Mode Chat"); }
   else if (mod && e.shiftKey && k === "r") { e.preventDefault(); naimCmd("toggleThink"); }
-  else if (e.key === "Escape") { if (!$("#palette").hidden) closePalette(); else if ($("#ctxmenu")) closeMenu(); else if (curRun()) stop(); else if (view !== "chat") setView("chat"); }
+  else if (e.key === "Escape") { if (!$("#apick").hidden) closeAttachPicker(); else if (!$("#palette").hidden) closePalette(); else if ($("#ctxmenu")) closeMenu(); else if (curRun()) stop(); else if (view !== "chat") setView("chat"); }
 });
 // pinch / ctrl+wheel zoom
 document.addEventListener("wheel", (e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(S.zoom - Math.sign(e.deltaY) * 0.05); } }, { passive: false });
@@ -10147,6 +10342,7 @@ async function checkStatus() {
 
 // ======================================================================= UI v3: rail, model picker, parameters panel, folders
 const RICON = {
+  upload: '<path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"/><path d="M4.5 15v3.5A1.5 1.5 0 006 20h12a1.5 1.5 0 001.5-1.5V15"/>',
   code: '<path d="M8.5 6.5L3 12l5.5 5.5"/><path d="M15.5 6.5L21 12l-5.5 5.5"/>',
   feather: '<path d="M20.2 3.8c-5.6.3-10.4 3.6-12.2 9.6L6.6 18"/><path d="M20.2 3.8c-.4 5.8-4 10.3-9.7 11.7"/><path d="M8.6 15.4l5.1-5.1"/><path d="M6.6 18L4 20.6"/>',
   image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5-8.5 8.5"/>',

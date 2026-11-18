@@ -234,7 +234,9 @@ MAC_SEARCH_TOOL = {"type": "function", "function": {"name": "chercher_sur_mac", 
 ORGANIZE_TOOL = {"type": "function", "function": {"name": "ranger_dossier", "description": (
     "Tidy one of the user's folders by THEME (« range mon dossier Téléchargements », « organise mes fichiers par "
     "thème »), in three steps, never all at once: action=voir lists what is in the folder, numbered, with a glimpse of "
-    "each document; action=proposer takes your plan {\"Thème\": [numbers], \"Thème/Sous-thème\": [numbers]} and "
+    "each document (a big folder: first an overview — kinds of files, families of names, frequent words — and its "
+    "pages with page=1, 2…); action=proposer takes your plan {\"Thème\": [numbers or name patterns], \"Thème/Sous-thème\": "
+    "[…]} — a pattern like \"*.dmg\", \"*facture*\", \"europredictor*\" takes every name it matches — and "
     "returns the proposal to SHOW the user — nothing is moved; action=appliquer moves exactly the proposal, only after "
     "the user said yes in a later message; action=annuler puts everything back. Nothing is ever deleted, nothing is "
     "overwritten, projects (code folders, Naim) are never moved. Use chercher_sur_mac first if the user names files, not "
@@ -242,7 +244,7 @@ ORGANIZE_TOOL = {"type": "function", "function": {"name": "ranger_dossier", "des
     "parameters": {"type": "object", "properties": {
         "dossier": {"type": "string", "description": "the folder to tidy, e.g. « ~/Downloads », « ~/Documents », « ~/Desktop »"},
         "action": {"type": "string", "enum": ["voir", "proposer", "appliquer", "annuler"]},
-        "plan": {"type": "object", "description": "for proposer: {\"Factures\": [1, 4], \"Cours/Maths\": [2, 3]} — numbers from voir; "
+        "plan": {"type": "object", "description": "for proposer: {\"Factures\": [1, 4, \"*facture*\"], \"Applications\": [\"*.dmg\", \"*.pkg\"]} — numbers from voir or name patterns (* = anything); "
                  "theme names in French, short, like the user would name a folder; existing folders can be reused"},
         "page": {"type": "integer", "description": "for voir: next page of a big folder (1, 2…)"}},
         "required": ["dossier", "action"]}}}
@@ -2081,6 +2083,54 @@ class Agent:
         import hashlib
         return hashlib.sha1(str(d).encode()).hexdigest()[:12]
 
+    ORGANIZE_KINDS = {"PDF": (".pdf",), "Word / textes": (".doc", ".docx", ".odt", ".pages", ".rtf", ".txt", ".md"),
+                      "Tableurs": (".xls", ".xlsx", ".csv", ".numbers", ".ods"), "Présentations": (".ppt", ".pptx", ".key"),
+                      "Images": (".png", ".jpg", ".jpeg", ".heic", ".gif", ".webp", ".svg", ".tiff", ".bmp"),
+                      "Vidéos": (".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm"),
+                      "Audio": (".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg"),
+                      "Archives": (".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".xip"),
+                      "Installeurs": (".dmg", ".pkg", ".exe", ".msi", ".apk", ".ipa"),
+                      "Code / données": (".py", ".js", ".ts", ".html", ".css", ".json", ".swift", ".sh", ".xml", ".yml", ".yaml", ".jsonl", ".sql"),
+                      "Mails": (".eml", ".msg"), "Torrents": (".torrent",)}
+
+    def _organize_overview(self, d, items):
+        """A big folder (hundreds of items) in ONE answer: its kinds of files, its families of names (« europredictor-ai-* :
+        45 »), its frequent words — enough to make a plan with name patterns, instead of reading page after page."""
+        from collections import Counter
+        home = str(Path.home())
+        kinds, projects, folders = Counter(), 0, 0
+        ext_kind = {e: k for k, exts in self.ORGANIZE_KINDS.items() for e in exts}
+        stem = lambda n: re.sub(r"([ _.-]*(\(\d+\)|copie|copy|\d+|v\d[\w.]*|final|old|new))+$", "", Path(n).stem if "." in n[1:] else n, flags=re.I).strip(" _.-").lower()  # noqa: E731
+        fam, words = Counter(), Counter()
+        for x in items:
+            if x.is_dir():
+                if self._organize_project(x):
+                    projects += 1
+                else:
+                    folders += 1
+            else:
+                kinds[ext_kind.get(x.suffix.lower(), "Autres")] += 1
+            if st := stem(x.name):
+                fam[st] += 1
+            for w in set(re.findall(r"[^\W\d_]{4,}", Path(x.name).stem.lower())):
+                words[w] += 1
+        families = [(f, n) for f, n in fam.most_common(40) if n >= 3][:25]
+        famw = {w for f, _ in families for w in re.findall(r"[^\W\d_]{4,}", f)}
+        frequent = [(w, n) for w, n in words.most_common(80) if n >= 3 and w not in famw][:30]
+        lines = [f"{str(d).replace(home, '~', 1)} : {len(items)} éléments — trop pour les lire un par un. Vue d'ensemble :",
+                 "Par type : " + ", ".join(f"{k} {n}" for k, n in kinds.most_common()) + (f", dossiers {folders}" if folders else "")
+                 + (f", projets de code {projects} (laissés en place)" if projects else "")]
+        if families:
+            lines.append("Familles de noms (le même nom en plusieurs versions) : " + ", ".join(f"« {f}* » {n}" for f, n in families))
+        if frequent:
+            lines.append("Mots fréquents dans les noms : " + ", ".join(f"{w} ({n})" for w, n in frequent))
+        lines.append("Fais ton plan par THÈME avec des motifs de noms, sans lire les pages : ranger_dossier action=proposer "
+                     "plan={\"Applications\": [\"*.dmg\", \"*.pkg\"], \"Séries\": [\"*dexter*\"], \"Factures\": [\"*facture*\"]}. "
+                     "Un motif prend tous les noms qui lui correspondent (* = n'importe quoi) ; un premier thème garde ce "
+                     "qu'il a pris. Pour voir les noms un par un (numérotés) : ranger_dossier action=voir page=1, page=2… "
+                     f"(il y a {-(-len(items) // self.ORGANIZE_PAGE)} pages) — seulement si un motif ne suffit pas.")
+        return "\n".join(lines)
+
     def ranger_dossier(self, dossier, action="voir", plan=None, page=None):
         import json as _json
         d, err = self._organize_root(dossier)
@@ -2097,6 +2147,8 @@ class Agent:
                            key=lambda x: (not x.is_dir(), x.name.lower()))
             names = [x.name for x in items]
             listing.write_text(_json.dumps({"dossier": str(d), "items": names}, ensure_ascii=False))
+            if len(items) > self.ORGANIZE_PAGE and not page:
+                return self._organize_overview(d, items)
             n0 = max(0, (int(page or 1) - 1)) * self.ORGANIZE_PAGE
             size = lambda n: f"{n / 1048576:.1f} Mo" if n >= 1048576 else f"{max(1, n // 1024)} Ko"  # noqa: E731
             lines, glimpses = [], 0
@@ -2115,9 +2167,10 @@ class Agent:
                     glimpses += 0 if x.is_dir() else 1
                 lines.append(f"{i}. {x.name} — {tag} · {time.strftime('%m/%Y', time.localtime(st.st_mtime))}" + (f" · {g}" if g else ""))
             more = len(items) - (n0 + self.ORGANIZE_PAGE)
-            return (f"{short(d)} : {len(items)} élément(s). Classe-les par THÈME (le sujet : factures, cours, travail, photos de "
+            return (f"{short(d)} : {len(items)} élément(s)" + (f", page {int(page)} (numéros {n0 + 1} à {n0 + len(lines)})" if page else "")
+                    + ". Classe-les par THÈME (le sujet : factures, cours, travail, photos de "
                     "vacances…, pas seulement le type de fichier), puis appelle ranger_dossier action=proposer avec "
-                    "plan={\"Thème\": [numéros]}. Laisse hors du plan ce qui est déjà bien rangé ou dont tu n'es pas sûr, "
+                    "plan={\"Thème\": [numéros ou motifs comme \"*facture*\"]}. Laisse hors du plan ce qui est déjà bien rangé ou dont tu n'es pas sûr, "
                     "et les « projet, laissé en place ».\n" + "\n".join(lines)
                     + (f"\n… encore {more} : ranger_dossier action=voir page={int(page or 1) + 1}" if more > 0 else ""))
         if action == "proposer":
@@ -2126,29 +2179,41 @@ class Agent:
             names = _json.loads(listing.read_text())["items"]
             if not isinstance(plan, dict) or not plan:
                 return "error: give plan as {\"Thème\": [numbers]} using the numbers from voir"
-            moves, problems, used = [], [], set()
+            import fnmatch
+            moves, problems, used, kept_projects = [], [], set(), 0
+            lower = [x.lower() for x in names]
             for theme, nums in plan.items():
                 t = "/".join(part.strip() for part in str(theme).replace("\\", "/").split("/") if part.strip())
                 if not t or ".." in t.split("/") or t.count("/") > 1 or re.search(r"[:*?\"<>|]", t) or len(t) > 80:
                     problems.append(f"thème refusé « {theme} » (un nom simple, ou Thème/Sous-thème)")
                     continue
+                picked = []
                 for n in (nums if isinstance(nums, list) else [nums]):
+                    if isinstance(n, str) and not n.strip().lstrip("#").isdigit():  # a pattern (« *.dmg ») or a name
+                        pat = n.strip().lower()
+                        hit = [names[i] for i, x in enumerate(lower) if fnmatch.fnmatchcase(x, pat)] if any(c in pat for c in "*?[") \
+                            else [names[i] for i, x in enumerate(lower) if x == pat]
+                        if not hit:
+                            problems.append(f"rien ne correspond à « {n} »")
+                        picked += hit
+                        continue
                     try:
-                        n = int(n)
-                        name = names[n - 1]
+                        picked.append(names[int(str(n).lstrip("#")) - 1])
                     except (ValueError, TypeError, IndexError):
                         problems.append(f"numéro inconnu : {n}")
-                        continue
+                for name in picked:
                     src = d / name
-                    if n in used or not src.exists():
+                    if name in used or not src.exists():
                         continue
                     if src.is_dir() and self._organize_project(src):
-                        problems.append(f"{name} : projet, laissé en place")
+                        kept_projects += 1
                         continue
                     if (d / t).resolve() == src.resolve() or src.resolve() in (d / t).resolve().parents:
                         continue  # a theme folder is not moved into itself
-                    used.add(n)
+                    used.add(name)
                     moves.append([name, t])
+            if kept_projects:
+                problems.append(f"projet, laissé en place : {kept_projects} dossier(s) de code")
             if not moves:
                 return "error: nothing to move in this plan" + ("\n- " + "\n- ".join(problems) if problems else "")
             proposal.write_text(_json.dumps({"dossier": str(d), "moves": moves, "made_by": self.run_id,
@@ -2730,6 +2795,62 @@ class Agent:
         return ("refused: this command would change Naim itself (its program, settings or model). Never do that unless "
                 "the user explicitly asks to modify Naim; continue the task without it.")
 
+    MOVE_RE = re.compile(r"(?:^|[;&|(\s])(?:mv|rename)\s|shutil\.move\s*\(|os\.(?:rename|replace)\s*\(|\.rename\s*\(")
+
+    def _command_paths(self, command):
+        """The paths a command names (« ~/Downloads/x », "/Users/…/a b.pdf", ~/Documents/naim/Dexter/), expanded."""
+        found = re.findall(r"[\"']((?:~|/Users/|\$HOME)[^\"'\n]*)[\"']", command)
+        for seg in re.split(r"&&|\|\||[;|\n]", re.sub(r"[\"'](?:~|/Users/|\$HOME)[^\"'\n]*[\"']", " ", command)):
+            try:
+                words = shlex.split(seg)
+            except ValueError:
+                words = seg.split()
+            found += [w for w in words if w.startswith(("~", "/Users/", "$HOME"))]
+        out = []
+        for w in found:
+            w = w.replace("$HOME", str(Path.home()), 1).rstrip(")")
+            try:
+                out.append(Path(os.path.expanduser(w)))
+            except (ValueError, RuntimeError):
+                pass
+        return out
+
+    def _guard_user_moves(self, command):
+        """Moving the user's own files with the shell: nothing journaled, nothing to undo. Into Naim's own folders: never.
+        Many at once (a pattern, a loop) outside the working folder: through ranger_dossier (a proposal, one yes,
+        undoable). One file outside the working folder: the user's yes, even when everything is allowed. None = allowed."""
+        if not self.MOVE_RE.search(command or ""):
+            return None
+        home, naim_docs = Path.home().resolve(), JOINTS.parent.parent.resolve()
+        mine = naim_docs / "Fichiers"
+        paths = self._command_paths(command)
+
+        def resolved(x):
+            try:
+                return Path(str(x).split("*")[0].split("?")[0] or "/").resolve()
+            except (OSError, RuntimeError):
+                return x
+        real = [resolved(x) for x in paths]
+        under = lambda x, top: (str(x).lower() + "/").startswith(str(top).lower() + "/")  # noqa: E731 — macOS ignores case
+        root = self.root.resolve()
+        for x in real:  # Naim's deliverables (Fichiers) and its projects (Projets, the open one) are work places
+            if (under(x, naim_docs) and not any(under(x, ok) for ok in (mine, naim_docs / "Projets", root))
+                    or is_naim_itself(x) and not under(x, root)):
+                return (f"refused: {x} is Naim's own folder (its program, model or work), not a place for the user's files. "
+                        "Never move the user's files there. Nothing was moved: leave them where they are, or ask the "
+                        "user where they want them.")
+        outside = [x for x in real if home in x.parents and not under(x, root) and not under(x, mine)]
+        standard = root in {home / "Downloads", home / "Desktop", home / "Documents"}
+        bulk = (any(c in str(x) for x in paths for c in "*?") or re.search(r"\bfor\b|\bwhile\b|\bglob\b|listdir|iterdir", command)
+                or len(self.MOVE_RE.findall(command)) > 1)
+        if bulk and (outside or standard):
+            return ("refused: this moves many of the user's files at once with the shell — no proposal, no undo. To tidy a "
+                    "folder, use ranger_dossier: action=voir, then action=proposer with a plan (name patterns like "
+                    "\"*.pdf\" or \"*dexter*\" work), show it to the user and wait for their yes. Nothing was moved.")
+        if outside and not self.approve("⚠ Déplacer tes fichiers hors du dossier de travail", f"$ {command}", kind="sensitive"):
+            return "denied by the user (moving their files outside the working folder)"
+        return None
+
     def _check_blocked(self, command):
         for rx, why in self.HARD_BLOCK:
             if rx.search(command):
@@ -2768,7 +2889,8 @@ class Agent:
                    else f"{first}(…) directly")
             return (f"error: {first} is one of YOUR tools, not a shell command or a Python module. Call it as a tool: {how}, "
                     "with the same arguments as JSON. Nothing was run.")
-        if err := self._check_blocked(command) or self._check_env(command) or self._guard_own_command(command):
+        if err := (self._check_blocked(command) or self._check_env(command) or self._guard_own_command(command)
+                   or self._guard_user_moves(command)):
             return err
         if not stdin and self.SERVER_RE.search(command.strip()) and "&" not in command.replace("&&", ""):
             res = self.start_process(command, name="application", keep=True)
@@ -4739,7 +4861,10 @@ class Agent:
                 return (f"error: {name} modifie un FICHIER, il lui faut path (le chemin du fichier). Ta réponse précédente "
                         "n'est pas un fichier : on ne la modifie pas. Pour te corriger, écris simplement la correction dans ta "
                         "réponse, puis fais l'action avec l'outil de la tâche (run_command, use_skill…).")
-            return f"error: bad arguments for {name}: {e}"
+            defs = [t for t in getattr(self, "tools", []) if "function" in t] + list((getattr(self, "_fast_extra", None) or {}).values())
+            known = next((list(t["function"].get("parameters", {}).get("properties", {})) for t in defs
+                          if t["function"]["name"] == name), None)
+            return f"error: bad arguments for {name}: {e}" + (f". Its parameters are only: {', '.join(known)}." if known else "")
         except ValueError as e:
             return f"error: {e}"
         except Exception as e:  # tools must never crash the agent loop
@@ -5117,7 +5242,10 @@ class Agent:
                 except (OSError, ValueError):
                     pass
         self._seen[key] = self._seen.get(key, 0) + 1
-        repeated = self._seen[key] > 1 and (name in READ_ONLY or name in ("write_file", "edit_file"))
+        reads = (name in READ_ONLY or name in ("write_file", "edit_file")
+                 or name == "run_command" and not command_writes(str(args.get("command") or ""))  # « ls -la ~/Downloads » again
+                 or name == "ranger_dossier" and str(args.get("action") or "voir") == "voir")
+        repeated = self._seen[key] > 1 and reads
         if content:
             repeated = repeated or content in self._notes[-3:]
             self._notes.append(content)

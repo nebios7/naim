@@ -1109,6 +1109,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(collect_artifacts())
         elif path == "/api/joints":
             self.send_json(_joints_info(q.get("conv", "")))
+        elif path == "/api/recent-files":  # « Ajouter des fichiers ou des photos »: the files already attached, Naim's
+            self.send_json(recent_files())
+        elif path == "/api/recent-files/inline":
+            try:
+                data, ctype = inline_attachment(q.get("ref"))
+            except (OSError, ValueError, KeyError, IndexError, TypeError):
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
         elif path.startswith("/api/conversations/"):
             cid = path.rsplit("/", 1)[1]
             f = CONVS / f"{cid}.json"
@@ -1611,6 +1625,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": r.returncode == 0})
         elif path == "/api/upload":
             self.send_json(self._upload())
+        elif path == "/api/recent-files/reuse":
+            try:
+                b = self.read_json()
+                self.send_json(reuse_file(b.get("root", ""), b.get("path", ""), b.get("conv", "")))
+            except (ValueError, OSError) as e:
+                self.send_json({"error": str(e)}, 400)
         elif path == "/api/extract":
             b = self.read_json()
             try:
@@ -3687,6 +3707,138 @@ def conversation_joints(cid):
             if p and p.parent == joints and p.is_file() and p not in out:
                 out.append(p)
     return out
+
+
+_CONV_ATTACH = {}  # conversation file -> (mtime, what its messages received): read again only when it changes
+_ORIGINAL_RE = re.compile(r"(?:fichier original|enregistré ici) : (/[^\n\]]+)")
+
+
+def _original_path(content):
+    """The saved original a chip's text names (« fichier original : /…/CV final.docx. Tes fichiers… »): the longest
+    piece ending in an extension that is a real file (a name may hold spaces and dots)."""
+    m = _ORIGINAL_RE.search(str(content or "")[:1500])
+    if not m:
+        return None
+    text = m.group(1)
+    for e in sorted((x.end() for x in re.finditer(r"\.[A-Za-z0-9]{1,8}(?=[.\s]|$)", text)), reverse=True):
+        if Path(text[:e]).is_file():
+            return text[:e]
+    return None
+
+
+def _conv_attachments(f):
+    """What one conversation received: (title, [(message index, attachment index, attachment, time)])."""
+    try:
+        mt = f.stat().st_mtime
+        if f in _CONV_ATTACH and _CONV_ATTACH[f][0] == mt:
+            return _CONV_ATTACH[f][1]
+        c = json.loads(f.read_text())
+    except (OSError, ValueError):
+        return "", []
+    got = []
+    for i, m in enumerate(c.get("messages") or []):
+        if m.get("role") != "user":
+            continue
+        for k, a in enumerate(m.get("attachments") or []):
+            if isinstance(a, dict) and a.get("name"):
+                got.append((i, k, {x: a.get(x) for x in ("name", "size", "kind", "mime", "path")}
+                            | {"original": None if a.get("path") else _original_path(a.get("content")),
+                               "inline": "data" if a.get("data") else "text" if a.get("content") and not a.get("kind") else ""},
+                            int(m.get("time") or mt * 1000)))
+    _CONV_ATTACH[f] = (mt, (c.get("title", ""), got))
+    return c.get("title", ""), got
+
+
+def recent_files(limit=400):
+    """The « Ajouter des fichiers » window: what the user already attached (the files each conversation received, its
+    originals kept in Fichiers/Joints, and the photos and texts kept in the conversation itself) and what Naim made
+    for them (~/Documents/Naim/Fichiers), newest first. The same file attached in several conversations: shown once."""
+    import chatfiles
+    from naimtools import JOINTS
+    joints = JOINTS.resolve()
+    out, seen_path, titles = [], set(), {}
+
+    def add_file(src, base, f, cid="", t=None):
+        try:
+            f = f.resolve()
+            st = f.stat()
+            rel = f.relative_to(base)
+        except (OSError, ValueError):
+            return
+        if f in seen_path or not f.is_file():
+            return
+        seen_path.add(f)
+        out.append({"src": src, "name": f.name, "path": str(rel), "size": st.st_size,
+                    "time": t or int(st.st_mtime * 1000), "conv": cid, "title": titles.get(cid, "")})
+
+    convs = sorted(CONVS.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True) if CONVS.exists() else []
+    for f in convs:
+        title, got = _conv_attachments(f)
+        cid = f.stem
+        titles[cid] = title
+        for i, k, a, t in got:
+            where = a.get("path") or a.get("original")
+            if where and Path(where).is_file():
+                add_file("joints", joints, Path(where), cid, t)
+            elif a["inline"]:
+                size = a.get("size") if isinstance(a.get("size"), int) else 0
+                out.append({"src": "joints", "name": a["name"], "inline": f"{cid}/{i}/{k}", "size": size, "time": t,
+                            "conv": cid, "title": title, "mime": a.get("mime") or ""})
+    if JOINTS.is_dir():  # originals listed in a folder but no longer in a conversation (one deleted, say)
+        for lst in JOINTS.glob("*/.joints"):
+            try:
+                names = [n for n in lst.read_text().splitlines() if n.strip()]
+            except OSError:
+                continue
+            for n in names:
+                add_file("joints", joints, lst.parent / n, lst.parent.name)
+    naim_out = chatfiles.OUT.resolve()
+    if naim_out.is_dir():
+        skip = {joints, naim_out / "Supprimés"}
+        for dirpath, dirnames, filenames in os.walk(naim_out):
+            d = Path(dirpath)
+            dirnames[:] = [x for x in dirnames if not x.startswith(".") and (d / x) not in skip
+                           and len((d / x).relative_to(naim_out).parts) <= 2]
+            for n in filenames:
+                if not n.startswith(".") and not n.endswith((".tmp", ".part")):
+                    add_file("naim", naim_out, d / n)
+    out.sort(key=lambda r: r["time"], reverse=True)
+    uniq, seen = [], set()
+    for r in out:
+        k = (r["src"], r["name"], r["size"])
+        if k not in seen:
+            seen.add(k)
+            uniq.append(r)
+    return {"roots": {"joints": str(joints), "naim": str(naim_out)}, "files": uniq[:limit]}
+
+
+def inline_attachment(ref):
+    """(bytes, type) of a photo or a text kept inside a conversation, for the window to preview it or attach it again."""
+    cid, i, k = (str(ref or "").split("/") + ["", "", ""])[:3]
+    if not ID_RE.match(cid) or not i.isdigit() or not k.isdigit():
+        raise ValueError("référence invalide")
+    a = json.loads((CONVS / f"{cid}.json").read_text())["messages"][int(i)]["attachments"][int(k)]
+    if a.get("data"):
+        return base64.b64decode(a["data"]), a.get("mime") or "image/png"
+    return str(a.get("content") or "").encode(), (mimetypes.guess_type(a.get("name") or "")[0] or "text/plain") + "; charset=utf-8"
+
+
+def reuse_file(root, rel, cid):
+    """A file chosen again in « Ajouter des fichiers », too big to go through the page: copied (an APFS clone, no
+    space taken) into this conversation's folder, kept as an original. Only from Naim's own folders."""
+    import chatfiles
+    from naimtools import JOINTS
+    allowed = [JOINTS.resolve(), chatfiles.OUT.resolve()]
+    base, f = project_path(root, rel)
+    if base not in allowed or not f.is_file():
+        raise ValueError("fichier introuvable")
+    folder = joints_dir(cid)
+    if f.parent.resolve() == folder.resolve():
+        return {"path": str(_read_only(f)), "size": f.stat().st_size, "folder": str(folder)}
+    dst = _free_name(folder, _safe_name(f.name))
+    if subprocess.run(["cp", "-c", str(f), str(dst)], capture_output=True).returncode != 0:
+        shutil.copy2(f, dst)
+    return {"path": str(_read_only(dst)), "size": dst.stat().st_size, "folder": str(folder)}
 
 
 def _joints_info(cid):

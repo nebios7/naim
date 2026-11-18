@@ -17,6 +17,9 @@ run_command : passe toujours par lui (une seule validation, et tout s'annule).
 
 ## 2. Voir, puis proposer
 1. `ranger_dossier(dossier, action="voir")` : la liste numérotée, avec quelques mots de chaque document.
+   Un grand dossier (des centaines d'éléments) : l'outil rend une **vue d'ensemble** (types, familles de noms, mots
+   fréquents). Fais ton plan directement avec des **motifs** (`"*.dmg"`, `"*facture*"`, `"europredictor*"`), sans lire
+   les pages une à une ; ne refais pas `voir`, il te redonnerait la même chose.
 2. Classe par **thème**, le sujet de la vie de l'utilisateur, pas le type de fichier :
    « Factures et banque », « Travail », « Cours/Maths », « Voyages », « Santé », « Papiers administratifs »,
    « Photos/Vacances 2025 »… Le nom, le début du texte et les noms du dossier disent le sujet.
@@ -24,7 +27,7 @@ run_command : passe toujours par lui (une seule validation, et tout s'annule).
    - Peu de thèmes (4 à 10), des noms courts en français, comme l'utilisateur les écrirait.
    - Un sous-thème seulement s'il y a beaucoup d'éléments (`Cours/Maths`, `Cours/Anglais`).
    - Pas sûr d'un élément : laisse-le hors du plan. Les « projet, laissé en place » ne bougent jamais.
-3. `ranger_dossier(dossier, action="proposer", plan={"Thème": [numéros], …})`.
+3. `ranger_dossier(dossier, action="proposer", plan={"Thème": [numéros ou motifs], …})`.
 4. **Montre la proposition** telle que l'outil la rend, puis arrête-toi : « Je range comme ça ? Tu peux changer un
    thème ou retirer un fichier. » Rien n'est déplacé tant qu'il n'a pas répondu.
 
