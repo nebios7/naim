@@ -5040,6 +5040,15 @@ class ALoopSimulationLooksRight(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("sort du cadre", out)
 
+    def test_small_slips_pass_and_shown_nulls_are_caught(self):
+        base = (self.SK / "exemples/boucle-while.js").read_text()
+        code, out = self.check(base.replace('P("tours += 1"', 'P("tours += 1:"'))  # a « : » too many is still that line
+        self.assertEqual(code, 0, out)
+        code, out = self.check(base.replace('P("x += pas"', 'P("x += pas * 2"'))
+        self.assertIn("la plus proche est « x += pas »", out)
+        code, out = self.check(base.replace("Un tour de plus : <b>tours = ${tours}</b>.", "Un tour de plus : ${null}"))
+        self.assertIn("« null »", out)
+
     def test_no_sort_counters_for_a_drawing(self):
         page = (self.SK / "moteur.html").read_text()
         self.assertIn("A.type==='tri'||A.type==='recherche'||!A.type)?['COMPARAISONS','ÉCHANGES']:[]", page)

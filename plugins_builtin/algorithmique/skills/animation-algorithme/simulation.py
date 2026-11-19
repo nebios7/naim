@@ -66,7 +66,13 @@ try {
     try {
       var T = makeTrace(ALGO, v, x), last = T[T.length - 1];
       c.etapes = T.length; c.fin = last.a;
-      T.forEach(function (t) { used[t.line] = 1; if (!t.msg) c.sans_message = (c.sans_message || 0) + 1; });
+      T.forEach(function (t, k) {
+        used[t.line] = 1; if (!t.msg) c.sans_message = (c.sans_message || 0) + 1;
+        // a value that does not exist shown to the student (« 5 × null », « i = undefined »): the algorithm is wrong there
+        var shown = [t.msg, t.note].concat(Object.keys(t.vars || {}).map(function (n) { return n + ' = ' + t.vars[n]; })).join(' | ');
+        var bad = /\b(undefined|NaN|null)\b|\[object Object\]/.exec(shown.replace(/<[^>]+>/g, ''));
+        if (bad && c.ok) { c.ok = false; c.pourquoi = 'étape ' + (k + 1) + ' : on montre « ' + bad[0] + ' » à l\'élève (' + shown.replace(/<[^>]+>/g, '').slice(0, 140) + ') : une valeur n\'est pas encore calculée ou mal passée'; }
+      });
       if (ALGO.type === 'tri') {
         var want = v.slice().sort(function (p, q) { return p - q; });
         if (ALGO.ordre === 'decroissant') want.reverse();
