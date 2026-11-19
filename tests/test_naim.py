@@ -4956,3 +4956,18 @@ class SameTextReadAgainIsNotGivenAgain(unittest.TestCase):
         src = (ROOT / "server.py").read_text()
         self.assertEqual(src.count('"content": helper._for_model(result, 9000)'), 2)
         self.assertIn("result = self._for_model(result, MAX_OUTPUT)", (ROOT / "naimtools.py").read_text())
+
+
+class AReadOnlyCommandMakesNoDeliverable(unittest.TestCase):
+    """« ls ~/Downloads » listed two .docx downloaded meanwhile: they were shown as Naim's work. A command that only
+    reads makes nothing."""
+
+    def test_reads_are_not_writes(self):
+        for c in ("ls -1 ~/Downloads | head -1300", "cat notes.txt", "grep -n x a.py | wc -l"):
+            self.assertFalse(naimtools.command_writes(c), c)
+        for c in ("python3 faire_pdf.py", "pandoc a.md -o a.pdf", "ls > liste.txt"):
+            self.assertTrue(naimtools.command_writes(c), c)
+
+    def test_the_chat_skips_deliverables_for_reads(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('and not (name == "run_command" and not _nt_writes(str(args.get("command") or "")))', src)

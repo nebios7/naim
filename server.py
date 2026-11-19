@@ -65,6 +65,7 @@ import llamacpp
 import mcp_catalog
 import scheduler
 import skill_hub
+from naimtools import command_writes as _nt_writes  # noqa: E402
 from naimtools import (answer_here, cmd_env, finals, ANNOUNCE_RE, STOP_WORDS_RE, writing_text, WRITING_STYLE, CHAT_PROMPT, OLLAMA_HOST, PROCESSES, SKIP_DIRS, TOOL_GROUPS, WEB_TOOLS, Agent, now_note, ollama_chat,
                        raw_tool_calls, today_line)
 
@@ -3219,7 +3220,10 @@ class Handler(BaseHTTPRequestHandler):
                         if name == "send_email":
                             sent, mail_error = (True, None) if str(result).startswith("ok") else (sent, result)
                         elif (name in ("convert_document", "make_diagram", "run_command", "write_file", "edit_file", "delegate")
-                              and helper.root.resolve() != Path.home().resolve() and not str(result).startswith(("error", "refused"))):
+                              and helper.root.resolve() != Path.home().resolve() and not str(result).startswith(("error", "refused"))
+                              # a command that only reads (ls, cat, grep…) makes nothing: a file that arrived meanwhile
+                              # (a download in the folder it listed) is not its work
+                              and not (name == "run_command" and not _nt_writes(str(args.get("command") or "")))):
                             # a PDF, a plan, an image made by another tool than creer_fichier: shown too, with Ouvrir / Finder
                             here = helper.root if helper.root.resolve() != chatfiles.OUT.resolve() else None
                             known = {f["path"] for f in made}
