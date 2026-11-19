@@ -3444,7 +3444,10 @@ class Agent:
                   "type": f"Taper : {shown}", "key": f"Touche {keys}", "scroll": f"Défiler de {amount}",
                   "drag": f"Glisser de ({x}, {y}) à ({x2}, {y2})", "open_app": f"Ouvrir l'application {app}"}.get(action)
         if detail is None:
-            return f"error: unknown action {action}"
+            return (f"error: unknown action {action}. This tool only clicks, types and looks at the screen; its actions: "
+                    "screenshot, click_text, click, double_click, right_click, type, key, scroll, drag, open_app. "
+                    "An action of an app (empty the Trash, play music…) is a command of that app: run_command with osascript "
+                    "(the mac skill has the recipes).")
         if action == "type" and text and (err := self._check_blocked(text)):  # typed into Terminal: same lock
             return err
         if sensitive:
@@ -3495,7 +3498,7 @@ class Agent:
                   "tap_text": f"Toucher « {text} »", "tap": f"Toucher en ({x}, {y})", "swipe": f"Glisser de ({x}, {y}) à ({x2}, {y2})",
                   "type": f"Taper : {text}", "home": "Écran d'accueil", "open_url": f"Ouvrir {url}"}
         if action not in labels:
-            return f"error: unknown action {action}"
+            return f"error: unknown action {action}. Actions: new_app, " + ", ".join(labels)
         kind = "command" if action in ("boot", "shutdown", "build_run", "install", "launch", "terminate") else "computer"
         if not self.approve("Simulateur iOS", labels[action], kind=kind):
             return "denied by the user"

@@ -63,8 +63,12 @@ l'utilisateur le fait lui-même dans Utilitaire de disque.
 - Montrer dans le Finder : `open -R "chemin"` · ouvrir un dossier : `open ~/Documents`
 - Mettre à la Corbeille (confirmation) : `osascript -e 'tell application "Finder" to delete POSIX file "/chemin/complet"'`
   Jamais `rm` sur les fichiers de l'utilisateur.
-- Vider la Corbeille (Naim demande l'autorisation, une fois) : `osascript -e 'tell application "Finder" to empty trash'`
-  · combien d'éléments : `osascript -e 'tell application "Finder" to count items of trash'` (avant et après, pour le dire vrai).
+- Vider la Corbeille (Naim demande l'autorisation, une fois) — sans la fenêtre « Voulez-vous vraiment… » du Finder, que
+  personne ne voit quand on parle à la voix (alors rien n'est vidé), puis le réglage remis comme avant, et compté après :
+  ```bash
+  osascript -e 'tell application "Finder"' -e 'set n to count items of trash' -e 'set w to warns before emptying of trash' -e 'set warns before emptying of trash to false' -e 'empty trash' -e 'set warns before emptying of trash to w' -e 'return (n as text) & " avant, " & ((count items of trash) as text) & " après"' -e 'end tell'
+  ```
+  Dis ce que la commande renvoie (« 6 avant, 0 après ») ; s'il en reste, dis combien — jamais « vidée » sans ce compte.
   `~/.Trash` est protégé par macOS : ni `ls`, ni `rm`, ni Python n'y ont accès ; seul le Finder la vide.
 - Compresser : `ditto -c -k --sequesterRsrc --keepParent "dossier" "dossier.zip"` · décompresser : `ditto -x -k "a.zip" "destination"`
 - Taille : `du -sh "chemin"` · dernier téléchargement : `ls -t ~/Downloads | head -5`

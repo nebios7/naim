@@ -5860,7 +5860,7 @@ function approvalAnswer(said) {  // true when the words answered the pending app
   if (!pendingApproval || !t || t.split(/\s+/).length > 8) return false;
   const all = APPROVE_ALL_RE.test(t), no = !all && APPROVE_NO_RE.test(t), yes = all || (!no && APPROVE_YES_RE.test(t));
   if (!yes && !no) return false;
-  const answer = pendingApproval; voiceStop(); answer(yes, all);
+  const answer = pendingApproval; voiceStop(); answer(yes, all, t);  // the words that answered are kept with it
   $("#input").value = ""; autoGrow?.(); updateSendBtn?.();
   return true;
 }
@@ -6495,8 +6495,22 @@ function addBot(m, idx) {
       }
     },
     error(t) { const n = document.createElement("div"); n.className = "error"; n.textContent = "⚠ " + t; block(n); },
-    approval(ev) {
-      const a = document.createElement("div"); a.className = "approval";
+    // an answered approval: ONE line of the work (who answered and how: a click, words said, no answer), its command
+    // under it — kept in the conversation, so what was allowed can always be checked afterwards
+    approvalLine(st, into) {
+      const isDiff = /^(---|@@)/m.test(st.detail || "") && /^\+\+\+ /m.test(st.detail || "");
+      const how = st.how === "voix" ? ` (à la voix : « ${esc(st.said || "")} »)` : st.how === "aucune" ? " (sans réponse)" : "";
+      const row = document.createElement("div"); row.className = "arow apfold " + (st.allow ? "ok" : "err");
+      row.innerHTML = `<div class="aline"><span class="aic">${svgI(st.allow ? "check" : "x")}</span><span class="alabel">${st.allow ? "Autorisé" : "Refusé"}${how} · ${esc(String(st.action || "").replace(/^⚠\s*/, ""))}</span></div><pre class="aout" hidden>${isDiff ? diffHtml(st.detail) : esc(st.detail || "")}</pre>`;
+      $(".aline", row).onclick = () => { const p = $(".aout", row); p.hidden = !p.hidden; };
+      const lw = lastWork(flow), g = into || group || (lw?.classList.contains("agroup") && $(".arows", lw) ? lw : null);
+      if (g?.isConnected) { $(".arows", g).appendChild(row); return row; }
+      const f = document.createElement("details"); f.className = "agroup";
+      f.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum">${esc(row.querySelector(".alabel").textContent)}</span></summary><div class="arows"></div>`;
+      $(".arows", f).appendChild(row); flow.appendChild(f); return row;
+    },
+    approval(ev, st) {
+      const a = document.createElement("div"); a.className = "approval"; a.dataset.aid = ev.id;
       const isDiff = /^(---|@@)/m.test(ev.detail) && /^\+\+\+ /m.test(ev.detail);
       const plain = approvalPlain(ev.action, ev.detail);  // what Naim wants to do, in one readable sentence
       a.innerHTML = plain
@@ -6507,21 +6521,23 @@ function addBot(m, idx) {
       if (String(ev.action).startsWith("⚠")) { all.remove(); a.classList.add("sensitive"); }  // asked every time
       // the group of work it belongs to (the step that asked): once answered, the card folds into ONE line of it
       const lw = lastWork(flow), g0 = group || (lw?.classList.contains("agroup") && $(".arows", lw) ? lw : null);
-      const answer = async (allow, always) => {
-        pendingApproval = null;
-        $(".btns", a).outerHTML = `<div class="res">${allow ? "✓ Autorisé" : "✕ Refusé"}</div>`;
+      st ||= { type: "approval", action: ev.action, detail: ev.detail, allow: null };
+      const fold = (allow, how, said) => {
+        if (a.classList.contains("done")) return false;
+        if (pendingApproval === a._answer) pendingApproval = null;
         a.classList.add("done");
-        const what = String(ev.action).replace(/^⚠\s*/, "");
-        const row = document.createElement("div"); row.className = "arow apfold " + (allow ? "ok" : "err");
-        row.innerHTML = `<div class="aline"><span class="aic">${svgI(allow ? "check" : "x")}</span><span class="alabel">${allow ? "Autorisé" : "Refusé"} · ${esc(what)}</span></div><pre class="aout" hidden>${isDiff ? diffHtml(ev.detail) : esc(ev.detail)}</pre>`;
-        $(".aline", row).onclick = () => { const p = $(".aout", row); p.hidden = !p.hidden; };
-        if (g0?.isConnected) { $(".arows", g0).appendChild(row); a.remove(); }  // the next steps join the same group (still open)
-        else { const f = document.createElement("details"); f.className = "agroup"; f.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum">${esc(row.querySelector(".alabel").textContent)}</span></summary><div class="arows"></div>`; $(".arows", f).appendChild(row); a.replaceWith(f); }
+        Object.assign(st, { allow, how, said: said ? String(said).slice(0, 80) : undefined });
+        const row = v.approvalLine(st, g0); a.remove();  // the next steps join the same group (still open)
+        return true;
+      };
+      const answer = async (allow, always, said) => {
+        if (!fold(allow, said ? "voix" : "clic", said)) return;
         if (always) { S.autoYes = true; saveSettings(); applySettings(); }
         await api("/api/approve", { method: "POST", body: { id: ev.id, allow, always: !!always } });
       };
+      a._fold = fold;  // the server gave up waiting (no answer): refused, said so
       yes.onclick = () => answer(true); no.onclick = () => answer(false); all.onclick = () => answer(true, true);
-      pendingApproval = (allow, always) => { pendingApproval = null; answer(allow, always && !String(ev.action).startsWith("⚠")); };
+      a._answer = pendingApproval = (allow, always, said) => answer(allow, always && !String(ev.action).startsWith("⚠"), said);
       // the question said without « oui » or « non »: those words would be taken for its own voice (echo) when you answer
       if (talk.on) voiceSay(`Je dois te demander : ${String(ev.action).replace(/^⚠\s*/, "")}. Je peux ?`);
       flow.appendChild(a); scrollDown(true);  // the group stays open: answered, the card goes into it
@@ -6585,6 +6601,7 @@ function addBot(m, idx) {
     replay(s) {
       v._replay = true;
       if (s.type === "question") { v.question(s); return; }
+      if (s.type === "approval") { if (s.allow != null) v.approvalLine(s); return; }
       if (s.type === "schedule") { v.schedule(s); return; }
       if (s.type === "process") { v.process(s.process); return; }
       if (s.type === "process_stopped") { v.processStopped(s); return; }
@@ -6609,10 +6626,22 @@ function composeContent(text, atts) {
   const files = atts.map((a) => a.kind === "big" ? `Fichier joint « ${a.name} » :\n${a.content}` : a.kind === "doc" ? `Document joint « ${a.name} » :\n${a.content}` : `Fichier joint « ${a.name} »${a.path ? ` (enregistré ici : ${a.path} ; pour reprendre ce modèle ou ce style, copie ce fichier avec cp puis change seulement les textes, sans retaper son HTML ni son CSS)` : ""} :\n\`\`\`${(a.name.split(".").pop() || "").toLowerCase()}\n${a.content}\n\`\`\``).join("\n\n");
   return `${files}\n\n${text}`;
 }
-function historyFor(msgs) {
+// what Naim DID in an earlier answer (its commands and how they ended), kept short: the next turn knows what failed
+// and what worked (« vide la corbeille » asked twice: it guessed the same wrong tools again, its working command forgotten)
+function doneTrace(m) {
+  const steps = (m.steps || []).filter((s) => s.type === "approval" || s.type === "tool" && !/^(update_todos|use_skill|chercher_skill)$/.test(s.name)).slice(-10);
+  if (!steps.length) return "";
+  const what = (s) => s.name === "run_command" ? "`" + String(s.args?.command || "").slice(0, 160) + "`" : s.name + (s.args?.action ? ` ${s.args.action}` : s.args?.path ? ` ${String(s.args.path).split("/").pop()}` : "");
+  const end = (s) => { const r = String(s.result || ""); const first = r.replace(/^exit code 0\n?/, "").split("\n").find((l) => l.trim()) || "";
+    return /^(error|denied|blocked|refused)/.test(r) || /^exit code [1-9]/.test(r) ? "échec : " + (r.split("\n").find((l) => l && !/^exit code/.test(l)) || r).slice(0, 110)
+      : first ? "ok : " + first.slice(0, 80) : "ok (aucune sortie : non vérifié)"; };
+  const line = (s) => s.type === "approval" ? `autorisation « ${String(s.action || "").replace(/^⚠\s*/, "")} » → ${s.allow ? "accordée" : s.how === "aucune" ? "sans réponse" : "refusée"}` : `${what(s)} → ${end(s)}`;
+  return "\n\n(Mémo interne, à ne pas recopier dans tes réponses — tes actions ici : " + steps.map(line).join(" ; ") + ")";
+}
+function historyFor(msgs, trace) {  // trace: what it did in each answer (for the model only, never for training)
   return msgs.filter((m) => m.content || m.attachments?.length)
     .map((m) => {
-      const h = { role: m.role, content: m.role === "user" ? composeContent(m.content, m.attachments) : m.content };
+      const h = { role: m.role, content: m.role === "user" ? composeContent(m.content, m.attachments) : m.content + (trace ? doneTrace(m) : "") };
       const im = m.role === "user" ? imagesOf(m.attachments) : [];
       return im.length ? { ...h, images: im } : h;
     });
@@ -6620,9 +6649,9 @@ function historyFor(msgs) {
 // ---- long conversations: the beginning is replaced by a summary made by Naim
 function histFor(conv, end) {
   const msgs = conv.messages.slice(0, end ?? conv.messages.length), sm = conv.summary;
-  if (!sm || sm.upto > msgs.length) return historyFor(msgs);
+  if (!sm || sm.upto > msgs.length) return historyFor(msgs, true);
   return [{ role: "user", content: "(Résumé du début de notre conversation, fait par toi : le texte complet n'est plus envoyé)\n\n" + sm.text },
-    { role: "assistant", content: "D'accord, je continue à partir de ce résumé." }, ...historyFor(msgs.slice(sm.upto))];
+    { role: "assistant", content: "D'accord, je continue à partir de ce résumé." }, ...historyFor(msgs.slice(sm.upto), true)];
 }
 const estTokens = (h) => Math.round(h.reduce((n, m) => n + m.content.length + (m.images?.length || 0) * 2800, 0) / 3.5);
 function compactLimit() {
@@ -7020,7 +7049,8 @@ async function stream(reply, v, message, hist, extra = {}) {
           case "project": if (ev.path && ev.path !== S.project) { S.project = ev.path; saveSettings(); if ($("#project")) $("#project").value = ev.path; toast(`Naim travaille dans ${ev.path.replace(/^\/Users\/[^/]+/, "~")}`); } break;
           case "note": reply.steps.push({ type: "note", text: ev.text }); v.note(ev.text); break;
           case "event": reply.steps.push({ type: "event", icon: ev.icon, text: ev.text }); v.event(ev.icon, ev.text); break;  // an MCP server installed, a hook added…
-          case "approval": v.approval(ev); break;
+          case "approval": { const st = { type: "approval", id: ev.id, action: ev.action, detail: String(ev.detail || "").slice(0, 4000), allow: null }; reply.steps.push(st); v.approval(ev, st); break; }
+          case "approval_result": { const c = document.querySelector(`.approval[data-aid="${ev.id}"]`); if (c?._fold && !ev.allow) c._fold(false, "aucune"); break; }
           case "question": { const st = { type: "question", id: ev.id, question: ev.question, options: ev.options || [], multiple: !!ev.multiple, answer: null }; reply.steps.push(st); v.question(st); break; }
           case "schedule": { const st = { type: "schedule", task: ev.task, deleted: !!ev.deleted }; reply.steps.push(st); v.schedule(st); loadList(); break; }
           case "interjection_read": {  // Naim read the remark now: it is placed here, in its answer

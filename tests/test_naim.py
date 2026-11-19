@@ -5015,9 +5015,11 @@ class AnsweredApprovalFoldsIntoTheWork(unittest.TestCase):
 
     def test_folds_into_the_group(self):
         html = (ROOT / "web/index.html").read_text()
-        i = html.index("    approval(ev) {"); j = html.index("    question(st) {", i); code = html[i:j]
+        i = html.index("    approvalLine(st, into) {"); j = html.index("    question(st) {", i); code = html[i:j]
         self.assertIn('row.className = "arow apfold "', code)
-        self.assertIn('$(".arows", g0).appendChild(row); a.remove();', code)
+        self.assertIn("const row = v.approvalLine(st, g0); a.remove();", code)
+        self.assertIn('if (s.type === "approval") { if (s.allow != null) v.approvalLine(s); return; }', html)  # kept, shown again
+        self.assertIn("answer(yes, all, t)", html)  # the words said are kept with it
         self.assertIn("flow.appendChild(a); scrollDown(true);", code)
         self.assertNotIn("block(a)", code)
 
@@ -5090,3 +5092,24 @@ class MacActionFindsItsMethod(unittest.TestCase):
     def test_action_request_gets_library_suggestion(self):
         src = (ROOT / "server.py").read_text()
         self.assertIn('if file_work or files or not pure_question(body["message"] or ""):', src)
+
+
+class TheConversationRemembersWhatWasDone(unittest.TestCase):
+    """« vide la corbeille » asked again: it guessed the same unknown tools, its working command forgotten (only the text
+    of its answers was sent back). Each earlier answer now carries what it did and how it ended; the Trash recipe goes
+    without the Finder's own confirmation window (nobody saw it, nothing was emptied) and counts before and after."""
+
+    def test_trace_in_the_history_not_in_training(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn("function doneTrace(m)", html)
+        self.assertIn("return historyFor(msgs, true);", html)
+        self.assertIn("historyFor(current.messages.slice(0, idx + 1)).map", html)  # rating: no trace
+
+    def test_unknown_screen_action_names_the_real_ones(self):
+        self.assertIn("its actions: \"\n                    \"screenshot, click_text", (ROOT / "naimtools.py").read_text())
+
+    def test_trash_recipe_without_the_finder_window(self):
+        s = (ROOT / "skills_extra/mac/systeme.md").read_text()
+        self.assertIn("set warns before emptying of trash to false", s)
+        self.assertIn("set warns before emptying of trash to w", s)
+        self.assertIn(" après", s)
