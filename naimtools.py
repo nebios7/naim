@@ -319,11 +319,21 @@ _APP_TOOLS = {"contacts": "chercher_contact (lire une fiche) et modifier_contact
               "calendar": "le skill mac (recette des rendez-vous)", "messages": "le skill mac (recette SMS / iMessage)"}
 
 
-def _applescript_hint(command):
-    """An AppleScript that failed on its syntax or its objects: the app's own dictionary says what exists (its classes,
-    properties and commands), and a dedicated tool may already do it — never a third guess of the syntax."""
+def _applescript_hint(command, output=""):
+    """An AppleScript that failed, read by its error number: cancelled by a confirmation window (-128), Naim not allowed
+    to drive the app (-1743), or its syntax and objects wrong — then the app's own dictionary says what exists (its
+    classes, properties and commands), and a dedicated tool may already do it — never a third guess of the syntax."""
     apps = list(dict.fromkeys(re.findall(r'(?:tell|application)\s+(?:application\s+)?"([^"]+)"', command)))
     app = apps[0] if apps else ""
+    if re.search(r"\(-128\)", output):
+        return (f"\n\n[Annulé (-128) : ce n'est pas une erreur de syntaxe. Une fenêtre de confirmation de macOS ou de "
+                f"{app or 'l’application'} a été fermée ou refusée (ou personne n'y a répondu). Rien n'a été fait : ne dis pas "
+                "que c'est fait, ni que c'est vide. Dis-le à l'utilisateur et propose de réessayer pendant qu'il regarde "
+                "l'écran pour confirmer.]")
+    if re.search(r"\(-1743\)|not authori[sz]ed to send apple events|n'est pas autoris", output, re.I):
+        return (f"\n\n[Naim n'a pas le droit de piloter {app or 'cette application'} : l'utilisateur doit l'autoriser dans "
+                "Réglages Système › Confidentialité et sécurité › Automatisation (Naim → " + (app or "l'application")
+                + "). Dis-le-lui ; ne contourne pas.]")
     tool = _APP_TOOLS.get(app.lower())
     look = (f'`(sdef "/System/Applications/{app}.app" 2>/dev/null || sdef "/Applications/{app}.app") | '
             f'grep -i -B2 -A8 "<le mot : phone, contact, volume…>"`' if app else '`sdef "/Applications/<App>.app" | grep -i <mot>`')
@@ -2878,8 +2888,11 @@ class Agent:
             where = next((str(x.parent if x.suffix else x).replace(str(home), "~", 1) for x in real
                           if home in x.parents), None) or ("~/Downloads" if re.search(r"downloads", command, re.I) else
                           str(root).replace(str(home), "~", 1))
+            if re.search(r"\.Trash\b", command):
+                return ("refused: moving the Trash's items elsewhere is not emptying it, and nothing was moved. To empty "
+                        "the Trash: osascript -e 'tell application \"Finder\" to empty trash' (the user is asked first).")
             return ("refused: this moves many of the user's files at once with the shell — no proposal, no undo. Nothing "
-                    "was moved, and a plan you write in your answer is not a proposal. Do it with your tool instead: "
+                    "was moved, and a plan you write in your answer is not a proposal. To TIDY a folder, use your tool: "
                     f"ranger_dossier(dossier=\"{where}\", action=\"proposer\", plan={{\"Thème\": [\"*.pdf\", \"*facture*\"], …}}) "
                     "(name patterns or numbers from action=voir), show its proposal to the user, then END your answer and "
                     "wait: their yes comes in their next message, and only then action=appliquer.")
@@ -4759,7 +4772,21 @@ class Agent:
                                     + ", ou web_search « <module> <fonction> documentation ». Puis utilise le vrai nom.]")
         if name == "run_command" and re.match(r"exit code [1-9]", str(result)) and "osascript" in str(args.get("command") or "") \
                 and re.search(r"syntax error|execution error|script error", str(result)):
-            result = str(result) + _applescript_hint(str(args.get("command") or ""))
+            result = str(result) + _applescript_hint(str(args.get("command") or ""), str(result))
+        if name == "run_command" and re.search(r"Operation not permitted", str(result)):
+            # macOS privacy (the Trash, Mail, Messages, Safari…): no shell command reads or changes it — not sudo either
+            result = str(result) + ("\n\n[macOS protège ce dossier (vie privée) : ni ls, ni rm, ni Python, ni sudo n'y ont accès "
+                                    "depuis Naim. Tu ne sais donc PAS ce qu'il contient : ne dis pas qu'il est vide. Passe par "
+                                    "l'application qui le gère (osascript vers le Finder pour la Corbeille), ou explique à "
+                                    "l'utilisateur qu'il faut donner à Naim l'« Accès complet au disque » dans Réglages Système › "
+                                    "Confidentialité et sécurité.]")
+        if name == "run_command" and self.DELETE_RE.search(str(args.get("command") or "")) and re.search(
+                r"ignore_errors\s*=\s*True|2>\s*/dev/null|\|\|\s*true|except\s*(?:Exception|OSError)?\s*:\s*pass", str(args.get("command") or "")):
+            # a deletion that hides its errors: its own « done » message proves nothing (rmtree on a protected folder
+            # printed « Corbeille vidée » and removed nothing)
+            result = str(result) + ("\n\n[Cette commande cache ses erreurs : le message de réussite qu'elle affiche ne prouve rien. "
+                                    "Vérifie ce qui reste vraiment (compte les éléments avec un outil qui y a accès) avant de "
+                                    "dire que c'est fait ; si tu ne peux pas vérifier, dis-le.]")
         if name == "run_command":
             failed_run = bool(re.match(r"(error|exit code [1-9])", str(result)))
             self._fail_streak = self._fail_streak + 1 if failed_run else 0

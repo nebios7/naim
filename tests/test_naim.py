@@ -4971,3 +4971,29 @@ class AReadOnlyCommandMakesNoDeliverable(unittest.TestCase):
     def test_the_chat_skips_deliverables_for_reads(self):
         src = (ROOT / "server.py").read_text()
         self.assertIn('and not (name == "run_command" and not _nt_writes(str(args.get("command") or "")))', src)
+
+
+class ErrorsReadForWhatTheyAre(unittest.TestCase):
+    """The Trash run: Finder's -128 (a confirmation closed) was told « wrong syntax »; ~/.Trash is closed by macOS
+    privacy (Operation not permitted) and Naim then said « la corbeille est vide »; an rmtree with ignore_errors printed
+    « Corbeille vidée » and removed nothing."""
+
+    def test_applescript_errors_by_their_number(self):
+        cmd = """osascript -e 'tell application "Finder" to empty trash'"""
+        cancelled = naimtools._applescript_hint(cmd, "29:40: execution error: Erreur dans Finder : Impossible d’achever l’opération. (-128)")
+        self.assertIn("Annulé (-128)", cancelled)
+        self.assertIn("ne dis pas que c'est fait, ni que c'est vide", cancelled)
+        self.assertIn("Automatisation", naimtools._applescript_hint(cmd, "execution error: Not authorized to send Apple events to Finder. (-1743)"))
+        self.assertIn("dictionnaire", naimtools._applescript_hint(cmd, "33:44: syntax error: … (-2740)"))
+
+    def test_protected_folder_and_hidden_errors_are_told(self):
+        import inspect
+        src = inspect.getsource(naimtools.Agent.call_tool)
+        self.assertIn("macOS protège ce dossier", src)
+        self.assertIn("Cette commande cache ses erreurs", src)
+
+    def test_moving_the_trash_is_not_called_tidying(self):
+        a = naimtools.Agent(tempfile.mkdtemp(), "naim", auto_yes=True, emit=lambda e: None)
+        r = a._guard_user_moves('mv ~/.Trash/* ~/.Trash.old 2>/dev/null; echo "ok"')
+        self.assertIn("is not emptying it", r)
+        self.assertNotIn("ranger_dossier", r)
