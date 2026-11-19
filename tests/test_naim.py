@@ -769,7 +769,11 @@ b = 2`, build(a, P) { P(1, "un", { dessin: {} }); P(2, "deux", { dessin: {} }); 
                         ("simule le produit de deux matrices", "animation-algorithme"),
                         ("montre pythagore avec une animation", "animation-algorithme"),
                         ("affiche moi l’heure dans un carré visuel beau", "visuel"),
-                        ("utilise le skill visuel pour un compteur", "visuel")):
+                        ("utilise le skill visuel pour un compteur", "visuel"),
+                        ("je veux que tu me créer un système visuel dynamique qui explique une boucle  while", "animation-algorithme"),
+                        ("un visuel qui explique la récursivité", "animation-algorithme"),
+                        ("un visuel de mon arbre généalogique", "visuel"),
+                        ("fais un visuel interactif pour la boucle de rétroaction du climat", "visuel")):
             sk = e.match_skill(m)
             self.assertEqual(sk and sk["name"], want, m)
 
@@ -5007,6 +5011,31 @@ class AttachPickerButtonReadable(unittest.TestCase):
         self.assertIn("background: var(--brand); color: var(--brand-t); border-radius: 8px;", html)
         self.assertIn(".aprow.ck .apck { background: var(--brand); border-color: var(--brand); opacity: 1; color: var(--brand-t); }", html)
         self.assertIn("white-space: nowrap; flex: none; }", html)
+
+
+class AFileGivenOpens(unittest.TestCase):
+    """A file written as is (SVG, JSON, Python) is checked before it is given: a broken SVG or one drawn with the
+    conversation's colours (var(--brand)) showed nothing and was announced as done."""
+
+    def test_broken_or_invisible_is_refused(self):
+        import chatfiles
+        self.assertIn("&lt;", chatfiles.unreadable(".svg", '<svg xmlns="http://www.w3.org/2000/svg"><text>i < 5</text></svg>'))
+        self.assertIn("var(--brand)", chatfiles.unreadable(".svg", '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="var(--brand)"/></svg>'))
+        self.assertEqual("", chatfiles.unreadable(".svg", '<svg xmlns="http://www.w3.org/2000/svg"><style>:root{--brand:#d97757}</style><rect fill="var(--brand)"/><text>i &lt; 5</text></svg>'))
+        self.assertTrue(chatfiles.unreadable(".json", "{a: 1}"))
+        self.assertTrue(chatfiles.unreadable(".py", "def f(:\n  pass"))
+        self.assertEqual("", chatfiles.unreadable(".py", "print(1)"))
+        self.assertEqual("", chatfiles.unreadable(".txt", "i < 5"))
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(ValueError):
+                chatfiles.create("x.svg", "<svg><text>i < 5</text></svg>", folder=d)
+            self.assertEqual([], list(Path(d).iterdir()))
+
+    def test_diagram_tool_names_the_way_for_a_moving_visual(self):
+        import diagrams
+        with self.assertRaises(diagrams.DiagramError) as c:
+            diagrams.render("graph TD; A-->B", "/tmp/x.html")
+        self.assertIn("```simulation", str(c.exception))
 
 
 class AnsweredApprovalFoldsIntoTheWork(unittest.TestCase):

@@ -125,9 +125,46 @@ def _docx_pandoc(dst, content):
     return r.returncode == 0 and dst.exists()
 
 
+THEME_VAR_RE = re.compile(r"var\(\s*(--[\w-]+)\s*\)")
+
+
+def unreadable(ext, content):
+    """Why a file written as is would not open or would show nothing, else ''. Checked before writing: a broken SVG
+    (« i < 5 » in a text), JSON or Python is not given to the user as if it were done."""
+    text = content or ""
+    if ext == ".svg" or (ext == ".png" and text.lstrip().startswith("<svg")) or ext == ".xml":
+        import xml.etree.ElementTree as ET
+        try:
+            ET.fromstring(text.strip())
+        except ET.ParseError as e:
+            line = text.strip().splitlines()[e.position[0] - 1] if 0 < e.position[0] <= len(text.strip().splitlines()) else ""
+            return (f"ce {ext[1:].upper()} est invalide ({e}) : aucun lecteur ne l'ouvrirait. Ligne fautive : {line.strip()[:160]!r}. "
+                    "Dans un texte, écris &lt; pour <, &gt; pour > et &amp; pour &.")
+    if ext in (".svg", ".png", ".html", ".htm"):
+        missing = sorted({v for v in THEME_VAR_RE.findall(text) if not re.search(re.escape(v) + r"\s*:", text)})
+        if missing:
+            return (f"les couleurs {', '.join(f'var({v})' for v in missing[:6])} ne sont définies nulle part dans ce fichier : "
+                    "elles n'existent que dans la conversation de Naim (bloc ```visuel). Dans un fichier elles sont vides et le "
+                    "dessin reste invisible. Écris de vraies couleurs (#d97757, #333, #fff…).")
+    if ext == ".json":
+        import json
+        try:
+            json.loads(text)
+        except ValueError as e:
+            return f"ce JSON est invalide ({e})."
+    if ext == ".py":
+        try:
+            compile(text, "fichier.py", "exec")
+        except SyntaxError as e:
+            return f"ce Python ne se lance pas : {e.msg}, ligne {e.lineno} : {(e.text or '').strip()[:160]!r}."
+    return ""
+
+
 def _make(dst, content):
     """Write one file at dst in the format given by its extension."""
     ext = dst.suffix.lower()
+    if (why := unreadable(ext, content)):
+        raise ValueError(f"rien n'a été créé : {why} Corrige le contenu et rappelle creer_fichier.")
     if ext in (".docx", ".doc") and _docx_pandoc(dst.with_suffix(".docx"), content):
         return
     if ext in DOCS or ext == ".png":

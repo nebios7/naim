@@ -345,7 +345,10 @@ def render(code, output, engine="mermaid", theme="default", background="white"):
     out = Path(output)
     fmt = out.suffix.lower()
     if fmt not in FORMATS:
-        raise DiagramError(f"format {fmt or '?'} : choisis .svg, .png ou .pdf")
+        raise DiagramError(f"format {fmt or '?'} : choisis .svg, .png ou .pdf. make_diagram dessine un schéma fixe (Mermaid, "
+                           "Graphviz). Un algorithme ou une boucle qui s'exécute pas à pas : un bloc ```simulation dans la "
+                           "réponse (skill animation-algorithme) ; un visuel vivant dans la conversation : un bloc ```visuel "
+                           "(skill visuel) ; une page .html animée : creer_fichier.")
     code = _clean(code)
     if not code:
         raise DiagramError("code du schéma vide")
