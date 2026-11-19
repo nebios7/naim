@@ -15,7 +15,7 @@ from pathlib import Path
 import extensions as ext
 
 LIB = ext.HOME / "skills-bibliotheque"
-INDEX = LIB / ".index.json"
+INDEX = LIB / ".index-v2.json"  # v2: with every word of the method
 SCRIPT_EXTS = {".py", ".sh", ".js", ".mjs", ".ts", ".rb", ".pl", ".swift", ".applescript", ".bash", ".zsh", ".command"}
 STOP = set("""le la les un une des de du d l et ou en au aux pour par sur dans avec sans mon ma mes ton ta tes son sa ses
 ce cette ces qui que quoi comment faire fais fait je tu il on nous vous moi a the of to and or for with in on an is be
@@ -115,13 +115,19 @@ def ensure_base():
     record.write_text("\n".join(sorted(done)) + "\n")
 
 
+_IDX = {}
+
+
 def index():
     """[{name, dir, description, head, scripts, path}] of every skill in the library (cached)."""
     ensure_base()
     stamp = _stamp()
+    if _IDX.get("stamp") == stamp:  # kept in memory: the file is read again only when the library changed
+        return _IDX["skills"]
     try:
         cached = json.loads(INDEX.read_text())
         if cached.get("stamp") == stamp:
+            _IDX.update(stamp=stamp, skills=cached["skills"])
             return cached["skills"]
     except (OSError, ValueError):
         pass
@@ -135,13 +141,22 @@ def index():
         except Exception:  # noqa: BLE001 — an unreadable skill is skipped, never blocks the others
             continue
         files = [p for p in d.rglob("*") if p.is_file() and p.name != "SKILL.md"]
-        out.append({"name": meta.get("name") or d.name, "dir": d.name, "path": str(f),
+        # every word of its method and of its detail notes (.md): what it knows how to do is often far below its first
+        # lines (« vider la Corbeille » in the Mac skill) — weighed less than the name, the description and the beginning
+        text = body
+        for p in [p for p in files if p.suffix.lower() in (".md", ".txt")][:12]:
+            try:
+                text += "\n" + p.read_text(errors="ignore")[:60000]
+            except OSError:
+                pass
+        out.append({"words": " ".join(sorted(set(re.findall(r"[a-z0-9]{3,}", _plain(text)))))[:40000], "name": meta.get("name") or d.name, "dir": d.name, "path": str(f),
                     "description": str(meta.get("description") or body.strip().split("\n")[0])[:400],
                     "head": re.sub(r"\s+", " ", body)[:1200],
                     "scripts": sorted({p.suffix for p in files if p.suffix.lower() in SCRIPT_EXTS}),
                     "files": len(files)})
     LIB.mkdir(parents=True, exist_ok=True)
     INDEX.write_text(json.dumps({"stamp": stamp, "skills": out}, ensure_ascii=False))
+    _IDX.update(stamp=stamp, skills=out)
     return out
 
 
@@ -159,7 +174,8 @@ def _tokens():
     stamp = _stamp()
     if _TOK["stamp"] != stamp:
         bag = lambda t: frozenset(re.findall(r"[a-z0-9]+", _plain(t)))  # noqa: E731
-        _TOK["data"] = [(s, (bag(s["name"] + " " + s["dir"]), bag(s["description"]), bag(s["head"]))) for s in index()]
+        _TOK["data"] = [(s, (bag(s["name"] + " " + s["dir"]), bag(s["description"]), bag(s["head"]),
+                             frozenset(s.get("words", "").split()))) for s in index()]
         _TOK["stamp"] = stamp
     return _TOK["data"]
 
@@ -182,7 +198,7 @@ def _rarity(words, data):
             del _DF[k]
     for w in words:
         if w not in seen:
-            seen[w] = sum(1 for _, (name, desc, head) in data if _hit(w, name) or _hit(w, desc) or _hit(w, head))
+            seen[w] = sum(1 for _, bags in data if any(_hit(w, b) for b in bags[:3]) or (len(bags) > 3 and w in bags[3]))
         df = seen[w]
         out[w] = math.log(1 + n / (1 + df)) / math.log(4)
         if len(w) < 3 and w not in ACRONYMS and w not in FR_EN:
@@ -209,10 +225,12 @@ def search(query, n=8, min_score=1):
     data = _tokens()
     weight = _rarity(words, data)
     scored = []
-    for s, (name, desc, head) in data:
+    for s, bags in data:
+        name, desc, head = bags[:3]
+        body = bags[3] if len(bags) > 3 else frozenset()  # every word of the method (an older index has none)
         score = 100 if exact in (_plain(s["name"]), _plain(s["dir"])) else 0
         for w in words:
-            score += weight.get(w, 0) * (4 * _hit(w, name) + 2 * _hit(w, desc) + 1 * _hit(w, head))
+            score += weight.get(w, 0) * (4 * _hit(w, name) + 2 * _hit(w, desc) + (1 if _hit(w, head) else 0.75 * (w in body)))
         if score >= min_score:
             scored.append((score, s))
     scored.sort(key=lambda x: -x[0])

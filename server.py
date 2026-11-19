@@ -2662,15 +2662,18 @@ class Handler(BaseHTTPRequestHandler):
                 import libs
                 if sk["name"] in libs.WEB_SKILLS and (lp := libs.prompt()):  # the libraries chosen in « Bibliothèques »
                     messages[-1] = dict(messages[-1], content=messages[-1]["content"] + "\n\n" + lp)
-            elif not sk and (near := _skills_by_meaning(body["message"] or "", helper)):
-                # no keyword of any skill in the request (« connecte-toi à ma télé »): the skills closest by MEANING are put
-                # in front of it — a list of sixty descriptions in the instructions was not enough to think of them
-                messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + near)
-            elif file_work or files:
-                # a task, but no active skill for it: the closest ones of the library are proposed
-                import skills_bibliotheque
-                if note := skills_bibliotheque.suggestion(body["message"]):
-                    messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + note)
+            else:
+                if not sk and (near := _skills_by_meaning(body["message"] or "", helper)):
+                    # no keyword of any skill in the request (« connecte-toi à ma télé »): the skills closest by MEANING are
+                    # put in front of it — a list of sixty descriptions in the instructions was not enough to think of them
+                    messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + near)
+                if file_work or files or not pure_question(body["message"] or ""):
+                    # something to DO (a file, or the Mac: « vide la corbeille »), no active skill for it: the closest ones
+                    # of the library are proposed too — a skill put away there is still the method (it guessed
+                    # « drutil -emptyTrash » while the Mac skill, in the library, had the Finder's way)
+                    import skills_bibliotheque
+                    if note := skills_bibliotheque.suggestion(body["message"]):
+                        messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + "\n\n" + note)
             if (file_work or files) and helper.features.get("mcp", True):
                 import mcp_bibliotheque  # the closest servers of the MCP library, when one really matches
                 if note := mcp_bibliotheque.suggestion(body["message"]):

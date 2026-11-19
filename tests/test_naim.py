@@ -2642,7 +2642,7 @@ class SkillsByMeaningNote(unittest.TestCase):
 
     def test_server_note(self):
         src = (ROOT / "server.py").read_text()
-        self.assertIn("elif not sk and (near := _skills_by_meaning(", src)
+        self.assertIn("if not sk and (near := _skills_by_meaning(", src)
 
     def test_edit_without_path(self):
         with tempfile.TemporaryDirectory() as d:
@@ -5056,3 +5056,37 @@ class BuiltinSkillsInTheLibraryStayUpToDate(unittest.TestCase):
         hint = h._install_hint("zsh: command not found: emptytrashxyz")
         self.assertIn("ne devine pas une autre commande", hint)
         self.assertIn("sdef", hint)
+
+
+class MacActionFindsItsMethod(unittest.TestCase):
+    """« vide la corbeille »: it guessed « drutil -emptyTrash » (a CD burner printing its instructions, exit 0) and said
+    the Trash was empty. The library search reads a skill's whole method; an output that is only the instructions of
+    the program is « nothing was done »."""
+
+    def test_only_usage(self):
+        u = "exit code 0\nUsage: drutil -drive [drive-arguments] command [command-options-and-arguments]\n drutil commands are:\n   atip  Displays"
+        self.assertTrue(naimtools.Agent.only_usage("drutil -emptyTrash", u))
+        self.assertTrue(naimtools.Agent.only_usage("foo -x", "exit code 1\nfoo: usage: foo [-a] file"))
+        self.assertFalse(naimtools.Agent.only_usage("drutil --help", u))
+        self.assertFalse(naimtools.Agent.only_usage("ls ~/Downloads", "exit code 0\na.pdf\nb.txt"))
+
+    def test_library_reads_the_whole_method(self):
+        import skills_bibliotheque as lib
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            for n, body in (("outil-a", "# A\n" + "texte " * 400 + "\nvider la Corbeille par le Finder"),
+                            ("outil-b", "# B\nUn commit propre, ligne vide.")) + tuple(
+                                (f"autre-{k}", f"# C{k}\nUne case vide, un champ vide.") for k in range(6)):  # « vide » is common
+                (root / n).mkdir(); (root / n / "SKILL.md").write_text(f"---\nname: {n}\ndescription: autre chose\n---\n\n{body}")
+            old_lib, old_idx, old_roots = lib.LIB, lib.INDEX, lib._roots
+            lib.LIB, lib.INDEX, lib._roots = root, root / ".index-v2.json", lambda: [root]
+            lib._TOK["stamp"] = None; based = lib._based; lib._based = True
+            try:
+                self.assertEqual(lib.search("vide la corbeille", 1, min_score=0.1)[0]["name"], "outil-a")
+            finally:
+                lib.LIB, lib.INDEX, lib._roots = old_lib, old_idx, old_roots
+                lib._TOK["stamp"] = None; lib._based = based; lib._IDX.clear()
+
+    def test_action_request_gets_library_suggestion(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('if file_work or files or not pure_question(body["message"] or ""):', src)

@@ -4366,6 +4366,17 @@ class Agent:
                               r"Cannot find module|unrecognized (option|arguments?)|[Uu]nknown option|invalid option|illegal option|"
                               r"command not found|no such option|Unrecognized option")
 
+    @staticmethod
+    def only_usage(command, result):
+        """The output is the program's instructions (« Usage: drutil … ») although no help was asked: what was typed
+        is not one of its commands or options, so nothing happened, whatever the exit code."""
+        if re.search(r"(?:^|\s)(?:-h|--help|-help|help|man|--usage)(?:\s|$)", command):
+            return False
+        out = re.sub(r"^exit code \d+\n?", "", str(result)).lstrip()
+        return bool(re.match(r"(?:\S+:\s*)?(?:usage|utilisation)\s*:", out, re.I)) or (
+            bool(re.search(r"(?im)^\s*usage\s*:", out[:600])) and len(out) < 6000
+            and not re.search(r"[✓✔]|done|succe|termin|cr[ée]{2}", out[:600], re.I))
+
     def speak_note(self, content, calls):
         """Several steps that acted without a word: one sentence for the user, like a colleague who says where they are."""
         self._silent_steps = self._silent_steps + 1 if calls and not (content or "").strip() else 0
@@ -4780,6 +4791,12 @@ class Agent:
         if name == "run_command" and re.match(r"exit code [1-9]", str(result)) and "osascript" in str(args.get("command") or "") \
                 and re.search(r"syntax error|execution error|script error", str(result)):
             result = str(result) + _applescript_hint(str(args.get("command") or ""), str(result))
+        if name == "run_command" and isinstance(result, str) and self.only_usage(str(args.get("command") or ""), result):
+            # « drutil -emptyTrash » printed drutil's instructions and exit 0: the option does not exist, nothing was done
+            result += ("\n\n[Cette commande n'a RIEN fait : elle a seulement affiché son mode d'emploi (l'option ou la commande "
+                       "que tu as donnée n'existe pas, même si le code de sortie est 0). Ne dis pas que c'est fait, ni que c'est "
+                       "vide. Cherche la vraie façon (le skill qui couvre la demande, chercher_skill, le dictionnaire de "
+                       "l'application avec sdef) au lieu d'en deviner une autre.]")
         if name == "run_command" and re.search(r"Operation not permitted", str(result)):
             # macOS privacy (the Trash, Mail, Messages, Safari…): no shell command reads or changes it — not sudo either
             result = str(result) + ("\n\n[macOS protège ce dossier (vie privée) : ni ls, ni rm, ni Python, ni sudo n'y ont accès "
