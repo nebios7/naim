@@ -4997,3 +4997,13 @@ class ErrorsReadForWhatTheyAre(unittest.TestCase):
         r = a._guard_user_moves('mv ~/.Trash/* ~/.Trash.old 2>/dev/null; echo "ok"')
         self.assertIn("is not emptying it", r)
         self.assertNotIn("ranger_dossier", r)
+
+
+class AttachPickerButtonReadable(unittest.TestCase):
+    """« Joindre 3 fichiers » was white on white in the dark theme: the colours of Naim's own main button."""
+
+    def test_brand_colours_and_one_line(self):
+        html = (ROOT / "web/index.html").read_text()
+        self.assertIn("background: var(--brand); color: var(--brand-t); border-radius: 8px;", html)
+        self.assertIn(".aprow.ck .apck { background: var(--brand); border-color: var(--brand); opacity: 1; color: var(--brand-t); }", html)
+        self.assertIn("white-space: nowrap; flex: none; }", html)
