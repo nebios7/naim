@@ -375,7 +375,13 @@ Détails (lis-les avec read_file quand la demande n'est pas dans ce fichier) :
 
 Demande TOUJOURS une confirmation avant (même en Contrôle étendu) : éteindre, redémarrer, verrouiller, forcer la
 fermeture d'une application, mettre à la Corbeille, couper le Wi-Fi ou le Bluetooth (le clavier ou Internet peuvent
-se couper), envoyer, appeler. Jamais : vider la Corbeille, effacer un disque, `rm -rf`, `sudo`.
+se couper), envoyer, appeler. Vider la Corbeille ou supprimer pour de bon : Naim demande l'autorisation, c'est
+l'utilisateur qui décide. Jamais : effacer un disque, `sudo`.
+
+Ce qu'une application gère (la Corbeille, la musique, les mails, les messages, les agendas) se fait PAR cette
+application (osascript), jamais par un script sur ses dossiers : macOS les protège, le script échoue ou ne fait rien
+en disant « fait ». Une commande que tu ne trouves pas ici : cherche-la dans les deux fichiers de détail, ou dans le
+dictionnaire de l'application (`sdef "/System/Library/CoreServices/Finder.app" | grep -i <mot>`), ne la devine pas.
 
 ## Contacts (toujours avant un message ou un appel)
 - chercher_contact avec le nom. Plusieurs personnes ou plusieurs numéros : demande lequel et ATTENDS la réponse.

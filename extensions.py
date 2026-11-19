@@ -604,16 +604,44 @@ def ensure_builtin_skills():
                 f.write_text(content)
                 record[name], changed = new_hash, True
         seeded.add(name)
+    # a built-in skill put away in the library (found and loaded when a task needs it) is still Naim's own: it gets
+    # its newer versions there too — its first update keeps the old copy in .anciens (it may have been edited), then
+    # the usual rule (an edited copy is left alone); its paths say where its files really are
+    lib = HOME / "skills-bibliotheque"
+    for name, (desc, body) in BUILTIN_SKILLS.items():
+        d, key = lib / name, "lib:" + name
+        f = d / "SKILL.md"
+        if (base / name).exists() or not f.is_file():
+            continue
+        content = f"---\nname: {name}\ndescription: {desc}\n---\n\n{body}".replace(f"~/.naim/skills/{name}/", f"~/.naim/skills-bibliotheque/{name}/")
+        new_hash, cur = hashlib.md5(content.encode()).hexdigest(), hashlib.md5(f.read_bytes()).hexdigest()
+        if cur == new_hash:
+            record[key] = new_hash; changed = changed or record.get(key) != new_hash; continue
+        if key in record and cur != record[key]:
+            continue  # edited since Naim's last update of it
+        if key not in record:
+            backup = lib / ".anciens" / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}"
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(d, backup)
+        f.write_text(content)
+        record[key], changed = new_hash, True
     # their extra files (skills_extra/<skill>/<file>: details read on demand), updated while the user has not edited them
     for f in sorted((Path(__file__).parent / "skills_extra").glob("*/*")):
         d, key = base / f.parent.name, f"{f.parent.name}/{f.name}"
+        if not d.is_dir() and (lib / f.parent.name / "SKILL.md").is_file():
+            d, key = lib / f.parent.name, f"lib:{key}"  # its skill lives in the library
         if not d.is_dir():
             continue  # the skill was deleted by the user
         content, target = f.read_bytes(), d / f.name
         new_hash = hashlib.md5(content).hexdigest()
         if record.get(key) == new_hash and target.exists():
             continue
-        if not target.exists() or hashlib.md5(target.read_bytes()).hexdigest() in (record.get(key), new_hash):
+        first_lib = key.startswith("lib:") and key not in record and target.exists()
+        if first_lib:  # its first update in the library: the old copy is kept
+            keep = lib / ".anciens" / f"{key[4:].replace('/', '-')}-{time.strftime('%Y%m%d-%H%M%S')}"
+            keep.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(target, keep)
+        if first_lib or not target.exists() or hashlib.md5(target.read_bytes()).hexdigest() in (record.get(key), new_hash):
             target.write_bytes(content)
             record[key], changed = new_hash, True
     marker.write_text("\n".join(sorted(seeded)))

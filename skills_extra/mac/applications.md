@@ -30,7 +30,7 @@ Si une application n'a pas de commande : skill controle-ecran (regarder l'écran
 - Ouvrir un dossier : `open ~/Documents` · montrer un fichier : `open -R "chemin"`
 - Sélection dans le Finder : `osascript -e 'tell application "Finder" to get POSIX path of (selection as alias list)'`
 - Dossier de la fenêtre : `osascript -e 'tell application "Finder" to get POSIX path of (target of front window as alias)'`
-- Corbeille : voir systeme.md (confirmation, jamais vider).
+- Corbeille : mettre dedans, la compter, la vider : voir systeme.md (par le Finder ; Naim demande l'autorisation).
 
 ## Musique, vidéo
 - Musique : `osascript -e 'tell application "Music" to play'` · `pause` · `next track` · `previous track` · `play playlist "Nom"`

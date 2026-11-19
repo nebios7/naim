@@ -62,7 +62,10 @@ l'utilisateur le fait lui-même dans Utilitaire de disque.
 - Chercher partout : `mdfind -name "mot" 2>/dev/null | head -20` · par contenu : `mdfind "phrase exacte" 2>/dev/null | head -20`
 - Montrer dans le Finder : `open -R "chemin"` · ouvrir un dossier : `open ~/Documents`
 - Mettre à la Corbeille (confirmation) : `osascript -e 'tell application "Finder" to delete POSIX file "/chemin/complet"'`
-  Jamais `rm` sur les fichiers de l'utilisateur, jamais vider la Corbeille.
+  Jamais `rm` sur les fichiers de l'utilisateur.
+- Vider la Corbeille (Naim demande l'autorisation, une fois) : `osascript -e 'tell application "Finder" to empty trash'`
+  · combien d'éléments : `osascript -e 'tell application "Finder" to count items of trash'` (avant et après, pour le dire vrai).
+  `~/.Trash` est protégé par macOS : ni `ls`, ni `rm`, ni Python n'y ont accès ; seul le Finder la vide.
 - Compresser : `ditto -c -k --sequesterRsrc --keepParent "dossier" "dossier.zip"` · décompresser : `ditto -x -k "a.zip" "destination"`
 - Taille : `du -sh "chemin"` · dernier téléchargement : `ls -t ~/Downloads | head -5`
 

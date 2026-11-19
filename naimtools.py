@@ -1289,6 +1289,13 @@ class Agent:
         if name in self.BREW_NAMES:
             return (f"\n[Outil manquant « {name} » : brew install {self.BREW_NAMES[name]} (Homebrew absent : donne à l'utilisateur la "
                     f"commande de https://brew.sh, il la lance lui-même), puis vérifie : {name} --version.]")
+        if name and not shutil.which(name):
+            # a command guessed from its meaning (« emptytrash »): the next guess, or a script written instead, fails the
+            # same way — the real way is looked up, not invented
+            return (f"\n[« {name} » n'existe pas sur ce Mac : ne devine pas une autre commande et n'écris pas un script à la place. "
+                    "Cherche la vraie : le skill mac et ses fichiers de détail (chercher_skill(requete=\"mac\")), le dictionnaire de "
+                    "l'application qui gère la chose (`sdef \"/Applications/<App>.app\" | grep -i <mot>`), ou, si c'est un "
+                    f"outil à installer, `brew search {name}`.]")
         return ""
 
     def _undouble_command(self, command):

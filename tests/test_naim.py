@@ -811,7 +811,7 @@ class InstallAlone(unittest.TestCase):
         self.assertIn(".venv", a._install_hint("No module named 'pandas'"))
         self.assertIn("brew install ffmpeg", a._install_hint("zsh: command not found: ffmpeg"))
         self.assertIn("brew install gnucobol", a._install_hint("bash: cobc: command not found"))
-        self.assertEqual(a._install_hint("zsh: command not found: monoutil"), "")
+        self.assertIn("ne devine pas une autre commande", a._install_hint("zsh: command not found: monoutil"))  # looked up, not guessed
 
     def test_routing(self):
         import extensions as e
@@ -5020,3 +5020,39 @@ class AnsweredApprovalFoldsIntoTheWork(unittest.TestCase):
         self.assertIn('$(".arows", g0).appendChild(row); a.remove();', code)
         self.assertIn("flow.appendChild(a); scrollDown(true);", code)
         self.assertNotIn("block(a)", code)
+
+
+class BuiltinSkillsInTheLibraryStayUpToDate(unittest.TestCase):
+    """The mac skill, put away in the library, kept « jamais vider la Corbeille » and paths to files that were not there:
+    a built-in skill in the library gets its newer versions too (its old copy kept once), its files with it."""
+
+    def test_library_copy_updated_and_old_one_kept(self):
+        import extensions as ext
+        with tempfile.TemporaryDirectory() as t:
+            home = Path(t)
+            (home / "skills").mkdir()
+            lib = home / "skills-bibliotheque" / "mac"; lib.mkdir(parents=True)
+            (lib / "SKILL.md").write_text("---\nname: mac\n---\n\nJamais : vider la Corbeille.")
+            (lib / "systeme.md").write_text("jamais vider la Corbeille")
+            (home / "skills" / ".seeded").write_text("\n".join(ext.BUILTIN_SKILLS))
+            old = ext.HOME; ext.HOME = home
+            try:
+                ext.ensure_builtin_skills()
+            finally:
+                ext.HOME = old
+            s = (lib / "SKILL.md").read_text()
+            self.assertIn("Naim demande l'autorisation", s)
+            self.assertIn("~/.naim/skills-bibliotheque/mac/systeme.md", s)
+            self.assertNotIn("~/.naim/skills/mac/", s)
+            self.assertIn("empty trash", (lib / "systeme.md").read_text())
+            kept = list((home / "skills-bibliotheque" / ".anciens").iterdir())
+            self.assertTrue(any("Jamais : vider" in (k / "SKILL.md").read_text() for k in kept if k.is_dir()))
+            self.assertFalse((home / "skills" / "mac").exists())  # it stays in the library
+
+    def test_guessed_command_points_to_the_real_way(self):
+        import naimtools
+        h = naimtools.Agent.__new__(naimtools.Agent)
+        h.root = Path(tempfile.gettempdir())
+        hint = h._install_hint("zsh: command not found: emptytrashxyz")
+        self.assertIn("ne devine pas une autre commande", hint)
+        self.assertIn("sdef", hint)

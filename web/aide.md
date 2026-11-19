@@ -293,7 +293,8 @@ démarre une fois pour vérifier qu'il marche, sinon il ne garde rien).
 - **Autorisations** : Manuel (il demande), Accepter (fichiers sans demander), **Auto** (rien), Plan (il propose
   seulement). Toujours demandé : payer, mots de passe, envoyer un message, appeler, éteindre, Corbeille.
   Réponds aux demandes **à la voix** (« oui », « autorisé », « non », « autorise tout »).
-- **Jamais** : vider la Corbeille, effacer un disque, `sudo`, toucher aux fichiers de Naim sans ton accord.
+- **Toujours avec ton autorisation** : vider la Corbeille, supprimer pour de bon.
+- **Jamais** : effacer un disque, `sudo`, toucher aux fichiers de Naim sans ton accord.
 - **Lecture** partout dans ton dossier personnel (sauf `.ssh`, trousseau, mails…), **écriture** seulement dans le
   projet et son brouillon.
 - **Corbeille** : tout ce que Naim retire y va (récupérable) ; « Tout supprimer définitivement » existe dans
