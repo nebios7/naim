@@ -242,18 +242,44 @@ def sim_dir():
     return None
 
 
+# what each verified example draws, said to the model so that it copies the plan, not the drawing of another subject
+SIM_SHAPES = {"produit-matrices": "des grilles de cases", "pythagore": "une figure de géométrie", "dijkstra": "un graphe (nœuds et arêtes)",
+              "recherche-dichotomique": "une recherche dans un tableau (barres)", "tri-insertion": "un tri (barres)",
+              "boucle-while": "une boucle (un axe où la variable avance)"}
+
+
+def sim_pick(text):
+    """(example name, True when the example is of the same kind as the subject asked)."""
+    t = text or ""
+    for name, rx in (("produit-matrices", r"matric|grille|tableau 2d|jeu de la vie|morpion|programmation dynamique"),
+                     ("pythagore", r"g[ée]om[ée]tr|pythagore|thal[èe]s|triangle|cercle|angle|aire|th[ée]or[èe]me|figure"),
+                     ("dijkstra", r"graphe|dijkstra|chemin|r[ée]seau|arbre|parcours|bfs|dfs|n[œo]euds?"),
+                     ("recherche-dichotomique", r"recherche|dichotom|cherche"),
+                     ("tri-insertion", r"\btri|\bsort|quicksort"),
+                     ("boucle-while", r"\bboucles?\b|\bwhile\b|\bfor\b|tant que|compteur|it[ée]ration|variables?")):
+        if re.search(rx, t, re.I):
+            return name, True
+    # a subject without its own example (a recursion, a stack, a linked list…): an example that DRAWS, for its plan only
+    return "boucle-while", False
+
+
 def sim_example(text):
-    """The verified example closest to what is asked (a grid, a figure, a graph, a search, a sort), as text."""
-    d, t = sim_dir(), text or ""
-    name = ("produit-matrices" if re.search(r"matric|grille|tableau 2d|jeu de la vie|morpion|programmation dynamique", t, re.I)
-            else "pythagore" if re.search(r"g[ée]om[ée]tr|pythagore|thal[èe]s|triangle|cercle|angle|aire|th[ée]or[èe]me|figure", t, re.I)
-            else "dijkstra" if re.search(r"graphe|dijkstra|chemin|r[ée]seau|arbre|parcours|bfs|dfs|n[œo]euds?", t, re.I)
-            else "recherche-dichotomique" if re.search(r"recherche|dichotom|cherche", t, re.I)
-            else "tri-insertion" if re.search(r"\btri|\bsort|quicksort", t, re.I)
-            else "boucle-while" if re.search(r"\bboucles?\b|\bwhile\b|\bfor\b|tant que|compteur|it[ée]ration|variables?", t, re.I)
-            else "tri-insertion")
+    """The verified example closest to what is asked (a grid, a figure, a graph, a search, a sort, a loop), as text."""
+    d, (name, _) = sim_dir(), sim_pick(text)
     f = d / "exemples" / f"{name}.js" if d else None
     return (name, f.read_text(encoding="utf-8")) if f and f.exists() else (None, "")
+
+
+def sim_example_note(text):
+    """What to take from the example: its plan always; its drawing only as far as the subject is the same."""
+    name, fits = sim_pick(text)
+    shape = SIM_SHAPES.get(name, "un autre sujet")
+    if fits:
+        return (f"Cet exemple dessine {shape}. Garde son plan ; dans le dessin, garde ce qui convient à TON sujet et change "
+                "le reste (les données, les étiquettes, la forme si ton cas diffère).")
+    return (f"Ton sujet n'a pas d'exemple à lui : celui-ci sert pour le PLAN seulement (les champs, build qui exécute, P à "
+            f"chaque ligne, dessiner, l'échelle calculée). Son dessin, {shape}, n'est PAS celui de ton sujet : ne le recopie "
+            "pas, dessine la forme de ton sujet (tableau « Choisis la forme d'après le sujet » du skill).")
 
 
 def check_simulation(algo):
@@ -2653,9 +2679,9 @@ class Handler(BaseHTTPRequestHandler):
                     ex_name, ex = sim_example(recent)  # the closest verified example comes with the request: its plan is followed
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                         "\n\n(Réponds ici, dans la conversation : une phrase, puis UN bloc ```simulation avec const ALGO = { … }. "
-                        "Garde EXACTEMENT le plan de l'exemple ci-dessous : les mêmes champs (titre, sous_titre, fichier, langage, type, "
+                        "Garde le plan de l'exemple ci-dessous : les mêmes champs (titre, sous_titre, fichier, langage, type, "
                         "valeurs, code, build(a, P), et dessiner(t, zone) s'il en a une), build qui exécute pour de vrai et appelle P, "
-                        "dessiner qui ne lit que t.extra. Change le sujet et invente le dessin. Aucun fichier à créer, aucune commande.)"
+                        "dessiner qui ne lit que t.extra. Aucun fichier à créer, aucune commande. " + sim_example_note(recent) + ")"
                         + (f"\n\n[Exemple vérifié à suivre : exemples/{ex_name}.js]\n```js\n{ex.strip()}\n```" if ex else "")))
                 _, skill_body = ext.parse_skill(Path(sk["path"]))
                 self.event({"type": "skill", "name": sk["name"]})
