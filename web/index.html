@@ -6505,10 +6505,18 @@ function addBot(m, idx) {
       a.innerHTML += `<div class="btns"><button class="btn primary">Autoriser</button><button class="btn">Refuser</button><button class="btn" title="Autoriser toutes les actions (réglage « Tout autoriser »)">Tout autoriser</button></div>`;
       const [yes, no, all] = $$(".btn", a);
       if (String(ev.action).startsWith("⚠")) { all.remove(); a.classList.add("sensitive"); }  // asked every time
+      // the group of work it belongs to (the step that asked): once answered, the card folds into ONE line of it
+      const lw = lastWork(flow), g0 = group || (lw?.classList.contains("agroup") && $(".arows", lw) ? lw : null);
       const answer = async (allow, always) => {
         pendingApproval = null;
         $(".btns", a).outerHTML = `<div class="res">${allow ? "✓ Autorisé" : "✕ Refusé"}</div>`;
         a.classList.add("done");
+        const what = String(ev.action).replace(/^⚠\s*/, "");
+        const row = document.createElement("div"); row.className = "arow apfold " + (allow ? "ok" : "err");
+        row.innerHTML = `<div class="aline"><span class="aic">${svgI(allow ? "check" : "x")}</span><span class="alabel">${allow ? "Autorisé" : "Refusé"} · ${esc(what)}</span></div><pre class="aout" hidden>${isDiff ? diffHtml(ev.detail) : esc(ev.detail)}</pre>`;
+        $(".aline", row).onclick = () => { const p = $(".aout", row); p.hidden = !p.hidden; };
+        if (g0?.isConnected) { $(".arows", g0).appendChild(row); a.remove(); }  // the next steps join the same group (still open)
+        else { const f = document.createElement("details"); f.className = "agroup"; f.innerHTML = `<summary><span class="gchev">${svgI("chevr")}</span><span class="gsum">${esc(row.querySelector(".alabel").textContent)}</span></summary><div class="arows"></div>`; $(".arows", f).appendChild(row); a.replaceWith(f); }
         if (always) { S.autoYes = true; saveSettings(); applySettings(); }
         await api("/api/approve", { method: "POST", body: { id: ev.id, allow, always: !!always } });
       };
@@ -6516,7 +6524,7 @@ function addBot(m, idx) {
       pendingApproval = (allow, always) => { pendingApproval = null; answer(allow, always && !String(ev.action).startsWith("⚠")); };
       // the question said without « oui » or « non »: those words would be taken for its own voice (echo) when you answer
       if (talk.on) voiceSay(`Je dois te demander : ${String(ev.action).replace(/^⚠\s*/, "")}. Je peux ?`);
-      block(a); scrollDown(true);
+      flow.appendChild(a); scrollDown(true);  // the group stays open: answered, the card goes into it
       if (document.hidden || !document.hasFocus()) notify("Naim attend ton autorisation", ev.action);
     },
     question(st) {

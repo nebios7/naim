@@ -5007,3 +5007,16 @@ class AttachPickerButtonReadable(unittest.TestCase):
         self.assertIn("background: var(--brand); color: var(--brand-t); border-radius: 8px;", html)
         self.assertIn(".aprow.ck .apck { background: var(--brand); border-color: var(--brand); opacity: 1; color: var(--brand-t); }", html)
         self.assertIn("white-space: nowrap; flex: none; }", html)
+
+
+class AnsweredApprovalFoldsIntoTheWork(unittest.TestCase):
+    """A big « Supprimer définitivement » card stayed in the middle of the answer once allowed: answered, it becomes
+    one line of « Exécuté N commandes », its command under that line."""
+
+    def test_folds_into_the_group(self):
+        html = (ROOT / "web/index.html").read_text()
+        i = html.index("    approval(ev) {"); j = html.index("    question(st) {", i); code = html[i:j]
+        self.assertIn('row.className = "arow apfold "', code)
+        self.assertIn('$(".arows", g0).appendChild(row); a.remove();', code)
+        self.assertIn("flow.appendChild(a); scrollDown(true);", code)
+        self.assertNotIn("block(a)", code)
