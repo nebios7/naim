@@ -5051,7 +5051,7 @@ class ALoopSimulationLooksRight(unittest.TestCase):
         self.assertFalse(fits)
         self.assertNotEqual(name, "tri-insertion")  # never sort bars for a recursion
         self.assertIn("ne le recopie pas", server.sim_example_note("simule les tours de hanoi"))
-        self.assertIn("garde ce qui convient", server.sim_example_note("anime le tri à bulles"))
+        self.assertIn("invente mieux", server.sim_example_note("anime le tri à bulles"))
         self.assertIn("sim_example_note(recent)", (ROOT / "server.py").read_text())
 
     def test_retry_does_not_talk_about_the_unseen_version(self):

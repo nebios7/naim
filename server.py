@@ -275,8 +275,8 @@ def sim_example_note(text):
     name, fits = sim_pick(text)
     shape = SIM_SHAPES.get(name, "un autre sujet")
     if fits:
-        return (f"Cet exemple dessine {shape}. Garde son plan ; dans le dessin, garde ce qui convient à TON sujet et change "
-                "le reste (les données, les étiquettes, la forme si ton cas diffère).")
+        return (f"Cet exemple dessine {shape}. Garde son plan. Le dessin est à toi : reprends ce qui convient à TON sujet, ou "
+                "invente mieux (une autre métaphore, une autre mise en scène) si elle montre plus clairement l'idée.")
     return (f"Ton sujet n'a pas d'exemple à lui : celui-ci sert pour le PLAN seulement (les champs, build qui exécute, P à "
             f"chaque ligne, dessiner, l'échelle calculée). Son dessin, {shape}, n'est PAS celui de ton sujet : ne le recopie "
             "pas, dessine la forme de ton sujet (tableau « Choisis la forme d'après le sujet » du skill).")
