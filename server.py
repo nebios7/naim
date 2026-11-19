@@ -228,6 +228,11 @@ DIAGRAM_ASK_RE = re.compile(r"\b(sch[ée]ma\w*|diagramme\w*|organigramme|flowcha
                             r"|gantt|r[ée]seau de|relations? entre)\b", re.I)
 
 
+# an answer taken back and written again: the user never saw the first one, so the new one does not talk about it
+RETRY_UNSEEN = (" L'utilisateur n'a pas vu ta première version : ta phrase s'adresse à lui comme une première réponse, "
+                "sans parler d'erreur, de correction ni de version précédente.")
+
+
 def sim_dir():
     """The folder of the animation engine (the user's installed copy first)."""
     for d in (Path.home() / ".naim/plugins/algorithmique/skills/animation-algorithme",
@@ -243,7 +248,10 @@ def sim_example(text):
     name = ("produit-matrices" if re.search(r"matric|grille|tableau 2d|jeu de la vie|morpion|programmation dynamique", t, re.I)
             else "pythagore" if re.search(r"g[ée]om[ée]tr|pythagore|thal[èe]s|triangle|cercle|angle|aire|th[ée]or[èe]me|figure", t, re.I)
             else "dijkstra" if re.search(r"graphe|dijkstra|chemin|r[ée]seau|arbre|parcours|bfs|dfs|n[œo]euds?", t, re.I)
-            else "recherche-dichotomique" if re.search(r"recherche|dichotom|cherche", t, re.I) else "tri-insertion")
+            else "recherche-dichotomique" if re.search(r"recherche|dichotom|cherche", t, re.I)
+            else "tri-insertion" if re.search(r"\btri|\bsort|quicksort", t, re.I)
+            else "boucle-while" if re.search(r"\bboucles?\b|\bwhile\b|\bfor\b|tant que|compteur|it[ée]ration|variables?", t, re.I)
+            else "tri-insertion")
     f = d / "exemples" / f"{name}.js" if d else None
     return (name, f.read_text(encoding="utf-8")) if f and f.exists() else (None, "")
 
@@ -2957,7 +2965,7 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "assistant", "content": content})
                     messages.append({"role": "user", "content": "(Vérification de ta simulation : elle ne marche pas encore.\n"
                                      + problems + "\n\nCorrige et redonne ta réponse entière : une phrase puis le bloc ```simulation "
-                                     "complet, corrigé, sur le plan de l'exemple vérifié.)"})
+                                     "complet, corrigé, sur le plan de l'exemple vérifié." + RETRY_UNSEEN + ")"})
                     shown = 0
                     continue
             if (not calls and not stop.is_set() and drawn_checks < 1 and DRAWN_OP_RE.search(content)
@@ -2971,7 +2979,7 @@ class Handler(BaseHTTPRequestHandler):
                 messages.append({"role": "user", "content": "(Pas de visuel : je ne l'ai pas demandé avec /visuel. Redonne ta réponse "
                                  "entière EN TEXTE : l'opération posée dans un bloc ```pose-texte (seulement l'opération, par "
                                  "exemple 854 : 7), puis les étapes écrites, le résultat et la vérification. Aucun bloc "
-                                 "division, addition, soustraction ou multiplication.)"})
+                                 "division, addition, soustraction ou multiplication." + RETRY_UNSEEN + ")"})
                 shown = 0
                 continue
             if not calls and not stop.is_set() and calc_checks < 2:

@@ -758,7 +758,9 @@ b = 2`, build(a, P) { P(1, "un", { dessin: {} }); P(2, "deux", { dessin: {} }); 
         import server
         for m, want in (("simule le produit de deux matrices", "produit-matrices"), ("montre pythagore en animation", "pythagore"),
                         ("une simulation de dijkstra", "dijkstra"), ("simule la recherche dichotomique", "recherche-dichotomique"),
-                        ("montre le tri avec une simulation", "tri-insertion")):
+                        ("montre le tri avec une simulation", "tri-insertion"),
+                        ("un système visuel dynamique qui explique une boucle while", "boucle-while"),
+                        ("anime le tri à bulles et ses boucles", "tri-insertion")):
             name, text = server.sim_example(m)
             self.assertEqual(name, want, m)
             self.assertIn("const ALGO", text)
@@ -5011,6 +5013,41 @@ class AttachPickerButtonReadable(unittest.TestCase):
         self.assertIn("background: var(--brand); color: var(--brand-t); border-radius: 8px;", html)
         self.assertIn(".aprow.ck .apck { background: var(--brand); border-color: var(--brand); opacity: 1; color: var(--brand-t); }", html)
         self.assertIn("white-space: nowrap; flex: none; }", html)
+
+
+class ALoopSimulationLooksRight(unittest.TestCase):
+    """A loop shown step by step: its own verified example, lines given by their text (never the wrong one
+    highlighted), no sort counters, a drawing kept inside its frame, and a retried answer that does not talk about
+    the version the user never saw."""
+    SK = ROOT / "plugins_builtin/algorithmique/skills/animation-algorithme"
+
+    def check(self, js):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "a.js"
+            f.write_text(js, encoding="utf-8")
+            r = subprocess.run([sys.executable, str(self.SK / "simulation.py"), "verifier", str(f)], capture_output=True, text=True, timeout=120)
+            return r.returncode, r.stdout
+
+    def test_loop_example_is_right(self):
+        code, out = self.check((self.SK / "exemples/boucle-while.js").read_text())
+        self.assertEqual(code, 0, out)
+
+    def test_line_by_text_blank_line_and_frame(self):
+        base = (self.SK / "exemples/boucle-while.js").read_text()
+        code, out = self.check(base.replace('P("x += pas"', 'P("x += rien"'))
+        self.assertIn("aucune ligne du code ne contient", out)
+        code, out = self.check(base.replace("const X = (v) => m + (v - lo) / ((hi - lo) || 1) * (W - 2 * m);", "const X = (v) => m + v * 40;"))
+        self.assertNotEqual(code, 0)
+        self.assertIn("sort du cadre", out)
+
+    def test_no_sort_counters_for_a_drawing(self):
+        page = (self.SK / "moteur.html").read_text()
+        self.assertIn("A.type==='tri'||A.type==='recherche'||!A.type)?['COMPARAISONS','ÉCHANGES']:[]", page)
+
+    def test_retry_does_not_talk_about_the_unseen_version(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn("RETRY_UNSEEN = (", src)
+        self.assertEqual(src.count("+ RETRY_UNSEEN +"), 2)
 
 
 class AFileGivenOpens(unittest.TestCase):

@@ -98,8 +98,9 @@ def tri_insertion(a):
   numérotées à partir de 1, la première ligne non vide étant la ligne 1.
 - `build` est du **JavaScript**, même si le code montré est en Python ou en C : `&&` et `||` (jamais `and` /
   `or`), `let` / `const`, des accolades, `Math.floor`. Il modifie `a` comme l'algorithme le fait, pour de vrai.
-- `P(ligne, message, options)` enregistre une étape. `ligne` est le numéro de la ligne de `code` qui s'exécute,
-  et `message` une phrase courte pour un élève (le HTML `<b>` est permis). Le tableau `a` est photographié tout seul.
+- `P(ligne, message, options)` enregistre une étape. `ligne` est la ligne de `code` qui s'exécute : de préférence
+  son TEXTE exact (`P("while x < limite:", …)`), qui ne peut pas surligner la mauvaise ligne ; un numéro marche aussi.
+  `message` est une phrase courte pour un élève (le HTML `<b>` est permis). Le tableau `a` est photographié tout seul.
   Les options :
   - `pair: [i, j]` : les deux cases regardées (le bras robot les tient), en bleu ; avec `swap: true`, en rouge ;
   - `key: k` : la case mise de côté, en violet (la valeur à insérer, le pivot, le minimum) ;
@@ -128,6 +129,7 @@ chaque étape comme tu veux, dans le style qui montre le mieux l'idée. Ce que t
 | matrice, tableau 2D, grille, jeu de la vie, morpion, programmation dynamique | grilles de cases | `exemples/produit-matrices.js` |
 | géométrie : théorème, construction, transformation, aire, angle | figure qui se construit | `exemples/pythagore.js` |
 | graphe, réseau, chemin, arbre, parcours (BFS, DFS, Dijkstra) | nœuds et arêtes | `exemples/dijkstra.js` |
+| boucle while / for, compteur, variables qui changent | axe où la variable avance, condition vraie / fausse, sortie des print | `exemples/boucle-while.js` |
 | récursivité, pile d'appels, Hanoï, liste chaînée, file | boîtes empilées ou reliées | invente à partir des précédents |
 
 Lis l'exemple le plus proche (`read_file`, dans le dossier de ce skill : `~/.naim/plugins/algorithmique/skills/animation-algorithme/exemples/`),
@@ -147,7 +149,10 @@ l'étape reçue), puis invente le dessin du sujet demandé.
 - **les textes** ne se chevauchent pas : une étiquette dans le triangle le long de son côté, une valeur sous son nœud ;
 - **ce qui change** d'une étape à l'autre se voit tout de suite : une couleur, une case qui se remplit, un trait
   plus épais ; le reste ne bouge pas ;
-- les compteurs du haut : `compteurs: ["MULTIPLICATIONS"]` puis `c: …` dans P ; `compteurs: []` pour aucun.
+- **tout reste dans le cadre** : l'échelle vient des valeurs (`x = marge + (v - min) / (max - min) * (largeur - 2 * marge)`),
+  jamais un nombre fixe de pixels par unité ; la vérification refuse un dessin qui sort du `viewBox` ;
+- les compteurs du haut : `compteurs: ["TOURS"]` puis `c: …` dans P ; sans `compteurs`, un tri ou une recherche a
+  « comparaisons » et « échanges », un dessin (`type: "autre"`) n'en a aucun.
 
 ## Pour finir
 Donne le chemin de la page et dis comment s'en servir : Espace = lecture / pause, flèches = étape par étape,

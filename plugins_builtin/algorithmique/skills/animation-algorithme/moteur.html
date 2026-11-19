@@ -90,10 +90,16 @@ function colorLine(line,lang){
 }
 function codeLines(A){const ls=String(A.code||'').replace(/\t/g,'    ').split('\n');while(ls.length&&!ls[0].trim())ls.shift();while(ls.length&&!ls[ls.length-1].trim())ls.pop();return ls}
 function makeTrace(A,vals,cible){
- const T=[],a=vals.slice(),n=codeLines(A).length;let c=0,s=0;
+ const T=[],a=vals.slice(),CL=codeLines(A),n=CL.length;let c=0,s=0;
+ // a line is given by its text (« while x < limite ») or its number: the text cannot point to the wrong line
+ const lineOf=t=>{const w=String(t).trim(),eq=[],inc=[];CL.forEach((l,i)=>{if(l.trim()===w)eq.push(i+1);else if(w&&l.includes(w))inc.push(i+1)});
+  const all=eq.length?eq:inc;if(!all.length)throw new Error('P("'+w+'", …) : aucune ligne du code ne contient « '+w+' ». Recopie le texte exact de la ligne qui s\'exécute.');
+  const prev=T.length?T[T.length-1].line:0;return all.find(k=>k>=prev)||all[0]};
  const P=(line,msg,o)=>{
   o=o||{};
+  if(typeof line==='string')line=lineOf(line);
   if(typeof line!=='number'||line<1||line>n||line!==Math.floor(line))throw new Error('P('+line+', …) : la ligne '+line+' n\'existe pas dans le code (il a '+n+' lignes, de 1 à '+n+').');
+  if(!CL[line-1].trim())throw new Error('P('+line+', …) : la ligne '+line+' du code est vide. Donne plutôt le texte de la ligne qui s\'exécute : P("while x < limite", …).');
   if(T.length>4000)throw new Error('Plus de 4000 étapes : la boucle ne s\'arrête pas (vérifie la condition de fin).');
   if(o.c!==undefined)c=o.c;if(o.s!==undefined)s=o.s;
   T.push({line,msg:String(msg==null?'':msg),a:(o.a||a).slice(),pair:o.pair||null,swap:!!o.swap,ok:o.ok||[],key:o.key==null?null:o.key,
@@ -110,12 +116,13 @@ function makeTrace(A,vals,cible){
 <script>
 // The engine, part 2: the page. Bars slide when values move, the robot arm follows the pair being compared.
 const A=typeof ALGO!=='undefined'?ALGO:null,$=id=>document.getElementById(id);
-const NAMES=(A&&A.compteurs)||['COMPARAISONS','ÉCHANGES'];
+const NAMES=(A&&A.compteurs)||(A&&(A.type==='tri'||A.type==='recherche'||!A.type)?['COMPARAISONS','ÉCHANGES']:[]);  // a loop or a figure has no comparisons to count
 let S=[],idx=0,playing=true,speeds=[.5,1,2,4],si=1,timer=null,slots={},prevIds=[],nextId=0,vals0=[];
 function showErr(e){$('err').style.display='block';$('err').textContent='Erreur dans l\'algorithme : '+(e&&e.message||e);console.error(e)}
 function init(){
  if(!A){showErr('ALGO n\'est pas défini (le fichier de l\'algorithme est absent ou a une erreur de syntaxe).');return false}
  document.title=A.titre||'Animation';$('titre').textContent=A.titre||'';$('soustitre').textContent=A.sous_titre||'';$('fichier').textContent=A.fichier||'';
+ $('stats').style.display=NAMES.length?'':'none';
  $('stats').innerHTML=NAMES.map((t,k)=>`<div class="stat">${esc(t)}<b id="cnt${k}">0</b></div>`).join('');
  const L=$('lines');L.innerHTML='';
  codeLines(A).forEach((h,i)=>{const d=document.createElement('div');d.className='ln';d.innerHTML='<em>'+(i+1)+'</em><span>'+colorLine(h,A.langage)+'</span><span class="note"></span>';L.appendChild(d)});

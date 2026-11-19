@@ -22,6 +22,25 @@ START, END = "// ==== ALGO ====", "// ==== FIN ALGO ===="
 
 HARNESS = r"""
 var __res = {cases: [], warnings: [], fatal: null};
+// what is drawn outside its <svg viewBox> is cut off on the page: say which element, where, and the frame
+function outside(html) {
+  var m = /<svg[^>]*viewBox="\s*(-?[\d.]+)[\s,]+(-?[\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/.exec(html);
+  if (!m) return '';
+  var x0 = +m[1], y0 = +m[2], W = +m[3], H = +m[4], re = /<(\w+)\b([^>]*)>/g, t, bad = [];
+  while ((t = re.exec(html)) && bad.length < 3) {
+    if (/^(svg|g|defs|style|marker|linearGradient|stop|tspan)$/i.test(t[1])) continue;
+    var at = {}, ar = /([\w-]+)="(-?[\d.]+)"/g, q;
+    while ((q = ar.exec(t[2]))) at[q[1]] = +q[2];
+    var xs = ['x', 'cx', 'x1', 'x2'].filter(function (k) { return k in at; }).map(function (k) { return at[k]; });
+    var ys = ['y', 'cy', 'y1', 'y2'].filter(function (k) { return k in at; }).map(function (k) { return at[k]; });
+    if ('width' in at && 'x' in at) xs.push(at.x + at.width);
+    if ('height' in at && 'y' in at) ys.push(at.y + at.height);
+    var r = at.r || 0, out = xs.some(function (v) { return v - r < x0 - 1 || v + r > x0 + W + 1; }) || ys.some(function (v) { return v - r < y0 - 1 || v + r > y0 + H + 1; });
+    if (out) bad.push('<' + t[1] + ' ' + t[2].trim().slice(0, 60) + '>');
+  }
+  return bad.length ? 'le dessin sort du cadre viewBox="' + m[1] + ' ' + m[2] + ' ' + W + ' ' + H + '" et sera coupé : ' + bad.join(', ')
+    + '. Calcule l\'échelle à partir des valeurs (par exemple x = marge + v / max * (largeur - 2 * marge)) pour que tout reste dedans.' : '';
+}
 try {
   if (typeof ALGO === 'undefined') throw new Error("ALGO n'est pas défini : le fichier doit commencer par « const ALGO = { … } ».");
   if (typeof ALGO.build !== 'function') throw new Error("ALGO.build(a, P) manque : c'est la fonction qui exécute l'algorithme.");
@@ -70,6 +89,7 @@ try {
       catch (e) { __res.dessin = 'dessiner() plante à l\'étape ' + (di + 1) + ' : ' + String(e && e.message || e)
                   + " (elle ne reçoit que l'étape : ce que tu passes dans P(…, { dessin: {…} }) arrive dans etape.extra)"; break; }
       if (zone.innerHTML || zone.children.length) drawn++;
+      if (!__res.dessin && zone.innerHTML) { var off = outside(String(zone.innerHTML)); if (off) __res.dessin = 'à l\'étape ' + (di + 1) + ', ' + off; }
     }
     if (!__res.dessin && !drawn) __res.dessin = "dessiner() ne dessine rien : remplis zone.innerHTML (un <svg …>…</svg>)";
   } else if (ALGO.type === 'autre') {
@@ -159,7 +179,8 @@ def check(path):
         print(f"FAUX dessin → {res['dessin']}")
     for w in res["warnings"]:
         print(f"À revoir : {w}")
-    print("\nLa simulation est juste." if good else "\nCorrige build() dans le fichier de l'algorithme puis relance.")
+    print("\nLa simulation est juste." if good else "\nCorrige build()" + (" ou dessiner()" if res.get("dessin") else "")
+          + " dans le fichier de l'algorithme puis relance.")
     return good
 
 
