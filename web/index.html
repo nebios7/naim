@@ -1595,6 +1595,60 @@ header#chatHeader { overflow: hidden; }
 .sheet .shtag.t3 { background: rgb(224 164 60 / .18); color: #b07a1c; }
 .sheet .shtag.t4 { background: rgb(120 120 120 / .16); color: var(--muted); }
 .sheet .shtag.t5 { background: rgb(63 185 160 / .16); color: #2c9a83; }
+.wboard { border: 1px solid var(--line); border-radius: 12px; background: var(--side); margin: 10px 0 12px; padding: 14px 14px 10px; }
+.wboard.swait { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; padding: 14px 16px; background: var(--panel); }
+.wboard .wbtitle { font-weight: 600; font-size: 15px; margin: 0 2px 12px; }
+.wboard .wbboard { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.wboard .wbempty { color: var(--muted); font-size: 13.5px; padding: 10px 2px; }
+.wboard .wbg { border: 1.5px solid var(--wb-edge); border-radius: 12px; padding: 8px 10px 12px; background: var(--wb-bg); transition: box-shadow .15s; }
+.wboard .wbg.over { box-shadow: 0 0 0 2px var(--wb-edge); }
+.wboard .wbg header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wboard .wbgname { color: var(--wb-title); font-size: 17px; font-weight: 500; outline: none; padding: 0 2px; border-radius: 4px; }
+.wboard .wbgname[contenteditable="true"] { background: rgb(255 255 255 / .08); }
+.wboard .wbadd { border: 0; background: transparent; color: var(--wb-title); width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; opacity: .7; cursor: pointer; }
+.wboard .wbadd:hover { opacity: 1; background: rgb(255 255 255 / .07); }
+.wboard .wbnotes { display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; }
+.wboard .wbn { position: relative; width: 98px; min-height: 74px; padding: 8px 9px; background: var(--wb-note); color: var(--wb-ink); font-size: 14.5px; line-height: 1.25; border-radius: 3px; box-shadow: 0 1px 2px rgb(0 0 0 / .25); cursor: grab; word-break: break-word; }
+.wboard .wbn.drag { opacity: .4; }
+.wboard .wbn .wbtxt { display: block; outline: none; min-height: 1.2em; }
+.wboard .wbn .wbtxt[contenteditable="true"] { cursor: text; }
+.wboard .wbdel { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border: 0; border-radius: 4px; background: rgb(0 0 0 / .12); color: var(--wb-ink); display: none; place-items: center; cursor: pointer; padding: 0; }
+.wboard .wbn:hover .wbdel { display: grid; }
+.wboard svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wboard .wbdel svg { width: 11px; height: 11px; }
+.wboard .wbbar { display: flex; align-items: center; gap: 4px; margin-top: 12px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); width: fit-content; max-width: 100%; }
+.wboard .wbbar button { border: 0; background: transparent; color: var(--text); width: 32px; height: 30px; border-radius: 7px; display: grid; place-items: center; cursor: pointer; }
+.wboard .wbbar button:hover { background: rgb(255 255 255 / .06); }
+.wboard .wbbar button.on { background: color-mix(in srgb, #d97757 22%, transparent); color: #d97757; }
+.wboard .wbbar svg { width: 18px; height: 18px; }
+.wboard .wbhint { color: var(--muted); font-size: 12.5px; padding: 0 8px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wboard .c0 { --wb-edge: rgb(232 197 71 / .55); --wb-bg: rgb(232 197 71 / .05); --wb-title: #e8c547; --wb-note: #f6e27a; --wb-ink: #3a3200; }
+.wboard .c1 { --wb-edge: rgb(229 138 168 / .55); --wb-bg: rgb(229 138 168 / .05); --wb-title: #e58aa8; --wb-note: #f4b3c8; --wb-ink: #4a1d2c; }
+.wboard .c2 { --wb-edge: rgb(127 178 238 / .55); --wb-bg: rgb(127 178 238 / .05); --wb-title: #7fb2ee; --wb-note: #a9cdf5; --wb-ink: #0f2a45; }
+.wboard .c3 { --wb-edge: rgb(120 196 120 / .55); --wb-bg: rgb(120 196 120 / .05); --wb-title: #7cc47c; --wb-note: #b9e3b0; --wb-ink: #173a12; }
+.wboard .c4 { --wb-edge: rgb(217 119 87 / .55); --wb-bg: rgb(217 119 87 / .05); --wb-title: #e08c6c; --wb-note: #f7c39a; --wb-ink: #4a2210; }
+.wboard .c5 { --wb-edge: rgb(170 140 230 / .55); --wb-bg: rgb(170 140 230 / .05); --wb-title: #b39ae8; --wb-note: #d4c4f5; --wb-ink: #2c1d4a; }
+.dash { border: 1px solid var(--line); border-radius: 12px; background: var(--side); margin: 10px 0 12px; padding: 16px 16px 14px; }
+.dash.swait { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; padding: 14px 16px; background: var(--panel); }
+.dash .dtitle { font-family: Georgia, "Times New Roman", serif; font-size: 24px; line-height: 1.2; }
+.dash .dsub { color: var(--muted); font-size: 15px; margin-top: 4px; }
+.dash .dkpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+.dash .dcard { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 10px 14px; }
+.dash .dklabel { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash .dkval { font-family: Georgia, "Times New Roman", serif; font-size: 26px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.dash .dkdelta { font-size: 13.5px; margin-top: 2px; }
+.dash .dkdelta.up { color: #4caf6a; } .dash .dkdelta.down { color: #e0645a; }
+.dash .dchartcard { margin-top: 12px; }
+.dash .dctitle { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.dash .dchart { width: 100%; height: auto; display: block; }
+.dash .dgrid { stroke: var(--line); stroke-width: 1; }
+.dash .dtick { fill: var(--muted); font-size: 11.5px; }
+.dash .dline { fill: none; stroke: #d97757; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.dash .darea { fill: rgb(217 119 87 / .10); stroke: none; }
+.dash .ddot { fill: var(--panel); stroke: #d97757; stroke-width: 2; }
+.dash .dlast { fill: #d97757; stroke: var(--panel); stroke-width: 2; }
+.dash .dval { fill: var(--text); font-size: 12.5px; font-weight: 600; }
+.dash .dbar { fill: #d97757; opacity: .85; } .dash .dbar:hover { opacity: 1; }
 .quizcard { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 10px 0 12px; background: var(--panel); }
 .quizcard.qwait { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; }
 .qtabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--hover); margin-bottom: 14px; }
@@ -3281,6 +3335,170 @@ document.addEventListener("keydown", (e) => {
   if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) { e.preventDefault(); sheetEdit(el, el.querySelector("td.sel"), e.key); }
 });
 new MutationObserver(() => $$(".sheet[data-src]:not([data-ready])").forEach((el) => sheetDraw(el))).observe(document.body, { childList: true, subtree: true });
+// ---- a whiteboard in the conversation (```tableau-blanc, skill tableau-blanc): coloured groups of sticky notes the user
+// moves, adds and rewrites; each change goes back into the message, so Naim reads the board as it is now
+const WB_COLORS = { jaune: 0, rose: 1, bleu: 2, vert: 3, orange: 4, violet: 5 };
+const WB_NAMES = Object.keys(WB_COLORS);
+function wbParse(src) {
+  const b = { titre: "", groups: [] };
+  for (const raw of String(src || "").replace(/\r/g, "").split("\n")) {
+    const l = raw.trim(); if (!l) continue;
+    let m;
+    if ((m = l.match(/^(?:titre|title)\s*:\s*(.*)$/i)) && !b.groups.length) { b.titre = m[1].trim(); continue; }
+    if ((m = l.match(/^#{1,3}\s*(.+?)\s*(?:\|\s*(\w+))?\s*$/))) {
+      const col = (m[2] || "").toLowerCase();
+      b.groups.push({ nom: m[1], couleur: col in WB_COLORS ? col : WB_NAMES[b.groups.length % WB_NAMES.length], notes: [] });
+      continue;
+    }
+    if ((m = l.match(/^(?:[-*•]|\d+[.)])\s*(.+)$/))) {
+      if (!b.groups.length) b.groups.push({ nom: "Idées", couleur: "jaune", notes: [] });
+      b.groups[b.groups.length - 1].notes.push(m[1].trim());
+    }
+  }
+  return b;
+}
+function wbSerialize(b) {
+  return (b.titre ? `titre: ${b.titre}\n` : "") + b.groups.map((g) => `## ${g.nom} | ${g.couleur}\n` + g.notes.map((n) => `- ${String(n).replace(/\n/g, " ")}`).join("\n")).join("\n\n");
+}
+const WB_ICON = {
+  move: '<svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg>',
+  note: '<svg viewBox="0 0 24 24"><path d="M4 4h16v10l-6 6H4z"/><path d="M14 20v-6h6"/></svg>',
+  group: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+};
+function wbDraw(el) {
+  let b; try { b = el._wb || wbParse(el.dataset.src); } catch (e) { return; }
+  el._wb = b;
+  const groups = b.groups.map((g, gi) => `<section class="wbg c${WB_COLORS[g.couleur] ?? 0}" data-g="${gi}">
+      <header><span class="wbgname" data-wbrename="${gi}">${esc(g.nom)}</span><button class="wbadd" data-wbadd="${gi}" title="Ajouter un post-it">${WB_ICON.plus}</button></header>
+      <div class="wbnotes">${g.notes.map((n, ni) => `<div class="wbn" draggable="true" data-g="${gi}" data-n="${ni}"><span class="wbtxt">${esc(n)}</span><button class="wbdel" data-wbdel="${gi}:${ni}" title="Retirer ce post-it">${WB_ICON.close}</button></div>`).join("")}</div>
+    </section>`).join("");
+  el.innerHTML = `${b.titre ? `<div class="wbtitle">${esc(b.titre)}</div>` : ""}<div class="wbboard">${groups || '<div class="wbempty">Tableau vide : ajoute un groupe.</div>'}</div>
+    <div class="wbbar"><button class="on" title="Déplacer : glisse un post-it vers un autre groupe">${WB_ICON.move}</button><button data-wbnew="note" title="Nouveau post-it">${WB_ICON.note}</button><button data-wbnew="group" title="Nouveau groupe">${WB_ICON.group}</button><span class="wbhint">Glisse les post-it · double-clic pour écrire</span></div>`;
+  el.dataset.ready = "1";
+}
+function wbSave(el) {
+  const old = el.dataset.src, now = wbSerialize(el._wb);
+  if (old === now) return;
+  el.dataset.src = now;
+  const m = current?.messages?.find((x) => typeof x.content === "string" && x.content.includes(old));
+  if (m) { m.content = m.content.replace(old, now); saveConv(current).catch(() => {}); }
+}
+function wbWrite(el, target, value, onDone) {  // writes in place: a note's text or a group's name
+  target.contentEditable = "true"; target.focus();
+  const r = document.createRange(); r.selectNodeContents(target); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  const end = (keep) => { if (target._done) return; target._done = true; target.contentEditable = "false"; onDone(keep ? target.textContent.trim() : value); };
+  target.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); end(true); } else if (e.key === "Escape") end(false); e.stopPropagation(); });
+  target.addEventListener("blur", () => end(true), { once: true });
+}
+document.addEventListener("click", (e) => {
+  const el = e.target.closest?.(".wboard[data-src]"); if (!el || !el._wb) return;
+  const b = el._wb, btn = e.target.closest("button");
+  if (!btn) return;
+  if (btn.dataset.wbdel) { const [g, n] = btn.dataset.wbdel.split(":").map(Number); b.groups[g].notes.splice(n, 1); wbDraw(el); wbSave(el); return; }
+  const addTo = btn.dataset.wbadd != null ? +btn.dataset.wbadd : btn.dataset.wbnew === "note" ? Math.max(0, b.groups.length - 1) : null;
+  if (addTo != null) {
+    if (!b.groups.length) b.groups.push({ nom: "Idées", couleur: "jaune", notes: [] });
+    b.groups[addTo].notes.push(""); wbDraw(el);
+    const t = el.querySelector(`.wbn[data-g="${addTo}"][data-n="${b.groups[addTo].notes.length - 1}"] .wbtxt`);
+    wbWrite(el, t, "", (v) => { if (v) b.groups[addTo].notes[b.groups[addTo].notes.length - 1] = v; else b.groups[addTo].notes.pop(); wbDraw(el); wbSave(el); });
+    return;
+  }
+  if (btn.dataset.wbnew === "group") {
+    b.groups.push({ nom: "Nouveau groupe", couleur: WB_NAMES[b.groups.length % WB_NAMES.length], notes: [] }); wbDraw(el);
+    const gi = b.groups.length - 1, t = el.querySelector(`[data-wbrename="${gi}"]`);
+    wbWrite(el, t, "Nouveau groupe", (v) => { b.groups[gi].nom = v || "Groupe"; wbDraw(el); wbSave(el); });
+  }
+});
+document.addEventListener("dblclick", (e) => {
+  const el = e.target.closest?.(".wboard[data-src]"); if (!el || !el._wb) return;
+  const b = el._wb, note = e.target.closest(".wbn"), name = e.target.closest("[data-wbrename]");
+  if (note) { const g = +note.dataset.g, n = +note.dataset.n, t = note.querySelector(".wbtxt");
+    wbWrite(el, t, b.groups[g].notes[n], (v) => { if (v) b.groups[g].notes[n] = v; else b.groups[g].notes.splice(n, 1); wbDraw(el); wbSave(el); }); }
+  else if (name) { const g = +name.dataset.wbrename; wbWrite(el, name, b.groups[g].nom, (v) => { b.groups[g].nom = v || b.groups[g].nom; wbDraw(el); wbSave(el); }); }
+});
+// moving a note: drag it onto another group (or before another note)
+document.addEventListener("dragstart", (e) => {
+  const n = e.target.closest?.(".wboard .wbn"); if (!n) return;
+  e.dataTransfer.setData("text/plain", n.dataset.g + ":" + n.dataset.n); e.dataTransfer.effectAllowed = "move"; n.classList.add("drag");
+});
+document.addEventListener("dragend", (e) => { e.target.closest?.(".wbn")?.classList.remove("drag"); $$(".wbg.over").forEach((g) => g.classList.remove("over")); });
+document.addEventListener("dragover", (e) => {
+  const g = e.target.closest?.(".wboard .wbg"); if (!g) return;
+  e.preventDefault(); $$(".wbg.over").forEach((x) => x !== g && x.classList.remove("over")); g.classList.add("over");
+});
+document.addEventListener("drop", (e) => {
+  const g = e.target.closest?.(".wboard .wbg"); if (!g) return;
+  e.preventDefault(); g.classList.remove("over");
+  const el = g.closest(".wboard"), b = el._wb, [fg, fn] = (e.dataTransfer.getData("text/plain") || "").split(":").map(Number);
+  if (!b || !b.groups[fg] || b.groups[fg].notes[fn] == null) return;
+  const text = b.groups[fg].notes.splice(fn, 1)[0], tg = +g.dataset.g, before = e.target.closest(".wbn");
+  let at = before && +before.dataset.g === tg ? +before.dataset.n : b.groups[tg].notes.length;
+  if (fg === tg && fn < at) at--;
+  b.groups[tg].notes.splice(Math.max(0, at), 0, text);
+  wbDraw(el); wbSave(el);
+});
+new MutationObserver(() => $$(".wboard[data-src]:not([data-ready])").forEach((el) => wbDraw(el))).observe(document.body, { childList: true, subtree: true });
+// ---- a data dashboard in the conversation (```donnees, skill donnees): a title, key figures with their change, and
+// charts (a curve or bars) drawn from the real values written in the block; the value of each point on hover
+function dashParse(src) {
+  const d = { titre: "", sous_titre: "", kpis: [], charts: [] };
+  for (const raw of String(src || "").replace(/\r/g, "").split("\n")) {
+    const l = raw.trim(); if (!l) continue;
+    let m;
+    if ((m = l.match(/^(?:titre|title)\s*:\s*(.*)$/i))) { d.titre = m[1].trim(); continue; }
+    if ((m = l.match(/^(?:sous[_ -]?titre|subtitle)\s*:\s*(.*)$/i))) { d.sous_titre = m[1].trim(); continue; }
+    if ((m = l.match(/^(?:kpi|chiffre)\s*:\s*(.*)$/i))) {
+      const [label, value, delta] = m[1].split("|").map((x) => (x || "").trim());
+      d.kpis.push({ label, value, delta: delta || "" }); continue;
+    }
+    if ((m = l.match(/^(courbe|ligne|barres?|histogramme)\s*:\s*(.*)$/i))) {
+      d.charts.push({ kind: /^(barres?|histogramme)$/i.test(m[1]) ? "bar" : "line", titre: m[2].trim(), points: [] }); continue;
+    }
+    if ((m = l.match(/^(.+?)\s*[;|]\s*(-?[\d\s  ]+(?:[.,]\d+)?)\s*(€|%|\$)?\s*$/)) && d.charts.length) {
+      d.charts[d.charts.length - 1].points.push({ x: m[1].trim(), y: parseFloat(m[2].replace(/[\s  ]/g, "").replace(",", ".")), unit: m[3] || "" });
+    }
+  }
+  return d;
+}
+const dashNum = (v, unit) => (Number.isFinite(v) ? v.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : "") + (unit ? ` ${unit}` : "");
+function dashChart(c, k) {
+  const W = 560, H = 220, L = 44, R = 24, T = 26, B = 30, pts = c.points;
+  if (!pts.length) return "";
+  const ys = pts.map((p) => p.y), max = Math.max(...ys), min = Math.min(0, ...ys);
+  const step = Math.pow(10, Math.floor(Math.log10((max - min) || 1))), nice = Math.ceil(max / step) * step || 1;
+  const top = nice + (nice - max < step * 0.15 ? step * 0.5 : 0);
+  const X = (i) => (c.kind === "bar" ? L + (i + 0.5) * (W - L - R) / pts.length : L + (pts.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (pts.length - 1)));
+  const Y = (v) => T + (top - v) / ((top - min) || 1) * (H - T - B);
+  let s = `<svg viewBox="0 0 ${W} ${H}" class="dchart" role="img" aria-label="${esc(c.titre)}">`;
+  const ticks = [min, (min + top) / 2, top].map((v) => Math.round(v));
+  ticks.forEach((v) => { s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" class="dgrid"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" class="dtick">${dashNum(v)}</text>`; });
+  const lab = pts.length <= 6 ? pts.map((_, i) => i) : [0, Math.round((pts.length - 1) / 2), pts.length - 1];
+  lab.forEach((i) => { s += `<text x="${X(i)}" y="${H - 8}" text-anchor="middle" class="dtick">${esc(pts[i].x)}</text>`; });
+  if (c.kind === "bar") {
+    const bw = Math.min(46, (W - L - R) / pts.length * 0.6);
+    pts.forEach((p, i) => { s += `<rect x="${X(i) - bw / 2}" y="${Y(Math.max(0, p.y))}" width="${bw}" height="${Math.abs(Y(p.y) - Y(0))}" rx="4" class="dbar"><title>${esc(p.x)} : ${dashNum(p.y, p.unit)}</title></rect>`; });
+  } else {
+    const line = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(p.y).toFixed(1)}`).join(" ");
+    s += `<path d="${line} L${X(pts.length - 1)} ${Y(min)} L${X(0)} ${Y(min)} Z" class="darea"/><path d="${line}" class="dline"/>`;
+    pts.forEach((p, i) => { s += `<circle cx="${X(i)}" cy="${Y(p.y)}" r="${i === pts.length - 1 ? 5 : 3.5}" class="${i === pts.length - 1 ? "dlast" : "ddot"}"><title>${esc(p.x)} : ${dashNum(p.y, p.unit)}</title></circle>`; });
+    const lp = pts[pts.length - 1];
+    s += `<text x="${X(pts.length - 1)}" y="${Y(lp.y) - 11}" text-anchor="middle" class="dval">${dashNum(lp.y, lp.unit)}</text>`;
+  }
+  return `<div class="dcard dchartcard"><div class="dctitle">${esc(c.titre)}</div>${s}</svg></div>`;
+}
+function dashDraw(el) {
+  let d; try { d = dashParse(el.dataset.src); } catch (e) { return; }
+  const kpis = d.kpis.map((k) => {
+    const neg = /^\s*[-−]/.test(k.delta);
+    return `<div class="dcard dkpi"><div class="dklabel">${esc(k.label)}</div><div class="dkval">${esc(k.value)}</div>${k.delta ? `<div class="dkdelta ${neg ? "down" : "up"}">${esc(k.delta)}</div>` : ""}</div>`;
+  }).join("");
+  el.innerHTML = `${d.titre ? `<div class="dtitle">${esc(d.titre)}</div>` : ""}${d.sous_titre ? `<div class="dsub">${esc(d.sous_titre)}</div>` : ""}`
+    + (kpis ? `<div class="dkpis">${kpis}</div>` : "") + d.charts.map(dashChart).join("");
+  el.dataset.ready = "1";
+}
+new MutationObserver(() => $$(".dash[data-src]:not([data-ready])").forEach((el) => dashDraw(el))).observe(document.body, { childList: true, subtree: true });
 // ---- an English game (```anglais): the words learnt with their pictures, then played six ways — pictures from
 // Wikipedia / Commons kept on this Mac (/api/anglais/images), the words said by the Mac's English voice
 const EN_GAMES = [["mots", "Vocabulaire"], ["images", "Images"], ["ecoute", "Écoute"], ["orthographe", "Orthographe"], ["paires", "Paires"], ["phrases", "Phrases"]];
@@ -4237,6 +4455,15 @@ function codeBlock(lang, body, file = "", open = false) {
     if (open) { const n = String(body).split("\n").filter((l) => l.trim() && !/^\s*titre\s*:/i.test(l)).length;
       return `<div class="sheet swait">${liveIcon("write")}<span>Naim remplit la feuille${n ? ` · ${n} ligne${n > 1 ? "s" : ""}` : "…"}</span></div>`; }
     return `<div class="sheet" tabindex="0" data-src="${esc(String(body).replace(/\n+$/, ""))}"></div>`;
+  }
+  if (/^(tableau-blanc|whiteboard|post-it)$/i.test(lang || "")) {  // a whiteboard of sticky notes (skill tableau-blanc), drawn by wbDraw
+    if (open) { const n = (String(body).match(/^\s*(?:[-*•]|\d+[.)])\s+\S/gm) || []).length;
+      return `<div class="wboard swait">${liveIcon("write")}<span>Naim prépare le tableau blanc${n ? ` · ${n} post-it` : "…"}</span></div>`; }
+    return `<div class="wboard" data-src="${esc(String(body).replace(/\n+$/, ""))}"></div>`;
+  }
+  if (/^(donnees|données|dashboard|tableau-de-bord)$/i.test(lang || "")) {  // a data dashboard (skill donnees), drawn by dashDraw
+    if (open) return `<div class="dash swait">${liveIcon("write")}<span>Naim prépare le tableau de bord…</span></div>`;
+    return `<div class="dash" data-src="${esc(String(body).replace(/\n+$/, ""))}"></div>`;
   }
   if (/^quiz$/i.test(lang || "")) {  // an interactive quiz (skill quiz): a card to tick, drawn by quizDraw
     // the JSON may be complete even when the closing ``` was forgotten: the card shows, the words after it too

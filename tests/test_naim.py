@@ -5040,7 +5040,31 @@ class ALiveSheetInTheConversation(unittest.TestCase):
         body = (ROOT / "plugins_builtin/tableur/skills/tableur-vivant/SKILL.md").read_text()
         self.assertIn("```feuille", body)
         self.assertIn("=SOMME(C2:C6)", body)
-        self.assertIn('sheet_here = sk["name"] == "tableur-vivant"', (ROOT / "server.py").read_text())
+        self.assertIn('sheet_here = sk["name"] in ("tableur-vivant"', (ROOT / "server.py").read_text())
+
+
+class AWhiteboardAndADashboardInTheConversation(unittest.TestCase):
+    """Sticky notes in coloured groups the user moves and rewrites (```tableau-blanc), and a dashboard of key figures and
+    charts (```donnees), drawn in the conversation; the board's changes go back into the message."""
+
+    def test_page(self):
+        page = (ROOT / "web/index.html").read_text()
+        for needle in ("function wbDraw(el)", "function wbSave(el)", "function dashDraw(el)", "function dashChart(c, k)",
+                       "/^(tableau-blanc|whiteboard|post-it)$/i.test(lang", "/^(donnees|données|dashboard|tableau-de-bord)$/i.test(lang",
+                       '.wboard .c0 {', '.dash .dline {', 'addEventListener("drop"'):
+            self.assertIn(needle, page)
+
+    def test_skills_and_routing(self):
+        import re as _re
+        wb = json.loads((ROOT / "plugins_builtin/tableau-blanc/plugin.json").read_text())["triggers"]["tableau-blanc"]
+        da = json.loads((ROOT / "plugins_builtin/donnees/plugin.json").read_text())["triggers"]["donnees"]
+        self.assertTrue(_re.search(wb, "fais un tableau blanc pour organiser le week-end", _re.I))
+        self.assertTrue(_re.search(wb, "brainstorm des idées pour mon anniversaire", _re.I))
+        self.assertTrue(_re.search(da, "un dashboard de mes abonnés", _re.I))
+        self.assertFalse(_re.search(da, "fais un tableau de bord de mes ventes en excel", _re.I))
+        self.assertIn("```tableau-blanc", (ROOT / "plugins_builtin/tableau-blanc/skills/tableau-blanc/SKILL.md").read_text())
+        self.assertIn("```donnees", (ROOT / "plugins_builtin/donnees/skills/donnees/SKILL.md").read_text())
+        self.assertIn('sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees")', (ROOT / "server.py").read_text())
 
 
 class CompressionShowsItsProgress(unittest.TestCase):

@@ -1,0 +1,10 @@
+{
+  "name": "donnees",
+  "version": "1.0",
+  "description": "Un tableau de bord de données dans la conversation : chiffres clés avec leur évolution, courbes et barres, à partir des vraies valeurs.",
+  "skills": "skills",
+  "triggers": {
+    "donnees": "(?s)^(?!.*\\b(excel|xlsx|fichier|t[ée]l[ée]charg\\w*|pdf)\\b).*(\\b(tableau de bord|dashboard|kpis?|indicateurs?( cl[ée]s)?|chiffres? cl[ée]s|suivi des (ventes|commandes|visites|abonn[ée]s|d[ée]penses))\\b)"
+  },
+  "priority": true
+}

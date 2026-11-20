@@ -1,0 +1,10 @@
+{
+  "name": "tableau-blanc",
+  "version": "1.0",
+  "description": "Un tableau blanc dans la conversation : des post-it rangés en groupes de couleur, que l'utilisateur déplace, ajoute et réécrit (idées, organisation d'un projet, d'un voyage, d'une fête, priorités).",
+  "skills": "skills",
+  "triggers": {
+    "tableau-blanc": "\\b(tableau blanc|whiteboard|post-?its?|pense-b[eê]tes?|brainstorm\\w*|remue-m[ée]ninges|tableau d'id[ée]es|mur d'id[ée]es|kanban)\\b|\\b(organise|range|regroupe|classe|trie)\\w*\\b[^.?!\\n]{0,40}\\b(id[ée]es|t[aâ]ches|activit[ée]s)\\b[^.?!\\n]{0,40}\\b(groupes?|cat[ée]gories|colonnes?)\\b"
+  },
+  "priority": true
+}

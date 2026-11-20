@@ -2681,7 +2681,7 @@ class Handler(BaseHTTPRequestHandler):
                 sim_here = sk["name"] == "animation-algorithme" and not re.search(
                     r"fichiers?|\bpages?\b|\bhtml\b|enregistr|sauvegard|t[ée]l[ée]charg|\w\.(js|html?)\b", body["message"] or "", re.I)
                 # a spreadsheet in the conversation (```feuille) is answered there too: the live sheet, no file
-                sheet_here = sk["name"] == "tableur-vivant" and not re.search(
+                sheet_here = sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees") and not re.search(
                     r"fichiers?|excel|xlsx|enregistr|sauvegard|t[ée]l[ée]charg", body["message"] or "", re.I)
                 file_work = not (sim_here or sheet_here)  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
                 if sim_here:
