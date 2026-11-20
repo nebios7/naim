@@ -1,0 +1,52 @@
+<!-- étape : Choix du style : zones colorées entre les deux droites -->
+<style>
+  .lg { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; margin: 0 0 6px; }
+  .lg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; }
+  .card { background: var(--side); border-radius: 10px; padding: 10px 14px; color: var(--muted); font-size: 14px; }
+  .card b { display: block; color: var(--text); font-size: 15px; font-weight: 600; }
+  #tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; display: none; }
+</style>
+<div class="lg" id="lg"></div>
+<div style="position: relative"><svg id="g" viewBox="0 0 640 400" style="width: 100%; display: block"></svg><div id="tip"></div></div>
+<div class="cards" id="cards"></div>
+<script>
+// étape : Les droites et leurs valeurs exactes
+const D = [
+  { nom: "d₁", txt: "y = 3/4 x − 7", f: (x) => 3 / 4 * x - 7, col: "#4a86d8" },
+  { nom: "d₂", txt: "y = −7/8 x + 4", f: (x) => -7 / 8 * x + 4, col: "#e0703f", dash: true },
+];
+const xi = (4 + 7) / (3 / 4 + 7 / 8), yi = D[0].f(xi);  // l'intersection, calculée
+const X0 = -2, X1 = 12, Y0 = -9, Y1 = 6, W = 640, H = 400, L = 34, B = 26;
+const X = (x) => L + (x - X0) / (X1 - X0) * (W - L - 8), Y = (y) => 8 + (Y1 - y) / (Y1 - Y0) * (H - 8 - B);
+const fr = (v) => (Math.round(v * 100) / 100).toString().replace(".", ",").replace("-", "−");
+// étape : Grille et axes
+const css = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+let g = "";
+for (let x = X0; x <= X1; x += 2) g += `<line x1="${X(x)}" y1="8" x2="${X(x)}" y2="${H - B}" stroke="${css("--line")}"/><text x="${X(x)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${css("--muted")}">${fr(x)}</text>`;
+for (let y = -8; y <= Y1; y += 2) g += `<line x1="${L}" y1="${Y(y)}" x2="${W - 8}" y2="${Y(y)}" stroke="${css("--line")}"/><text x="${L - 6}" y="${Y(y) + 4}" text-anchor="end" font-size="11" fill="${css("--muted")}">${fr(y)}</text>`;
+g += `<line x1="${L}" y1="${Y(0)}" x2="${W - 8}" y2="${Y(0)}" stroke="${css("--muted")}"/><line x1="${X(0)}" y1="8" x2="${X(0)}" y2="${H - B}" stroke="${css("--muted")}"/>`;
+// étape : Les zones entre les droites, de la couleur de celle qui est au-dessus
+const zone = (a, b, col) => { const pts = []; for (let k = 0; k <= 40; k++) { const x = a + (b - a) * k / 40; pts.push([x, D[0].f(x)]); }
+  for (let k = 40; k >= 0; k--) { const x = a + (b - a) * k / 40; pts.push([x, D[1].f(x)]); }
+  return `<polygon points="${pts.map(([x, y]) => X(x).toFixed(1) + "," + Y(y).toFixed(1)).join(" ")}" fill="${col}" fill-opacity=".18"/>`; };
+g += zone(X0, xi, D[1].col) + zone(xi, X1, D[0].col);
+// étape : Les courbes et l'intersection
+D.forEach((d) => { g += `<line x1="${X(X0)}" y1="${Y(d.f(X0))}" x2="${X(X1)}" y2="${Y(d.f(X1))}" stroke="${d.col}" stroke-width="2.4"${d.dash ? ' stroke-dasharray="8 6"' : ""}/>`; });
+g += `<circle cx="${X(xi)}" cy="${Y(yi)}" r="6" fill="#fff" stroke="${css("--muted")}"/><text x="${X(xi) + 10}" y="${Y(yi) + 22}" font-size="12" fill="${css("--text")}">(${fr(xi)} ; ${fr(yi)})</text>`;
+g += `<line id="probe" y1="8" y2="${H - B}" stroke="${css("--muted")}" stroke-dasharray="3 4" style="display:none"/>`;
+document.getElementById("g").innerHTML = g;
+document.getElementById("lg").innerHTML = D.map((d) => `<span><i style="background:${d.col}"></i>${d.nom} : ${d.txt}</span>`).join("") + `<span><i style="background:#fff;border-radius:50%"></i>Intersection</span>`;
+// étape : L'infobulle au survol et les cartes de valeurs
+const svg = document.getElementById("g"), tip = document.getElementById("tip"), probe = document.getElementById("probe");
+svg.addEventListener("mousemove", (e) => {
+  const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width, x = X0 + (px - L) / (W - L - 8) * (X1 - X0);
+  if (x < X0 || x > X1) return;
+  probe.setAttribute("x1", px); probe.setAttribute("x2", px); probe.style.display = "";
+  tip.style.display = "block"; tip.style.left = (e.clientX - r.left + 14) + "px"; tip.style.top = (e.clientY - r.top - 10) + "px";
+  tip.innerHTML = `x = ${fr(x)}<br>${D.map((d) => `${d.nom} : ${fr(d.f(x))}`).join("<br>")}`;
+});
+svg.addEventListener("mouseleave", () => { tip.style.display = "none"; probe.style.display = "none"; });
+document.getElementById("cards").innerHTML = `<div class="card">Intersection exacte<b>(88/13 ; −25/13)</b></div>`
+  + `<div class="card">Zone bleue<b>d₁ au-dessus pour x > ${fr(xi)}</b></div><div class="card">Zone orange<b>d₂ au-dessus pour x < ${fr(xi)}</b></div>`;
+</script>

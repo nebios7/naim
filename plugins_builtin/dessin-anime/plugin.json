@@ -1,0 +1,10 @@
+{
+  "name": "dessin-anime",
+  "version": "1.0",
+  "description": "Un dessin animé dans la conversation à partir de tes images : ta photo devient un décor qui vit, tes personnages sont redessinés et bougent, en scènes avec sous-titres.",
+  "skills": "skills",
+  "triggers": {
+    "dessin-anime": "\\b(dessins? anim[ée]s?|cartoons?|anim[ée]s?|anime\\w*|fais(?:-la|-le)? (?:vivre|bouger)|donne(?:r)? vie|prend(?:re)? vie)\\b[^.?!\\n]{0,60}\\b(images?|photos?|dessins?|personnages?|illustrations?|captures?)\\b|\\b(images?|photos?|dessins?|personnages?)\\b[^.?!\\n]{0,40}\\b(en )?(dessins? anim[ée]s?|cartoons?|anim[ée]e?s?|qui bouge\\w*|vivante?s?)\\b"
+  },
+  "priority": true
+}

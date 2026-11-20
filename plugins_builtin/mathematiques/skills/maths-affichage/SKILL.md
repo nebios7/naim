@@ -183,6 +183,13 @@ d1(x) = 3/4 x - 7
 d2(x) = -7/8 x + 4
 ```
 
+### Un autre style (« autre style ? », « autre type »)
+Le même graphe en mieux n'est pas un autre style : invente une autre représentation des mêmes valeurs dans un bloc
+```visuel (skill visuel) : zones colorées entre les courbes, barres groupées avec un bouton qui bascule la vue
+(valeurs / écart), construction pas à pas avec Précédent / Suivant, tableau de valeurs coloré, point qui parcourt la
+courbe. Le script calcule chaque valeur à partir des équations ; légende en haut, valeurs exactes dans des cartes en
+bas ; un commentaire `// étape : …` avant chaque partie. Jamais deux fois le même style dans la conversation.
+
 ### Un graphe dynamique (à faire bouger) : des curseurs
 Quand on demande un graphe « dynamique », « interactif », « à faire bouger », ou pour voir l'effet d'un paramètre
 (pente, ordonnée, a, b, c…) : une ligne `curseur` par paramètre, puis les courbes écrites avec ces noms.

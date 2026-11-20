@@ -5151,6 +5151,44 @@ console.log(JSON.stringify({ inter: /Intersection/.test(two), exact: two.include
         self.assertIn("```diagramme", (ROOT / "plugins_builtin/tableur/skills/tableur-vivant/SKILL.md").read_text())
 
 
+class AnotherStyleAndACartoonInventedByNaim(unittest.TestCase):
+    """« autre style ? » after a graph: Naim invents another picture of the same values in a ```visuel; « fais un dessin
+    animé avec cette image »: the picture given (image:1) becomes the set of a cartoon. While it is written, its steps
+    (« // étape : … ») show with a shimmering space; the ⋯ of a visual copies it as an image or downloads it."""
+
+    def test_page(self):
+        page = (ROOT / "web/index.html").read_text()
+        for needle in ("function visSteps(body)", "function visImages(body)", "const visSnap = () =>", 'label: "Télécharger au format HTML"',
+                       ".md .vis .vshim {", "naimSnapOk", 'class="vis vcard"'):
+            self.assertIn(needle, page)
+
+    def test_routing_and_skills(self):
+        import re as _re
+        server = (ROOT / "server.py").read_text()
+        i = server.index("STYLE_ASK_RE = re.compile(")
+        ns = {"re": _re}
+        exec(server[i:server.index(", re.I)", i) + len(", re.I)")], ns)
+        st = ns["STYLE_ASK_RE"]
+        for m in ("ta pas autre style de graphe ?", "autre type", "autre style ?", "présente-le autrement"):
+            self.assertTrue(st.search(m), m)
+        for m in ("fais le graphe des dépenses", "un autre exercice"):
+            self.assertFalse(st.search(m), m)
+        self.assertIn('"dessin-anime": "visuel', server)
+        da = json.loads((ROOT / "plugins_builtin/dessin-anime/plugin.json").read_text())["triggers"]["dessin-anime"]
+        for m in ("fais un dessin animé avec cette image", "anime cette photo", "fais bouger mon dessin", "donne vie à mon personnage"):
+            self.assertTrue(_re.search(da, m, _re.I), m)
+        for m in ("anime cette présentation", "une animation de la boucle while", "mon personnage préféré"):
+            self.assertFalse(_re.search(da, m, _re.I), m)
+        sk = (ROOT / "plugins_builtin/dessin-anime/skills/dessin-anime/SKILL.md").read_text()
+        for needle in ("image:1", "```visuel", "étape", "exemples/scene-image.html"):
+            self.assertIn(needle, sk)
+        ex = (ROOT / "plugins_builtin/dessin-anime/skills/dessin-anime/exemples/scene-image.html").read_text()
+        self.assertIn('"image:1"', ex)
+        self.assertIn("requestAnimationFrame", ex)
+        self.assertTrue((ROOT / "plugins_builtin/visuel/skills/visuel/exemples/zones-colorees.html").exists())
+        self.assertIn("Un autre style", (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text())
+
+
 class CompressionShowsItsProgress(unittest.TestCase):
     """A long conversation being summarized: a ring of dots, the sentence, a bar with its percentage read from the
     engine — no emoji line."""

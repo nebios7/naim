@@ -2333,6 +2333,19 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md .simbar button:hover { background: var(--hover); }
 .md .simbar svg { width: 13px; height: 13px; }
 .md .vis iframe.simf { max-width: 680px; margin: 0 auto; border: 1px solid #2c2c40; border-radius: 14px; background: #12121c; overflow: hidden; }
+/* a visual being written: its steps, and the space it will take, shimmering */
+.md .vis.vbuild { margin: 6px 0 10px; }
+.md .vis .vsteps { list-style: none; margin: 0 0 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); font-size: 14.5px; line-height: 1.9; }
+.md .vis .vsteps li.now { color: var(--text); }
+.md .vis .vsteps li.now::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-radius: 50%; background: #d97757; vertical-align: middle; animation: vpulse 1s ease-in-out infinite; }
+@keyframes vpulse { 50% { opacity: .25; } }
+.md .vis .vshim { height: 320px; border-radius: 12px; background: linear-gradient(110deg, var(--side) 30%, color-mix(in srgb, var(--text) 7%, var(--side)) 45%, var(--side) 60%); background-size: 250% 100%; animation: vshim 1.8s linear infinite; }
+@keyframes vshim { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.md .vis.vcard { position: relative; }
+.md .vis.vcard > .gmore { position: absolute; top: 2px; right: 2px; width: 32px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: var(--side); color: var(--text); cursor: pointer; opacity: 0; transition: opacity .15s; z-index: 2; }
+.md .vis.vcard:hover > .gmore, .md .vis.vcard > .gmore:focus-visible { opacity: 1; }
+.md .vis.vcard > .gmore svg { width: 18px; height: 18px; }
 .md .vis.vwait { display: flex; align-items: center; gap: 8px; padding: 18px 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 13.5px; }
 .md details.mfigcode > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 2px 0 8px; }
 .turn.plugcard { align-items: flex-start; }
@@ -4626,7 +4639,8 @@ function codeBlock(lang, body, file = "", open = false) {
       + `<details class="mfigcode"><summary>Code de la simulation</summary>${codeBlockRaw("javascript", body, file, open)}</details>`;
   }
   if (/^(visuel|widget)$/i.test(lang || "")) {  // a live visual (a clock, a card, a gauge…): drawn here, in a sealed frame
-    if (open) { quillText(body.length); return `<div class="vis vwait">${liveIcon("write")}<span>Naim dessine le visuel… <span class="muted">${body.split("\n").length} lignes</span></span></div>`; }
+    if (open) { quillText(body.length); return visSteps(body); }
+    body = visImages(body);  // « image:1 »: the user's own picture, put in the visual
     // the frame's colour scheme is the page's: otherwise its background is painted opaque (a dark band in dark mode)
     const dark = document.documentElement.dataset.theme === "dark"
       || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -4635,7 +4649,7 @@ function codeBlock(lang, body, file = "", open = false) {
     if (!ready) visLibsLoad(libs);
     const wait = ready ? "" : ` data-vlibs="${libs.join(" ")}" data-vbody="${esc(body)}"`;
     const doc = ready ? visuelDoc(body) : visuelDoc(`<div style="padding: 18px; color: var(--muted); font-size: 13px">Préparation du ${libs.includes("leaflet") ? "plan" : "graphique"}…</div>`);
-    return `<div class="vis"><iframe class="visf" sandbox="allow-scripts" title="Visuel" style="color-scheme: ${dark ? "dark" : "light"}"${wait} srcdoc="${esc(doc)}"></iframe></div>`
+    return `<div class="vis vcard"><button class="gmore" type="button" title="Exporter" aria-label="Exporter le visuel">${svgI("dots")}</button><iframe class="visf" sandbox="allow-scripts" title="Visuel" style="color-scheme: ${dark ? "dark" : "light"}"${wait} srcdoc="${esc(doc)}"></iframe></div>`
       + `<details class="mfigcode"><summary>Code du visuel</summary>${codeBlockRaw("html", body, file, open)}</details>`;
   }
   if (/^mermaid$/i.test(lang || "")) return `<div class="diagram" data-mmd="${esc(body)}"><div class="dbar"><span>Schéma</span><button data-dcode>Code</button><button data-dsvg>SVG</button><button data-dpng>PNG</button><button data-dbig>Agrandir</button></div><div class="dview"><span class="muted">Dessin du schéma…</span></div>${codeBlockRaw("mermaid", body, file)}</div>`;
@@ -4645,6 +4659,17 @@ function codeBlock(lang, body, file = "", open = false) {
 // own script), and its height told to the conversation so that it shows whole, without a scroll bar
 // the frame's page takes the frame's real size: with Naim's zoom (60 %…) WebKit laid it out narrower than the frame (a white
 // band on the right). Naim's zoom itself already reaches the frame's content: it scales with the rest of Naim
+const visSnap = () => `<scr` + `ipt>addEventListener("message", (e) => { if (!e.data || !e.data.naimSnap) return; const id = e.data.naimSnap;`
+  + ` const els = [...document.querySelectorAll("canvas, svg")].filter((x) => !x.closest("button") && x.getBoundingClientRect().width > 80);`
+  + ` const el = els.sort((a, b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0];`
+  + ` const send = (d) => parent.postMessage({ naimSnapOk: id, data: d }, "*"); if (!el) return send(null);`
+  + ` if (el.tagName === "CANVAS") return send(el.toDataURL("image/png"));`
+  + ` const c = el.cloneNode(true), a = [el, ...el.querySelectorAll("*")], b = [c, ...c.querySelectorAll("*")];`
+  + ` a.forEach((n, i) => { const cs = getComputedStyle(n); b[i].setAttribute("style", ["fill", "stroke", "stroke-width", "stroke-dasharray", "opacity", "fill-opacity", "stroke-opacity", "font-size", "font-weight", "font-family"].map((k) => k + ":" + cs.getPropertyValue(k)).join(";")); });`
+  + ` const r = el.getBoundingClientRect(); c.setAttribute("width", r.width); c.setAttribute("height", r.height); c.setAttribute("xmlns", "http://www.w3.org/2000/svg");`
+  + ` const img = new Image(); img.onload = () => { const cv = document.createElement("canvas"); cv.width = r.width * 2; cv.height = r.height * 2; const x = cv.getContext("2d");`
+  + ` x.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg") || "#fff"; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(img, 0, 0, cv.width, cv.height); send(cv.toDataURL("image/png")); };`
+  + ` img.onerror = () => send(null); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(c)); });<\/script>`;
 const visHeight = () => `<scr` + `ipt>(() => { const fit = () => { const r = document.documentElement;`
   + ` const v = window.visualViewport, w = Math.ceil((v && v.width) || innerWidth); if (Math.abs(w - r.clientWidth) > 2) r.style.width = w + "px";`
   + ` r.style.minHeight = Math.ceil((v && v.height) || innerHeight) + "px"; };`
@@ -4758,6 +4783,43 @@ function visLibsHead(body) {
 }`);
   return h;
 }
+document.addEventListener("click", (e) => {
+  const b = e.target.closest?.(".vis.vcard > .gmore"); if (!b) return;
+  e.stopPropagation();
+  const f = b.parentElement.querySelector("iframe.visf"); if (!f) return;
+  const snap = () => new Promise((ok, ko) => {
+    const id = Math.random().toString(36).slice(2), done = (ev) => {
+      if (!ev.data || ev.data.naimSnapOk !== id) return;
+      removeEventListener("message", done);
+      if (!ev.data.data) return ko(new Error("rien à copier"));
+      fetch(ev.data.data).then((r) => r.blob()).then(ok, ko);
+    };
+    addEventListener("message", done); f.contentWindow.postMessage({ naimSnap: id }, "*");
+    setTimeout(() => { removeEventListener("message", done); ko(new Error("délai")); }, 4000);
+  });
+  showMenu(b, [
+    { icon: "copy", label: "Copier comme image", run: () => {
+      try { navigator.clipboard.write([new ClipboardItem({ "image/png": snap() })]).then(() => toast("Image copiée"), () => toast("Ce visuel n'a pas de dessin à copier")); }
+      catch (err) { toast("Copie impossible"); } } },
+    { icon: "download", label: "Télécharger au format HTML", run: () => gSave(new Blob([f.srcdoc || visuelDoc(f.dataset.vbody || "")], { type: "text/html" }), "visuel.html") },
+  ]);
+});
+// the pictures the user gave in this conversation, in order: « image:1 » is the first, « image:2 » the next, « image:derniere »
+// the last one; a visual (a cartoon made from a drawing, a photo that comes alive) uses them as they are
+function visImages(body) {
+  if (!/\bimage:(\d+|derni[eè]re)\b/i.test(body)) return body;
+  const imgs = (current?.messages || []).filter((m) => m.role === "user").flatMap((m) => (m.attachments || []).filter((a) => a.kind === "image" && a.data));
+  return body.replace(/\bimage:(\d+|derni[eè]re)\b/gi, (all, k) => {
+    const a = /^\d+$/.test(k) ? imgs[+k - 1] : imgs.at(-1);
+    return a ? `data:${a.mime || "image/png"};base64,${a.data}` : all;
+  });
+}
+function visSteps(body) {
+  const steps = [...String(body).matchAll(/(?:<!--|\/\/|\/\*)\s*[ée]tape\s*\d*\s*[:.\-–]\s*(.+?)\s*(?:-->|\*\/|$)/gim)].map((m) => m[1].replace(/\s*(-->|\*\/)\s*$/, "")).slice(-8);
+  const list = steps.length ? steps.map((t, i) => `<li class="${i === steps.length - 1 ? "now" : ""}">${esc(t.replace(/\.?$/, "."))}</li>`).join("")
+    : `<li class="now">Naim dessine le visuel… <span class="muted">${body.split("\n").length} lignes</span></li>`;
+  return `<div class="vis vbuild"><ul class="vsteps">${list}</ul><div class="vshim"></div></div>`;
+}
 function visuelDoc(body) {
   const cs = getComputedStyle(document.documentElement);
   const v = ["bg", "panel", "side", "hover", "text", "muted", "line", "accent", "code", "brand", "ok", "warn", "danger"]
@@ -4768,7 +4830,7 @@ function visuelDoc(body) {
   const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https: ${location.origin}; font-src data:">`
     + `<style>:root { ${v} color-scheme: ${dark ? "dark" : "light"}; } html, body { margin: 0; background: transparent; color: var(--text);`
     + ` font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; } body { padding: 4px; } * { box-sizing: border-box; }</style>`
-    + visHeight() + visLibsHead(body);
+    + visHeight() + visSnap() + visLibsHead(body);
   body = body.replace(/<meta[^>]+name=["']?viewport[^>]*>/gi, "");  // the same zoom in a visual written as a whole page
   return whole ? body.replace(/<head[^>]*>/i, (m) => m + head).replace(/^(?![\s\S]*<head)/, head) : `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
 }

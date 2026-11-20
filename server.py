@@ -237,7 +237,13 @@ FILE_OUT_RE = re.compile(r"\b(?:en|un|une|dans un|au format|comme|sous forme d'u
 # skills whose result is a block drawn IN the conversation (a sheet, a board, a dashboard, a graph, a simulation):
 # no file, no command — the block in the reply is the work
 CHAT_BLOCK = {"tableur-vivant": "feuille", "tableau-blanc": "tableau-blanc", "donnees": "donnees",
-              "maths-affichage": "graphe (une courbe) ou ```diagramme (barres, camembert…)", "animation-algorithme": "simulation"}
+              "maths-affichage": "graphe (une courbe) ou ```diagramme (barres, camembert…)", "animation-algorithme": "simulation",
+              "dessin-anime": "visuel (le dessin animé, avec image:1 pour l'image donnée)"}
+# « autre style ? », « un autre type de graphe », « présente-le autrement »: the same values, another picture, invented
+STYLE_ASK_RE = re.compile(r"\b(?:autres?\s+(?:style|type|fa[cç]on|version|rendu|pr[ée]sentation|forme|mod[eè]le|graphe|graphique|"
+                          r"visuel|repr[ée]sentation|design|look)s?|autrement|(?:style|type|graphe|visuel)\s+diff[ée]rent|change\w*\s+(?:de\s+)?"
+                          r"(?:le\s+)?(?:style|type|look|design))\b", re.I)
+STYLE_EXAMPLE = Path(__file__).resolve().parent / "plugins_builtin/visuel/skills/visuel/exemples/zones-colorees.html"
 RETRY_UNSEEN = (" L'utilisateur n'a pas vu ta première version : ta phrase s'adresse à lui comme une première réponse, "
                 "sans parler d'erreur, de correction ni de version précédente.")
 
@@ -2664,10 +2670,10 @@ class Handler(BaseHTTPRequestHandler):
                 if generic_app:
                     keep = ("app-macos", "react-app", "react-native")  # an application stays an application
                 found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k and k["name"] in keep] if keep else []
-                if not found and re.search(r"\b(respect\w*|pas mis|pas fait|toujours|encore|m[êe]me style|le style|l'affichage|enrichi\w*|"
+                if not found and (STYLE_ASK_RE.search(m_) or re.search(r"\b(respect\w*|pas mis|pas fait|toujours|encore|m[êe]me style|le style|l'affichage|enrichi\w*|"
                                            r"refai\w*|recommence\w*|c'?est pas [cç]a|pas ce que|la suite|suivant\w*|continu\w*|de plus|en plus|"
                                            r"maintenant|pareil|idem|(?:la )?m[êe]me chose|et pour|fais(?:-le)? pour|pour (?:ce|cette|ces|celui|celle)\b|"
-                                           r"avec (?:ce|cette|ces)\b|celui-ci|celle-ci|un autre|une autre)\b", m_, re.I):
+                                           r"avec (?:ce|cette|ces)\b|celui-ci|celle-ci|un autre|une autre)\b", m_, re.I)):
                     # a remark on the work under way (« tu n'as pas respecté le style ») or its next part (« fais la suite »)
                     # keeps that work's skill — the one of the document being made (pdf-pro…) before a subject or a sending
                     found = [k for k in (ext.match_skill(t, helper.root, helper.disabled_skills) for t in reversed(asked_before)) if k]
@@ -2694,7 +2700,23 @@ class Handler(BaseHTTPRequestHandler):
                 sheet_here = sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees") and not file_out
                 block_here = sk["name"] in CHAT_BLOCK and not file_out
                 file_work = not block_here  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
-                if block_here and not sim_here:
+                if block_here and not sim_here and STYLE_ASK_RE.search(body["message"] or ""):
+                    # another picture of the same thing: a ```visuel invented for it, not the block already given
+                    ex = STYLE_EXAMPLE.read_text() if STYLE_EXAMPLE.exists() else ""
+                    messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                        "\n\n(On te demande un AUTRE style : réponds ici par une phrase, puis UN bloc ```visuel (HTML, CSS, "
+                        "script) que tu inventes pour ces mêmes valeurs, différent de ta réponse précédente — par exemple des "
+                        "zones colorées entre les courbes, des barres groupées avec un bouton qui bascule la vue, une "
+                        "construction pas à pas avec Précédent / Suivant, un tableau de valeurs coloré, un point qui parcourt "
+                        "la courbe. Règles : les valeurs sont CALCULÉES par le script à partir des équations ou des données "
+                        "(jamais écrites à la main), les couleurs du thème (var(--text), var(--muted), var(--line), "
+                        "var(--side)), la légende en haut, les valeurs exactes dans des cartes en bas, un commentaire "
+                        "`// étape : …` (ou `<!-- étape : … -->`) avant chaque partie : Naim les montre pendant que tu "
+                        "écris. Puis 2 ou 3 phrases sur ce que montre ce style, et deux autres styles possibles. Aucun "
+                        "fichier, aucune commande.)"
+                        + (f"\n\n[Exemple vérifié de la STRUCTURE (un style parmi d'autres : si ta réponse précédente "
+                           f"avait déjà ces zones colorées, invente-en un autre)]\n```html\n{ex.strip()}\n```" if ex else "")))
+                elif block_here and not sim_here:
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                         f"\n\n(Réponds ici, dans la conversation : une phrase, puis le bloc ```{CHAT_BLOCK[sk['name']]} — Naim le "
                         "dessine et l'utilisateur s'en sert là. Aucun fichier, aucune commande, aucun outil : les valeurs viennent "

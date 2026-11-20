@@ -1,0 +1,72 @@
+<!-- étape : Le plan : la photo devient le décor, le personnage est redessiné d'après elle -->
+<style>
+  .da { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #20304a; }
+  .da .decor { position: absolute; inset: -6%; background: center / cover no-repeat; will-change: transform; }
+  .da svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .da .st { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 82%; padding: 6px 14px; border-radius: 10px;
+    background: rgb(0 0 0 / .55); color: #fff; font-size: 15px; text-align: center; transition: opacity .3s; }
+  .ctl { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .ctl button { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 8px; padding: 6px 14px; font: inherit; cursor: pointer; }
+  .ctl .bar { flex: 1; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .ctl .bar i { display: block; height: 100%; width: 0; background: var(--text); }
+</style>
+<div class="da" id="da">
+  <div class="decor" id="decor"></div>
+  <svg viewBox="0 0 1600 900" aria-label="Le personnage">
+    <!-- étape : Le personnage, en formes simples, aux couleurs de l'image -->
+    <g id="perso">
+      <ellipse cx="0" cy="250" rx="110" ry="22" fill="rgb(0 0 0 / .25)"/>
+      <g id="corps">
+        <rect x="-70" y="40" width="140" height="170" rx="60" fill="#e0703f"/>
+        <g id="bras"><rect x="55" y="70" width="34" height="110" rx="17" fill="#c95f33"/></g>
+        <rect x="-89" y="70" width="34" height="110" rx="17" fill="#c95f33"/>
+        <circle cx="0" cy="-20" r="88" fill="#f2c79b"/>
+        <path d="M-88 -40 Q0 -150 88 -40 Q60 -90 0 -95 Q-60 -90 -88 -40Z" fill="#3a2a22"/>
+        <g id="yeux"><ellipse cx="-30" cy="-25" rx="9" ry="12" fill="#222"/><ellipse cx="30" cy="-25" rx="9" ry="12" fill="#222"/></g>
+        <path id="bouche" d="M-24 22 Q0 40 24 22" stroke="#222" stroke-width="6" fill="none" stroke-linecap="round"/>
+      </g>
+    </g>
+    <g id="bulle" opacity="0"><rect x="0" y="0" width="380" height="96" rx="24" fill="#fff"/><path d="M60 96 L40 130 L100 96Z" fill="#fff"/>
+      <text id="bulleT" x="190" y="58" text-anchor="middle" font-size="34" fill="#222"></text></g>
+  </svg>
+  <div class="st" id="st"></div>
+</div>
+<div class="ctl"><button id="play">Pause</button><button id="again">Rejouer</button><span class="bar"><i id="prog"></i></span><span id="sc"></span></div>
+<script>
+// étape : Le scénario, en scènes : ce que fait chacun, et le sous-titre
+const SCENES = [
+  { duree: 4, st: "Un matin, Nour arrive dans le jardin.", action: "marche", de: 200, a: 760 },
+  { duree: 3.5, st: "Il aperçoit quelqu'un et fait signe.", action: "salue", de: 760, a: 760, dit: "Coucou !" },
+  { duree: 4, st: "Puis il repart, tout content.", action: "saute", de: 760, a: 1450 },
+];
+const IMG = "image:1";  // l'image donnée : remplacée par Naim ; sans image, un ciel en dégradé
+const decor = document.getElementById("decor");
+decor.style.backgroundImage = IMG.startsWith("data:") ? `url("${IMG}")` : "linear-gradient(#7fb2ee, #cfe6c8)";
+// étape : Le moteur : une horloge, chaque scène calcule sa position à l'instant t
+const $ = (id) => document.getElementById(id), total = SCENES.reduce((a, s) => a + s.duree, 0);
+const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let t = 0, last = null, enPause = false;
+const doux = (u) => u < .5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+function dessine() {
+  let t0 = 0, k = 0; while (k < SCENES.length - 1 && t >= t0 + SCENES[k].duree) t0 += SCENES[k++].duree;
+  const s = SCENES[k], u = Math.min(1, (t - t0) / s.duree), x = s.de + (s.a - s.de) * doux(u);
+  const pas = s.action === "marche" ? Math.sin(t * 9) * 8 : 0, saut = s.action === "saute" ? Math.abs(Math.sin(t * 6)) * 60 : 0;
+  $("perso").setAttribute("transform", `translate(${x} ${560 - Math.abs(pas) - saut}) rotate(${pas / 3})`);
+  $("bras").setAttribute("transform", s.action === "salue" ? `rotate(${-140 + Math.sin(t * 10) * 25} 72 80)` : `rotate(${pas * 2} 72 80)`);
+  $("yeux").setAttribute("transform", (t % 3.2) < .12 ? "translate(0 -25) scale(1 .1) translate(0 25)" : "");  // il cligne des yeux
+  $("bouche").setAttribute("d", s.dit && Math.sin(t * 14) > 0 ? "M-24 20 Q0 52 24 20" : "M-24 22 Q0 40 24 22");
+  $("bulle").setAttribute("opacity", s.dit ? 1 : 0); $("bulle").setAttribute("transform", `translate(${x + 60} 300)`); $("bulleT").textContent = s.dit || "";
+  if (!calme) decor.style.transform = `scale(${1.04 + t / total * .06}) translate(${-x / 160}px, 0)`;  // le décor vit : zoom lent et parallaxe
+  $("st").textContent = s.st; $("prog").style.width = (t / total * 100) + "%"; $("sc").textContent = `Scène ${k + 1} / ${SCENES.length}`;
+}
+// étape : Lecture, pause, rejouer
+function boucle(now) {
+  if (last != null && !enPause) t = Math.min(total, t + (now - last) / 1000);
+  last = now; dessine();
+  if (t >= total) { $("play").textContent = "Lecture"; enPause = true; }
+  requestAnimationFrame(boucle);
+}
+$("play").onclick = () => { if (t >= total) t = 0; enPause = !enPause; $("play").textContent = enPause ? "Lecture" : "Pause"; };
+$("again").onclick = () => { t = 0; enPause = false; $("play").textContent = "Pause"; };
+requestAnimationFrame(boucle);
+</script>
