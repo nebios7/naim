@@ -5049,6 +5049,15 @@ class ALoopSimulationLooksRight(unittest.TestCase):
         code, out = self.check(base.replace("Un tour de plus : <b>tours = ${tours}</b>.", "Un tour de plus : ${null}"))
         self.assertIn("« null »", out)
 
+    def test_recursion_example_and_unreadable_layout(self):
+        code, out = self.check((self.SK / "exemples/recursivite-factorielle.js").read_text())
+        self.assertEqual(code, 0, out)
+        base = (self.SK / "exemples/boucle-while.js").read_text()
+        code, out = self.check(base.replace('s += `</svg>`;', 's += `<text x="100" y="100">bonjour</text><text x="104" y="102">bonsoir</text></svg>`;'))
+        self.assertIn("se chevauchent", out)
+        code, out = self.check(base.replace('s += `</svg>`;', 's += `<rect x="10" y="10" width="100" height="40"/><rect x="60" y="30" width="100" height="40"/></svg>`;'))
+        self.assertIn("deux cases se coupent", out)
+
     def test_no_sort_counters_for_a_drawing(self):
         page = (self.SK / "moteur.html").read_text()
         self.assertIn("A.type==='tri'||A.type==='recherche'||!A.type)?['COMPARAISONS','ÉCHANGES']:[]", page)
@@ -5056,10 +5065,11 @@ class ALoopSimulationLooksRight(unittest.TestCase):
     def test_another_subject_does_not_copy_the_drawing(self):
         import server
         self.assertEqual(server.sim_pick("explique la boucle while"), ("boucle-while", True))
-        name, fits = server.sim_pick("anime la récursivité de factorielle")
+        self.assertEqual(server.sim_pick("anime la récursivité de factorielle"), ("recursivite-factorielle", True))
+        name, fits = server.sim_pick("anime une liste chaînée")
         self.assertFalse(fits)
-        self.assertNotEqual(name, "tri-insertion")  # never sort bars for a recursion
-        self.assertIn("ne le recopie pas", server.sim_example_note("simule les tours de hanoi"))
+        self.assertNotEqual(name, "tri-insertion")  # never sort bars for a linked list
+        self.assertIn("ne le recopie pas", server.sim_example_note("anime une liste chaînée"))
         self.assertIn("invente mieux", server.sim_example_note("anime le tri à bulles"))
         self.assertIn("sim_example_note(recent)", (ROOT / "server.py").read_text())
 

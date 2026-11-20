@@ -39,7 +39,39 @@ function outside(html) {
     if (out) bad.push('<' + t[1] + ' ' + t[2].trim().slice(0, 60) + '>');
   }
   return bad.length ? 'le dessin sort du cadre viewBox="' + m[1] + ' ' + m[2] + ' ' + W + ' ' + H + '" et sera coupé : ' + bad.join(', ')
-    + '. Calcule l\'échelle à partir des valeurs (par exemple x = marge + v / max * (largeur - 2 * marge)) pour que tout reste dedans.' : '';
+    + '. Calcule les positions à partir de ce qu\'il y a à montrer : une échelle tirée des valeurs (x = marge + (v - min) / (max - min) * (largeur - 2 * marge)), '
+    + 'une taille de case tirée du nombre de cases (h = hauteur utile / nombre), pour que tout reste dedans.' : '';
+}
+// two texts on top of each other, or two boxes that cut each other (neither inside the other), cannot be read
+function overlaps(html) {
+  var num = function (a, k, d) { var q = new RegExp('(?:^|\\s)' + k + '="(-?[\\d.]+)"').exec(a); return q ? +q[1] : d; };
+  var texts = [], rects = [], re = /<text\b([^>]*)>([\s\S]*?)<\/text>/g, t;
+  while ((t = re.exec(html))) {
+    var a = t[1], str = t[2].replace(/<[^>]+>/g, '').replace(/&\w+;/g, '_').trim();
+    if (!str) continue;
+    var fs = num(a, 'font-size', 14), w = str.length * fs * 0.56, x = num(a, 'x', 0), y = num(a, 'y', 0);
+    var anc = (/text-anchor="(\w+)"/.exec(a) || [])[1];
+    var x0 = anc === 'middle' ? x - w / 2 : anc === 'end' ? x - w : x;
+    texts.push({x0: x0, x1: x0 + w, y0: y - fs * 0.78, y1: y + fs * 0.22, s: str});
+  }
+  var rr = /<rect\b([^>]*)>/g;
+  while ((t = rr.exec(html))) {
+    var b = t[1], rw = num(b, 'width', 0), rh = num(b, 'height', 0);
+    if (rw > 0 && rh > 0) rects.push({x0: num(b, 'x', 0), y0: num(b, 'y', 0), x1: num(b, 'x', 0) + rw, y1: num(b, 'y', 0) + rh});
+  }
+  var inter = function (p, q) { return Math.max(0, Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0)) * Math.max(0, Math.min(p.y1, q.y1) - Math.max(p.y0, q.y0)); };
+  var area = function (p) { return (p.x1 - p.x0) * (p.y1 - p.y0); };
+  for (var i = 0; i < texts.length; i++) for (var j = i + 1; j < texts.length; j++) {
+    if (inter(texts[i], texts[j]) > 0.25 * Math.min(area(texts[i]), area(texts[j])))
+      return 'les textes « ' + texts[i].s.slice(0, 30) + ' » et « ' + texts[j].s.slice(0, 30) + ' » se chevauchent : donne à chaque texte sa place (une ligne, une case, un côté).';
+  }
+  var inside = function (p, q) { return p.x0 >= q.x0 - 1 && p.x1 <= q.x1 + 1 && p.y0 >= q.y0 - 1 && p.y1 <= q.y1 + 1; };
+  for (var i2 = 0; i2 < rects.length; i2++) for (var j2 = i2 + 1; j2 < rects.length; j2++) {
+    var P1 = rects[i2], Q1 = rects[j2];
+    if (inter(P1, Q1) > 4 && !inside(P1, Q1) && !inside(Q1, P1))
+      return 'deux cases se coupent (x=' + Math.round(P1.x0) + ' y=' + Math.round(P1.y0) + ' et x=' + Math.round(Q1.x0) + ' y=' + Math.round(Q1.y0) + ') : une case est soit à côté d\'une autre, soit entièrement dedans.';
+  }
+  return '';
 }
 try {
   if (typeof ALGO === 'undefined') throw new Error("ALGO n'est pas défini : le fichier doit commencer par « const ALGO = { … } ».");
@@ -95,7 +127,7 @@ try {
       catch (e) { __res.dessin = 'dessiner() plante à l\'étape ' + (di + 1) + ' : ' + String(e && e.message || e)
                   + " (elle ne reçoit que l'étape : ce que tu passes dans P(…, { dessin: {…} }) arrive dans etape.extra)"; break; }
       if (zone.innerHTML || zone.children.length) drawn++;
-      if (!__res.dessin && zone.innerHTML) { var off = outside(String(zone.innerHTML)); if (off) __res.dessin = 'à l\'étape ' + (di + 1) + ', ' + off; }
+      if (!__res.dessin && zone.innerHTML) { var off = outside(String(zone.innerHTML)) || overlaps(String(zone.innerHTML)); if (off) __res.dessin = 'à l\'étape ' + (di + 1) + ', ' + off; }
     }
     if (!__res.dessin && !drawn) __res.dessin = "dessiner() ne dessine rien : remplis zone.innerHTML (un <svg …>…</svg>)";
   } else if (ALGO.type === 'autre') {

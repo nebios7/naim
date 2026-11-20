@@ -245,7 +245,8 @@ def sim_dir():
 # what each verified example draws, said to the model so that it copies the plan, not the drawing of another subject
 SIM_SHAPES = {"produit-matrices": "des grilles de cases", "pythagore": "une figure de géométrie", "dijkstra": "un graphe (nœuds et arêtes)",
               "recherche-dichotomique": "une recherche dans un tableau (barres)", "tri-insertion": "un tri (barres)",
-              "boucle-while": "une boucle (un axe où la variable avance)"}
+              "boucle-while": "une boucle (un axe où la variable avance)",
+              "recursivite-factorielle": "une récursivité (la pile d'appels qui monte puis se dépile)"}
 
 
 def sim_pick(text):
@@ -254,6 +255,7 @@ def sim_pick(text):
     for name, rx in (("produit-matrices", r"matric|grille|tableau 2d|jeu de la vie|morpion|programmation dynamique"),
                      ("pythagore", r"g[ée]om[ée]tr|pythagore|thal[èe]s|triangle|cercle|angle|aire|th[ée]or[èe]me|figure"),
                      ("dijkstra", r"graphe|dijkstra|chemin|r[ée]seau|arbre|parcours|bfs|dfs|n[œo]euds?"),
+                     ("recursivite-factorielle", r"r[ée]cursi\w*|factorielle|fibonacci|hano[iï]|piles? d'appels?|s'appelle elle-m[êe]me"),
                      ("recherche-dichotomique", r"recherche|dichotom|cherche"),
                      ("tri-insertion", r"\btri|\bsort|quicksort"),
                      ("boucle-while", r"\bboucles?\b|\bwhile\b|\bfor\b|tant que|compteur|it[ée]ration|variables?")):

@@ -130,7 +130,8 @@ chaque étape comme tu veux, dans le style qui montre le mieux l'idée. Ce que t
 | géométrie : théorème, construction, transformation, aire, angle | figure qui se construit | `exemples/pythagore.js` |
 | graphe, réseau, chemin, arbre, parcours (BFS, DFS, Dijkstra) | nœuds et arêtes | `exemples/dijkstra.js` |
 | boucle while / for, compteur, variables qui changent | axe où la variable avance, condition vraie / fausse, sortie des print | `exemples/boucle-while.js` |
-| récursivité, pile d'appels, Hanoï, liste chaînée, file | boîtes empilées ou reliées | invente à partir des précédents |
+| récursivité, pile d'appels, factorielle, Fibonacci, Hanoï | pile de cases : un appel s'empile, attend, puis se dépile en renvoyant sa valeur | `exemples/recursivite-factorielle.js` |
+| liste chaînée, file | boîtes reliées | invente à partir des précédents |
 
 Lis l'exemple le plus proche (`read_file`, dans le dossier de ce skill : `~/.naim/plugins/algorithmique/skills/animation-algorithme/exemples/`),
 garde son plan (`build` qui exécute pour de vrai, `P` à chaque ligne importante, `dessiner` qui ne fait QUE dessiner
@@ -146,7 +147,9 @@ l'étape reçue), puis invente le dessin du sujet demandé.
   petit `<rect>` de fond au milieu ;
 - **une figure** : calcule les points à partir des valeurs (à l'échelle), puis cadre le `viewBox` sur tous les points
   avec une marge : rien n'est coupé, quelles que soient les valeurs ;
-- **les textes** ne se chevauchent pas : une étiquette dans le triangle le long de son côté, une valeur sous son nœud ;
+- **la taille des cases** vient de leur nombre (`h = hauteur utile / nombre de cases`) : 2 ou 8 cases tiennent ;
+- **les textes** ne se chevauchent pas, deux cases ne se coupent pas (l'une est à côté de l'autre ou entièrement
+  dedans) : la vérification refuse un dessin illisible : une étiquette dans le triangle le long de son côté, une valeur sous son nœud ;
 - **ce qui change** d'une étape à l'autre se voit tout de suite : une couleur, une case qui se remplit, un trait
   plus épais ; le reste ne bouge pas ;
 - **tout reste dans le cadre** : l'échelle vient des valeurs (`x = marge + (v - min) / (max - min) * (largeur - 2 * marge)`),
