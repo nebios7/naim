@@ -5189,6 +5189,22 @@ class AnotherStyleAndACartoonInventedByNaim(unittest.TestCase):
         self.assertIn("Un autre style", (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text())
 
 
+class WordDocumentsKeepTheirPromises(unittest.TestCase):
+    """The Word skill: a page limit is kept by cutting words (not the reading comfort, never a safety or money
+    condition); a received .docx is opened with Python (no unzip); the preview comes from Word, else LibreOffice; the
+    docx scripts are found where they really are (~/.naim/skills or the library)."""
+
+    def test_skill_and_preview(self):
+        import skills_library
+        body = skills_library.BUILTIN_SKILLS["word"][1] if hasattr(skills_library, "BUILTIN_SKILLS") else (ROOT / "skills_library.py").read_text()
+        for needle in ("## 3 bis. Tenir dans un nombre de pages", "jamais sous 10 pt", "zipfile.ZipFile(sys.argv[1]).extractall",
+                       "zip -XrDy", "~/.naim/skills-bibliotheque/docx", "accept_changes.py"):
+            self.assertIn(needle, body)
+        self.assertNotIn("LibreOffice n'est pas installé", body)
+        sh = (ROOT / "skills_extra/word/apercu.sh").read_text()
+        self.assertIn('--headless --convert-to pdf --outdir "$tmp"', sh)
+
+
 class CompressionShowsItsProgress(unittest.TestCase):
     """A long conversation being summarized: a ring of dots, the sentence, a bar with its percentage read from the
     engine — no emoji line."""

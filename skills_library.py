@@ -113,26 +113,42 @@ for p in doc.paragraphs:
 doc.save("lettre-modifie.docx")
 ```
 Word coupe souvent une phrase en plusieurs morceaux (runs) : si le texte cherché n'est dans aucun run, fusionne-les
-d'abord : `~/.naim/docs-venv/bin/python ~/.naim/skills/docx/scripts/merge_runs.py lettre.docx -o fusion.docx`.
+d'abord : `~/.naim/docs-venv/bin/python "$(ls -d ~/.naim/skills/docx ~/.naim/skills-bibliotheque/docx 2>/dev/null | head -1)"/scripts/merge_runs.py lettre.docx -o fusion.docx`.
 Les tableaux : `doc.tables[0].cell(1, 2).text`.
+
+## 3 bis. Tenir dans un nombre de pages
+Le document dépasse la limite demandée (« une page », « 3 pages max ») : enlève des mots, pas du confort de lecture.
+Garde le texte à 11–12 pt et des marges de 2 à 2,5 cm (ou celles du fichier de l'utilisateur) ; retire d'abord les
+répétitions et les phrases creuses, les faits en dernier, et seulement ce qu'il faut. Exception : un avertissement de
+sécurité, une dose, une limite, un prix, des frais, une clause de contrat gardent tout leur sens et toutes leurs
+conditions (on agit d'après eux). Si ça ne tient pas sans les abîmer : réduis un peu les marges ou l'interligne (texte
+jamais sous 10 pt), ou laisse dépasser — et dis lequel et pourquoi. Puis compare avec l'original et liste chaque fait,
+nom ou chiffre retiré ; ne dis « tout est gardé » que si c'est vrai. Si l'utilisateur permet de réduire la police ou dit
+de ne rien couper, fais ce qu'il dit.
 
 ## 4. VÉRIFIER (obligatoire avant de répondre)
 ```bash
-bash ~/.naim/skills/word/apercu.sh "rapport.docx"      # → rapport.apercu.pdf (exporté par Word lui-même)
+bash ~/.naim/skills/word/apercu.sh "rapport.docx"      # → rapport.apercu.pdf (Word, sinon LibreOffice)
 ```
 puis `look_at` sur le PDF : titres, tableaux, pages, rien de coupé ou de vide. Corrige et recommence sinon.
 Supprime l'aperçu ensuite (il est à côté du document). La première fois, Word peut demander l'accès au dossier :
 l'utilisateur clique « Autoriser ».
 
 ## 5. Suivi des modifications et commentaires (XML)
-Scripts prêts dans `~/.naim/skills/docx/scripts` (lis `~/.naim/skills/docx/SKILL.md`, sections « Editing » et
+Scripts prêts dans la skill docx, dossier "$(ls -d ~/.naim/skills/docx ~/.naim/skills-bibliotheque/docx 2>/dev/null | head -1)"/scripts (dans ~/.naim/skills ou rangée dans la bibliothèque :
+écris ce chemin tel quel dans ta commande ; lis son SKILL.md, sections « Editing » et
 « Comments », pour le détail ; lance-les avec `~/.naim/docs-venv/bin/python`) :
-- Ouvrir : `mkdir x && cd x && unzip -q ../doc.docx` · éditer `word/document.xml` sans le reformater · refermer :
-  `cd x && zip -Xr ../doc-modifie.docx .`
+- Ouvrir avec Python, pas `unzip` (un .docx reçu peut cacher des liens symboliques qui écriraient ailleurs) :
+  `python3 -c "import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall('x')" doc.docx` · éditer
+  `word/document.xml` sans le reformater · refermer : `(cd x && rm -f ../doc-modifie.docx && zip -XrDy ../doc-modifie.docx .)`
+  (`-D` : sans entrées de dossiers, qu'un Word en ligne refuse).
 - Modification suivie : le texte supprimé dans `<w:del w:id="1" w:author="Naim" w:date="2026-01-01T00:00:00Z">`
   avec `<w:delText>`, l'ajout dans `<w:ins …>` ; vérifier : `office/validate.py doc-modifie.docx --original doc.docx --author Naim`
 - Commentaire : `comment.py doc.docx "Préciser les dates" -o commente.docx` puis placer les marques qu'il affiche.
-- Tout accepter : `pandoc --track-changes=accept doc.docx -o propre.docx` (LibreOffice n'est pas installé).
+- Tout accepter : `soffice --headless --convert-to docx --outdir propre/ doc.docx` après avoir accepté les
+  modifications avec le script `accept_changes.py` de la skill docx (LibreOffice relie un paragraphe dont la marque
+  est supprimée au suivant, comme Word) ; `pandoc --track-changes=accept` laisse un paragraphe vide à sa place.
+  Une puce vide dans un aperçu vient de cet outil, pas du document : regarde le XML avant de « corriger ».
 
 ## 6. Répondre
 Le chemin du document, ce qu'il contient en 2 lignes, et ce que tu as vérifié dans l'aperçu.

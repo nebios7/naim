@@ -2,7 +2,8 @@
 # Aperçu fidèle d'un document Word (.docx/.doc/.rtf) pour le vérifier : un PDF à côté du fichier.
 #   bash ~/.naim/skills/word/apercu.sh "chemin/document.docx"   → affiche le chemin du PDF (puis look_at dessus)
 # 1. Microsoft Word s'il est installé (rendu exact : en-têtes, numéros de page, tableaux, sauts de page)
-# 2. sinon Quick Look de macOS (une image de la première page, styles approchés)
+# 2. sinon LibreOffice (toutes les pages, rendu fidèle)
+# 3. sinon Quick Look de macOS (une image de la première page, styles approchés)
 set -e
 src="$1"
 [ -f "$src" ] || { echo "error: fichier introuvable : $src" >&2; exit 1; }
@@ -30,6 +31,16 @@ EOF
   echo "(Word n'a pas pu exporter : la première fois, autorise Word à ouvrir ce dossier, puis recommence)" >&2
 fi
 out="$(dirname "$abs")"
+# 2. LibreOffice: every page, the tables and the page breaks as they are
+so="$(command -v soffice || true)"; [ -z "$so" ] && [ -x /Applications/LibreOffice.app/Contents/MacOS/soffice ] && so=/Applications/LibreOffice.app/Contents/MacOS/soffice
+if [ -n "$so" ]; then
+  tmp="$(mktemp -d)"
+  if "$so" --headless --convert-to pdf --outdir "$tmp" "$abs" >/dev/null 2>&1; then
+    got="$(ls "$tmp"/*.pdf 2>/dev/null | head -1)"
+    [ -n "$got" ] && mv "$got" "$pdf" && rmdir "$tmp" 2>/dev/null; [ -f "$pdf" ] && { echo "$pdf"; exit 0; }
+  fi
+fi
+# 3. Quick Look: an image of the first page, styles approached
 qlmanage -t -s 1400 -o "$out" "$abs" >/dev/null 2>&1 || true
 [ -f "$abs.png" ] && { echo "$abs.png  (aperçu Quick Look de la 1re page : tableaux et sauts de page approchés)"; exit 0; }
 echo "error: aucun aperçu possible (ni Word ni Quick Look)" >&2
