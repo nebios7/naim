@@ -3877,12 +3877,13 @@ class MoreGraphTypes(unittest.TestCase):
 
     JS = r"""
 const fs = require('fs'), src = fs.readFileSync(process.argv[1], 'utf8');
-const grab = (n) => { const i = src.search(new RegExp('^function ' + n + '\\(', 'm')); let d = 0, j = src.indexOf('{', i);
-  for (; j < src.length; j++) { if (src[j] == '{') d++; else if (src[j] == '}' && --d == 0) break; } return src.slice(i, j + 1); };
+const grab = (n) => { const i = src.search(new RegExp('^(function ' + n + '\\(|const ' + n + ' =)', 'm')); if (i < 0) throw new Error('absent: ' + n);
+  return src.slice(i, src.slice(i, i + 5) === 'const' ? src.indexOf(';\n', i) + 1 : src.indexOf('\n}\n', i) + 2); };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const frNum = (v) => String(+v.toFixed(6)).replace('.', ',').replace('-', '−');
 var graphSeq = 0;
-eval(['mathFn', 'niceStep', 'graphCard', 'graphHtml', 'chartHtml'].map(grab).join('\n'));
+const svgI = () => '<svg></svg>';
+eval(['G_COLORS', 'G_SUB', 'gName', 'gCurveLabel', 'gExpr', 'gFrac', 'gDec', 'gPt', 'gLinear', 'gRoots', 'mathFn', 'niceStep', 'graphCard', 'graphHtml', 'chartHtml'].map(grab).join('\n'));
 const out = {};
 const G = { param: 'x(t) = cos(3t)\ny(t) = sin(2t)', polar: 'r = 1 + cos(θ)', implicit: 'x^2 + y^2 = 4',
   region: 'y >= x^2 - 2\nx + y < 3', data: 'nuage : (1;2,1) (2;3,9) (3;6,2)\najustement', old: 'f(x) = x^2 - 2x - 3\nA(0;-3)' };
@@ -4021,8 +4022,8 @@ class MultiplicationStepByStep(unittest.TestCase):
 
     JS = r"""
 const fs = require('fs'), src = fs.readFileSync(process.argv[1], 'utf8');
-const grab = (n) => { const i = src.search(new RegExp('^function ' + n + '\\(', 'm')); let d = 0, j = src.indexOf('{', i);
-  for (; j < src.length; j++) { if (src[j] == '{') d++; else if (src[j] == '}' && --d == 0) break; } return src.slice(i, j + 1); };
+const grab = (n) => { const i = src.search(new RegExp('^(function ' + n + '\\(|const ' + n + ' =)', 'm')); if (i < 0) throw new Error('absent: ' + n);
+  return src.slice(i, src.slice(i, i + 5) === 'const' ? src.indexOf(';\n', i) + 1 : src.indexOf('\n}\n', i) + 2); };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 eval(src.match(/^const COLNAME[^\n]*/m)[0].replace(/^const /, 'var ') + '\n' + grab('opLearnHtml'));
 const h = opLearnHtml('347 × 26');
@@ -5049,7 +5050,7 @@ class ALiveSheetInTheConversation(unittest.TestCase):
         body = (ROOT / "plugins_builtin/tableur/skills/tableur-vivant/SKILL.md").read_text()
         self.assertIn("```feuille", body)
         self.assertIn("=SOMME(C2:C6)", body)
-        self.assertIn('sheet_here = sk["name"] in ("tableur-vivant"', (ROOT / "server.py").read_text())
+        self.assertIn('sheet_here = sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees") and not file_out', (ROOT / "server.py").read_text())
 
 
 class AWhiteboardAndADashboardInTheConversation(unittest.TestCase):
@@ -5080,21 +5081,71 @@ class AWhiteboardAndADashboardInTheConversation(unittest.TestCase):
         self.assertFalse(_re.search(da, "fais un tableau de bord de mes ventes en excel", _re.I))
         self.assertIn("```tableau-blanc", (ROOT / "plugins_builtin/tableau-blanc/skills/tableau-blanc/SKILL.md").read_text())
         self.assertIn("```donnees", (ROOT / "plugins_builtin/donnees/skills/donnees/SKILL.md").read_text())
-        self.assertIn('sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees")', (ROOT / "server.py").read_text())
+        self.assertIn('sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees") and not file_out', (ROOT / "server.py").read_text())
 
 
-class GraphsWearTheSheetsCard(unittest.TestCase):
-    """Naim's charts (bars, curves, pies, histograms) and function graphs are drawn in the spreadsheet's card: a title
-    bar with Copier / SVG, colours that follow the theme; every chart type stays."""
+class AGraphLikeTheConversationsOwn(unittest.TestCase):
+    """« le graphe des dépenses », « deux droites », « un graphe dynamique »: drawn IN the conversation from the block —
+    the legend at the right (equation, slope, intercept), the points on the axes and the intersections computed, a ⋯ menu
+    (copy as an image, SVG, PNG), and sliders that move the curves; never a file or a script for it."""
+
+    JS = r"""
+const fs = require('fs'), src = fs.readFileSync(process.argv[1], 'utf8');
+const grab = (n) => { const i = src.search(new RegExp('^(function ' + n + '\\(|const ' + n + ' =)', 'm')); if (i < 0) throw new Error('absent: ' + n);
+  return src.slice(i, src.slice(i, i + 5) === 'const' ? src.indexOf(';\n', i) + 1 : src.indexOf('\n}\n', i) + 2); };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const frNum = (v) => String(+v.toFixed(6)).replace('.', ',').replace('-', '−');
+const svgI = () => '<svg></svg>';
+var graphSeq = 0;
+eval(['G_COLORS', 'G_SUB', 'gName', 'gCurveLabel', 'gExpr', 'gFrac', 'gDec', 'gPt', 'gLinear', 'gRoots', 'mathFn', 'niceStep', 'graphCard', 'graphHtml', 'gdynParse', 'gdynShow'].map(grab).join('\n'));
+const two = graphHtml('d1(x) = 3/4 x - 7\nd2(x) = -7/8 x + 4'), par = graphHtml('f(x) = x^2 - 2\ng(x) = x');
+const dyn = graphHtml('curseur m = 3/4 (-3..3) « Pente m »\nd1(x) = m*x - 7'), P = gdynParse('curseur m = 3/4 (-3..3) « Pente m »\nd1(x) = m*x - 7');
+console.log(JSON.stringify({ inter: /Intersection/.test(two), exact: two.includes('(88/13 ; −25/13)'), slope: two.includes('pente 3/4 (monte)'),
+  intercept: two.includes("ordonnée à l'origine −7"), axes: two.includes('(9,33 ; 0)') && two.includes('(0 ; 4)'), dashed: /stroke-dasharray="8 6"/.test(two),
+  more: two.includes('class="gmore"'), roots: par.includes('(−1 ; −1)') && par.includes('(2 ; 2)'), square: par.includes('x² − 2'),
+  dyn: dyn.startsWith('<div class="gdyn"'), slider: P.sl.length === 1 && P.sl[0].v0 === 0.75 && P.sl[0].label === 'Pente m',
+  show: gdynShow('d1(x) = m*x + b', { m: -0.5, b: 4 }) }));
+"""
+
+    def test_drawing(self):
+        import shutil
+        if not shutil.which("node"):
+            self.skipTest("node absent")
+        r = subprocess.run(["node", "-e", self.JS, str(ROOT / "web/index.html")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        o = json.loads(r.stdout)
+        for k in ("inter", "exact", "slope", "intercept", "axes", "dashed", "more", "roots", "square", "dyn", "slider"):
+            self.assertTrue(o[k], k)
+        self.assertEqual(o["show"], "−1/2 x + 4")
 
     def test_page(self):
         page = (ROOT / "web/index.html").read_text()
-        for needle in ("function graphCard(label, title, svg, caption", 'return graphCard("Diagramme", title',
-                       'return graphCard("Courbe", "", svg', ".md figure.gcard .gtop {", 'data-gact="svg"',
-                       ".md figure.gcard svg [stroke=\"#e6e2da\"] { stroke: var(--line); }"):
+        for needle in ('label: "Copier comme image"', 'label: "Télécharger au format SVG"', 'label: "Télécharger au format PNG"',
+                       "function gdynDraw(el)", "Position x", "Valeurs de départ", 'fig.querySelector(":scope > svg")',
+                       ".md figure.gcard .gmore {"):
             self.assertIn(needle, page)
-        for kind in ("camembert", "histo", "ligne|courbe"):
-            self.assertIn(kind, page)
+
+    def test_routing(self):
+        import re as _re
+        server = (ROOT / "server.py").read_text()
+        i = server.index("FILE_OUT_RE = re.compile(")
+        ns = {"re": _re}
+        exec(server[i:server.index(", re.I)", i) + len(", re.I)")], ns)
+        out = ns["FILE_OUT_RE"]
+        for m in ("Fais un tableau blanc pour organiser les fichier de mon mac", "fait moi le graphe des dépense",
+                  "une courbe des fichiers volumineux", "un graphe des ventes"):
+            self.assertFalse(out.search(m), m)
+        for m in ("le graphe en png", "enregistre le tableau", "fais-le en PDF", "un budget en fichier excel"):
+            self.assertTrue(out.search(m), m)
+        self.assertIn('"maths-affichage":', server)
+        self.assertIn('if block_here and (name in LESSON_NO_FILES or name == "run_command"):', server)
+        maths = json.loads((ROOT / "plugins_builtin/mathematiques/plugin.json").read_text())["triggers"]["maths-affichage"]
+        self.assertTrue(_re.search(maths, "fais un graphique de mes dépenses", _re.I))
+        da = json.loads((ROOT / "plugins_builtin/donnees/plugin.json").read_text())["triggers"]["donnees"]
+        self.assertTrue(_re.search(da, "un dashboard de la taille des fichiers de mon mac", _re.I))
+        skill = (ROOT / "plugins_builtin/mathematiques/skills/maths-affichage/SKILL.md").read_text()
+        self.assertIn("curseur m1 = 3/4 (-3..3)", skill)
+        self.assertIn("```diagramme", (ROOT / "plugins_builtin/tableur/skills/tableur-vivant/SKILL.md").read_text())
 
 
 class CompressionShowsItsProgress(unittest.TestCase):

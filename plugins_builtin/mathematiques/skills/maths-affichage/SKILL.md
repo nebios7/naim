@@ -167,9 +167,37 @@ g(x) = 2x - 3
 x : -3..5
 A(0;-3)
 ```
-Une fonction par ligne (`f(x) = …` ou `y = …`), avec `^`, `*` ou rien (`2x`), `/`, `sqrt`, `sin`, `cos`, `tan`, `exp`,
-`ln`, `abs`, `pi`. Facultatif : `x : a..b`, `y : c..d`, des points nommés `A(1;2)`. L'application calcule la courbe
-exacte : ne dessine jamais une courbe à la main en svg.
+Une fonction par ligne (`f(x) = …`, `d1(x) = …` ou `y = …`), avec `^`, `*` ou rien (`2x`), `/`, `sqrt`, `sin`, `cos`,
+`tan`, `exp`, `ln`, `abs`, `pi`. Facultatif : `x : a..b`, `y : c..d`, des points nommés `A(1;2)`. L'application calcule
+la courbe exacte : ne dessine jamais une courbe à la main en svg, ni en image avec Python.
+
+Ce que l'application ajoute seule, sans que tu l'écrives : la légende à droite (l'équation de chaque courbe ; pour une
+droite, sa pente « monte / descend » et son ordonnée à l'origine), les points où une droite coupe les axes, et chaque
+intersection de deux courbes (point blanc, coordonnées exactes en fraction). La 2e courbe est en pointillés. La fenêtre
+s'élargit pour montrer ces points. Le menu ⋯ du graphe copie l'image ou la télécharge en PNG ou en SVG : ne crée jamais
+de fichier image pour un graphe. `sans points` retire les points ajoutés.
+
+Deux droites, leur intersection :
+```graphe
+d1(x) = 3/4 x - 7
+d2(x) = -7/8 x + 4
+```
+
+### Un graphe dynamique (à faire bouger) : des curseurs
+Quand on demande un graphe « dynamique », « interactif », « à faire bouger », ou pour voir l'effet d'un paramètre
+(pente, ordonnée, a, b, c…) : une ligne `curseur` par paramètre, puis les courbes écrites avec ces noms.
+```graphe
+curseur m1 = 3/4 (-3..3) « Pente m »
+curseur b1 = -7 (-10..10) « Ordonnée b »
+curseur m2 = -1/2 (-3..3) « Pente m »
+curseur b2 = 4 (-10..10) « Ordonnée b »
+d1(x) = m1*x + b1
+d2(x) = m2*x + b2
+```
+`curseur nom = valeur de départ (min..max) « étiquette »`. L'application dessine une carte par courbe avec ses
+curseurs et son équation qui change en direct, le graphe, un curseur « Position x » qui fait courir un point sur
+chaque courbe, les valeurs lues (point sur chaque courbe, intersection) et « Valeurs de départ ». Les noms des
+paramètres : des lettres courtes (`a`, `b`, `k`, `m1`), jamais `x` ni `y`.
 
 ### Une figure dans un repère : toujours le bloc graphe
 Points, polygones, segments, vecteurs, droites, et l'image d'une figure par une transformation (matrice, symétrie,
@@ -239,7 +267,9 @@ Mars: 9, 14
 - une ligne par catégorie `nom : valeur` (plusieurs valeurs séparées par des virgules = plusieurs séries, nommées par
   `séries:`) ; facultatif : `titre:`, `unité: €` ;
 - le camembert calcule seul les pourcentages : donne les valeurs, pas les pourcentages.
-Pour les données de l'utilisateur (budget, notes, ventes), le même bloc : jamais un tableau dessiné en texte.
+Pour les données de l'utilisateur (budget, notes, ventes), le même bloc : jamais un tableau dessiné en texte, jamais
+une image faite avec Python. Un graphe des valeurs d'une feuille (```feuille) déjà dans la conversation : reprends
+exactement ses lignes et ses montants (pas la ligne Total), l'application calcule les pourcentages.
 Le type suit la question : une évolution dans le temps → `lignes` ; des parts d'un total → `camembert` ; comparer des
 catégories → `barres` ; des notes ou des mesures regroupées en classes → `histogramme`. Un seul diagramme, avec les
 vraies valeurs de l'utilisateur (jamais des valeurs inventées).

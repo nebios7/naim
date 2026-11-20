@@ -2290,20 +2290,35 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md figure.mgraph[data-field] svg { touch-action: none; cursor: crosshair; }
 .md figure.mgraph .gread { margin-top: 4px; width: 0; min-width: 100%; color: #333; font: 13px "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; }
 .md figure.mgraph figcaption { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font: 13px "SF Mono", SFMono-Regular, ui-monospace, Menlo, monospace; }
-/* the graph card: the spreadsheet's look */
-.md figure.gcard { padding: 0; background: var(--panel); overflow: hidden; margin: 10px 0 12px; }
-.md figure.gcard .gtop { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
-.md figure.gcard .gtitle { font-weight: 600; font-size: 14.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.md figure.gcard .gacts { display: flex; gap: 6px; }
-.md figure.gcard .gacts .btn { padding: 3px 9px; font-size: 12.5px; }
-.md figure.gcard .gbody { padding: 12px 14px 10px; }
+/* a graph: drawn on the conversation itself, the ⋯ on hover (copy as an image, SVG, PNG); colours follow the theme */
+.md figure.gcard { position: relative; padding: 6px 0 0; background: transparent; border: 0; border-radius: 0; margin: 12px 0 12px; overflow: visible; max-width: 100%; }
+.md figure.gcard .gtitle { font-weight: 600; font-size: 14px; margin: 0 40px 6px 2px; }
+.md figure.gcard .gmore { position: absolute; top: 0; right: 0; width: 32px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: var(--side); color: var(--text); cursor: pointer; opacity: 0; transition: opacity .15s; z-index: 2; }
+.md figure.gcard:hover .gmore, .md figure.gcard .gmore:focus-visible { opacity: 1; }
+.md figure.gcard .gmore svg { width: 18px; height: 18px; }
 .md figure.gcard svg { fill: var(--text); }
 .md figure.gcard svg [fill="#333"], .md figure.gcard svg [fill="#444"], .md figure.gcard svg [fill="#222"] { fill: var(--text); }
+.md figure.gcard svg [fill="#666"] { fill: var(--muted); }
 .md figure.gcard svg [stroke="#e6e2da"] { stroke: var(--line); }
 .md figure.gcard svg [stroke="#555"] { stroke: var(--muted); }
 .md figure.gcard svg marker [fill="#555"] { fill: var(--muted); }
-.md figure.gcard svg [stroke="#fff"] { stroke: var(--panel); }
+.md figure.gcard svg [stroke="#fff"] { stroke: var(--bg); }
 .md figure.gcard .gread { color: var(--text); }
+.md .gdyn { margin: 12px 0; max-width: 760px; }
+.md .gdyn .gdcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.md .gdyn .gdcard { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--side); }
+.md .gdyn .gdhead { display: flex; align-items: center; gap: 8px; font-size: 14.5px; margin-bottom: 6px; }
+.md .gdyn .gdsw { width: 18px; height: 0; border-top: 2.6px solid var(--c); display: inline-block; }
+.md .gdyn .gdsw.gdash { border-top-style: dashed; }
+.md .gdyn .gdrow { display: grid; grid-template-columns: 96px 1fr 56px; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); margin: 4px 0; }
+.md .gdyn .gdrow output { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.md .gdyn input[type=range] { width: 100%; accent-color: #d97757; }
+.md .gdyn .gdpos { margin: 10px 0; }
+.md .gdyn .gdvals { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.md .gdyn .gdval { border-radius: 10px; padding: 10px 14px; background: var(--side); display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--muted); }
+.md .gdyn .gdval b { color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }
+.md .gdyn .gdreset { margin-top: 12px; }
 .md .vis { margin: 4px 0 6px; }
 .md .vis iframe.visf { display: block; width: 100%; height: 160px; border: 0; background: transparent; }
 .md .simbar { display: flex; align-items: center; justify-content: space-between; max-width: 680px; margin: 6px auto 4px; font-size: 12.5px; color: var(--muted); }
@@ -5068,11 +5083,46 @@ function fieldProbe(F, view, x, y, id) {  // the point, its level curve (dashed)
   const read = `f(${fieldNum(x)} ; ${fieldNum(y)}) = ${fieldNum(z)} · ∇f = (${fieldNum(gx)} ; ${fieldNum(gy)}) · |∇f| = ${fieldNum(len)}`;
   return { g, read };
 }
+const G_COLORS = ["#4a86d8", "#e0703f", "#3fae7a", "#a77be0", "#d9a03c"];
+const G_SUB = { 0: "₀", 1: "₁", 2: "₂", 3: "₃", 4: "₄", 5: "₅", 6: "₆", 7: "₇", 8: "₈", 9: "₉" };
+const gName = (n) => String(n).replace(/^([a-zA-Z]+)(\d+)$/, (_, a, d) => a + [...d].map((c) => G_SUB[c]).join(""));
+const gCurveLabel = (n) => (n === "y" ? "" : /^[a-zA-Z]$/.test(n) ? "C" + n : gName(n));
+const gExpr = (t) => String(t).replace(/\((-?\d+(?:\.\d+)?)\)/g, (_, v) => gFrac(+v).replace("−", "-")).replace(/\*\*/g, "^").replace(/\s*\*\s*/g, " ").replace(/(\d)\s*([a-zA-Z(])/g, "$1 $2")
+  .replace(/\s*-\s*/g, " − ").replace(/\s*\+\s*/g, " + ").replace(/^\s*−\s*/, "−").replace(/\(\s*−\s*/g, "(−").replace(/\^\s*2(?![\d.])/g, "²").replace(/\^\s*3(?![\d.])/g, "³").replace(/\s+/g, " ").replace(/\+ − /g, "− ").replace(/− − /g, "+ ").trim();
+function gFrac(v) {  // 0.75 → 3/4, 6.769… → 88/13 when exact, else a short decimal
+  if (!Number.isFinite(v)) return "?";
+  for (let d = 1; d <= 24; d++) { const n = Math.round(v * d); if (Math.abs(v - n / d) < 1e-9 * Math.max(1, Math.abs(v))) return (n < 0 ? "−" : "") + Math.abs(n) + (d > 1 ? "/" + d : ""); }
+  return frNum(+v.toPrecision(4));
+}
+const gDec = (v) => frNum(Math.abs(v) < 1e-9 ? 0 : +(+v.toFixed(2)));
+const gPt = (x, y) => `(${gDec(x)} ; ${gDec(y)})`;
+function gLinear(f, span) {  // y = m x + b exactly (checked at several x): its m and b, else null
+  const b = f(0), m = f(1) - b;
+  if (!Number.isFinite(b) || !Number.isFinite(m)) return null;
+  const tol = 1e-9 * Math.max(1, Math.abs(m) * span, Math.abs(b));
+  return [-3.7, 2.3, 5.9, span].every((x) => Math.abs(f(x) - (m * x + b)) < tol) ? { m, b } : null;
+}
+function gRoots(h, a, b, n = 600) {  // where h changes sign on [a, b]: refined by bisection
+  const out = []; let x0 = a, y0 = h(a);
+  for (let k = 1; k <= n && out.length < 4; k++) {
+    const x1 = a + (b - a) * k / n, y1 = h(x1);
+    if (y0 === 0 && !out.some((q) => Math.abs(q - x0) < (b - a) / n)) out.push(x0);
+    else if (Number.isFinite(y0) && Number.isFinite(y1) && y0 * y1 < 0 && Math.abs(y1 - y0) < 1e6) {
+      let lo = x0, hi = x1;
+      for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2, ym = h(mid); if ((h(lo) <= 0) === (ym <= 0)) lo = mid; else hi = mid; }
+      const r0 = (lo + hi) / 2, r = Math.abs(r0 - Math.round(r0 * 1e6) / 1e6) < 1e-9 ? Math.round(r0 * 1e6) / 1e6 : r0;
+      if (!out.some((q) => Math.abs(q - r) < (b - a) / n)) out.push(r);
+    }
+    x0 = x1; y0 = y1;
+  }
+  return out;
+}
 function graphHtml(src) {
+  if (/^\s*curseurs?\b/im.test(String(src))) return `<div class="gdyn" data-src="${esc(String(src).replace(/\n+$/, ""))}"></div>`;  // a graph to move: drawn by gdynDraw
   const curves = [], points = [], shapes = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
   const params = [], polars = [], implicits = [], series = [];  // x(t), y(t) · r = f(θ) · x² + y² = 4, y > 2x · data
   const fields = []; let levels = null;  // f(x, y) = …: level curves, gradient, a point to move · « niveaux : 0, 1, 2 »
-  let xr = null, yr = null, tr = null, ortho = false, showXY = false, fit = false;
+  let xr = null, yr = null, tr = null, ortho = false, showXY = false, fit = false, bare = false;
   // the pairs of a data line: « (1;2) (2;3,5) », « (1, 2) (2, 3) », « 1;2 | 2;3 »
   const pairs = (t) => (t.match(/\(([^()]*)\)/g) || t.split("|")).map((q) => {
     const in_ = q.replace(/[()]/g, "").trim(), parts = in_.includes(";") ? in_.split(";") : (in_.match(/,/g) || []).length === 1 ? in_.split(",") : in_.split(/,\s+|\s+/);
@@ -5122,6 +5172,7 @@ function graphHtml(src) {
     }
     if (/^(rep[èe]re )?orthonorm[ée]?$/i.test(l)) { ortho = true; continue; }
     if (/^(avec (les )?)?coordonn[ée]es$/i.test(l)) { showXY = true; continue; }
+    if (/^sans (les )?points( remarquables)?$/i.test(l)) { bare = true; continue; }
     if ((m = l.match(/^([xy])\s*(?::|∈|dans)\s*\[?\s*(.+?)\s*(?:\.\.|;|à)\s*(.+?)\s*\]?$/i))) {
       const r = [mathFn(m[2])(0), mathFn(m[3])(0)].sort((a, b) => a - b);  // bounds may be computed: -2pi, pi/2, sqrt(2)
       if (m[1].toLowerCase() === "x") xr = r; else yr = r;
@@ -5160,6 +5211,16 @@ function graphHtml(src) {
     const xs = points.map((p) => p.x).concat(0), ys = points.map((p) => p.y).concat(0);
     xr = [Math.min(...xs) - 1, Math.max(...xs) + 1]; yr = [Math.min(...ys) - 1, Math.max(...ys) + 1];
   }
+  if (!xr && curves.length && !fields.length) {  // lines: the window shows where they cross the axes and each other
+    const ls = curves.map((c) => gLinear(c.f, 10)).filter(Boolean), key = [0];
+    ls.forEach((a) => { if (Math.abs(a.m) > 1e-12) key.push(-a.b / a.m); });
+    ls.forEach((a, i) => ls.slice(i + 1).forEach((b) => { if (Math.abs(a.m - b.m) > 1e-12) key.push((b.b - a.b) / (a.m - b.m)); }));
+    const ks = key.filter((x) => Number.isFinite(x) && Math.abs(x) < 1e4).concat(points.map((p) => p.x));
+    if (ls.length && ks.some((x) => Math.abs(x) > 4)) {
+      const lo = Math.min(...ks), hi = Math.max(...ks), pad = Math.max(1.5, (hi - lo) * 0.3);
+      xr = [Math.min(lo - pad, -1), Math.max(hi + pad, 1)];
+    }
+  }
   xr ||= points.length ? [Math.min(-1, ...points.map((p) => p.x)) - 1, Math.max(1, ...points.map((p) => p.x)) + 1] : [-5, 5];
   const N = 480, samples = curves.map((c) => Array.from({ length: N + 1 }, (_, k) => { const x = xr[0] + (xr[1] - xr[0]) * k / N, y = c.f(x); return [x, Number.isFinite(y) ? y : NaN]; }));
   if (!yr) {  // what the curves show, without their far ends (an asymptote does not crush the rest)
@@ -5193,7 +5254,7 @@ function graphHtml(src) {
     + `<line x1="${ay}" y1="${H - B}" x2="${ay}" y2="${T}" stroke="#555" stroke-width="1.2" marker-end="url(#${id}f)"/>`
     + `<text x="${W - R - 2}" y="${ax - 6}" text-anchor="end" font-style="italic">x</text><text x="${ay + 6}" y="${T + 10}" font-style="italic">y</text>`
     + (xr[0] <= 0 && xr[1] >= 0 && yr[0] <= 0 && yr[1] >= 0 ? `<text x="${ay - 5}" y="${ax + 14}" text-anchor="end">0</text>` : "");  // the origin only when it is in the frame
-  const COLORS = ["#c4553a", "#3d7cc9", "#2f9a6f", "#9a5cc9", "#c98a1f"];
+  const COLORS = G_COLORS;
   let fieldAttr = "", fieldRead = "";
   const legendMore = [];
   fields.slice(0, 1).forEach((fd) => {  // the values in colour (low blue, high orange), the level curves, ∇f, the point
@@ -5248,10 +5309,52 @@ function graphHtml(src) {
       d += inside ? `${d && !jump && Number.isFinite(prev) ? "L" : "M"}${X(x).toFixed(1)},${Y(y).toFixed(1)}` : "";
       prev = inside ? y : NaN;
     }
-    g += `<path d="${d}" fill="none" stroke="${COLORS[n % COLORS.length]}" stroke-width="2.2" clip-path="url(#${id}z)"/>`;
+    g += `<path d="${d}" fill="none" stroke="${COLORS[n % COLORS.length]}" stroke-width="2.4" stroke-linecap="round"${n % 2 ? ' stroke-dasharray="8 6"' : ""} clip-path="url(#${id}z)"/>`;
     const lab = samples[n].filter(([, y]) => Number.isFinite(y) && y > yr[0] && y < yr[1]).at(-Math.round(N * 0.06) || -1);
-    if (lab) g += `<text x="${X(lab[0]) - 4}" y="${Y(lab[1]) - 8}" text-anchor="end" fill="${COLORS[n % COLORS.length]}" font-weight="600" font-style="italic">${esc(c.name === "y" ? "" : "C" + c.name)}</text>`;
+    if (lab) g += `<text x="${X(lab[0]) + 6}" y="${Y(lab[1]) - 10}" text-anchor="end" fill="${COLORS[n % COLORS.length]}" font-size="12">${esc(gCurveLabel(c.name))}</text>`;
   });
+  // the remarkable points, computed: where a line meets the axes, where two curves meet (a white point)
+  const span = Math.max(Math.abs(xr[0]), Math.abs(xr[1]), 1), lin = curves.map((c) => gLinear(c.f, span));
+  const inView = (x, y) => x >= xr[0] && x <= xr[1] && y >= yr[0] && y <= yr[1];
+  const taken = (x, y) => points.some((p) => Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6);
+  const meets = [], boxes = [];
+  const free = (x, y, w, h) => { const b = [x, y, x + w, y + h]; if (boxes.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1])) return false; boxes.push(b); return true; };
+  for (let v = Math.ceil(xr[0] / sx) * sx; v <= xr[1] + 1e-9; v += sx) if (Math.abs(v) > 1e-9) boxes.push([X(v) - 12, ax + 3, X(v) + 12, ax + 17]);
+  for (let v = Math.ceil(yr[0] / sy) * sy; v <= yr[1] + 1e-9; v += sy) if (Math.abs(v) > 1e-9) boxes.push([ay - 30, Y(v) - 7, ay - 3, Y(v) + 7]);
+  if (!bare && curves.length <= 3) {
+    for (let i = 0; i < curves.length; i++) for (let j = i + 1; j < curves.length; j++) {
+      const fi = curves[i].f, fj = curves[j].f;
+      let xs = [];
+      if (lin[i] && lin[j]) { if (Math.abs(lin[i].m - lin[j].m) > 1e-12) xs = [(lin[j].b - lin[i].b) / (lin[i].m - lin[j].m)]; }
+      else xs = gRoots((x) => fi(x) - fj(x), xr[0], xr[1]);
+      xs.forEach((x) => {
+        const y = fi(x);
+        if (!Number.isFinite(y) || !inView(x, y) || taken(x, y)) return;
+        meets.push({ x, y, i, j, exact: !!(lin[i] && lin[j]) });
+        g += `<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="7" fill="#fff" stroke="#8a877f" stroke-width="1.2"/>`;
+        free(X(x) - 8, Y(y) - 8, 16, 16);
+        const t2 = gPt(x, y), w2 = Math.max(78, t2.length * 7.2), sides = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
+        const [sx_, sy_] = sides.find(([a, c]) => free(a > 0 ? X(x) + 12 : X(x) - 12 - w2, c > 0 ? Y(y) + 14 : Y(y) - 50, w2, 38)) || sides[0];
+        const tx = (X(x) + sx_ * 16).toFixed(1), ty = sy_ > 0 ? Y(y) + 30 : Y(y) - 30;
+        g += `<text x="${tx}" y="${ty.toFixed(1)}" text-anchor="${sx_ > 0 ? "start" : "end"}" font-size="12.5" font-weight="600" fill="#333">`
+          + `<tspan x="${tx}">Intersection</tspan><tspan x="${tx}" dy="17">${t2}</tspan></text>`;
+      });
+    }
+    curves.forEach((c, n) => {
+      const L_ = lin[n], col = COLORS[n % COLORS.length];
+      if (!L_) return;
+      const dots = [[0, L_.b, "y"]].concat(Math.abs(L_.m) > 1e-12 ? [[-L_.b / L_.m, 0, "x"]] : []);
+      dots.forEach(([x, y, k]) => {
+        if (!inView(x, y) || taken(x, y) || (k === "x" && Math.abs(x) < 1e-9)) return;
+        g += `<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="4.5" fill="${col}"/>`;
+        const t = gPt(x, y), w = t.length * 6.6;
+        const spots = k === "y" ? [[X(x) + 10, Y(y) + (L_.m > 0 ? 20 : -10)], [X(x) + 10, Y(y) + (L_.m > 0 ? -10 : 20)]]
+          : [[X(x) - w / 2, Y(y) + (L_.m > 0 ? -12 : 24)], [X(x) - w / 2, Y(y) + (L_.m > 0 ? 24 : -12)]];
+        const at = spots.find(([px, py]) => free(px, py - 12, w, 15));
+        if (at) g += `<text x="${at[0].toFixed(1)}" y="${at[1].toFixed(1)}" font-size="12" fill="#333">${t}</text>`;
+      });
+    });
+  }
   let ci = curves.length;  // each drawn thing takes the next colour
   implicits.forEach((im) => {  // a region shaded row by row, then its border (dashed when strict) by marching squares
     const col = COLORS[ci++ % COLORS.length], GX = 160, GY = Math.round(GX * (H - T - B) / (W - L - R)) || 100;
@@ -5339,35 +5442,173 @@ function graphHtml(src) {
     const anchor = ox > 0.35 ? "start" : ox < -0.35 ? "end" : "middle";
     g += `<circle cx="${X(pt.x)}" cy="${Y(pt.y)}" r="3.6" fill="${pt.col || "#222"}"/><text x="${tx.toFixed(1)}" y="${(ty + (Math.abs(ox) <= 0.35 ? -oy * 4 : 0)).toFixed(1)}" text-anchor="${anchor}" font-weight="600" fill="${pt.col || "#333"}" stroke="#fff" stroke-width="3" stroke-linejoin="round" paint-order="stroke">${esc(lab)}</text>`;
   });
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" font-family="Helvetica, Arial" font-size="11" fill="#333">`
+  // the legend, at the right of the frame: each curve with its line, its equation, and for a line its slope and intercept
+  let leg = "", ly = T + 14, lw = 0;
+  const LX = W + 26, lt = (x, y, t, a = "") => { lw = Math.max(lw, x - LX + t.length * 7.4); return `<text x="${x}" y="${y}"${a}>${esc(t)}</text>`; };
+  curves.forEach((c, n) => {
+    const col = COLORS[n % COLORS.length], name = c.name === "y" ? "" : gName(c.name) + " : ";
+    leg += `<line x1="${LX}" y1="${ly - 4}" x2="${LX + 30}" y2="${ly - 4}" stroke="${col}" stroke-width="2.6"${n % 2 ? ' stroke-dasharray="7 5"' : ""}/>`;
+    leg += lt(LX + 42, ly, `${name}y = ${gExpr(c.text)}`, ' font-size="13.5" font-weight="600"');
+    if (lin[n]) {
+      leg += lt(LX, ly + 22, `pente ${gFrac(lin[n].m)}${lin[n].m > 0 ? " (monte)" : lin[n].m < 0 ? " (descend)" : " (constante)"}`, ' font-size="12.5" fill="#666"');
+      leg += lt(LX, ly + 41, `ordonnée à l'origine ${gFrac(lin[n].b)}`, ' font-size="12.5" fill="#666"');
+      ly += 26;
+    }
+    ly += 44;
+  });
+  meets.slice(0, 4).forEach((q) => {
+    leg += `<circle cx="${LX + 15}" cy="${ly - 5}" r="6" fill="#fff" stroke="#8a877f" stroke-width="1.2"/>`;
+    leg += lt(LX + 42, ly, `${gName(curves[q.i].name)} ∩ ${gName(curves[q.j].name)}`, ' font-size="13.5" font-weight="600"');
+    leg += lt(LX, ly + 22, q.exact ? `(${gFrac(q.x)} ; ${gFrac(q.y)})` : gPt(q.x, q.y), ' font-size="12.5" fill="#666"');
+    ly += 50;
+  });
+  const Wt = curves.length && !fields.length ? Math.round(W + 26 + Math.min(320, Math.max(170, lw)) + 8) : W, Ht = Math.max(H, ly);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Wt} ${Ht}" width="${Wt}" style="width:${Wt}px" font-family="-apple-system, system-ui, Helvetica, Arial" font-size="11" fill="#333">`
     + `<defs><marker id="${id}f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>`
     + arrows + `<marker id="${id}ga" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f9a6f"/></marker>`
     + `<marker id="${id}gp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c4553a"/></marker>`
-    + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}</svg>`;
-  const legend = curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join("")
+    + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}${Wt > W ? leg : ""}</svg>`;
+  const legend = (Wt > W ? "" : curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join(""))
     + legendMore.map(([col, t]) => `<span style="color:${col}">${esc(t)}</span>`).join("");
-  return graphCard("Courbe", "", svg, `<figcaption>${legend}</figcaption>${fieldRead}`, fieldAttr);
+  return graphCard("Courbe", "", svg, (legend ? `<figcaption>${legend}</figcaption>` : "") + fieldRead,
+    fieldAttr + ` data-gview="${[xr[0], xr[1], yr[0], yr[1], L, T, W, H, R, B].join(",")}"`);
 }
 
 // ---- a statistics chart (```diagramme): bars, histogram, lines or a pie, from « label : value » lines
 // a chart or a graph in the spreadsheet's card: a title bar with its actions, the drawing below; the colours of the
 // drawing follow the theme (light or dark), the chart types stay the ones Naim draws
 function graphCard(label, title, svg, caption, extra = "", tsv = "") {
-  return `<figure class="mfig mgraph gcard"${extra}><div class="gtop">${title ? `<span class="gtitle">${esc(title)}</span>` : `<span class="gtitle muted">${esc(label)}</span>`}`
-    + `<span class="gacts">${tsv ? `<button class="btn" data-gact="copy" data-tsv="${esc(tsv)}" title="Copier les valeurs (à coller dans Excel ou Numbers)">Copier</button>` : ""}`
-    + `<button class="btn" data-gact="svg" title="Enregistrer l'image (SVG)">SVG</button></span></div>`
-    + `<div class="gbody">${svg}${caption}</div></figure>`;
+  return `<figure class="mfig mgraph gcard"${extra}${tsv ? ` data-tsv="${esc(tsv)}"` : ""}>`
+    + `<button class="gmore" type="button" title="Exporter" aria-label="Exporter le graphe">${svgI("dots")}</button>`
+    + `${title ? `<div class="gtitle">${esc(title)}</div>` : ""}${svg}${caption}</figure>`;
+}
+// the figure as it is seen (the theme's colours written into it), for a file or the clipboard
+function gSvgText(svg) {
+  const c = svg.cloneNode(true), a = [svg, ...svg.querySelectorAll("*")], b = [c, ...c.querySelectorAll("*")];
+  a.forEach((el, i) => {
+    const cs = getComputedStyle(el), st = [];
+    for (const k of ["fill", "stroke", "stroke-opacity", "fill-opacity", "font-family", "font-size", "font-weight"]) { const v = cs.getPropertyValue(k); if (v) st.push(`${k}:${v}`); }
+    b[i].setAttribute("style", st.join(";"));
+  });
+  const vb = (svg.getAttribute("viewBox") || "0 0 600 400").split(/\s+/).map(Number);
+  c.setAttribute("width", vb[2]); c.setAttribute("height", vb[3]); c.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  return new XMLSerializer().serializeToString(c);
+}
+function gPng(svg) {
+  return new Promise((ok, ko) => {
+    const vb = (svg.getAttribute("viewBox") || "0 0 600 400").split(/\s+/).map(Number), k = 2, img = new Image();
+    img.onload = () => {
+      const cv = document.createElement("canvas"); cv.width = vb[2] * k; cv.height = vb[3] * k;
+      const x = cv.getContext("2d"); x.fillStyle = getComputedStyle(document.body).backgroundColor || "#fff"; x.fillRect(0, 0, cv.width, cv.height);
+      x.drawImage(img, 0, 0, cv.width, cv.height); cv.toBlob((bl) => (bl ? ok(bl) : ko(new Error("png"))), "image/png");
+    };
+    img.onerror = ko;
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(gSvgText(svg));
+  });
+}
+function gSave(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 document.addEventListener("click", (e) => {
-  const b = e.target.closest?.(".gcard button[data-gact]"); if (!b) return;
-  const fig = b.closest(".gcard");
-  if (b.dataset.gact === "copy") { navigator.clipboard?.writeText(b.dataset.tsv).then(() => toast("Valeurs copiées")); return; }
-  const svg = fig.querySelector(".gbody svg"); if (!svg) return;
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" }));
-  a.download = ((fig.querySelector(".gtitle:not(.muted)")?.textContent || "graphe").replace(/[\\/:*?"<>|]+/g, "-")) + ".svg";
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  const b = e.target.closest?.(".gcard .gmore"); if (!b) return;
+  e.stopPropagation();
+  const fig = b.closest(".gcard"), svg = fig.querySelector(":scope > svg"); if (!svg) return;
+  const name = ((fig.querySelector(".gtitle")?.textContent || "graphe").replace(/[\\/:*?"<>|]+/g, "-")).slice(0, 60);
+  showMenu(b, [
+    { icon: "copy", label: "Copier comme image", run: () => {
+      try { navigator.clipboard.write([new ClipboardItem({ "image/png": gPng(svg) })]).then(() => toast("Image copiée"), () => toast("Copie impossible")); }
+      catch (err) { toast("Copie impossible"); } } },
+    { icon: "download", label: "Télécharger au format SVG", run: () => gSave(new Blob([gSvgText(svg)], { type: "image/svg+xml" }), name + ".svg") },
+    { icon: "download", label: "Télécharger au format PNG", run: () => gPng(svg).then((bl) => gSave(bl, name + ".png"), () => toast("Image impossible")) },
+    ...(fig.dataset.tsv ? [{ icon: "copy", label: "Copier les valeurs", run: () => navigator.clipboard?.writeText(fig.dataset.tsv).then(() => toast("Valeurs copiées")) }] : []),
+  ]);
 });
+// ---- a graph to move (```graphe with « curseur m = 0,75 (-3..3) »): sliders that change the curves live, a point that
+// runs along them (Position x), the values read below, and « Valeurs de départ »
+function gdynParse(src) {
+  const sl = [], rest = []; let probe = true;
+  for (const raw of String(src).split("\n")) {
+    const l = raw.trim(); let m;
+    if ((m = l.match(/^curseurs?\s*:?\s*([a-zA-Z]\w*)\s*=\s*([^(\[]+?)\s*[(\[]\s*(.+?)\s*(?:\.\.|;|à)\s*(.+?)\s*[)\]]\s*(?:«\s*([^»]+?)\s*»|"([^"]+)")?\s*$/i))) {
+      const n = (t) => { try { return mathFn(String(t).replace(",", "."))(0); } catch (e) { return NaN; } };
+      const v = n(m[2]), lo = n(m[3]), hi = n(m[4]);
+      if ([v, lo, hi].every(Number.isFinite) && hi > lo) sl.push({ name: m[1], v0: v, lo, hi, step: niceStep(hi - lo) / 20, label: m[5] || m[6] || m[1] });
+    } else if (/^sans (sonde|point mobile|position)$/i.test(l)) probe = false;
+    else if (!/^(sonde|point mobile|dynamique)$/i.test(l)) rest.push(raw);
+  }
+  return { sl, rest, probe };
+}
+function gdynSub(line, vals) {  // the curve with the sliders' values: « d1(x) = m*x + b » → « d1(x) = (0.75)*x + (-7) »
+  const i = line.indexOf("="); if (i < 0) return line;
+  let r = line.slice(i + 1);
+  for (const [k, v] of Object.entries(vals)) r = r.replace(new RegExp(`(?<![\\w.])${k}(?![\\w(])`, "g"), `(${v})`);
+  return line.slice(0, i + 1) + r;
+}
+function gdynShow(line, vals) {  // the same, as it reads: « y = 3/4 x − 7 »
+  const i = line.indexOf("="); let r = line.slice(i + 1);
+  for (const [k, v] of Object.entries(vals)) r = r.replace(new RegExp(`(?<![\\w.])${k}(?![\\w(])`, "g"), `{${gFrac(v)}}`);
+  return gExpr(r.replace(/\{([^}]*)\}/g, "$1").replace(/\+\s*−/g, "− ").replace(/−\s*−/g, "+ ").replace(/\b1\s+x\b/g, "x").replace(/(^|[^\d/])0\s*x\s*[+−]?\s*/g, "$1"));
+}
+const G_CURVE = /^\s*(?:([a-zA-Z]\w*)\s*\(\s*x\s*\)|y)\s*=/;
+function gdynDraw(el) {
+  const P = gdynParse(el.dataset.src);
+  if (!P.sl.length) { el.outerHTML = graphHtml(P.rest.join("\n")) || ""; return; }
+  const st = el._gd ||= { vals: Object.fromEntries(P.sl.map((s) => [s.name, s.v0])), x: null, frame: null };
+  const curves = P.rest.filter((l) => G_CURVE.test(l)).map((l, n) => ({ line: l, name: (l.match(G_CURVE)[1] || "y"), n }));
+  const owner = {};  // each slider sits in the card of the first curve that uses it
+  P.sl.forEach((s) => { const c = curves.find((c) => new RegExp(`(?<![\\w.])${s.name}(?![\\w(])`).test(c.line.slice(c.line.indexOf("=") + 1))); owner[s.name] = c ? c.n : -1; });
+  const row = (s) => `<label class="gdrow"><span>${esc(s.label)}</span><input type="range" min="${s.lo}" max="${s.hi}" step="${s.step}" value="${st.vals[s.name]}" data-gdk="${esc(s.name)}"><output>${esc(frNum(+(+st.vals[s.name]).toPrecision(6)))}</output></label>`;
+  const cards = curves.filter((c) => P.sl.some((s) => owner[s.name] === c.n)).map((c) => `<div class="gdcard"><div class="gdhead"><i class="gdsw${c.n % 2 ? " gdash" : ""}" style="--c:${G_COLORS[c.n % G_COLORS.length]}"></i><b data-gdeq="${c.n}"></b></div>${P.sl.filter((s) => owner[s.name] === c.n).map(row).join("")}</div>`).join("")
+    + (P.sl.some((s) => owner[s.name] === -1) ? `<div class="gdcard">${P.sl.filter((s) => owner[s.name] === -1).map(row).join("")}</div>` : "");
+  el.innerHTML = `<div class="gdcards">${cards}</div><div class="gdplot"></div>`
+    + (P.probe && curves.length ? `<label class="gdrow gdpos"><span>Position x</span><input type="range" data-gdx><output></output></label><div class="gdvals"></div>` : "")
+    + `<button class="btn gdreset" type="button" data-gdreset>Valeurs de départ</button>`;
+  el._gdP = P; el._gdC = curves; el.dataset.ready = "1";
+  gdynRender(el);
+}
+function gdynRender(el) {
+  const P = el._gdP, curves = el._gdC, st = el._gd;
+  const lines = P.rest.map((l) => (G_CURVE.test(l) ? gdynSub(l, st.vals) : l));
+  const hasX = P.rest.some((l) => /^\s*x\s*(?::|∈|dans)/i.test(l)), hasY = P.rest.some((l) => /^\s*y\s*(?::|∈|dans)/i.test(l));
+  if (st.frame) { if (!hasX) lines.push(`x : ${st.frame[0]}..${st.frame[1]}`); if (!hasY) lines.push(`y : ${st.frame[2]}..${st.frame[3]}`); }
+  const plot = el.querySelector(".gdplot");
+  plot.innerHTML = graphHtml(lines.join("\n")) || "";
+  const fig = plot.querySelector(".gcard"), v = (fig?.dataset.gview || "").split(",").map(Number);
+  if (!st.frame && v.length === 10) st.frame = v.slice(0, 4);  // the frame stays put while the sliders move
+  curves.forEach((c) => { const b = el.querySelector(`[data-gdeq="${c.n}"]`); if (b) b.textContent = `${c.name === "y" ? "" : gName(c.name) + " : "}y = ${gdynShow(c.line, st.vals)}`; });
+  el.querySelectorAll("[data-gdk]").forEach((i) => { i.nextElementSibling.textContent = frNum(+(+st.vals[i.dataset.gdk]).toPrecision(6)); });
+  const xi = el.querySelector("[data-gdx]");
+  if (!xi || v.length !== 10) return;
+  const [x0, x1, y0, y1, L, T, W, H, R, B] = v, step = niceStep(x1 - x0) / 10;
+  if (xi.min !== String(x0)) { xi.min = x0; xi.max = x1; xi.step = step; }
+  if (st.x == null) st.x = Math.round((x0 + (x1 - x0) * 0.45) / step) * step;
+  xi.value = st.x; xi.nextElementSibling.textContent = frNum(+(+st.x).toPrecision(6));
+  const X = (u) => L + (u - x0) / (x1 - x0) * (W - L - R), Y = (u) => T + (y1 - u) / (y1 - y0) * (H - T - B);
+  const fs = curves.map((c) => { try { return mathFn(gdynSub(c.line, st.vals).split("=").slice(1).join("=")); } catch (e) { return () => NaN; } });
+  let g = `<line x1="${X(st.x).toFixed(1)}" y1="${T}" x2="${X(st.x).toFixed(1)}" y2="${H - B}" stroke="#8a877f" stroke-width="1.2" stroke-dasharray="3 4"/>`;
+  const cards = curves.map((c, n) => {
+    const y = fs[n](st.x);
+    if (Number.isFinite(y) && y >= y0 && y <= y1) g += `<circle cx="${X(st.x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="5" fill="${G_COLORS[n % G_COLORS.length]}"/>`;
+    return `<div class="gdval"><span>Point sur ${esc(c.name === "y" ? "la courbe" : gName(c.name))}</span><b>${Number.isFinite(y) ? gPt(st.x, y) : "non défini"}</b></div>`;
+  });
+  if (fs.length >= 2) {
+    const r = gRoots((x) => fs[0](x) - fs[1](x), x0, x1)[0];
+    cards.push(`<div class="gdval"><span>Intersection</span><b>${r == null ? "aucune ici" : gPt(r, fs[0](r))}</b></div>`);
+  }
+  fig.querySelector(":scope > svg").insertAdjacentHTML("beforeend", g);
+  el.querySelector(".gdvals").innerHTML = cards.join("");
+}
+document.addEventListener("input", (e) => {
+  const i = e.target.closest?.(".gdyn input[type=range]"); if (!i) return;
+  const el = i.closest(".gdyn"); if (!el._gd) return;
+  if (i.dataset.gdk) el._gd.vals[i.dataset.gdk] = +i.value; else el._gd.x = +i.value;
+  cancelAnimationFrame(el._raf); el._raf = requestAnimationFrame(() => gdynRender(el));
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest?.(".gdyn [data-gdreset]"); if (!b) return;
+  const el = b.closest(".gdyn"); el._gd = null; el.dataset.ready = ""; gdynDraw(el);
+});
+new MutationObserver(() => $$(".gdyn[data-src]:not([data-ready='1'])").forEach((el) => gdynDraw(el))).observe(document.body, { childList: true, subtree: true });
 function chartHtml(src) {
   let type = "barres", title = "", unit = "", names = [];
   const rows = [];
@@ -5568,7 +5809,7 @@ function downloadBlob(name, blob) {
 // a map of f(x, y): the point follows a click or a drag, its level curve and ∇f are computed again where it is
 let fieldDrag = null;
 function fieldMove(fig, e) {
-  const svg = fig.querySelector("svg"), view = (fig.dataset.view || "").split(",").map(Number);
+  const svg = fig.querySelector(":scope > svg"), view = (fig.dataset.view || "").split(",").map(Number);
   let F; try { const f = mathFn(fig.dataset.field); F = (x, y) => f(x, y, 0); } catch (err) { return; }
   const [x0, x1, y0, y1, L, T, W, H, R, B] = view, pt = svg.createSVGPoint();
   pt.x = e.clientX; pt.y = e.clientY;
@@ -5948,7 +6189,7 @@ function guideNote(text, state) {
   return Object.assign(document.createElement("div"), { className: "evnote gnote" + (state === "wait" ? " pending" : ""),
     innerHTML: `<div class="ghead"><span class="evic">${svgI("chat")}</span><span>Ton message pendant le travail</span>${st ? `<span class="gstate"${tip}>${st}</span>` : ""}</div>${now ? `<div class="gfoot">${now}</div>` : ""}<div class="gtext">${esc(words)}</div>` });
 }
-function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()]; return k && RICON[k] ? svgI(k) : esc(ic || ""); }
+function menuIcon(ic) { const k = MENU_ICONS[(ic || "").trim()] || (RICON[ic] ? ic : null); return k && RICON[k] ? svgI(k) : esc(ic || ""); }
 function showMenu(anchor, items) {
   closeMenu();
   const m = document.createElement("div"); m.className = "menu"; m.id = "ctxmenu";

@@ -1,10 +1,10 @@
 {
   "name": "tableur",
-  "version": "1.2",
+  "version": "1.4",
   "description": "Un tableur vivant dans la conversation (formules qui se recalculent, cellules modifiables) ou un vrai fichier Excel (.xlsx) : budgets, suivis, factures, plannings.",
   "skills": "skills",
   "triggers": {
-    "tableur-vivant": "(?s)^(?!.*\\b(excel|xlsx|fichier|t[ée]l[ée]charg\\w*)\\b).*(\\b(tableur|feuille de calcul|spreadsheet)\\b|\\b(budget|suivi|planning|inventaire|comparatif|d[ée]penses|notes de frais)\\b[^.?!\\n]{0,40}\\b(tableau|tableur|feuille)\\b|\\b(tableau|feuille)\\b[^.?!\\n]{0,40}\\b(budget|d[ée]penses|co[uû]ts?|prix|calculs?|totaux|total)\\b)",
+    "tableur-vivant": "(?s)^(?!.*(\\b(en|un|une|dans un|au format)\\s+(fichier|excel|pdf|xlsx)\\b|\\b(excel|xlsx)\\b|t[ée]l[ée]charg|enregistr)).*(\\b(tableur|feuille de calcul|spreadsheet)\\b|\\b(budget|suivi|planning|inventaire|comparatif|d[ée]penses|notes de frais)\\b[^.?!\\n]{0,40}\\b(tableau|tableur|feuille)\\b|\\b(tableau|feuille)\\b[^.?!\\n]{0,40}\\b(budget|d[ée]penses|co[uû]ts?|prix|calculs?|totaux|total)\\b)",
     "tableur": "\\b(excel|xlsx|classeur)\\b|\\bfichiers?\\b[^.?!\\n]{0,40}\\b(tableur|calcul|budget|tableau)\\b|\\b(tableur|feuille de calcul|budget|tableau|planning|facture|devis)\\b[^.?!\\n]{0,40}\\b(fichiers?|t[ée]l[ée]charg\\w*)\\b"
   },
   "priority": true

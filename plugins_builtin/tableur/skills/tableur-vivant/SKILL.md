@@ -13,6 +13,17 @@ feuille telle qu'il l'a laissée.
 Pas de fichier, pas d'outil, pas de tableau Markdown pour ce travail. Un fichier Excel seulement si l'utilisateur dit
 Excel, .xlsx ou fichier : c'est alors le skill tableur.
 
+Un graphe de la feuille (« fais-moi le graphe des dépenses ») : un bloc ```diagramme dans la conversation avec les
+lignes de la feuille (pas la ligne Total), par exemple :
+```diagramme
+type: camembert
+titre: Budget du week-end
+unité: €
+Chalets: 2400
+Bar à tacos: 640
+```
+Jamais une image faite avec un script : Naim dessine le bloc, et son menu ⋯ l'exporte en PNG ou en SVG.
+
 ## Le bloc
 
 ```feuille

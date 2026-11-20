@@ -229,6 +229,15 @@ DIAGRAM_ASK_RE = re.compile(r"\b(sch[ée]ma\w*|diagramme\w*|organigramme|flowcha
 
 
 # an answer taken back and written again: the user never saw the first one, so the new one does not talk about it
+# a FILE asked as the result (« en fichier », « un fichier excel », « enregistre-le », « en PDF »), not files as the
+# subject (« organise les fichiers de mon Mac », « un graphe des fichiers volumineux »)
+FILE_OUT_RE = re.compile(r"\b(?:en|un|une|dans un|au format|comme|sous forme d'un|sous forme de)\s+(?:fichiers?|documents?|pdf|word|"
+                         r"docx|excel|xlsx|csv|png|pages? web|pages? html|html)\b|\b(?:excel|xlsx|docx|pptx)\b|\.(?:xlsx|csv|png|pdf|"
+                         r"html?|js|docx)\b|enregistr|sauvegard|t[ée]l[ée]charg|\bexporte\w*", re.I)
+# skills whose result is a block drawn IN the conversation (a sheet, a board, a dashboard, a graph, a simulation):
+# no file, no command — the block in the reply is the work
+CHAT_BLOCK = {"tableur-vivant": "feuille", "tableau-blanc": "tableau-blanc", "donnees": "donnees",
+              "maths-affichage": "graphe (une courbe) ou ```diagramme (barres, camembert…)", "animation-algorithme": "simulation"}
 RETRY_UNSEEN = (" L'utilisateur n'a pas vu ta première version : ta phrase s'adresse à lui comme une première réponse, "
                 "sans parler d'erreur, de correction ni de version précédente.")
 
@@ -2626,6 +2635,7 @@ class Handler(BaseHTTPRequestHandler):
         # « imprime mon CV PDF », « envoie le document »: acting on a file that exists is not making one, no skill
         acting_only = bool(MAC_ACTION_RE.search(body["message"] or "")) and not MAKE_RE.search(body["message"] or "")
         sk = None
+        block_here = False  # the answer is a block drawn in the conversation: no file, no command
         if not plain and not body.get("_question") and helper.features.get("skills", True) and helper.auto_skill:
             # the same skills as the Agent (a house plan, a pro email…): their method and tools, not a drawing made up by hand
             recent = " ".join([body["message"]] + [str(m.get("content") or "") for m in (body.get("history") or [])[-2:]
@@ -2678,12 +2688,17 @@ class Handler(BaseHTTPRequestHandler):
             # (the debug method too: a bug to find is work on the files, its method is what makes it methodical)
             if sk and sk["name"] not in ("application-web", "api-rest", "projet-existant") and (file_work or sk["name"] not in ("schemas",)):
                 # an algorithm shown in the conversation is a ```simulation block, played there: no file, unless one is asked
-                sim_here = sk["name"] == "animation-algorithme" and not re.search(
-                    r"fichiers?|\bpages?\b|\bhtml\b|enregistr|sauvegard|t[ée]l[ée]charg|\w\.(js|html?)\b", body["message"] or "", re.I)
-                # a spreadsheet in the conversation (```feuille) is answered there too: the live sheet, no file
-                sheet_here = sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees") and not re.search(
-                    r"fichiers?|excel|xlsx|enregistr|sauvegard|t[ée]l[ée]charg", body["message"] or "", re.I)
-                file_work = not (sim_here or sheet_here)  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
+                file_out = bool(FILE_OUT_RE.search(body["message"] or ""))
+                sim_here = sk["name"] == "animation-algorithme" and not file_out
+                # a spreadsheet, a board, a dashboard, a graph in the conversation is answered there too: the block, no file
+                sheet_here = sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees") and not file_out
+                block_here = sk["name"] in CHAT_BLOCK and not file_out
+                file_work = not block_here  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
+                if block_here and not sim_here:
+                    messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
+                        f"\n\n(Réponds ici, dans la conversation : une phrase, puis le bloc ```{CHAT_BLOCK[sk['name']]} — Naim le "
+                        "dessine et l'utilisateur s'en sert là. Aucun fichier, aucune commande, aucun outil : les valeurs viennent "
+                        "de ma demande ou des messages précédents (un tableau déjà fait : reprends ses vraies valeurs).)"))
                 if sim_here:
                     ex_name, ex = sim_example(recent)  # the closest verified example comes with the request: its plan is followed
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
@@ -3224,6 +3239,12 @@ class Handler(BaseHTTPRequestHandler):
                     messages.append({"role": "tool", "tool_name": name, "content": (
                         "refused: the user asked for the answer HERE, in the conversation — no file. Write the full content "
                         "in your reply instead (code in a Markdown block).")})
+                    continue
+                if block_here and (name in LESSON_NO_FILES or name == "run_command"):
+                    refusals += 1  # a sheet, a board, a graph: drawn from the block in the reply, never a file or a script
+                    messages.append({"role": "tool", "tool_name": name, "content": (
+                        "refused: this is shown IN the conversation as a ``` block that Naim draws. Write the block in your "
+                        "reply now (with the real values), no file and no command.")})
                     continue
                 if lesson and name in LESSON_NO_FILES:
                     refusals += 1
