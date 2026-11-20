@@ -5205,6 +5205,45 @@ class WordDocumentsKeepTheirPromises(unittest.TestCase):
         self.assertIn('--headless --convert-to pdf --outdir "$tmp"', sh)
 
 
+class ADynamicGraphAskedIsDynamicAndStill(unittest.TestCase):
+    """« un graphe dynamique pour y = 3/7x - 8 et y = -2/3x + 4 »: a still graph is taken back and given with sliders
+    (the block prepared from its own curves); a drawn block is the work (no « En fait, ce n'était pas encore fait »);
+    a graph or a sheet already drawn stays as it is while the rest of the answer is written (it shook)."""
+
+    def test_server(self):
+        import re as _re
+        src = (ROOT / "server.py").read_text()
+        i = src.index("GRAPH_BLOCK_RE = ")
+        j = src.index('    return "\\n".join(out + curves) if curves else ""', i) + len('    return "\\n".join(out + curves) if curves else ""')
+        ns = {"re": _re}
+        exec(src[i:j], ns)
+        got = ns["dyn_graph_block"]("y = 3/7*x - 8\ny = -2/3*x + 4\nx : -10..10")
+        self.assertIn("curseur m1 = 3/7 (-5..5)", got)
+        self.assertIn("curseur b2 = 4 (-10..10)", got)
+        self.assertIn("d2(x) = m2*x + b2", got)
+        self.assertTrue(ns["DYN_ASK_RE"].search("non j'ai dit dynamique"))
+        self.assertIn("and dyn_checks < 1 and DYN_ASK_RE.search", src)
+        self.assertIn("claims_done(content) and not DRAWN_BLOCK_RE.search(content)", src)
+
+    def test_page_keeps_what_is_drawn(self):
+        page = (ROOT / "web/index.html").read_text()
+        self.assertIn("id = `g${hsh.toString(36)}`", page)
+        self.assertIn("a.dataset.ready && a.dataset.src != null && a.dataset.src === b.dataset?.src", page)
+
+
+class ARequestWithPicturesKeepsItsSkill(unittest.TestCase):
+    """« fais-moi un dessin animé avec ces deux images »: the pictures go to the model that sees them, without tools —
+    the skill of the request comes too, with its verified example and the names image:1, image:2 (it got no method and
+    made up an empty block)."""
+
+    def test_server(self):
+        src = (ROOT / "server.py").read_text()
+        i = src.index('        if body.get("images") and not trivial_message(body["message"] or ""):')
+        part = src[i:i + 2600]
+        for needle in ("ext.match_skill(", "exemples", "image:1", "CHAT_BLOCK[sk['name']]", 'self.event({"type": "skill"'):
+            self.assertIn(needle, part)
+
+
 class CompressionShowsItsProgress(unittest.TestCase):
     """A long conversation being summarized: a ring of dots, the sentence, a bar with its percentage read from the
     engine — no emoji line."""
@@ -5301,7 +5340,7 @@ class ALoopSimulationLooksRight(unittest.TestCase):
     def test_retry_does_not_talk_about_the_unseen_version(self):
         src = (ROOT / "server.py").read_text()
         self.assertIn("RETRY_UNSEEN = (", src)
-        self.assertEqual(src.count("+ RETRY_UNSEEN +"), 2)
+        self.assertEqual(src.count("+ RETRY_UNSEEN +"), 3)  # simulation, drawn operation, still graph asked dynamic
 
 
 class AFileGivenOpens(unittest.TestCase):

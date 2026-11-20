@@ -4873,6 +4873,10 @@ function morphChildren(el, from) {
       // the same visual or simulation (its height set since): kept as it is — rebuilt, it started again from zero at every
       // word written after it, and the page shook
       if (a.tagName === "IFRAME" && b.tagName === "IFRAME" && a.getAttribute("srcdoc") === b.getAttribute("srcdoc")) continue;
+      // a sheet, a board, a dashboard, a graph to move, drawn from its data: the same data, it is kept as drawn (with what
+      // the user moved in it) — rebuilt at every word written after it, it went back to its start and shook
+      if (a.nodeType === 1 && a.tagName === b.tagName && a.dataset.ready && a.dataset.src != null && a.dataset.src === b.dataset?.src
+          && a.className.split(/\s+/)[0] === b.className.split(/\s+/)[0]) continue;
       // the same step-by-step board of an operation (already drawn, on the step the child is reading): kept — rebuilt at
       // every word written after it, it went back to step 0 and faded in again, and the drawing shook
       if (a.tagName === "FIGURE" && b.tagName === "FIGURE" && a.classList.contains("dvfig") && a.dataset.say != null
@@ -5188,7 +5192,10 @@ function gRoots(h, a, b, n = 600) {  // where h changes sign on [a, b]: refined 
 }
 function graphHtml(src) {
   if (/^\s*curseurs?\b/im.test(String(src))) return `<div class="gdyn" data-src="${esc(String(src).replace(/\n+$/, ""))}"></div>`;  // a graph to move: drawn by gdynDraw
-  const curves = [], points = [], shapes = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
+  // its own ids, made from its text: two graphs on a page never mix, and the same graph keeps the same drawing while the
+  // rest of the answer is written (a new id at every word rebuilt it, and the graph and its ⋯ shook)
+  let hsh = 5381; for (const ch of String(src)) hsh = ((hsh * 33) ^ ch.charCodeAt(0)) >>> 0;
+  const curves = [], points = [], shapes = [], id = `g${hsh.toString(36)}`; graphSeq++;
   const params = [], polars = [], implicits = [], series = [];  // x(t), y(t) · r = f(θ) · x² + y² = 4, y > 2x · data
   const fields = []; let levels = null;  // f(x, y) = …: level curves, gradient, a point to move · « niveaux : 0, 1, 2 »
   let xr = null, yr = null, tr = null, ortho = false, showXY = false, fit = false, bare = false, live = false;

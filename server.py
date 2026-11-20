@@ -207,6 +207,38 @@ LATE_ANNOUNCE_RE = re.compile(r"^\W*(?:(?:maintenant|ensuite|puis|alors|donc)[, 
 
 
 SIM_BLOCK_RE = re.compile(r"```simulation[ \t]*\n(.*?)```", re.S)
+# a block drawn IN the conversation: its answer did the work, with no tool to use
+DRAWN_BLOCK_RE = re.compile(r"```(?:graphe|graph|courbe|fonction|diagramme|chart|feuille|sheet|tableau-blanc|donnees|données|"
+                            r"visuel|widget|simulation|systeme|pose-texte)\b", re.I)
+GRAPH_BLOCK_RE = re.compile(r"```(?:graphe|graph|courbe|fonction)[ \t]*\n(.*?)```", re.S | re.I)
+# « un graphe dynamique », « interactif », « à faire bouger », « avec des curseurs »
+DYN_ASK_RE = re.compile(r"\b(?:dynamiques?|interactifs?|interactives?|curseurs?|sliders?|(?:faire |fais |le |la )?bouger|"
+                        r"modifiables?|r[ée]glables?)\b", re.I)
+
+
+def dyn_graph_block(block):
+    """The graph with sliders for these curves: « y = 3/7*x - 8 » → « curseur m1 = 3/7 (-5..5) », « d1(x) = m1*x + b1 »."""
+    out, curves, n = [], [], 0
+    for line in block.splitlines():
+        m = re.match(r"^\s*(?:([a-zA-Z]\w*)\s*\(\s*x\s*\)|y)\s*=\s*(.+?)\s*$", line)
+        if not m:
+            if line.strip() and not re.match(r"^\s*[xy]\s*(?::|∈|dans)", line):
+                out.append(line)
+            continue
+        n += 1
+        e = m.group(2).replace(" ", "").replace("−", "-")
+        lin = re.match(r"^([+-]?[\d.,/]*)\*?x(?:([+-])([\d.,/]+))?$", e)
+        if lin:
+            k = lin.group(1) or "1"
+            k = "-1" if k == "-" else "1" if k == "+" else k
+            b = (lin.group(2) or "+") + (lin.group(3) or "0")
+            out.append(f"curseur m{n} = {k} (-5..5) « Pente m »")
+            out.append(f"curseur b{n} = {b.lstrip('+')} (-10..10) « Ordonnée b »")
+            curves.append(f"d{n}(x) = m{n}*x + b{n}")
+        else:
+            out.append(f"curseur a{n} = 1 (-3..3) « Facteur a »")
+            curves.append(f"d{n}(x) = a{n}*({m.group(2)})")
+    return "\n".join(out + curves) if curves else ""
 DRAWN_OP_RE = re.compile(r"```(division|addition|soustraction|multiplication|apprendre-calcul|calcul-visuel)[ \t]*\n", re.I)
 
 
@@ -2271,6 +2303,29 @@ class Handler(BaseHTTPRequestHandler):
             if self.chat_with_web(body, messages, options, stop, schedule=wants_schedule, files=files,
                                   web=web or not (files or email), email=email, send_now=address_given):
                 return
+        if body.get("images") and not trivial_message(body["message"] or ""):
+            # a request with pictures goes to the model that sees them, without tools: the skill of the request comes with
+            # it, with its verified example (it cannot open the file here) and the names of the pictures — « un dessin animé
+            # avec ces deux images » got no method at all and made up an empty block
+            try:
+                sk = ext.match_skill(body["message"] or "", body.get("project") or None, set(s.get("disabled_skills") or []))
+            except Exception:  # noqa: BLE001
+                sk = None
+            if sk:
+                _, skill_body = ext.parse_skill(Path(sk["path"]))
+                note = f"\n\n[Skill « {sk['name']} » chargé automatiquement : suis cette méthode]\n{skill_body.strip()}"
+                ex = sorted((Path(sk["path"]).parent / "exemples").glob("*.html"))
+                if ex:
+                    note += f"\n\n[Exemple vérifié du skill : exemples/{ex[0].name}]\n```html\n{ex[0].read_text()[:9000].strip()}\n```"
+                if sk["name"] in CHAT_BLOCK and not FILE_OUT_RE.search(body["message"] or ""):
+                    note += (f"\n\n(Réponds ici, dans la conversation : une phrase, puis le bloc ```{CHAT_BLOCK[sk['name']]}, "
+                             "complet, puis une ou deux phrases. Jamais un bloc vide ni des « [image] » à la place du code.)")
+                n_img = sum(len(m.get("images") or []) for m in messages)
+                if n_img:
+                    note += (f"\n(Les images que je t'ai données s'appellent image:1" + (f" à image:{n_img}" if n_img > 1 else "")
+                             + ", dans l'ordre où je les ai envoyées : écris ces noms dans ton bloc, Naim les remplace par les images.)")
+                messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + note)
+                self.event({"type": "skill", "name": sk["name"]})
         think = bool(body.get("think")) and not trivial_message(body["message"])
         for chunk in ollama_chat(body.get("model", "naim"), messages, think=think,
                                  stream=True, options=options):
@@ -2597,7 +2652,7 @@ class Handler(BaseHTTPRequestHandler):
         flat = lambda s: " ".join(str(s or "").split())  # noqa: E731
         earlier = [flat(m.get("content")) for m in messages if m.get("role") == "assistant" and len(flat(m.get("content"))) >= 160]
         earlier_answers = [str(m.get("content") or "") for m in messages if m.get("role") == "assistant"]
-        copies = rewrites = loops = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = repeat_checks = code_checks = report_checks = 0
+        copies = rewrites = loops = dyn_checks = sim_checks = svg_checks = drawn_checks = calc_checks = link_checks = repeat_checks = code_checks = report_checks = 0
         force_tool = False
 
         def copying(text):  # it writes again, word for word, one of its earlier answers (seen: a diagram 8 times in a row)
@@ -2720,7 +2775,11 @@ class Handler(BaseHTTPRequestHandler):
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
                         f"\n\n(Réponds ici, dans la conversation : une phrase, puis le bloc ```{CHAT_BLOCK[sk['name']]} — Naim le "
                         "dessine et l'utilisateur s'en sert là. Aucun fichier, aucune commande, aucun outil : les valeurs viennent "
-                        "de ma demande ou des messages précédents (un tableau déjà fait : reprends ses vraies valeurs).)"))
+                        "de ma demande ou des messages précédents (un tableau déjà fait : reprends ses vraies valeurs).)"
+                        + (" (Un graphe DYNAMIQUE est demandé : dans le bloc ```graphe, une ligne `curseur m1 = 3/4 (-5..5) "
+                           "« Pente m »` par paramètre, puis les courbes nommées d1(x), d2(x) écrites avec ces noms, par "
+                           "exemple `d1(x) = m1*x + b1` — Naim dessine les curseurs.)"
+                           if sk["name"] == "maths-affichage" and DYN_ASK_RE.search(body["message"] or "") else "")))
                 if sim_here:
                     ex_name, ex = sim_example(recent)  # the closest verified example comes with the request: its plan is followed
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
@@ -2997,7 +3056,7 @@ class Handler(BaseHTTPRequestHandler):
                 if content.strip():
                     self.event({"type": "token", "text": "\n\n"})
                 continue
-            if not calls and not stop.is_set() and not used_tools and nudges < 2 and claims_done(content):
+            if not calls and not stop.is_set() and not used_tools and nudges < 2 and claims_done(content) and not DRAWN_BLOCK_RE.search(content):
                 # « J'ai installé le skill » with no tool used in this reply: nothing was done — it does it now, or
                 # says plainly that it was not done (the false sentence is corrected first)
                 nudges += 1
@@ -3025,6 +3084,23 @@ class Handler(BaseHTTPRequestHandler):
                                  + ". Fais-le maintenant toi-même avec run_command (imprimer : lp -d <imprimante> <fichier> ; "
                                  "SMS : chercher_contact ou le numéro que je t'ai donné, puis osascript avec Messages ; appel : "
                                  "open \"tel:<numéro>\"). Ne me dis pas de le faire moi-même. Je validerai si on me le demande."})
+                continue
+            if (not calls and not stop.is_set() and dyn_checks < 1 and DYN_ASK_RE.search(body["message"] or "")
+                    and (gb := GRAPH_BLOCK_RE.search(content)) and not re.search(r"^\s*curseurs?\b", gb.group(1), re.M | re.I)):
+                # a graph to move was asked and a still one came: taken back and given again with its sliders — the block
+                # is prepared from its own curves, so the next answer only has to write it
+                dyn_checks += 1
+                ready = dyn_graph_block(gb.group(1))
+                self.event({"type": "retract", "chars": shown})
+                self.event({"type": "status", "text": "Naim rend le graphe dynamique…"})
+                messages.append({"role": "assistant", "content": content})
+                messages.append({"role": "user", "content": "(Ton graphe est statique : on t'a demandé un graphe DYNAMIQUE, avec des "
+                                 "curseurs. Redonne ta réponse entière, avec ce bloc à la place de l'autre"
+                                 + (f" (il reprend tes courbes) :\n```graphe\n{ready}\n```\n" if ready else
+                                    " : une ligne `curseur nom = valeur (min..max) « étiquette »` par paramètre, puis les courbes "
+                                    "nommées d1(x), d2(x) écrites avec ces noms. ")
+                                 + "Garde le reste de ta réponse (l'explication, les autres questions)." + RETRY_UNSEEN + ")"})
+                shown = 0
                 continue
             if not calls and not stop.is_set() and sim_checks < 3 and (blk := SIM_BLOCK_RE.search(content)):
                 # a simulation is checked before it is shown as done (run for real, drawn on every step): wrong, it is
