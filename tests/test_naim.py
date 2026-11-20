@@ -5015,6 +5015,41 @@ class AttachPickerButtonReadable(unittest.TestCase):
         self.assertIn("white-space: nowrap; flex: none; }", html)
 
 
+class CompressionShowsItsProgress(unittest.TestCase):
+    """A long conversation being summarized: a ring of dots, the sentence, a bar with its percentage read from the
+    engine — no emoji line."""
+
+    def test_page_and_server(self):
+        page = (ROOT / "web/index.html").read_text()
+        self.assertIn("function compactingView()", page)
+        self.assertIn("Compression de notre conversation en cours pour pouvoir continuer à discuter…", page)
+        self.assertIn('api("/api/compact/progress")', page)
+        self.assertNotIn('toast("🗜', page)
+        self.assertNotIn('v.typing("🗜', page)
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('elif path == "/api/compact/progress":', src)
+        self.assertIn("COMPACT_PROGRESS.update(active=False, pct=100)", src)
+
+
+class AnAnnouncementAlreadyShownIsDone(unittest.TestCase):
+    """« Je vais dessiner le graphe » followed by the ```graphe block: the work is done. « j'ai pas compris » then asks for
+    an explanation — it made an unrequested PDF and hid its explanation."""
+
+    def test_a_graph_point_off_its_curve_is_caught(self):
+        import calccheck
+        wrong = calccheck.check("```graphe\ny = 3/4*x - 5\nx : -4..8\nA(0;-5)\nB(7;0)\n```")
+        self.assertEqual(len(wrong), 1)
+        self.assertIn("B(7 ; 0)", wrong[0])
+        self.assertIn("y = 0,25", wrong[0])
+        self.assertEqual(calccheck.check("```graphe\ny = 3/4x - 5\nA(0;-5)\nB(20/3;0)\n```"), [])
+        self.assertEqual(calccheck.check("```graphe\nf(x) = 2x^2 - 3\nP(1,5;1,5)\n```"), [])
+        self.assertTrue(calccheck.check("```graphe\nf(x) = 2x^2 - 3\nP(1,5;2)\n```"))
+
+    def test_shown_block_counts_as_done(self):
+        src = (ROOT / "server.py").read_text()
+        self.assertIn('and "```" not in prev_answer and any(', src)
+
+
 class ALoopSimulationLooksRight(unittest.TestCase):
     """A loop shown step by step: its own verified example, lines given by their text (never the wrong one
     highlighted), no sort counters, a drawing kept inside its frame, and a retried answer that does not talk about

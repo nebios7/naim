@@ -1123,6 +1123,8 @@ class Handler(BaseHTTPRequestHandler):
                 "failed": [x["name"] for x in last["results"] if not x["ok"]]}, "lessons": naim_check.lessons()})
         elif path == "/api/context":  # what the engine reads before the conversation, part by part (like /context)
             self.send_json(context_parts(q.get("mode") or "chat", q.get("project") or ""))
+        elif path == "/api/compact/progress":  # how far the summary of a long conversation is (the app's progress bar)
+            self.send_json(dict(COMPACT_PROGRESS))
         elif path == "/api/room":  # the real room of one conversation in the running engine (98k with shared memory)
             self.send_json({"room": llamacpp.slot_ctx() if llamacpp.available() else 0})
         elif path == "/api/llama":
@@ -2613,7 +2615,9 @@ class Handler(BaseHTTPRequestHandler):
         if file_work and MATH_ASK_RE.search(body["message"] or "") and not FILE_NAMED_RE.search(body["message"] or ""):
             file_work = False  # « corrige l'exercice » is maths to answer here, not a file to correct
         prev_answer = next((str(m.get("content") or "") for m in reversed(body.get("history") or []) if m.get("role") == "assistant"), "")
-        if not file_work and not plain and not pure_question(body["message"] or "") and any(
+        # … unless that answer did it right there: a block shown in the conversation (```graphe, ```simulation, code) is the
+        # announced work, done — « j'ai pas compris » after a graph asks for an explanation, not for a file
+        if not file_work and not plain and not pure_question(body["message"] or "") and "```" not in prev_answer and any(
                 ANNOUNCE_RE.search(x) for x in re.split(r"(?<=[.!?…])\s+", prev_answer.strip()[-600:]) if x):
             # its last answer announced an action it did not do (« Je vais ajouter un titre… »): the user's « j'attends »,
             # « tu bloques », « vas-y » asks for that action — with the tools, not another announcement
@@ -3671,11 +3675,31 @@ def compact_conversation(body):
     msgs = [{"role": "system", "content": COMPACT_PROMPT},
             {"role": "user", "content": "Conversation to summarize:\n<conversation>\n" + "\n\n".join(lines)[-60000:]
              + "\n</conversation>\nNotes (only facts written above):"}]
-    out = ollama_chat(body.get("model", "naim"), msgs, think=False, options=options)
+    COMPACT_PROGRESS.update(active=True, pct=1, started=time.time())
+    try:
+        if options.get("backend") == "llamacpp":
+            # read as it is made, for the progress bar: reading the conversation is the first half, writing the notes the
+            # second (600 tokens at most, about 3.5 characters each)
+            content = ""
+            for chunk in ollama_chat(body.get("model", "naim"), msgs, think=False, stream=True, options=options):
+                w = chunk.get("writing") or {}
+                if w.get("reading") and w.get("total"):
+                    COMPACT_PROGRESS["pct"] = max(COMPACT_PROGRESS["pct"], min(50, round(50 * w.get("done", 0) / w["total"])))
+                content += (chunk.get("message") or {}).get("content") or ""
+                if content:
+                    COMPACT_PROGRESS["pct"] = max(COMPACT_PROGRESS["pct"], min(99, 50 + round(49 * len(content) / 2100)))
+            out = {"content": content}
+        else:
+            out = ollama_chat(body.get("model", "naim"), msgs, think=False, options=options)
+    finally:
+        COMPACT_PROGRESS.update(active=False, pct=100)
     text = re.sub(r"(?s)<think>.*?</think>", "", out.get("content") or "").strip()
     if not text:
         raise RuntimeError("résumé vide")
     return text
+
+
+COMPACT_PROGRESS = {"active": False, "pct": 0, "started": 0}  # the summary being made, for the app's progress bar
 
 
 def _storage_dirs():

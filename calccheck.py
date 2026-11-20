@@ -51,8 +51,60 @@ def _eval(expr):
     return r, vals, ops
 
 
-def check(text):
+GRAPH_RE = re.compile(r"```(?:graphe|graph|courbe|fonction)[ \t]*\n([\s\S]*?)```", re.I)
+_MATH = {"sqrt": __import__("math").sqrt, "sin": __import__("math").sin, "cos": __import__("math").cos,
+         "tan": __import__("math").tan, "exp": __import__("math").exp, "ln": __import__("math").log,
+         "log": __import__("math").log10, "abs": abs, "pi": __import__("math").pi, "e": __import__("math").e}
+
+
+def _fn(expr):
+    """y = f(x) as written in a graph block (3/4x - 5, 2x^2+1, sqrt(x)), as a Python function; None when unreadable."""
+    import ast
+    t = expr.strip().replace("^", "**").replace("×", "*").replace("−", "-").replace("÷", "/").replace("π", "pi")
+    t = re.sub(r"(?<=\d),(?=\d)", ".", t)
+    t = re.sub(r"(\d|\))\s*(?=[a-zA-Z(])", r"\1*", t)          # 3x, 2(x+1), )( and )x
+    t = re.sub(r"\bx\s*(?=[\d(])", "x*", t)
+    try:
+        tree = ast.parse(t, mode="eval")
+    except SyntaxError:
+        return None
+    ok = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant, ast.Name, ast.Load, ast.Call, ast.Add, ast.Sub, ast.Mult,
+          ast.Div, ast.Pow, ast.USub, ast.UAdd, ast.Mod)
+    if any(not isinstance(n, ok) or (isinstance(n, ast.Name) and n.id != "x" and n.id not in _MATH) for n in ast.walk(tree)):
+        return None
+    code = compile(tree, "f", "eval")
+    return lambda x: eval(code, {"__builtins__": {}}, dict(_MATH, x=x))  # noqa: S307 — only x, numbers and math names
+
+
+def graph_points(text):
+    """In a graph block with one curve y = f(x), each named point A(a;b) said to be on it is checked: f(a) must be b.
+    « B(7;0) » on y = 3/4x - 5 is off the line (f(7) = 0,25): the point the model meant is (20/3 ; 0)."""
     out = []
+    for blk in GRAPH_RE.finditer(str(text or "")):
+        lines = [l.strip() for l in blk.group(1).splitlines() if l.strip()]
+        curves = [m.group(1) for l in lines if (m := re.match(r"^(?:[a-zA-Z]\w*\s*\(\s*x\s*\)|y)\s*=\s*(.+)$", l))]
+        if len(curves) != 1 or not (f := _fn(curves[0])):
+            continue
+        for l in lines:
+            m = re.match(r"^([A-Z]\w?['’]?)\s*\(\s*([^;|)]+?)\s*[;|]\s*([^)]+?)\s*\)$", l)
+            if not m:
+                continue
+            fx, fy = _fn(m.group(2)), _fn(m.group(3))
+            try:
+                a, b = fx(0), fy(0)
+                v = f(a)
+            except Exception:  # noqa: BLE001 — outside the domain (sqrt of a negative…): not checked
+                continue
+            if abs(v - b) > 0.01 * max(1, abs(v)):
+                out.append(f"le point {m.group(1)}({m.group(2)} ; {m.group(3)}) du graphe n'est pas sur la courbe y = {curves[0]} : "
+                           f"pour x = {_fmt(Fraction(a).limit_denominator(1000))}, y = {_fmt(Fraction(v).limit_denominator(1000))}. "
+                           "Donne les coordonnées exactes du point que tu veux montrer (une fraction s'écrit 20/3) ; "
+                           "si ce point est volontairement hors de la courbe, dis-le dans le texte")
+    return out
+
+
+def check(text):
+    out = graph_points(text)
     plain = re.sub(r"```[\s\S]*?```", " ", str(text or ""))  # blocks the application computes itself are not read
     plain = re.sub(r"\$[^$\n]*\$", lambda m: m.group(0) if re.fullmatch(r"\$[\d\s+×÷:*/=,−-]+\$", m.group(0)) else " ", plain)
     for m in EXPR.finditer(plain):
