@@ -5265,6 +5265,40 @@ class ACartoonPlayedOrAProductionFile(unittest.TestCase):
         self.assertIn("web_search", body)
 
 
+class NaimMakesSkillsThatWorkAndTestsThem(unittest.TestCase):
+    """Creating or improving a skill follows a method (createur-skills): what it does, its triggers, instructions that
+    explain why, trigger phrases and real requests tested, then a corrected version. « déclencheurs: » as the first line
+    of create_skill's instructions goes into the skill's header — a skill Naim made was never loaded by itself."""
+
+    def test_triggers_go_in_the_header(self):
+        import extensions as ext, tempfile, re as _re
+        old = ext.HOME
+        try:
+            ext.HOME = Path(tempfile.mkdtemp())
+            f = ext.write_skill("Créateur rapide", "Des recettes", "déclencheurs: \\b(recettes? rapides?)\\b\n\n# Recette\nCourt.")
+            meta, body = ext.parse_skill(f)
+            self.assertEqual(f.parent.name, "createur-rapide")
+            self.assertTrue(_re.search(meta["triggers"], "une recette rapide", _re.I))
+            self.assertNotIn("déclencheurs", body)
+            bad = ext.write_skill("x", "y", "déclencheurs: (oops\n\nCorps")
+            self.assertNotIn("triggers:", bad.read_text())
+        finally:
+            ext.HOME = old
+
+    def test_plugin_and_routing(self):
+        import re as _re
+        t = json.loads((ROOT / "plugins_builtin/createur-skills/plugin.json").read_text())["triggers"]["createur-skills"]
+        for m in ("améliore le skill tableur", "teste ce skill", "transforme ça en skill", "utilise le skill creator"):
+            self.assertTrue(_re.search(t, m, _re.I), m)
+        for m in ("quel temps fait-il", "un skill de cuisine ?"):
+            self.assertFalse(_re.search(t, m, _re.I), m)
+        sk = (ROOT / "plugins_builtin/createur-skills/skills/createur-skills/SKILL.md").read_text()
+        for needle in ("déclencheurs: ", "run_command", "Corrige la MÉTHODE", "Apache 2.0"):
+            self.assertIn(needle, sk)
+        self.assertTrue((ROOT / "plugins_builtin/createur-skills/skills/createur-skills/LICENSE.txt").exists())
+        self.assertIn("use_skill createur-skills", (ROOT / "plugins_builtin/auto-amelioration/skills/s-ameliorer/SKILL.md").read_text())
+
+
 class CompressionShowsItsProgress(unittest.TestCase):
     """A long conversation being summarized: a ring of dots, the sentence, a bar with its percentage read from the
     engine — no emoji line."""

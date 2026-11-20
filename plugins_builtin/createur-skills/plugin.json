@@ -1,0 +1,10 @@
+{
+  "name": "createur-skills",
+  "version": "1.0",
+  "description": "Créer ou améliorer un skill et le tester avant de le livrer : ses déclencheurs, ses instructions, des phrases de test, puis une version corrigée.",
+  "skills": "skills",
+  "triggers": {
+    "createur-skills": "\\bskill[- ]?creator\\b|\\bcr[ée]ateur de skills?\\b|\\b(am[ée]lior\\w*|corrig\\w*|modifi\\w*|refai\\w*|r[ée][ée]cri\\w*|teste\\w*|tester|v[ée]rifi\\w*|optimis\\w*)\\b[^.?!\\n]{0,30}\\b(le|ce|mon|ton|un|du|les|mes|tes|ces) skills?\\b|\\b(transforme|change|mets?|enregistre)\\w*\\b[^.?!\\n]{0,30}\\ben (un )?skill\\b|\\b(d[ée]clencheurs?|description) (du|de ce|de mon|d'un) skill\\b"
+  },
+  "priority": true
+}

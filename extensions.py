@@ -704,7 +704,9 @@ def find_skill(name, root=None):
 
 
 def slugify(name):
-    s = re.sub(r"[^a-z0-9]+", "-", name.lower().strip()).strip("-")
+    import unicodedata  # « Créateur de recettes » → creatur-de-recettes was « cr-ateur… »: the accents become their letter
+    plain = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
+    s = re.sub(r"[^a-z0-9]+", "-", plain.lower().strip()).strip("-")
     return s[:48] or "skill"
 
 
@@ -713,7 +715,19 @@ def write_skill(name, description, instructions, root=None, scope="utilisateur")
     d = base / slugify(name)
     d.mkdir(parents=True, exist_ok=True)
     desc = " ".join(description.split())
-    (d / "SKILL.md").write_text(f"---\nname: {slugify(name)}\ndescription: {desc}\n---\n\n{instructions.strip()}\n")
+    # « déclencheurs: <regex> » as the first line of the instructions: the words that load the skill by themselves, put
+    # in its header (checked first: a broken expression would never match) — without them a skill Naim made was never
+    # loaded unless named
+    trig, body = "", instructions.strip()
+    m = re.match(r"^(?:d[ée]clencheurs?|triggers?)\s*:\s*(.+?)\s*(?:\n|$)", body, re.I)
+    if m:
+        try:
+            re.compile(m.group(1).strip().strip("`\"'"))
+            trig, body = m.group(1).strip().strip("`\"'"), body[m.end():].strip()
+        except re.error:
+            pass
+    head = f"---\nname: {slugify(name)}\ndescription: {desc}\n" + (f"triggers: {trig}\n" if trig else "") + "---\n\n"
+    (d / "SKILL.md").write_text(head + body + "\n")
     return d / "SKILL.md"
 
 

@@ -1,6 +1,6 @@
 {
   "name": "auto-amelioration",
-  "version": "1.2",
+  "version": "1.3",
   "description": "Naim apprend ce qu'on lui montre (capture, lien, site, autre assistant) et le garde : il en fait un skill ou un plugin, le teste, puis s'en sert de lui-même.",
   "skills": "skills",
   "triggers": {

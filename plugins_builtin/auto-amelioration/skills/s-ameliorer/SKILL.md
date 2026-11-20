@@ -19,6 +19,9 @@ outil) et veut que tu fasses pareil, ne te contente pas de le faire une fois : t
 ## 2. Choisir la forme
 - Une façon d'écrire, de répondre, de présenter, une méthode de travail : un **skill** (create_skill). Nom court en
   minuscules avec des tirets, description qui dit QUAND s'en servir, instructions = les règles + un exemple complet.
+  Pour l'écrire, lui donner ses déclencheurs (`déclencheurs: <expression>` en première ligne des instructions :
+  les mots qui le chargent tout seul) et le TESTER avant de le livrer : suis la méthode du skill createur-skills
+  (use_skill createur-skills).
 - Un vrai outil (un script, une conversion, une vérification) : un **plugin** dans ~/.naim/plugins/<nom>/ avec
   `plugin.json` (name, version, description, skills, triggers), `skills/<nom>/SKILL.md` et le script à côté ; le
   SKILL.md donne la commande exacte à lancer (comme le skill traduction-livre avec livre.py).
