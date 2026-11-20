@@ -2305,20 +2305,27 @@ body, :root[data-theme="dark"] body, :root[data-theme="light"] body { font-famil
 .md figure.gcard svg marker [fill="#555"] { fill: var(--muted); }
 .md figure.gcard svg [stroke="#fff"] { stroke: var(--bg); }
 .md figure.gcard .gread { color: var(--text); }
-.md .gdyn { margin: 12px 0; max-width: 760px; }
-.md .gdyn .gdcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.md .gdyn .gdcard { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--side); }
-.md .gdyn .gdhead { display: flex; align-items: center; gap: 8px; font-size: 14.5px; margin-bottom: 6px; }
-.md .gdyn .gdsw { width: 18px; height: 0; border-top: 2.6px solid var(--c); display: inline-block; }
+.md .gdyn { margin: 12px 0; max-width: 780px; }
+.md .gdyn .gdcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.md .gdyn .gdcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px 18px 10px; background: transparent; }
+.md .gdyn .gdhead { display: flex; align-items: center; gap: 10px; font-size: 15.5px; margin-bottom: 4px; }
+.md .gdyn .gdhead b { font-weight: 600; }
+.md .gdyn .gdsw { width: 22px; height: 0; border-top: 2.6px solid var(--c); display: inline-block; }
 .md .gdyn .gdsw.gdash { border-top-style: dashed; }
-.md .gdyn .gdrow { display: grid; grid-template-columns: 96px 1fr 56px; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); margin: 4px 0; }
-.md .gdyn .gdrow output { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
-.md .gdyn input[type=range] { width: 100%; accent-color: #d97757; }
-.md .gdyn .gdpos { margin: 10px 0; }
-.md .gdyn .gdvals { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-.md .gdyn .gdval { border-radius: 10px; padding: 10px 14px; background: var(--side); display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--muted); }
-.md .gdyn .gdval b { color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }
-.md .gdyn .gdreset { margin-top: 12px; }
+.md .gdyn .gdrow { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 12px; font-size: 15px; color: var(--muted); margin: 2px 0; line-height: 1.25; }
+.md .gdyn .gdrow output { text-align: right; color: var(--text); font-size: 15.5px; font-variant-numeric: tabular-nums; }
+.md .gdyn input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; margin: 0; cursor: pointer; }
+.md .gdyn input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: var(--line); }
+.md .gdyn input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: var(--line); }
+.md .gdyn input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7.5px; border-radius: 50%; background: var(--bg); border: 1px solid color-mix(in srgb, var(--text) 35%, transparent); }
+.md .gdyn input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--bg); border: 1px solid color-mix(in srgb, var(--text) 35%, transparent); }
+.md .gdyn .gdplot { display: flex; justify-content: center; margin: 14px 0 4px; }
+.md .gdyn .gdplot figure.gcard { margin: 0; }
+.md .gdyn .gdpos { grid-template-columns: 82px 1fr 52px; margin: 18px 0 12px; }
+.md .gdyn .gdvals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+.md .gdyn .gdval { border-radius: 10px; padding: 14px 20px; background: color-mix(in srgb, var(--text) 5%, transparent); display: flex; flex-direction: column; gap: 2px; font-size: 16px; color: var(--muted); line-height: 1.35; }
+.md .gdyn .gdval b { color: var(--text); font-size: 16.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.md .gdyn .gdreset { margin-top: 14px; background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 7px 18px; font-size: 15px; color: var(--text); }
 .md .vis { margin: 4px 0 6px; }
 .md .vis iframe.visf { display: block; width: 100%; height: 160px; border: 0; background: transparent; }
 .md .simbar { display: flex; align-items: center; justify-content: space-between; max-width: 680px; margin: 6px auto 4px; font-size: 12.5px; color: var(--muted); }
@@ -5122,7 +5129,7 @@ function graphHtml(src) {
   const curves = [], points = [], shapes = [], id = `g${++graphSeq}`;  // its own ids: two graphs on a page never mix
   const params = [], polars = [], implicits = [], series = [];  // x(t), y(t) · r = f(θ) · x² + y² = 4, y > 2x · data
   const fields = []; let levels = null;  // f(x, y) = …: level curves, gradient, a point to move · « niveaux : 0, 1, 2 »
-  let xr = null, yr = null, tr = null, ortho = false, showXY = false, fit = false, bare = false;
+  let xr = null, yr = null, tr = null, ortho = false, showXY = false, fit = false, bare = false, live = false;
   // the pairs of a data line: « (1;2) (2;3,5) », « (1, 2) (2, 3) », « 1;2 | 2;3 »
   const pairs = (t) => (t.match(/\(([^()]*)\)/g) || t.split("|")).map((q) => {
     const in_ = q.replace(/[()]/g, "").trim(), parts = in_.includes(";") ? in_.split(";") : (in_.match(/,/g) || []).length === 1 ? in_.split(",") : in_.split(/,\s+|\s+/);
@@ -5173,6 +5180,7 @@ function graphHtml(src) {
     if (/^(rep[èe]re )?orthonorm[ée]?$/i.test(l)) { ortho = true; continue; }
     if (/^(avec (les )?)?coordonn[ée]es$/i.test(l)) { showXY = true; continue; }
     if (/^sans (les )?points( remarquables)?$/i.test(l)) { bare = true; continue; }
+    if (/^rendu\s*:\s*dynamique$/i.test(l)) { live = true; continue; }
     if ((m = l.match(/^([xy])\s*(?::|∈|dans)\s*\[?\s*(.+?)\s*(?:\.\.|;|à)\s*(.+?)\s*\]?$/i))) {
       const r = [mathFn(m[2])(0), mathFn(m[3])(0)].sort((a, b) => a - b);  // bounds may be computed: -2pi, pi/2, sqrt(2)
       if (m[1].toLowerCase() === "x") xr = r; else yr = r;
@@ -5216,8 +5224,8 @@ function graphHtml(src) {
     ls.forEach((a) => { if (Math.abs(a.m) > 1e-12) key.push(-a.b / a.m); });
     ls.forEach((a, i) => ls.slice(i + 1).forEach((b) => { if (Math.abs(a.m - b.m) > 1e-12) key.push((b.b - a.b) / (a.m - b.m)); }));
     const ks = key.filter((x) => Number.isFinite(x) && Math.abs(x) < 1e4).concat(points.map((p) => p.x));
-    if (ls.length && ks.some((x) => Math.abs(x) > 4)) {
-      const lo = Math.min(...ks), hi = Math.max(...ks), pad = Math.max(1.5, (hi - lo) * 0.3);
+    if (ls.length && (live || ks.some((x) => Math.abs(x) > 4))) {  // a graph to move keeps room around its points
+      const lo = Math.min(...ks), hi = Math.max(...ks), pad = live ? Math.max(4, (hi - lo) * 0.7) : Math.max(1.5, (hi - lo) * 0.3);
       xr = [Math.min(lo - pad, -1), Math.max(hi + pad, 1)];
     }
   }
@@ -5230,7 +5238,7 @@ function graphHtml(src) {
     yr = series.length ? [lo - pad, hi + pad] : [Math.min(lo - pad, 0), Math.max(hi + pad, 0)];
     if (yr[1] - yr[0] < 1) yr = [yr[0] - 1, yr[1] + 1];
   }
-  let W = 520, H = 340;
+  let W = live ? 760 : 520, H = live ? 580 : 340;
   const L = 40, R = 16, T = 14, B = 30;
   if (ortho) {  // one unit is as long on both axes: the frame takes the figure's proportions (within bounds)
     const ux = xr[1] - xr[0], uy = yr[1] - yr[0], u = Math.min((W - L - R) / ux, (H - T - B) / uy, 64);
@@ -5241,6 +5249,10 @@ function graphHtml(src) {
   const X = (x) => L + (x - xr[0]) / (xr[1] - xr[0]) * (W - L - R), Y = (y) => T + (yr[1] - y) / (yr[1] - yr[0]) * (H - T - B);
   const sx = niceStep(xr[1] - xr[0]), sy = niceStep(yr[1] - yr[0]);
   let g = "";
+  if (live) {  // the fine grid: one line per half step, under the numbered ones
+    for (let v = Math.ceil(xr[0] / (sx / 2)) * (sx / 2); v <= xr[1] + 1e-9; v += sx / 2) g += `<line x1="${X(v)}" y1="${T}" x2="${X(v)}" y2="${H - B}" stroke="#e6e2da" stroke-opacity=".55"/>`;
+    for (let v = Math.ceil(yr[0] / (sy / 2)) * (sy / 2); v <= yr[1] + 1e-9; v += sy / 2) g += `<line x1="${L}" y1="${Y(v)}" x2="${W - R}" y2="${Y(v)}" stroke="#e6e2da" stroke-opacity=".55"/>`;
+  }
   for (let v = Math.ceil(xr[0] / sx) * sx; v <= xr[1] + 1e-9; v += sx) {
     g += `<line x1="${X(v)}" y1="${T}" x2="${X(v)}" y2="${H - B}" stroke="#e6e2da"/>`;
     if (Math.abs(v) > 1e-9) g += `<text x="${X(v)}" y="${Math.min(H - B, Math.max(T, Y(0))) + 14}" text-anchor="middle">${frNum(v)}</text>`;
@@ -5252,7 +5264,7 @@ function graphHtml(src) {
   const ax = Math.min(H - B, Math.max(T, Y(0))), ay = Math.min(W - R, Math.max(L, X(0)));
   g += `<line x1="${L}" y1="${ax}" x2="${W - R}" y2="${ax}" stroke="#555" stroke-width="1.2" marker-end="url(#${id}f)"/>`
     + `<line x1="${ay}" y1="${H - B}" x2="${ay}" y2="${T}" stroke="#555" stroke-width="1.2" marker-end="url(#${id}f)"/>`
-    + `<text x="${W - R - 2}" y="${ax - 6}" text-anchor="end" font-style="italic">x</text><text x="${ay + 6}" y="${T + 10}" font-style="italic">y</text>`
+    + `<text x="${W - R - 2}" y="${ax - 8}" text-anchor="end" font-size="13">x</text><text x="${ay + 8}" y="${T + 12}" font-size="13">y</text>`
     + (xr[0] <= 0 && xr[1] >= 0 && yr[0] <= 0 && yr[1] >= 0 ? `<text x="${ay - 5}" y="${ax + 14}" text-anchor="end">0</text>` : "");  // the origin only when it is in the frame
   const COLORS = G_COLORS;
   let fieldAttr = "", fieldRead = "";
@@ -5333,6 +5345,7 @@ function graphHtml(src) {
         meets.push({ x, y, i, j, exact: !!(lin[i] && lin[j]) });
         g += `<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="7" fill="#fff" stroke="#8a877f" stroke-width="1.2"/>`;
         free(X(x) - 8, Y(y) - 8, 16, 16);
+        if (live) { g += `<text x="${(X(x) + 14).toFixed(1)}" y="${(Y(y) - 12).toFixed(1)}" font-size="12.5" fill="#333">${gPt(x, y)}</text>`; return; }
         const t2 = gPt(x, y), w2 = Math.max(78, t2.length * 7.2), sides = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
         const [sx_, sy_] = sides.find(([a, c]) => free(a > 0 ? X(x) + 12 : X(x) - 12 - w2, c > 0 ? Y(y) + 14 : Y(y) - 50, w2, 38)) || sides[0];
         const tx = (X(x) + sx_ * 16).toFixed(1), ty = sy_ > 0 ? Y(y) + 30 : Y(y) - 30;
@@ -5345,8 +5358,9 @@ function graphHtml(src) {
       if (!L_) return;
       const dots = [[0, L_.b, "y"]].concat(Math.abs(L_.m) > 1e-12 ? [[-L_.b / L_.m, 0, "x"]] : []);
       dots.forEach(([x, y, k]) => {
-        if (!inView(x, y) || taken(x, y) || (k === "x" && Math.abs(x) < 1e-9)) return;
+        if (!inView(x, y) || taken(x, y) || (k === "x" && Math.abs(x) < 1e-9) ) return;
         g += `<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="4.5" fill="${col}"/>`;
+        if (live) return;
         const t = gPt(x, y), w = t.length * 6.6;
         const spots = k === "y" ? [[X(x) + 10, Y(y) + (L_.m > 0 ? 20 : -10)], [X(x) + 10, Y(y) + (L_.m > 0 ? -10 : 20)]]
           : [[X(x) - w / 2, Y(y) + (L_.m > 0 ? -12 : 24)], [X(x) - w / 2, Y(y) + (L_.m > 0 ? 24 : -12)]];
@@ -5462,13 +5476,13 @@ function graphHtml(src) {
     leg += lt(LX, ly + 22, q.exact ? `(${gFrac(q.x)} ; ${gFrac(q.y)})` : gPt(q.x, q.y), ' font-size="12.5" fill="#666"');
     ly += 50;
   });
-  const Wt = curves.length && !fields.length ? Math.round(W + 26 + Math.min(320, Math.max(170, lw)) + 8) : W, Ht = Math.max(H, ly);
+  const Wt = curves.length && !fields.length && !live ? Math.round(W + 26 + Math.min(320, Math.max(170, lw)) + 8) : W, Ht = Math.max(H, ly);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Wt} ${Ht}" width="${Wt}" style="width:${Wt}px" font-family="-apple-system, system-ui, Helvetica, Arial" font-size="11" fill="#333">`
     + `<defs><marker id="${id}f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>`
     + arrows + `<marker id="${id}ga" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f9a6f"/></marker>`
     + `<marker id="${id}gp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c4553a"/></marker>`
     + `<clipPath id="${id}z"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath></defs>${g}${Wt > W ? leg : ""}</svg>`;
-  const legend = (Wt > W ? "" : curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join(""))
+  const legend = (Wt > W || live ? "" : curves.map((c, n) => `<span style="color:${COLORS[n % COLORS.length]}">${esc((c.name === "y" ? "y" : c.name + "(x)") + " = " + c.text)}</span>`).join(""))
     + legendMore.map(([col, t]) => `<span style="color:${col}">${esc(t)}</span>`).join("");
   return graphCard("Courbe", "", svg, (legend ? `<figcaption>${legend}</figcaption>` : "") + fieldRead,
     fieldAttr + ` data-gview="${[xr[0], xr[1], yr[0], yr[1], L, T, W, H, R, B].join(",")}"`);
@@ -5547,7 +5561,9 @@ function gdynSub(line, vals) {  // the curve with the sliders' values: « d1(x) 
 function gdynShow(line, vals) {  // the same, as it reads: « y = 3/4 x − 7 »
   const i = line.indexOf("="); let r = line.slice(i + 1);
   for (const [k, v] of Object.entries(vals)) r = r.replace(new RegExp(`(?<![\\w.])${k}(?![\\w(])`, "g"), `{${gFrac(v)}}`);
-  return gExpr(r.replace(/\{([^}]*)\}/g, "$1").replace(/\+\s*−/g, "− ").replace(/−\s*−/g, "+ ").replace(/\b1\s+x\b/g, "x").replace(/(^|[^\d/])0\s*x\s*[+−]?\s*/g, "$1"));
+  return gExpr(r.replace(/\{([^}]*)\}/g, "$1")).replace(/(^|[^\d/,])1 ([a-zA-Z(])/g, "$1$2")  // « 1 x² » reads « x² », « 0 x + 4 » reads « 4 »
+    .replace(/(^|[^\d/,])0 [a-zA-Z][²³]?\s*(?:\+\s*)?/g, "$1").replace(/\+\s*−\s*/g, "− ").replace(/−\s*−\s*/g, "+ ").replace(/\s*[+−]\s*0(?![\d,/])/g, "")
+    .replace(/^\s*−\s*(?=\d|[a-zA-Z])/, "−").trim() || "0";
 }
 const G_CURVE = /^\s*(?:([a-zA-Z]\w*)\s*\(\s*x\s*\)|y)\s*=/;
 function gdynDraw(el) {
@@ -5568,7 +5584,7 @@ function gdynDraw(el) {
 }
 function gdynRender(el) {
   const P = el._gdP, curves = el._gdC, st = el._gd;
-  const lines = P.rest.map((l) => (G_CURVE.test(l) ? gdynSub(l, st.vals) : l));
+  const lines = P.rest.map((l) => (G_CURVE.test(l) ? gdynSub(l, st.vals) : l)).concat("rendu: dynamique");
   const hasX = P.rest.some((l) => /^\s*x\s*(?::|∈|dans)/i.test(l)), hasY = P.rest.some((l) => /^\s*y\s*(?::|∈|dans)/i.test(l));
   if (st.frame) { if (!hasX) lines.push(`x : ${st.frame[0]}..${st.frame[1]}`); if (!hasY) lines.push(`y : ${st.frame[2]}..${st.frame[3]}`); }
   const plot = el.querySelector(".gdplot");
@@ -5581,7 +5597,7 @@ function gdynRender(el) {
   if (!xi || v.length !== 10) return;
   const [x0, x1, y0, y1, L, T, W, H, R, B] = v, step = niceStep(x1 - x0) / 10;
   if (xi.min !== String(x0)) { xi.min = x0; xi.max = x1; xi.step = step; }
-  if (st.x == null) st.x = Math.round((x0 + (x1 - x0) * 0.45) / step) * step;
+  if (st.x == null) { const u = x1 - x0 > 6 ? 1 : step; st.x = Math.round((x0 + (x1 - x0) * 0.45) / u) * u; }  // a round value to start
   xi.value = st.x; xi.nextElementSibling.textContent = frNum(+(+st.x).toPrecision(6));
   const X = (u) => L + (u - x0) / (x1 - x0) * (W - L - R), Y = (u) => T + (y1 - u) / (y1 - y0) * (H - T - B);
   const fs = curves.map((c) => { try { return mathFn(gdynSub(c.line, st.vals).split("=").slice(1).join("=")); } catch (e) { return () => NaN; } });

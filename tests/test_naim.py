@@ -5104,7 +5104,8 @@ console.log(JSON.stringify({ inter: /Intersection/.test(two), exact: two.include
   intercept: two.includes("ordonnée à l'origine −7"), axes: two.includes('(9,33 ; 0)') && two.includes('(0 ; 4)'), dashed: /stroke-dasharray="8 6"/.test(two),
   more: two.includes('class="gmore"'), roots: par.includes('(−1 ; −1)') && par.includes('(2 ; 2)'), square: par.includes('x² − 2'),
   dyn: dyn.startsWith('<div class="gdyn"'), slider: P.sl.length === 1 && P.sl[0].v0 === 0.75 && P.sl[0].label === 'Pente m',
-  show: gdynShow('d1(x) = m*x + b', { m: -0.5, b: 4 }) }));
+  show: gdynShow('d1(x) = m*x + b', { m: -0.5, b: 4 }), show2: [gdynShow('f(x) = a*x^2 + c', { a: 1, c: -2 }), gdynShow('d(x) = m*x + b', { m: 0, b: 4 })],
+  live: (() => { const h = graphHtml('d1(x) = 3/4 x - 7\nd2(x) = -1/2 x + 4\nrendu: dynamique'); return !h.includes('pente 3/4') && h.includes('(44/5') === false && h.includes('(8,8 ; −0,4)') && !h.includes('Intersection'); })() }));
 """
 
     def test_drawing(self):
@@ -5117,6 +5118,8 @@ console.log(JSON.stringify({ inter: /Intersection/.test(two), exact: two.include
         for k in ("inter", "exact", "slope", "intercept", "axes", "dashed", "more", "roots", "square", "dyn", "slider"):
             self.assertTrue(o[k], k)
         self.assertEqual(o["show"], "−1/2 x + 4")
+        self.assertEqual(o["show2"], ["x² − 2", "4"])
+        self.assertTrue(o["live"])  # the moving graph: no legend at the side (its cards say it), the intersection's coordinates
 
     def test_page(self):
         page = (ROOT / "web/index.html").read_text()
