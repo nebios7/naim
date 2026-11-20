@@ -3882,7 +3882,7 @@ const grab = (n) => { const i = src.search(new RegExp('^function ' + n + '\\(', 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const frNum = (v) => String(+v.toFixed(6)).replace('.', ',').replace('-', '−');
 var graphSeq = 0;
-eval(['mathFn', 'niceStep', 'graphHtml', 'chartHtml'].map(grab).join('\n'));
+eval(['mathFn', 'niceStep', 'graphCard', 'graphHtml', 'chartHtml'].map(grab).join('\n'));
 const out = {};
 const G = { param: 'x(t) = cos(3t)\ny(t) = sin(2t)', polar: 'r = 1 + cos(θ)', implicit: 'x^2 + y^2 = 4',
   region: 'y >= x^2 - 2\nx + y < 3', data: 'nuage : (1;2,1) (2;3,9) (3;6,2)\najustement', old: 'f(x) = x^2 - 2x - 3\nA(0;-3)' };
@@ -5027,6 +5027,15 @@ class ALiveSheetInTheConversation(unittest.TestCase):
             self.assertIn(needle, page)
         self.assertIn(".compacting .cpspin circle { fill: #d97757; }", page)
 
+    def test_rows_and_columns_can_be_removed(self):
+        """A row or column added (or given) can be removed again, from the toolbar or a right-click, and the formulas
+        follow their cells."""
+        page = (ROOT / "web/index.html").read_text()
+        for needle in ('data-sh="delrow"', 'data-sh="delcol"', "function sheetShift(el, axis, at, delta)",
+                       "function shShiftRefs(f, axis, at, delta)", "function sheetMenu(el, e, r, c)",
+                       'document.addEventListener("contextmenu"', "Supprimer la ligne", "Supprimer la colonne"):
+            self.assertIn(needle, page)
+
     def test_skill_and_routing(self):
         import re as _re
         m = json.loads((ROOT / "plugins_builtin/tableur/plugin.json").read_text())
@@ -5054,6 +5063,13 @@ class AWhiteboardAndADashboardInTheConversation(unittest.TestCase):
                        '.wboard .c0 {', '.dash .dline {', 'addEventListener("drop"'):
             self.assertIn(needle, page)
 
+    def test_a_group_can_be_removed(self):
+        """A group of the board is removed with the x beside its +; one with notes asks a second click."""
+        page = (ROOT / "web/index.html").read_text()
+        for needle in ('data-wbgdel="${gi}"', "btn.dataset.wbgdel != null", 'btn.classList.contains("sure")',
+                       ".wboard .wbgdel.sure {"):
+            self.assertIn(needle, page)
+
     def test_skills_and_routing(self):
         import re as _re
         wb = json.loads((ROOT / "plugins_builtin/tableau-blanc/plugin.json").read_text())["triggers"]["tableau-blanc"]
@@ -5065,6 +5081,20 @@ class AWhiteboardAndADashboardInTheConversation(unittest.TestCase):
         self.assertIn("```tableau-blanc", (ROOT / "plugins_builtin/tableau-blanc/skills/tableau-blanc/SKILL.md").read_text())
         self.assertIn("```donnees", (ROOT / "plugins_builtin/donnees/skills/donnees/SKILL.md").read_text())
         self.assertIn('sk["name"] in ("tableur-vivant", "tableau-blanc", "donnees")', (ROOT / "server.py").read_text())
+
+
+class GraphsWearTheSheetsCard(unittest.TestCase):
+    """Naim's charts (bars, curves, pies, histograms) and function graphs are drawn in the spreadsheet's card: a title
+    bar with Copier / SVG, colours that follow the theme; every chart type stays."""
+
+    def test_page(self):
+        page = (ROOT / "web/index.html").read_text()
+        for needle in ("function graphCard(label, title, svg, caption", 'return graphCard("Diagramme", title',
+                       'return graphCard("Courbe", "", svg', ".md figure.gcard .gtop {", 'data-gact="svg"',
+                       ".md figure.gcard svg [stroke=\"#e6e2da\"] { stroke: var(--line); }"):
+            self.assertIn(needle, page)
+        for kind in ("camembert", "histo", "ligne|courbe"):
+            self.assertIn(kind, page)
 
 
 class CompressionShowsItsProgress(unittest.TestCase):
