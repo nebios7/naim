@@ -1,0 +1,10 @@
+{
+  "name": "studio-dessin-anime",
+  "version": "1.0",
+  "description": "Un dossier de production pour une vraie vidéo animée faite avec des outils d'IA : concept et accroche, bible du personnage, découpage plan par plan avec les prompts prêts à coller, voix, montage, export et pack de publication (TikTok, Shorts, Reels, YouTube).",
+  "skills": "skills",
+  "triggers": {
+    "studio-dessin-anime": "\\b(dessins? anim[ée]s?|cartoons?|vid[ée]os? anim[ée]es?|s[ée]ries? anim[ée]es?|personnages? anim[ée]s?|anim\\w*)\\b[^.?!\\n]{0,80}\\b(tiktok|youtube|shorts?|reels?|instagram|publi\\w*|prompts?|sc[ée]nari\\w*|[ée]pisodes?|kling|runway|sora|veo|pika|hailuo)\\b|\\b(tiktok|youtube|shorts?|reels?|instagram)\\b[^.?!\\n]{0,80}\\b(dessins? anim[ée]s?|cartoons?|anim\\w*|personnages?)\\b|\\bdossier de production\\b|\\bprompts? (vid[ée]o|pour (kling|runway|sora|veo|pika|hailuo))\\b|\\bvid[ée]os? (anim[ée]es? )?(par|avec|en) (l'?)?ia\\b|\\b(prompts?|sc[ée]nari\\w*|storyboard|d[ée]coupage|bible du personnage)\\b[^.?!\\n]{0,60}\\b(dessins? anim[ée]s?|cartoons?|vid[ée]os?|s[ée]ries?|anim\\w*)\\b"
+  },
+  "priority": true
+}

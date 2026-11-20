@@ -5244,6 +5244,27 @@ class ARequestWithPicturesKeepsItsSkill(unittest.TestCase):
             self.assertIn(needle, part)
 
 
+class ACartoonPlayedOrAProductionFile(unittest.TestCase):
+    """« fais un dessin animé avec cette image » is animated in the conversation (dessin-anime); « pour TikTok », « les
+    prompts », « un dossier de production », « publier sur YouTube » is the production file of a real AI video
+    (studio-dessin-anime); a loop or a slideshow is neither."""
+
+    def test_routing(self):
+        import re as _re
+        da = json.loads((ROOT / "plugins_builtin/dessin-anime/plugin.json").read_text())["triggers"]["dessin-anime"]
+        st = json.loads((ROOT / "plugins_builtin/studio-dessin-anime/plugin.json").read_text())["triggers"]["studio-dessin-anime"]
+        for m in ("fais un dessin animé avec cette image", "anime cette photo", "donne vie à mon personnage"):
+            self.assertTrue(_re.search(da, m, _re.I) and not _re.search(st, m, _re.I), m)
+        for m in ("fais un dessin animé pour TikTok avec ces images", "écris les prompts pour mon dessin animé",
+                  "un dossier de production pour une série animée", "je veux publier mon cartoon sur YouTube"):
+            self.assertTrue(_re.search(st, m, _re.I) and not _re.search(da, m, _re.I), m)
+        for m in ("une animation de la boucle while", "anime cette présentation"):
+            self.assertFalse(_re.search(da, m, _re.I) or _re.search(st, m, _re.I), m)
+        body = (ROOT / "plugins_builtin/studio-dessin-anime/skills/studio-dessin-anime/SKILL.md").read_text()
+        self.assertIn("bloc de verrouillage", body)
+        self.assertIn("web_search", body)
+
+
 class CompressionShowsItsProgress(unittest.TestCase):
     """A long conversation being summarized: a ring of dots, the sentence, a bar with its percentage read from the
     engine — no emoji line."""
