@@ -5015,6 +5015,34 @@ class AttachPickerButtonReadable(unittest.TestCase):
         self.assertIn("white-space: nowrap; flex: none; }", html)
 
 
+class ALiveSheetInTheConversation(unittest.TestCase):
+    """« un tableau de mes dépenses avec le total »: a live spreadsheet in the conversation (```feuille), formulas that
+    recalculate, cells the user edits and that go back into the message; a .xlsx only when a file is asked."""
+
+    def test_page_draws_and_saves_the_sheet(self):
+        page = (ROOT / "web/index.html").read_text()
+        for needle in ("function sheetDraw(el, keepSel)", "function shEval(sheet, r, c, seen)", "function sheetSave(el)",
+                       "/^(feuille|sheet|tableur-chat)$/i.test(lang", "SOMME:", "MOYENNE:", "\"#CYCLE!\"",
+                       "m.content = m.content.replace(old, now); saveConv(current)"):
+            self.assertIn(needle, page)
+        self.assertIn(".compacting .cpspin circle { fill: #d97757; }", page)
+
+    def test_skill_and_routing(self):
+        import re as _re
+        m = json.loads((ROOT / "plugins_builtin/tableur/plugin.json").read_text())
+        live, xlsx = m["triggers"]["tableur-vivant"], m["triggers"]["tableur"]
+        self.assertTrue(_re.search(live, "un tableau de mes dépenses du mois avec le total", _re.I))
+        self.assertTrue(_re.search(live, "fais-moi un tableur pour le budget du week-end", _re.I))
+        self.assertFalse(_re.search(live, "crée un fichier excel de budget", _re.I))
+        self.assertFalse(_re.search(live, "une feuille de style css", _re.I))
+        self.assertTrue(_re.search(xlsx, "fais-moi un budget sur excel", _re.I))
+        self.assertFalse(_re.search(xlsx, "fais-moi un tableur pour le budget du week-end", _re.I))
+        body = (ROOT / "plugins_builtin/tableur/skills/tableur-vivant/SKILL.md").read_text()
+        self.assertIn("```feuille", body)
+        self.assertIn("=SOMME(C2:C6)", body)
+        self.assertIn('sheet_here = sk["name"] == "tableur-vivant"', (ROOT / "server.py").read_text())
+
+
 class CompressionShowsItsProgress(unittest.TestCase):
     """A long conversation being summarized: a ring of dots, the sentence, a bar with its percentage read from the
     engine — no emoji line."""

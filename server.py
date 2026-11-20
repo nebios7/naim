@@ -2680,7 +2680,10 @@ class Handler(BaseHTTPRequestHandler):
                 # an algorithm shown in the conversation is a ```simulation block, played there: no file, unless one is asked
                 sim_here = sk["name"] == "animation-algorithme" and not re.search(
                     r"fichiers?|\bpages?\b|\bhtml\b|enregistr|sauvegard|t[ée]l[ée]charg|\w\.(js|html?)\b", body["message"] or "", re.I)
-                file_work = not sim_here  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
+                # a spreadsheet in the conversation (```feuille) is answered there too: the live sheet, no file
+                sheet_here = sk["name"] == "tableur-vivant" and not re.search(
+                    r"fichiers?|excel|xlsx|enregistr|sauvegard|t[ée]l[ée]charg", body["message"] or "", re.I)
+                file_work = not (sim_here or sheet_here)  # « un plan de maison T4 » makes files; « mes rendez-vous ? » runs commands on the Mac
                 if sim_here:
                     ex_name, ex = sim_example(recent)  # the closest verified example comes with the request: its plan is followed
                     messages[-1] = dict(messages[-1], content=str(messages[-1].get("content") or "") + (
